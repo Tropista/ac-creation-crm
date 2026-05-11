@@ -6,6 +6,34 @@ import "./App.css";
 const STORAGE_KEY = "crm_local_data_v2";
 const SESSION_KEY = "crm_current_user_v2";
 
+const ADMIN_EMAILS = ["ac.creation.officiel@gmail.com"];
+
+function normalizeEmail(email) {
+  return String(email || "").trim().toLowerCase();
+}
+
+function isAdminEmail(email) {
+  return ADMIN_EMAILS.map(normalizeEmail).includes(normalizeEmail(email));
+}
+
+function isAllowedUser(email, users = []) {
+  const normalizedEmail = normalizeEmail(email);
+  return (
+    isAdminEmail(normalizedEmail) ||
+    (users || []).some((user) =>
+      normalizeEmail(user.email) === normalizedEmail &&
+      user.status !== "Désactivé"
+    )
+  );
+}
+
+function userRole(email, users = []) {
+  if (isAdminEmail(email)) return "Admin";
+  const found = (users || []).find((user) => normalizeEmail(user.email) === normalizeEmail(email));
+  return found?.role || "Utilisateur";
+}
+
+
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
 
 const emptyData = {
@@ -175,6 +203,9 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [syncStatus, setSyncStatus] = useState("Connexion à Supabase...");
 
+  const isAdmin = isAdminEmail(currentUser?.email);
+  const currentRole = userRole(currentUser?.email, data.users);
+
   useEffect(() => {
     initializeCloudData();
   }, []);
@@ -245,11 +276,17 @@ export default function App() {
     return <AuthPage data={data} setData={updateData} setCurrentUser={setCurrentUser} />;
   }
 
+  if (!isAllowedUser(currentUser.email, data.users)) {
+    return (
+      <AccessDenied user={currentUser} logout={logout} />
+    );
+  }
+
   return (
     <div className="app">
       <aside className="sidebar">
         <h1>{data.settings.companyName}</h1>
-        <p className="user">Connecté : {currentUser.name}</p>
+        <p className="user">Connecté : {currentUser.name}<br /><span>{currentRole}</span></p>
         <p className="cloud-status">☁️ {syncStatus}</p>
         <button onClick={() => setPage("dashboard")}>📊 Tableau de bord</button>
         <button onClick={() => setPage("clients")}>👥 Clients</button>
@@ -257,8 +294,9 @@ export default function App() {
         <button onClick={() => setPage("categories")}>🏷️ Catégories</button>
         <button onClick={() => setPage("quotes")}>🧾 Devis</button>
         <button onClick={() => setPage("invoices")}>💶 Factures</button>
-        <button onClick={() => setPage("settings")}>⚙️ Paramètres</button>
-        <button onClick={() => setPage("import")}>📥 Import Excel</button>
+        {isAdmin && <button onClick={() => setPage("users")}>🔐 Utilisateurs</button>}
+        {isAdmin && <button onClick={() => setPage("settings")}>⚙️ Paramètres</button>}
+        {isAdmin && <button onClick={() => setPage("import")}>📥 Import Excel</button>}
         <button className="danger" onClick={logout}>Déconnexion</button>
       </aside>
 
@@ -269,56 +307,37 @@ export default function App() {
         {page === "categories" && <Categories data={data} setData={updateData} />}
         {page === "quotes" && <Documents type="quote" data={data} setData={updateData} />}
         {page === "invoices" && <Documents type="invoice" data={data} setData={updateData} />}
-        {page === "settings" && <Settings data={data} setData={updateData} />}
-        {page === "import" && <ExcelImport data={data} setData={updateData} />}
+        {page === "users" && isAdmin && <UsersAdmin data={data} setData={updateData} />}
+        {page === "settings" && isAdmin && <Settings data={data} setData={updateData} />}
+        {page === "import" && isAdmin && <ExcelImport data={data} setData={updateData} />}
       </main>
     </div>
   );
 }
 
+function AccessDenied({ user, logout }) {
+  return (
+    <div className="modern-auth">
+      <div className="modern-auth-card admin-lock-card">
+        <div className="lock-icon">⛔</div>
+        <h2>Accès non autorisé</h2>
+        <p className="auth-subtitle">
+          Le compte {user?.email} existe dans Supabase, mais il n’est pas autorisé dans ce CRM.
+        </p>
+        <p className="admin-help">
+          Un administrateur doit ajouter cet email dans la page Utilisateurs.
+        </p>
+        <button className="modern-primary" type="button" onClick={logout}>
+          Se déconnecter <span>→</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function AuthPage({ data, setData, setCurrentUser }) {
-  const [mode, setMode] = useState("login");
-  const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
-
-  async function register(e) {
-    e.preventDefault();
-    setError("");
-
-    if (!form.name || !form.email || !form.password) {
-      setError("Remplis tous les champs.");
-      return;
-    }
-
-    const { data: authData, error } = await supabase.auth.signUp({
-      email: form.email.toLowerCase(),
-      password: form.password,
-      options: {
-        data: {
-          name: form.name,
-        },
-      },
-    });
-
-    if (error) {
-      setError(error.message || "Impossible de créer le compte.");
-      return;
-    }
-
-    if (!authData.user) {
-      setError("Compte créé, mais connexion impossible pour le moment.");
-      return;
-    }
-
-    const session = {
-      id: authData.user.id,
-      name: form.name,
-      email: authData.user.email,
-    };
-
-    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
-    setCurrentUser(session);
-  }
 
   async function login(e) {
     e.preventDefault();
@@ -329,8 +348,10 @@ function AuthPage({ data, setData, setCurrentUser }) {
       return;
     }
 
+    const email = normalizeEmail(form.email);
+
     const { data: authData, error } = await supabase.auth.signInWithPassword({
-      email: form.email.toLowerCase(),
+      email,
       password: form.password,
     });
 
@@ -339,10 +360,17 @@ function AuthPage({ data, setData, setCurrentUser }) {
       return;
     }
 
+    if (!isAllowedUser(authData.user.email, data.users)) {
+      await supabase.auth.signOut();
+      setError("Compte non autorisé. Demande à l’administrateur d’ajouter ton email.");
+      return;
+    }
+
     const session = {
       id: authData.user.id,
       name: authData.user.user_metadata?.name || authData.user.email,
       email: authData.user.email,
+      role: userRole(authData.user.email, data.users),
     };
 
     localStorage.setItem(SESSION_KEY, JSON.stringify(session));
@@ -360,54 +388,41 @@ function AuthPage({ data, setData, setCurrentUser }) {
           Mon <span>CRM</span>
         </h1>
         <p className="brand-text">
-          Gérez vos clients, devis et factures simplement et efficacement.
+          Accès privé réservé aux utilisateurs autorisés par l’administrateur.
         </p>
 
         <div className="auth-features">
           <div className="feature-item">
-            <div>👥</div>
+            <div>🔐</div>
             <span>
-              <strong>Gestion clients</strong>
-              Centralisez toutes vos informations clients.
+              <strong>Accès sécurisé</strong>
+              L’inscription publique est désactivée.
             </span>
           </div>
 
           <div className="feature-item">
-            <div>🧾</div>
+            <div>👑</div>
             <span>
-              <strong>Devis & Factures</strong>
-              Créez et suivez vos documents en quelques clics.
+              <strong>Mode admin</strong>
+              Seul l’admin peut autoriser de nouveaux utilisateurs.
             </span>
           </div>
 
           <div className="feature-item">
-            <div>📈</div>
+            <div>☁️</div>
             <span>
-              <strong>Tableaux de bord</strong>
-              Analysez votre activité en temps réel.
+              <strong>Supabase</strong>
+              Données synchronisées dans le cloud.
             </span>
           </div>
         </div>
       </section>
 
-      <form className="modern-auth-card" onSubmit={mode === "login" ? login : register}>
+      <form className="modern-auth-card" onSubmit={login}>
         <div className="lock-icon">🔒</div>
 
-        <h2>{mode === "login" ? "Bienvenue !" : "Créer un compte"}</h2>
-        <p className="auth-subtitle">
-          {mode === "login" ? "Connectez-vous à votre espace" : "Créez votre accès CRM"}
-        </p>
-
-        {mode === "register" && (
-          <label className="modern-field">
-            <span>👤</span>
-            <input
-              placeholder="Nom"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-            />
-          </label>
-        )}
+        <h2>Bienvenue !</h2>
+        <p className="auth-subtitle">Connectez-vous à votre espace privé</p>
 
         <label className="modern-field">
           <span>✉️</span>
@@ -432,25 +447,11 @@ function AuthPage({ data, setData, setCurrentUser }) {
         {error && <p className="modern-error">{error}</p>}
 
         <button className="modern-primary" type="submit">
-          {mode === "login" ? "Se connecter" : "Créer mon compte"}
+          Se connecter
           <span>→</span>
         </button>
 
-        <div className="auth-separator">
-          <span></span>
-          <p>ou</p>
-          <span></span>
-        </div>
-
-        <button
-          type="button"
-          className="modern-secondary"
-          onClick={() => setMode(mode === "login" ? "register" : "login")}
-        >
-          {mode === "login" ? "Créer un compte" : "Se connecter"}
-        </button>
-
-        <p className="auth-note">🛡️ Données synchronisées avec Supabase.</p>
+        <p className="auth-note">🛡️ Compte requis et validé par l’administrateur.</p>
       </form>
     </div>
   );
@@ -646,6 +647,144 @@ function Dashboard({ data }) {
             </div>
           )}
         </div>
+      </div>
+    </section>
+  );
+}
+
+
+function UsersAdmin({ data, setData }) {
+  const [form, setForm] = useState({ name: "", email: "", role: "Utilisateur", status: "Actif" });
+  const users = data.users || [];
+
+  function reset() {
+    setForm({ name: "", email: "", role: "Utilisateur", status: "Actif" });
+  }
+
+  function addUser(e) {
+    e.preventDefault();
+    const email = normalizeEmail(form.email);
+
+    if (!email) return alert("Email obligatoire.");
+    if (isAdminEmail(email)) return alert("Cet email est déjà administrateur principal.");
+    if (users.some((user) => normalizeEmail(user.email) === email)) {
+      return alert("Cet utilisateur existe déjà.");
+    }
+
+    const nextUser = {
+      id: uid(),
+      createdAt: today(),
+      name: form.name || email,
+      email,
+      role: form.role,
+      status: form.status,
+    };
+
+    setData({ ...data, users: [...users, nextUser] });
+    reset();
+  }
+
+  function updateUser(id, changes) {
+    setData({
+      ...data,
+      users: users.map((user) => user.id === id ? { ...user, ...changes } : user),
+    });
+  }
+
+  function removeUser(id) {
+    if (!confirm("Retirer cet accès utilisateur ?")) return;
+    setData({ ...data, users: users.filter((user) => user.id !== id) });
+  }
+
+  return (
+    <section>
+      <div className="page-header">
+        <div>
+          <h2>Utilisateurs</h2>
+          <p>Autorise les comptes qui peuvent accéder au CRM.</p>
+        </div>
+      </div>
+
+      <div className="card admin-warning">
+        <strong>Important :</strong>
+        <p>
+          L’inscription publique est désactivée. Pour créer un nouveau compte, ajoute d’abord
+          l’utilisateur ici, puis crée son compte dans Supabase → Authentication → Users.
+        </p>
+      </div>
+
+      <form className="card form-grid" onSubmit={addUser}>
+        <input
+          placeholder="Nom utilisateur"
+          value={form.name}
+          onChange={(e) => setForm({ ...form, name: e.target.value })}
+        />
+        <input
+          placeholder="Email autorisé *"
+          type="email"
+          value={form.email}
+          onChange={(e) => setForm({ ...form, email: e.target.value })}
+        />
+        <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+          <option>Utilisateur</option>
+          <option>Admin</option>
+        </select>
+        <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+          <option>Actif</option>
+          <option>Désactivé</option>
+        </select>
+        <button className="primary">Autoriser l’utilisateur</button>
+      </form>
+
+      <div className="table card">
+        <table>
+          <thead>
+            <tr>
+              <th>Nom</th>
+              <th>Email</th>
+              <th>Rôle</th>
+              <th>Statut</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>AC Creation</td>
+              <td>ac.creation.officiel@gmail.com</td>
+              <td><span className="badge vip">Admin principal</span></td>
+              <td><span className="badge client">Actif</span></td>
+              <td>-</td>
+            </tr>
+
+            {users.map((user) => (
+              <tr key={user.id}>
+                <td>{user.name}</td>
+                <td>{user.email}</td>
+                <td>
+                  <select value={user.role || "Utilisateur"} onChange={(e) => updateUser(user.id, { role: e.target.value })}>
+                    <option>Utilisateur</option>
+                    <option>Admin</option>
+                  </select>
+                </td>
+                <td>
+                  <select value={user.status || "Actif"} onChange={(e) => updateUser(user.id, { status: e.target.value })}>
+                    <option>Actif</option>
+                    <option>Désactivé</option>
+                  </select>
+                </td>
+                <td>
+                  <button className="danger" onClick={() => removeUser(user.id)}>Retirer accès</button>
+                </td>
+              </tr>
+            ))}
+
+            {users.length === 0 && (
+              <tr>
+                <td colSpan="5" className="muted">Aucun utilisateur ajouté pour le moment.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </section>
   );

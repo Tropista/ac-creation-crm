@@ -3135,3 +3135,41 @@ tr:hover td {
   }
 }
 
+
+
+/* =========================================================
+   SÉCURITÉ / MODE ADMIN
+   ========================================================= */
+
+.user span {
+  display: inline-block;
+  margin-top: 4px;
+  color: #93c5fd !important;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.admin-warning {
+  border-color: rgba(251, 191, 36, 0.35) !important;
+  background: rgba(251, 191, 36, 0.10) !important;
+}
+
+.admin-warning strong {
+  color: #fde68a !important;
+}
+
+.admin-warning p {
+  margin: 8px 0 0;
+  color: #e5edff !important;
+}
+
+.admin-lock-card {
+  max-width: 560px;
+  text-align: center;
+}
+
+.admin-help {
+  color: #cbd5e1 !important;
+  line-height: 1.5;
+  margin: 0 0 18px;
+}
