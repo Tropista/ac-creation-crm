@@ -280,65 +280,6 @@ function statusClass(status) {
   return "badge " + String(status || "").toLowerCase().replaceAll(" ", "-").replaceAll("é", "e");
 }
 
-function invoicePaidAmount(invoice) {
-  const historyTotal = (invoice.paymentHistory || []).reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
-  return Number(invoice.paidAmount ?? historyTotal ?? 0);
-}
-
-function invoiceRemainingAmount(invoice) {
-  return Math.max(0, Number(invoice.totalTTC || 0) - invoicePaidAmount(invoice));
-}
-
-function invoicePaymentStatus(invoice) {
-  const paid = invoicePaidAmount(invoice);
-  const total = Number(invoice.totalTTC || 0);
-  if (total > 0 && paid >= total) return "Payée";
-  if (paid > 0) return "Partiellement payée";
-  return invoice.status || "Non payée";
-}
-
-function stockStatus(product) {
-  if (product.trackStock === false) return { label: "Non suivi", className: "neutral", level: 100 };
-  const stock = Number(product.stock || 0);
-  const min = Number(product.stockMin || 0);
-  if (stock <= 0) return { label: "Rupture", className: "danger", level: 0 };
-  if (min > 0 && stock <= min) return { label: "Stock faible", className: "warning", level: 25 };
-  return { label: "Disponible", className: "success", level: 100 };
-}
-
-function buildStockMovement(type, quantity, reason, documentNumber = "") {
-  return {
-    id: uid(),
-    type,
-    quantity: Number(quantity || 0),
-    reason,
-    documentNumber,
-    createdAt: new Date().toISOString(),
-  };
-}
-
-function applyStockDelta(products, lines = [], direction = -1, reason = "Mouvement stock", documentNumber = "") {
-  return (products || []).map((product) => {
-    const quantity = (lines || [])
-      .filter((line) => String(line.productId || "") === String(product.id || ""))
-      .reduce((sum, line) => sum + Number(line.quantity || 0), 0);
-
-    if (!quantity || product.trackStock === false) return product;
-
-    const movementQuantity = quantity * direction;
-    const nextStock = Math.max(0, Number(product.stock || 0) + movementQuantity);
-
-    return {
-      ...product,
-      stock: nextStock,
-      stockHistory: [
-        buildStockMovement(direction < 0 ? "Sortie" : "Entrée", Math.abs(quantity), reason, documentNumber),
-        ...(product.stockHistory || []),
-      ].slice(0, 30),
-    };
-  });
-}
-
 export default function App() {
   const [data, setData] = useState(loadData);
   const [currentUser, setCurrentUser] = useState(() => JSON.parse(localStorage.getItem(SESSION_KEY) || "null"));
@@ -652,9 +593,11 @@ function Dashboard({ data }) {
   const categories = data.categories || [];
 
   const totalInvoices = invoices.reduce((sum, inv) => sum + Number(inv.totalTTC || 0), 0);
-  const paidInvoices = invoices.reduce((sum, inv) => sum + invoicePaidAmount(inv), 0);
-  const unpaidInvoices = invoices.reduce((sum, inv) => sum + invoiceRemainingAmount(inv), 0);
-  const unpaidCount = invoices.filter((i) => invoiceRemainingAmount(i) > 0).length;
+  const paidInvoices = invoices
+    .filter((i) => i.status === "Payée")
+    .reduce((sum, inv) => sum + Number(inv.totalTTC || 0), 0);
+  const unpaidInvoices = totalInvoices - paidInvoices;
+  const unpaidCount = invoices.filter((i) => i.status !== "Payée").length;
   const acceptedQuotes = quotes.filter((q) => q.status === "Accepté").length;
 
   const invoiceLines = invoices.flatMap((invoice) =>
@@ -735,7 +678,6 @@ function Dashboard({ data }) {
       <div className="stats">
         <div className="card stat"><span>Clients</span><strong>{clients.length}</strong></div>
         <div className="card stat"><span>Produits</span><strong>{products.length}</strong></div>
-        <div className="card stat"><span>Alertes stock</span><strong>{products.filter((p) => stockStatus(p).className !== "success" && p.trackStock !== false).length}</strong></div>
         <div className="card stat"><span>Devis</span><strong>{quotes.length}</strong></div>
         <div className="card stat"><span>Devis acceptés</span><strong>{acceptedQuotes}</strong></div>
         <div className="card stat"><span>Factures</span><strong>{invoices.length}</strong></div>
@@ -1178,7 +1120,7 @@ function Clients({ data, setData, currentRole = 'Admin' }) {
   const [sortBy, setSortBy] = useState("nameAsc");
   const [form, setForm] = useState({ name: "", email: "", phone: "", company: "", address: "", status: "Prospect", notes: "" });
 
-  const itemsPerPage = 10;
+  const itemsPerPage = 25;
   const clients = (data.clients || [])
     .filter((c) => [c.name, c.email, c.phone, c.company, c.status, c.address].join(" ").toLowerCase().includes(search.trim().toLowerCase()))
     .sort((a, b) => {
@@ -1351,11 +1293,9 @@ function Documents({ type, data, setData, currentRole = 'Admin' }) {
   const [previewDoc, setPreviewDoc] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [sortBy, setSortBy] = useState("dateDesc");
-  const [paymentDoc, setPaymentDoc] = useState(null);
-  const [paymentForm, setPaymentForm] = useState({ amount: "", method: "Virement", note: "" });
   const [form, setForm] = useState({ clientId: "", status: defaultStatus, lines: [{ ...emptyLine }] });
 
-  const itemsPerPage = 10;
+  const itemsPerPage = 25;
   const documents = data[listKey];
 
   const sortedDocuments = useMemo(() => {
@@ -1412,7 +1352,7 @@ function Documents({ type, data, setData, currentRole = 'Admin' }) {
   function updateLine(index, changes) {
     setForm({
       ...form,
-      lines: form.lines.map((line, i) => (i === index ? { ...line, ...changes } : line)),
+      lines: (form.lines || []).map((line, i) => (i === index ? { ...line, ...changes } : line)),
     });
   }
 
@@ -1478,21 +1418,13 @@ function Documents({ type, data, setData, currentRole = 'Admin' }) {
     const firstDescription = cleanLines.length === 1 ? cleanLines[0].description : `${cleanLines.length} lignes`;
 
     if (editingId) {
-      const previousDoc = documents.find((d) => d.id === editingId);
-      const updatedDoc = previousDoc
-        ? { ...previousDoc, clientId: form.clientId, status: form.status, description: firstDescription, lines: cleanLines, taxRate: data.settings.taxRate, ...totals }
-        : null;
-
-      let nextProducts = data.products || [];
-      if (!isQuote && previousDoc) {
-        nextProducts = applyStockDelta(nextProducts, previousDoc.lines || [], 1, `Correction ${previousDoc.number}`, previousDoc.number);
-        nextProducts = applyStockDelta(nextProducts, cleanLines, -1, `Facture modifiée ${previousDoc.number}`, previousDoc.number);
-      }
-
       setData({
         ...data,
-        products: nextProducts,
-        [listKey]: documents.map((d) => (d.id === editingId && updatedDoc ? updatedDoc : d)),
+        [listKey]: documents.map((d) =>
+          d.id === editingId
+            ? { ...d, clientId: form.clientId, status: form.status, description: firstDescription, lines: cleanLines, taxRate: data.settings.taxRate, ...totals }
+            : d
+        ),
       });
     } else {
       const doc = {
@@ -1504,12 +1436,9 @@ function Documents({ type, data, setData, currentRole = 'Admin' }) {
         status: form.status,
         description: firstDescription,
         lines: cleanLines,
-        paidAmount: !isQuote && form.status === "Payée" ? totals.totalTTC : 0,
-        paymentHistory: !isQuote && form.status === "Payée" ? [{ id: uid(), amount: totals.totalTTC, method: "Paiement complet", date: today(), note: "Facture marquée payée à la création" }] : [],
         ...totals,
       };
-      const nextProducts = isQuote ? data.products : applyStockDelta(data.products || [], cleanLines, -1, `Facture ${doc.number}`, doc.number);
-      setData({ ...data, products: nextProducts, [listKey]: [...documents, doc] });
+      setData({ ...data, [listKey]: [...documents, doc] });
     }
 
     reset();
@@ -1526,59 +1455,17 @@ function Documents({ type, data, setData, currentRole = 'Admin' }) {
 
   function remove(id) {
     if (!confirm(`Supprimer ce ${isQuote ? "devis" : "facture"} ?`)) return;
-    const doc = documents.find((d) => d.id === id);
-    const nextProducts = !isQuote && doc ? applyStockDelta(data.products || [], doc.lines || [], 1, `Suppression ${doc.number}`, doc.number) : data.products;
-    setData({ ...data, products: nextProducts, [listKey]: documents.filter((d) => d.id !== id) });
+    setData({ ...data, [listKey]: documents.filter((d) => d.id !== id) });
   }
 
   function updateStatus(id, status) {
-    setData({ ...data, [listKey]: documents.map((d) => {
-      if (d.id !== id) return d;
-      const fullPaid = !isQuote && status === "Payée";
-      return {
-        ...d,
-        status,
-        paidAmount: fullPaid ? Number(d.totalTTC || 0) : d.paidAmount,
-        paymentHistory: fullPaid && invoicePaidAmount(d) < Number(d.totalTTC || 0)
-          ? [{ id: uid(), amount: invoiceRemainingAmount(d), method: "Marquage manuel", date: today(), note: "Statut passé en Payée" }, ...(d.paymentHistory || [])]
-          : (d.paymentHistory || []),
-      };
-    }) });
-  }
-
-  function openPayment(doc) {
-    setPaymentDoc(doc);
-    setPaymentForm({ amount: String(invoiceRemainingAmount(doc) || ""), method: "Virement", note: "" });
-  }
-
-  function addPayment(e) {
-    e.preventDefault();
-    if (!paymentDoc) return;
-    const amount = Number(String(paymentForm.amount || "0").replace(",", "."));
-    if (!amount || amount <= 0) return alert("Montant du paiement obligatoire.");
-
-    setData({
-      ...data,
-      invoices: (data.invoices || []).map((invoice) => {
-        if (invoice.id !== paymentDoc.id) return invoice;
-        const payment = { id: uid(), amount, method: paymentForm.method, date: today(), note: paymentForm.note };
-        const paidAmount = Math.min(Number(invoice.totalTTC || 0), invoicePaidAmount(invoice) + amount);
-        return {
-          ...invoice,
-          paidAmount,
-          paymentHistory: [payment, ...(invoice.paymentHistory || [])],
-          status: paidAmount >= Number(invoice.totalTTC || 0) ? "Payée" : "Partiellement payée",
-        };
-      }),
-    });
-    setPaymentDoc(null);
+    setData({ ...data, [listKey]: documents.map((d) => (d.id === id ? { ...d, status } : d)) });
   }
 
   function convertQuoteToInvoice(doc) {
-    const invoice = { ...doc, id: uid(), number: `FAC-${String(data.invoices.length + 1).padStart(4, "0")}`, date: today(), status: "Non payée", paidAmount: 0, paymentHistory: [], convertedFrom: doc.number };
-    const nextProducts = applyStockDelta(data.products || [], invoice.lines || [], -1, `Conversion ${invoice.number}`, invoice.number);
-    setData({ ...data, products: nextProducts, invoices: [...data.invoices, invoice] });
-    alert("Devis converti en facture. Le stock a été déduit automatiquement.");
+    const invoice = { ...doc, id: uid(), number: `FAC-${String(data.invoices.length + 1).padStart(4, "0")}`, date: today(), status: "Non payée", convertedFrom: doc.number };
+    setData({ ...data, invoices: [...data.invoices, invoice] });
+    alert("Devis converti en facture.");
   }
 
   return (
@@ -1593,7 +1480,7 @@ function Documents({ type, data, setData, currentRole = 'Admin' }) {
           </select>
 
           <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-            {isQuote ? <><option>Brouillon</option><option>Envoyé</option><option>Accepté</option><option>Refusé</option></> : <><option>Non payée</option><option>Partiellement payée</option><option>Payée</option><option>En retard</option></>}
+            {isQuote ? <><option>Brouillon</option><option>Envoyé</option><option>Accepté</option><option>Refusé</option></> : <><option>Non payée</option><option>Payée</option><option>En retard</option></>}
           </select>
         </div>
 
@@ -1602,7 +1489,7 @@ function Documents({ type, data, setData, currentRole = 'Admin' }) {
             <span>Produit</span><span>Description</span><span>Qté</span><span>Prix HT</span><span>Remise %</span><span>Total HT</span><span></span>
           </div>
 
-          {form.lines.map((line, index) => {
+          {(form.lines || []).map((line, index) => {
             const total = lineTotal(line).totalHT;
             return (
               <div className="document-line" key={index}>
@@ -1655,20 +1542,18 @@ function Documents({ type, data, setData, currentRole = 'Admin' }) {
         </div>
 
         <table>
-          <thead><tr><th>N°</th><th>Date</th><th>Client</th><th>Lignes</th><th>Total TTC</th>{!isQuote && <th>Payé / Reste</th>}<th>Statut</th><th>Actions</th></tr></thead>
+          <thead><tr><th>N°</th><th>Date</th><th>Client</th><th>Lignes</th><th>Total TTC</th><th>Statut</th><th>Actions</th></tr></thead>
           <tbody>
             {paginatedDocuments.map((d) => (
               <tr key={d.id}>
                 <td>{d.number}</td><td>{d.date}</td><td>{clientName(data, d.clientId)}</td><td>{d.lines?.length || 1}</td><td>{money(d.totalTTC)}</td>
-                {!isQuote && <td><strong>{money(invoicePaidAmount(d))}</strong><br /><span className="muted">Reste {money(invoiceRemainingAmount(d))}</span></td>}
                 <td>
                   <select value={d.status} onChange={(e) => updateStatus(d.id, e.target.value)}>
-                    {isQuote ? <><option>Brouillon</option><option>Envoyé</option><option>Accepté</option><option>Refusé</option></> : <><option>Non payée</option><option>Partiellement payée</option><option>Payée</option><option>En retard</option></>}
+                    {isQuote ? <><option>Brouillon</option><option>Envoyé</option><option>Accepté</option><option>Refusé</option></> : <><option>Non payée</option><option>Payée</option><option>En retard</option></>}
                   </select>
                 </td>
                 <td className="actions">
                   <button onClick={() => setPreviewDoc(d)}>Voir</button>
-                  {!isQuote && <button className="primary" onClick={() => openPayment(d)}>Paiement</button>}
                   <button onClick={() => edit(d)}>Modifier</button>
                   {isQuote && <button onClick={() => convertQuoteToInvoice(d)}>Convertir</button>}
                   <button className="danger" onClick={() => remove(d.id)}>Supprimer</button>
@@ -1686,34 +1571,6 @@ function Documents({ type, data, setData, currentRole = 'Admin' }) {
           onPageChange={setCurrentPage}
         />
       </div>
-
-      {paymentDoc && (
-        <div className="modal">
-          <form className="modal-content payment-modal" onSubmit={addPayment}>
-            <div className="modal-actions no-print">
-              <button type="button" onClick={() => setPaymentDoc(null)}>Fermer</button>
-              <button className="primary">Enregistrer le paiement</button>
-            </div>
-            <h2>Paiement {paymentDoc.number}</h2>
-            <p className="muted">Total : {money(paymentDoc.totalTTC)} · Déjà payé : {money(invoicePaidAmount(paymentDoc))} · Reste : {money(invoiceRemainingAmount(paymentDoc))}</p>
-            <div className="form-grid">
-              <input type="text" inputMode="decimal" placeholder="Montant reçu" value={paymentForm.amount} onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })} />
-              <select value={paymentForm.method} onChange={(e) => setPaymentForm({ ...paymentForm, method: e.target.value })}>
-                <option>Virement</option><option>Carte bancaire</option><option>Espèces</option><option>PayPal</option><option>Chèque</option><option>Autre</option>
-              </select>
-              <textarea placeholder="Note paiement" value={paymentForm.note} onChange={(e) => setPaymentForm({ ...paymentForm, note: e.target.value })} />
-            </div>
-            <div className="payment-history-list">
-              <h3>Historique des paiements</h3>
-              {(paymentDoc.paymentHistory || []).length === 0 ? <p className="muted">Aucun paiement enregistré.</p> : (paymentDoc.paymentHistory || []).map((payment) => (
-                <div className="payment-history-item" key={payment.id}>
-                  <strong>{money(payment.amount)}</strong><span>{payment.method}</span><span>{payment.date}</span><em>{payment.note}</em>
-                </div>
-              ))}
-            </div>
-          </form>
-        </div>
-      )}
 
       {previewDoc && <DocumentPreview doc={previewDoc} type={type} data={data} onClose={() => setPreviewDoc(null)} />}
     </section>
@@ -2120,43 +1977,189 @@ function Categories({ data, setData, currentRole = 'Admin' }) {
 function Products({ data, setData, currentRole = 'Admin' }) {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
-  const [stockFilter, setStockFilter] = useState("");
+  const [stockFilter, setStockFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("name-asc");
+  const [priceMin, setPriceMin] = useState("");
+  const [priceMax, setPriceMax] = useState("");
   const [editing, setEditing] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedProductIds, setSelectedProductIds] = useState([]);
   const [bulkCategory, setBulkCategory] = useState("");
-  const [movementProduct, setMovementProduct] = useState(null);
-  const [movementForm, setMovementForm] = useState({ type: "Entrée", quantity: "", reason: "Ajustement manuel" });
+  const [bulkStock, setBulkStock] = useState(100);
   const [form, setForm] = useState({
     name: "",
     sku: "",
     category: "",
     price: "",
-    purchasePrice: "",
     stock: "",
-    stockMin: "",
-    supplier: "",
-    trackStock: true,
+    imageUrl: "",
     description: "",
   });
 
-  const categories = data.categories || [];
-  const itemsPerPage = 10;
-  const allProducts = data.products || [];
-  const stockAlerts = allProducts.filter((product) => product.trackStock !== false && stockStatus(product).className !== "success");
-  const totalStockValue = allProducts.reduce((sum, product) => sum + Number(product.stock || 0) * Number(product.price || 0), 0);
-  const totalPurchaseValue = allProducts.reduce((sum, product) => sum + Number(product.stock || 0) * Number(product.purchasePrice || 0), 0);
+  function compressProductImage(file, maxWidth = 900, quality = 0.78) {
+    return new Promise((resolve, reject) => {
+      if (!file || !file.type.startsWith("image/")) {
+        reject(new Error("Choisis une image valide."));
+        return;
+      }
 
-  const products = allProducts.filter((product) => {
-    const matchesSearch = [product.name, product.sku, product.category, product.description, product.supplier]
-      .join(" ")
-      .toLowerCase()
-      .includes(search.toLowerCase());
-    const matchesCategory = !categoryFilter || product.category === categoryFilter;
-    const status = stockStatus(product);
-    const matchesStock = !stockFilter || status.className === stockFilter;
-    return matchesSearch && matchesCategory && matchesStock;
-  });
+      const reader = new FileReader();
+
+      reader.onload = (event) => {
+        const img = new Image();
+
+        img.onload = () => {
+          const scale = Math.min(1, maxWidth / img.width);
+          const width = Math.round(img.width * scale);
+          const height = Math.round(img.height * scale);
+
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, width, height);
+
+          resolve(canvas.toDataURL("image/jpeg", quality));
+        };
+
+        img.onerror = () => reject(new Error("Image impossible à lire."));
+        img.src = event.target.result;
+      };
+
+      reader.onerror = () => reject(new Error("Image impossible à importer."));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function handleProductImageUpload(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const imageUrl = await compressProductImage(file);
+      setForm((current) => ({ ...current, imageUrl }));
+    } catch (error) {
+      alert(error.message || "Erreur pendant l'import de l'image.");
+    } finally {
+      event.target.value = "";
+    }
+  }
+
+  function removeProductImage() {
+    setForm((current) => ({ ...current, imageUrl: "" }));
+  }
+
+
+  const categories = data.categories || [];
+  const itemsPerPage = 25;
+
+  const allProducts = (data.products || []).map((product) => ({
+    ...product,
+    stock:
+      Number(product.stock || 0) > 0
+        ? Number(product.stock || 0)
+        : 100,
+  }));
+
+  const products = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    const minPrice = priceMin === "" ? null : Number(priceMin);
+    const maxPrice = priceMax === "" ? null : Number(priceMax);
+
+    const filtered = allProducts.filter((product) => {
+      const stock = Number(product.stock || 0);
+      const minStock = Number(product.stockMin || product.minStock || 0);
+      const price = Number(product.price || 0);
+      const margin = price - Number(product.purchasePrice || 0);
+
+      const matchesSearch =
+        !query ||
+        [
+          product.name,
+          product.sku,
+          product.category,
+          product.description,
+          product.supplier,
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(query);
+
+      const matchesCategory =
+        !categoryFilter || product.category === categoryFilter;
+
+      const matchesStock =
+        stockFilter === "all" ||
+        (stockFilter === "available" && stock > 0 && (!minStock || stock > minStock)) ||
+        (stockFilter === "low" && stock > 0 && minStock > 0 && stock <= minStock) ||
+        (stockFilter === "out" && stock <= 0);
+
+      const matchesPriceMin = minPrice === null || price >= minPrice;
+      const matchesPriceMax = maxPrice === null || price <= maxPrice;
+
+      return (
+        matchesSearch &&
+        matchesCategory &&
+        matchesStock &&
+        matchesPriceMin &&
+        matchesPriceMax
+      );
+    });
+
+    return filtered.sort((a, b) => {
+      const priceA = Number(a.price || 0);
+      const priceB = Number(b.price || 0);
+      const stockA = Number(a.stock || 0);
+      const stockB = Number(b.stock || 0);
+      const marginA = priceA - Number(a.purchasePrice || 0);
+      const marginB = priceB - Number(b.purchasePrice || 0);
+      const dateA = new Date(a.createdAt || 0).getTime();
+      const dateB = new Date(b.createdAt || 0).getTime();
+
+      switch (sortBy) {
+        case "name-desc":
+          return String(b.name || "").localeCompare(String(a.name || ""));
+        case "price-asc":
+          return priceA - priceB;
+        case "price-desc":
+          return priceB - priceA;
+        case "stock-asc":
+          return stockA - stockB;
+        case "stock-desc":
+          return stockB - stockA;
+        case "margin-desc":
+          return marginB - marginA;
+        case "recent":
+          return dateB - dateA;
+        default:
+          return String(a.name || "").localeCompare(String(b.name || ""));
+      }
+    });
+  }, [allProducts, search, categoryFilter, stockFilter, priceMin, priceMax, sortBy]);
+
+  const productsStats = useMemo(() => {
+    const total = allProducts.length;
+    const available = allProducts.filter((p) => Number(p.stock || 0) > 0).length;
+    const low = allProducts.filter((p) => {
+      const stock = Number(p.stock || 0);
+      const minStock = Number(p.stockMin || p.minStock || 0);
+      return stock > 0 && minStock > 0 && stock <= minStock;
+    }).length;
+    const out = allProducts.filter((p) => Number(p.stock || 0) <= 0).length;
+
+    return { total, available, low, out };
+  }, [allProducts]);
+
+  function resetProductFilters() {
+    setSearch("");
+    setCategoryFilter("");
+    setStockFilter("all");
+    setSortBy("name-asc");
+    setPriceMin("");
+    setPriceMax("");
+    setCurrentPage(1);
+  }
 
   const productTotalPages = Math.max(1, Math.ceil(products.length / itemsPerPage));
   const productPage = Math.min(currentPage, productTotalPages);
@@ -2164,7 +2167,7 @@ function Products({ data, setData, currentRole = 'Admin' }) {
 
   function reset() {
     setEditing(null);
-    setForm({ name: "", sku: "", category: "", price: "", purchasePrice: "", stock: "", stockMin: "", supplier: "", trackStock: true, description: "" });
+    setForm({ name: "", sku: "", category: "", price: "", stock: "", imageUrl: "", description: "" });
   }
 
   function submit(e) {
@@ -2174,23 +2177,20 @@ function Products({ data, setData, currentRole = 'Admin' }) {
     const productData = {
       ...form,
       price: Number(form.price || 0),
-      purchasePrice: Number(form.purchasePrice || 0),
       stock: Number(form.stock || 0),
-      stockMin: Number(form.stockMin || 0),
-      trackStock: Boolean(form.trackStock),
     };
 
     if (editing) {
       setData({
         ...data,
-        products: allProducts.map((p) =>
-          p.id === editing ? { ...p, ...productData, updatedAt: today() } : p
+        products: (data.products || []).map((p) =>
+          p.id === editing ? { ...p, ...productData } : p
         ),
       });
     } else {
       setData({
         ...data,
-        products: [...allProducts, { id: uid(), createdAt: today(), stockHistory: [], ...productData }],
+        products: [...allProducts, { id: uid(), createdAt: today(), ...productData }],
       });
     }
 
@@ -2204,11 +2204,8 @@ function Products({ data, setData, currentRole = 'Admin' }) {
       sku: product.sku || "",
       category: product.category || "",
       price: product.price || "",
-      purchasePrice: product.purchasePrice || "",
       stock: product.stock || "",
-      stockMin: product.stockMin || "",
-      supplier: product.supplier || "",
-      trackStock: product.trackStock !== false,
+      imageUrl: product.imageUrl || "",
       description: product.description || "",
     });
   }
@@ -2221,139 +2218,316 @@ function Products({ data, setData, currentRole = 'Admin' }) {
   }
 
   function toggleProductSelection(id) {
-    setSelectedProductIds((current) => current.includes(id) ? current.filter((productId) => productId !== id) : [...current, id]);
+    setSelectedProductIds((current) =>
+      current.includes(id)
+        ? current.filter((productId) => productId !== id)
+        : [...current, id]
+    );
   }
 
   function toggleVisibleProducts() {
     const visibleIds = paginatedProducts.map((product) => product.id);
     const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedProductIds.includes(id));
-    setSelectedProductIds(allVisibleSelected ? selectedProductIds.filter((id) => !visibleIds.includes(id)) : [...new Set([...selectedProductIds, ...visibleIds])]);
+
+    if (allVisibleSelected) {
+      setSelectedProductIds(selectedProductIds.filter((id) => !visibleIds.includes(id)));
+    } else {
+      setSelectedProductIds([...new Set([...selectedProductIds, ...visibleIds])]);
+    }
   }
 
   function applyBulkCategory() {
     if (!selectedProductIds.length) return alert("Sélectionne au moins un produit.");
     if (!bulkCategory) return alert("Choisis une catégorie.");
-    setData({ ...data, products: allProducts.map((product) => selectedProductIds.includes(product.id) ? { ...product, category: bulkCategory } : product) });
+
+    setData({
+      ...data,
+      products: allProducts.map((product) =>
+        selectedProductIds.includes(product.id)
+          ? { ...product, category: bulkCategory }
+          : product
+      ),
+    });
+
     setSelectedProductIds([]);
     setBulkCategory("");
     alert("Catégorie appliquée aux produits sélectionnés.");
   }
 
-  function openMovement(product) {
-    setMovementProduct(product);
-    setMovementForm({ type: "Entrée", quantity: "", reason: "Ajustement manuel" });
-  }
+  function applyBulkStock() {
+    if (!selectedProductIds.length) return alert("Sélectionne au moins un produit.");
 
-  function saveMovement(e) {
-    e.preventDefault();
-    if (!movementProduct) return;
-    const quantity = Number(movementForm.quantity || 0);
-    if (!quantity || quantity <= 0) return alert("Quantité obligatoire.");
-    const direction = movementForm.type === "Entrée" ? 1 : -1;
     setData({
       ...data,
-      products: allProducts.map((product) => {
-        if (product.id !== movementProduct.id) return product;
-        const nextStock = Math.max(0, Number(product.stock || 0) + quantity * direction);
-        return {
-          ...product,
-          stock: nextStock,
-          stockHistory: [buildStockMovement(movementForm.type, quantity, movementForm.reason), ...(product.stockHistory || [])].slice(0, 30),
-        };
-      }),
+      products: allProducts.map((product) =>
+        selectedProductIds.includes(product.id)
+          ? { ...product, stock: Number(bulkStock || 0) }
+          : product
+      ),
     });
-    setMovementProduct(null);
+
+    setSelectedProductIds([]);
+    alert("Stock modifié avec succès.");
+  }
+
+  function setAllProductsStock100() {
+    if (!confirm("Mettre tous les produits à 100 pièces ?")) return;
+
+    setData({
+      ...data,
+      products: allProducts.map((product) => ({
+        ...product,
+        stock: 100,
+      })),
+    });
+
+    setSelectedProductIds([]);
+    alert("Tous les produits sont maintenant à 100 pièces.");
   }
 
   return (
-    <section className="products-page">
+    <section>
       <div className="page-header">
         <div>
-          <h2>Produits & Stock</h2>
-          <p>Catalogue premium, valorisation du stock, alertes et mouvements.</p>
+          <h2>Produits</h2>
+          <p>Gère tes produits, prix, références et stocks.</p>
         </div>
       </div>
 
-      <div className="product-kpi-grid">
-        <div className="card product-kpi"><span>Produits actifs</span><strong>{allProducts.length}</strong><small>Catalogue complet</small></div>
-        <div className="card product-kpi"><span>Valeur vente stock</span><strong>{money(totalStockValue)}</strong><small>Stock × prix HT</small></div>
-        <div className="card product-kpi"><span>Valeur achat stock</span><strong>{money(totalPurchaseValue)}</strong><small>Stock × coût achat</small></div>
-        <div className="card product-kpi alert"><span>Alertes stock</span><strong>{stockAlerts.length}</strong><small>Faible ou rupture</small></div>
-      </div>
+      <form className="card form-grid" onSubmit={submit}>
+        <input placeholder="Nom produit *" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        <input placeholder="Référence SKU" value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} />
+        <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
+          <option value="">Sans catégorie</option>
+          {categories.map((category) => (
+            <option key={category.id} value={category.name}>{category.name}</option>
+          ))}
+        </select>
+        <input
+          type="text"
+          inputMode="decimal"
+          placeholder="Prix HT"
+          value={String(form.price).replace(".", ",")}
+          onChange={(e) => setForm({ ...form, price: e.target.value.replace(",", ".") })}
+        />
+        <input type="number" min="0" placeholder="Stock" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} />
+        <div className="product-image-field">
+          <label className="image-upload-button">
+            📷 Importer une image
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              onChange={handleProductImageUpload}
+            />
+          </label>
 
-      <form className="card product-form" onSubmit={submit}>
-        <div className="product-form-title">
-          <h3>{editing ? "Modifier un produit" : "Nouveau produit"}</h3>
-          <p className="muted">Les champs stock minimum et fournisseur alimentent les alertes et la fiche produit.</p>
+          {form.imageUrl && (
+            <div className="product-image-preview">
+              <img src={form.imageUrl} alt="Aperçu produit" />
+              <button type="button" onClick={removeProductImage}>
+                Retirer
+              </button>
+            </div>
+          )}
         </div>
-        <div className="form-grid">
-          <input placeholder="Nom produit *" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          <input placeholder="Référence SKU" value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} />
-          <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
-            <option value="">Sans catégorie</option>
-            {categories.map((category) => <option key={category.id} value={category.name}>{category.name}</option>)}
-          </select>
-          <input type="text" inputMode="decimal" placeholder="Prix vente HT" value={String(form.price).replace(".", ",")} onChange={(e) => setForm({ ...form, price: e.target.value.replace(",", ".") })} />
-          <input type="text" inputMode="decimal" placeholder="Coût achat HT" value={String(form.purchasePrice).replace(".", ",")} onChange={(e) => setForm({ ...form, purchasePrice: e.target.value.replace(",", ".") })} />
-          <input type="number" min="0" placeholder="Stock actuel" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} />
-          <input type="number" min="0" placeholder="Stock minimum" value={form.stockMin} onChange={(e) => setForm({ ...form, stockMin: e.target.value })} />
-          <input placeholder="Fournisseur" value={form.supplier} onChange={(e) => setForm({ ...form, supplier: e.target.value })} />
-          <label className="check-card"><input type="checkbox" checked={form.trackStock} onChange={(e) => setForm({ ...form, trackStock: e.target.checked })} /> Suivre le stock</label>
-          <textarea placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-        </div>
-        <div className="document-form-footer">
-          <button className="primary">{editing ? "Modifier" : "Ajouter produit"}</button>
-          {editing && <button type="button" onClick={reset}>Annuler</button>}
-        </div>
+        <textarea placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+        <button className="primary">{editing ? "Modifier" : "Ajouter produit"}</button>
+        {editing && <button type="button" onClick={reset}>Annuler</button>}
       </form>
 
-      <div className="filters-row product-filters">
-        <input className="search" placeholder="Rechercher nom, SKU, fournisseur..." value={search} onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }} />
-        <select value={categoryFilter} onChange={(e) => { setCategoryFilter(e.target.value); setCurrentPage(1); }}>
-          <option value="">Toutes les catégories</option>
-          {categories.map((category) => <option key={category.id} value={category.name}>{category.name}</option>)}
-        </select>
-        <select value={stockFilter} onChange={(e) => { setStockFilter(e.target.value); setCurrentPage(1); }}>
-          <option value="">Tous les statuts stock</option>
-          <option value="success">Disponible</option>
-          <option value="warning">Stock faible</option>
-          <option value="danger">Rupture</option>
-          <option value="neutral">Non suivi</option>
-        </select>
-      </div>
-
-      <div className="table card product-table-card">
-        <div className="bulk-actions">
-          <strong>{selectedProductIds.length} produit(s) sélectionné(s)</strong>
-          <select value={bulkCategory} onChange={(e) => setBulkCategory(e.target.value)}>
-            <option value="">Choisir une catégorie</option>
-            {categories.map((category) => <option key={category.id} value={category.name}>{category.name}</option>)}
-          </select>
-          <button type="button" className="primary" onClick={applyBulkCategory}>Appliquer la catégorie</button>
-          {selectedProductIds.length > 0 && <button type="button" onClick={() => setSelectedProductIds([])}>Désélectionner</button>}
+      <div className="product-search-panel filters-card card">
+        <div className="filters-premium-header">
+          <div className="filters-title-row">
+            <span className="filters-icon">⌕</span>
+            <div>
+              <strong>Recherche & filtres produits</strong>
+              <span>{products.length} résultat(s) sur {productsStats.total} produit(s)</span>
+            </div>
+          </div>
         </div>
 
-        <div className="product-card-grid">
+        <div className="filters-main-row">
+          <div className="filters-search-wrap">
+            <span>⌕</span>
+            <input
+              className="search filters-search-input"
+              placeholder="Recherche ultra rapide : nom, SKU, catégorie..."
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setCurrentPage(1);
+              }}
+            />
+          </div>
+
+          <select
+            className="filters-select"
+            value={categoryFilter}
+            onChange={(e) => {
+              setCategoryFilter(e.target.value);
+              setCurrentPage(1);
+            }}
+          >
+            <option value="">Toutes les catégories</option>
+            {categories.map((category) => (
+              <option key={category.id} value={category.name}>{category.name}</option>
+            ))}
+          </select>
+
+          <select
+            className="filters-select"
+            value={stockFilter}
+            onChange={(e) => {
+              setStockFilter(e.target.value);
+              setCurrentPage(1);
+            }}
+          >
+            <option value="all">Tous les stocks</option>
+            <option value="available">Disponibles</option>
+            <option value="low">Stock faible</option>
+            <option value="out">Rupture</option>
+          </select>
+
+          <select
+            className="filters-select"
+            value={sortBy}
+            onChange={(e) => {
+              setSortBy(e.target.value);
+              setCurrentPage(1);
+            }}
+          >
+            <option value="name-asc">Nom A → Z</option>
+            <option value="name-desc">Nom Z → A</option>
+            <option value="price-asc">Prix croissant</option>
+            <option value="price-desc">Prix décroissant</option>
+            <option value="stock-asc">Stock croissant</option>
+            <option value="stock-desc">Stock décroissant</option>
+            <option value="margin-desc">Meilleure marge</option>
+            <option value="recent">Plus récents</option>
+          </select>
+
+          <div className="filters-price-wrap">
+            <input
+              type="number"
+              min="0"
+              placeholder="Prix min"
+              value={priceMin}
+              onChange={(e) => {
+                setPriceMin(e.target.value);
+                setCurrentPage(1);
+              }}
+            />
+            <span>→</span>
+            <input
+              type="number"
+              min="0"
+              placeholder="Prix max"
+              value={priceMax}
+              onChange={(e) => {
+                setPriceMax(e.target.value);
+                setCurrentPage(1);
+              }}
+            />
+          </div>
+        </div>
+
+        <div className="filters-bottom-row">
+          <button type="button" className="filters-reset-button" onClick={resetProductFilters}>
+            ↺ Réinitialiser
+          </button>
+        </div>
+      </div>
+
+      <div className="products-premium-panel card">
+        <div className="bulk-actions products-bulk-premium">
+          <strong>{selectedProductIds.length} produit(s) sélectionné(s)</strong>
+
+          <select value={bulkStock} onChange={(e) => setBulkStock(e.target.value)}>
+            <option value="100">100 pièces</option>
+            <option value="200">200 pièces</option>
+            <option value="500">500 pièces</option>
+          </select>
+
+          <button type="button" className="primary" onClick={applyBulkStock}>
+            Modifier le stock
+          </button>
+
+          <button type="button" className="primary" onClick={setAllProductsStock100}>
+            Tous les produits = 100 pièces
+          </button>
+
+          <select value={bulkCategory} onChange={(e) => setBulkCategory(e.target.value)}>
+            <option value="">Choisir une catégorie</option>
+            {categories.map((category) => (
+              <option key={category.id} value={category.name}>{category.name}</option>
+            ))}
+          </select>
+
+          <button type="button" className="primary" onClick={applyBulkCategory}>
+            Appliquer la catégorie
+          </button>
+
+          {selectedProductIds.length > 0 && (
+            <button type="button" onClick={() => setSelectedProductIds([])}>
+              Désélectionner
+            </button>
+          )}
+        </div>
+
+        <div className="select-visible-row">
+          <button type="button" onClick={toggleVisibleProducts}>
+            Sélectionner / désélectionner cette page
+          </button>
+        </div>
+
+        {products.length === 0 && (
+          <div className="product-empty-state">
+            <strong>Aucun produit trouvé</strong>
+            <span>Essaie de modifier la recherche ou les filtres.</span>
+          </div>
+        )}
+
+        <div className="product-premium-grid">
           {paginatedProducts.map((product) => {
-            const status = stockStatus(product);
-            const margin = Number(product.price || 0) - Number(product.purchasePrice || 0);
-            const maxLevel = Math.max(Number(product.stockMin || 0) * 2, Number(product.stock || 0), 1);
-            const level = Math.min(100, Math.round((Number(product.stock || 0) / maxLevel) * 100));
             return (
-              <article className="product-tile" key={product.id}>
-                <div className="product-tile-top">
-                  <input type="checkbox" checked={selectedProductIds.includes(product.id)} onChange={() => toggleProductSelection(product.id)} />
-                  <span className={`stock-pill ${status.className}`}>{status.label}</span>
+              <article
+                className={`product-premium-card ${selectedProductIds.includes(product.id) ? "selected" : ""}`}
+                key={product.id}
+              >
+                <div className="product-premium-top">
+                  <label className="product-select-pill">
+                    <input
+                      type="checkbox"
+                      checked={selectedProductIds.includes(product.id)}
+                      onChange={() => toggleProductSelection(product.id)}
+                    />
+                    <span>Sélection</span>
+                  </label>
+
                 </div>
-                <h3>{product.name}</h3>
-                <p className="muted">{product.sku || "Sans SKU"} · {product.category || "Sans catégorie"}</p>
-                <div className="product-price-row"><strong>{money(product.price)}</strong><span>Marge {money(margin)}</span></div>
-                <div className="stock-meter"><div style={{ width: `${level}%` }} /></div>
-                <div className="product-stock-row"><span>Stock</span><strong>{product.trackStock === false ? "Non suivi" : product.stock}</strong><small>Min. {product.stockMin || 0}</small></div>
-                {product.supplier && <p className="product-supplier">Fournisseur : {product.supplier}</p>}
-                {product.description && <p className="product-description">{product.description}</p>}
+
+                <div className="product-visual">
+                  {product.imageUrl ? (
+                    <img src={product.imageUrl} alt={product.name || "Produit"} />
+                  ) : (
+                    <span>{(product.name || "P").slice(0, 1).toUpperCase()}</span>
+                  )}
+                </div>
+
+                <div className="product-premium-body">
+                  <h3>{product.name}</h3>
+
+                  <div className="product-tags-row">
+                    <span>SKU : {product.sku || "Sans SKU"}</span>
+                    <span>Prix HT : {money(product.price || 0)}</span>
+                  </div>
+
+                  {product.description && (
+                    <p className="product-description">{product.description}</p>
+                  )}
+                </div>
+
                 <div className="product-actions">
-                  <button onClick={() => openMovement(product)}>Stock</button>
                   <button onClick={() => edit(product)}>Modifier</button>
                   <button className="danger" onClick={() => remove(product.id)}>Supprimer</button>
                 </div>
@@ -2362,40 +2536,14 @@ function Products({ data, setData, currentRole = 'Admin' }) {
           })}
         </div>
 
-        <div className="select-visible-row">
-          <button type="button" onClick={toggleVisibleProducts}>Sélectionner / désélectionner cette page</button>
-        </div>
-
-        <PaginationControls page={productPage} totalPages={productTotalPages} totalItems={products.length} perPage={itemsPerPage} onPageChange={setCurrentPage} />
+        <PaginationControls
+          page={productPage}
+          totalPages={productTotalPages}
+          totalItems={products.length}
+          perPage={itemsPerPage}
+          onPageChange={setCurrentPage}
+        />
       </div>
-
-      {movementProduct && (
-        <div className="modal">
-          <form className="modal-content payment-modal" onSubmit={saveMovement}>
-            <div className="modal-actions no-print">
-              <button type="button" onClick={() => setMovementProduct(null)}>Fermer</button>
-              <button className="primary">Enregistrer</button>
-            </div>
-            <h2>Mouvement stock — {movementProduct.name}</h2>
-            <p className="muted">Stock actuel : {movementProduct.stock || 0}</p>
-            <div className="form-grid">
-              <select value={movementForm.type} onChange={(e) => setMovementForm({ ...movementForm, type: e.target.value })}>
-                <option>Entrée</option><option>Sortie</option>
-              </select>
-              <input type="number" min="1" placeholder="Quantité" value={movementForm.quantity} onChange={(e) => setMovementForm({ ...movementForm, quantity: e.target.value })} />
-              <input placeholder="Motif" value={movementForm.reason} onChange={(e) => setMovementForm({ ...movementForm, reason: e.target.value })} />
-            </div>
-            <div className="payment-history-list">
-              <h3>Derniers mouvements</h3>
-              {(movementProduct.stockHistory || []).length === 0 ? <p className="muted">Aucun mouvement enregistré.</p> : (movementProduct.stockHistory || []).slice(0, 10).map((move) => (
-                <div className="payment-history-item" key={move.id}>
-                  <strong>{move.type}</strong><span>{move.quantity}</span><span>{move.reason}</span><em>{move.documentNumber || new Date(move.createdAt).toLocaleDateString("fr-FR")}</em>
-                </div>
-              ))}
-            </div>
-          </form>
-        </div>
-      )}
     </section>
   );
 }
