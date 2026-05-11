@@ -21,25 +21,7 @@ button:hover { opacity: 0.85; }
 .switch span { color: #2563eb; cursor: pointer; font-weight: bold; }
 .error { color: #dc2626; }
 .small-warning, .muted { color: #6b7280; font-size: 14px; }
-.stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 12px;
-}
-
-.stat {
-  padding: 12px !important;
-  min-height: 90px;
-}
-
-.stat span {
-  font-size: 14px !important;
-}
-
-.stat strong {
-  font-size: 24px !important;
-  margin-top: 4px !important;
-}
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px; }
 .stat span { color: #6b7280; }
 .stat strong { display: block; font-size: 28px; margin-top: 8px; }
 .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; align-items: start; }
@@ -2700,7 +2682,88 @@ tr:hover td {
   background: #ff99cc;
   z-index: 10;
 }
+/* =========================
+   VERSION MOBILE
+   ========================= */
 
+@media (max-width: 768px) {
+
+  body {
+    overflow-x: hidden;
+  }
+
+  .layout,
+  .app-layout,
+  .main-layout {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+
+    width: 100%;
+    height: auto;
+
+    display: flex;
+    flex-direction: row;
+    justify-content: space-around;
+
+    padding: 8px;
+    z-index: 9999;
+
+    border-top: 1px solid rgba(255,255,255,0.1);
+    backdrop-filter: blur(10px);
+  }
+
+  .sidebar button {
+    flex: 1;
+    min-width: 70px;
+
+    font-size: 12px;
+    padding: 10px 4px;
+  }
+
+  .content,
+  main {
+    padding-bottom: 110px;
+  }
+
+  table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .grid,
+  .dashboard-grid,
+  .documents-grid,
+  .stats-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .card,
+  .stat {
+    width: 100%;
+  }
+
+  .topbar,
+  .actions,
+  .row {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  input,
+  select,
+  textarea,
+  button {
+    min-height: 42px;
+    font-size: 16px;
+  }
+}
 @media (max-width: 768px) {
   body {
     overflow-x: hidden;
@@ -2786,255 +2849,289 @@ tr:hover td {
 }
 
 /* =========================================================
-   VERSION MOBILE PROPRE — À GARDER TOUT EN BAS
+   PAGE CLIENTS — TRI, STATUTS, HISTORIQUE FACTURES
+   À GARDER TOUT EN BAS
    ========================================================= */
 
-@media (max-width: 768px) {
-  html,
-  body,
-  #root {
-    width: 100% !important;
-    min-width: 0 !important;
-    overflow-x: hidden !important;
-  }
+.clients-page .clients-toolbar {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) 220px !important;
+  gap: 12px !important;
+  margin-bottom: 14px !important;
+}
 
-  body {
-    font-size: 14px !important;
-  }
+.clients-page .search,
+.clients-page .client-sort {
+  height: 44px !important;
+  margin-bottom: 0 !important;
+  border-radius: 14px !important;
+  padding: 0 16px !important;
+  font-size: 15px !important;
+}
 
-  .app {
-    display: block !important;
-    width: 100% !important;
-    min-height: 100vh !important;
-    padding: 0 !important;
-  }
+.clients-page .clients-layout {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) 360px !important;
+  gap: 18px !important;
+  align-items: start !important;
+}
 
-  .app::before {
-    z-index: 0 !important;
-  }
+.clients-page .clients-table-card {
+  padding: 0 !important;
+  overflow: hidden !important;
+  border-radius: 18px !important;
+}
 
-  .content {
-    width: 100% !important;
-    min-width: 0 !important;
-    margin: 0 !important;
-    padding: 18px 14px 104px !important;
-    overflow-x: hidden !important;
-  }
+.clients-page .clients-table-card table {
+  width: 100% !important;
+  table-layout: fixed !important;
+  border-collapse: collapse !important;
+}
 
-  .sidebar {
-    position: fixed !important;
-    left: 0 !important;
-    right: 0 !important;
-    bottom: 0 !important;
-    top: auto !important;
+.clients-page .clients-table-card th:nth-child(1),
+.clients-page .clients-table-card td:nth-child(1) {
+  width: 58% !important;
+}
 
-    width: 100% !important;
-    height: 78px !important;
-    min-height: 78px !important;
-    max-height: 78px !important;
+.clients-page .clients-table-card th:nth-child(2),
+.clients-page .clients-table-card td:nth-child(2) {
+  width: 42% !important;
+}
 
-    display: flex !important;
-    flex-direction: row !important;
-    align-items: center !important;
-    gap: 6px !important;
+.clients-page .clients-table-card th {
+  padding: 12px 14px !important;
+  font-size: 12px !important;
+  background: rgba(2, 6, 23, 0.92) !important;
+  color: #dbeafe !important;
+  text-transform: uppercase !important;
+  letter-spacing: .35px !important;
+}
 
-    padding: 7px 8px !important;
-    margin: 0 !important;
-    z-index: 9999 !important;
+.clients-page .clients-table-card td {
+  padding: 8px 12px !important;
+  height: 54px !important;
+  vertical-align: middle !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14) !important;
+  overflow: visible !important;
+}
 
-    overflow-x: auto !important;
-    overflow-y: hidden !important;
+.clients-page .clients-table-card tbody tr:hover td,
+.clients-page .clients-table-card tbody tr.selected-client-row td {
+  background: rgba(59, 130, 246, 0.16) !important;
+}
 
-    border-right: 0 !important;
-    border-top: 1px solid rgba(148, 163, 184, 0.25) !important;
-    box-shadow: 0 -16px 45px rgba(0,0,0,0.35) !important;
-  }
+.clients-page .client-name-button {
+  display: block !important;
+  width: 100% !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  text-align: left !important;
+}
 
-  .sidebar h1,
-  .sidebar .user,
-  .sidebar .cloud-status,
-  .sidebar .danger,
-  .sidebar button.danger {
-    display: none !important;
-  }
+.clients-page .client-name-button strong {
+  display: block !important;
+  color: #60a5fa !important;
+  font-size: 14px !important;
+  font-weight: 900 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
 
-  .sidebar button {
-    width: auto !important;
-    min-width: 82px !important;
-    max-width: 105px !important;
-    height: 58px !important;
-    flex: 0 0 auto !important;
+.clients-page .client-actions {
+  display: flex !important;
+  justify-content: flex-start !important;
+  align-items: center !important;
+  gap: 6px !important;
+  overflow: visible !important;
+  white-space: nowrap !important;
+}
 
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
+.clients-page .client-actions button {
+  width: 76px !important;
+  min-width: 76px !important;
+  max-width: 76px !important;
+  height: 34px !important;
+  padding: 6px 6px !important;
+  margin: 0 !important;
+  font-size: 10.5px !important;
+  line-height: 1 !important;
+  border-radius: 9px !important;
+  flex: 0 0 76px !important;
+  white-space: nowrap !important;
+  overflow: visible !important;
+}
 
-    margin: 0 !important;
-    padding: 6px 8px !important;
+.clients-page .client-actions .danger {
+  width: 82px !important;
+  min-width: 82px !important;
+  max-width: 82px !important;
+  flex-basis: 82px !important;
+}
 
-    font-size: 11px !important;
-    line-height: 1.15 !important;
-    text-align: center !important;
-    white-space: normal !important;
+.clients-page .client-side-card {
+  width: 360px !important;
+  min-width: 360px !important;
+  max-width: 360px !important;
+  padding: 18px !important;
+  border-radius: 18px !important;
+}
 
-    border-radius: 14px !important;
-  }
+.clients-page .client-side-card > h3 {
+  text-align: center !important;
+  font-size: 21px !important;
+  margin: 0 0 14px !important;
+}
 
-  .sidebar button:hover {
-    transform: none !important;
-  }
+.clients-page .client-card {
+  width: 100% !important;
+  padding: 18px !important;
+  border-radius: 18px !important;
+  background: rgba(2, 6, 23, 0.38) !important;
+  border: 1px solid rgba(148, 163, 184, 0.22) !important;
+}
 
-  .page-header {
-    display: block !important;
-    margin-bottom: 14px !important;
-  }
+.clients-page .client-card h2 {
+  margin: 0 0 14px !important;
+  font-size: 22px !important;
+  line-height: 1.1 !important;
+  text-align: center !important;
+  color: #ffffff !important;
+}
 
-  .page-header h2,
-  .content h2 {
-    font-size: 24px !important;
-    line-height: 1.15 !important;
-  }
+.clients-page .client-card p {
+  margin: 7px 0 !important;
+  font-size: 13px !important;
+  line-height: 1.35 !important;
+  color: var(--crm-muted, #aebed4) !important;
+  overflow-wrap: anywhere !important;
+}
 
-  .page-header p {
-    font-size: 14px !important;
-  }
+.clients-page .client-card strong {
+  color: #ffffff !important;
+}
 
-  .stats {
-    grid-template-columns: 1fr 1fr !important;
-    gap: 10px !important;
-  }
+/* Couleurs de statut plus visibles */
+.badge.prospect {
+  background: rgba(59, 130, 246, 0.22) !important;
+  color: #bfdbfe !important;
+  border: 1px solid rgba(96, 165, 250, 0.55) !important;
+}
 
-  .stat {
-    padding: 14px 10px !important;
-    margin-bottom: 0 !important;
-  }
+.badge.client {
+  background: rgba(34, 197, 94, 0.22) !important;
+  color: #bbf7d0 !important;
+  border: 1px solid rgba(74, 222, 128, 0.55) !important;
+}
 
-  .stat span {
-    font-size: 13px !important;
-  }
+.badge.vip {
+  background: rgba(168, 85, 247, 0.28) !important;
+  color: #ead5ff !important;
+  border: 1px solid rgba(196, 181, 253, 0.65) !important;
+  box-shadow: 0 0 18px rgba(168, 85, 247, 0.18) !important;
+}
 
-  .stat strong {
-    font-size: 24px !important;
-  }
+.badge.inactif {
+  background: rgba(100, 116, 139, 0.24) !important;
+  color: #cbd5e1 !important;
+  border: 1px solid rgba(148, 163, 184, 0.42) !important;
+}
 
-  .dashboard-grid,
-  .two-columns,
-  .form-grid,
-  .filters-row,
-  .document-form-header,
-  .document-line {
+/* Historique factures dans la fiche client */
+.client-history {
+  margin-top: 16px !important;
+  padding-top: 14px !important;
+  border-top: 1px solid rgba(148, 163, 184, 0.22) !important;
+}
+
+.client-history h4 {
+  margin: 0 0 10px !important;
+  font-size: 15px !important;
+  color: #ffffff !important;
+}
+
+.client-history-total {
+  display: flex !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+  padding: 10px 12px !important;
+  margin-bottom: 10px !important;
+  border-radius: 12px !important;
+  background: rgba(59, 130, 246, 0.11) !important;
+  border: 1px solid rgba(96, 165, 250, 0.22) !important;
+}
+
+.client-history-total span {
+  color: var(--crm-muted, #aebed4) !important;
+  font-size: 12px !important;
+}
+
+.client-history-total strong {
+  color: #ffffff !important;
+  font-size: 13px !important;
+}
+
+.client-history-list {
+  display: grid !important;
+  gap: 8px !important;
+}
+
+.client-history-item {
+  display: grid !important;
+  grid-template-columns: 1fr auto !important;
+  gap: 10px !important;
+  align-items: center !important;
+  padding: 10px 12px !important;
+  border-radius: 12px !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(148, 163, 184, 0.14) !important;
+}
+
+.client-history-item div {
+  display: grid !important;
+  gap: 3px !important;
+}
+
+.client-history-item strong {
+  font-size: 12px !important;
+  color: #ffffff !important;
+}
+
+.client-history-item span {
+  font-size: 11px !important;
+  color: var(--crm-muted, #aebed4) !important;
+}
+
+.client-history-item .badge {
+  justify-self: end !important;
+  font-size: 10px !important;
+  padding: 3px 7px !important;
+}
+
+@media (max-width: 1050px) {
+  .clients-page .clients-layout {
     grid-template-columns: 1fr !important;
   }
 
-  .card {
-    padding: 14px !important;
-    margin-bottom: 14px !important;
-    border-radius: 16px !important;
-  }
-
-  .table {
+  .clients-page .client-side-card {
     width: 100% !important;
-    overflow-x: auto !important;
-    -webkit-overflow-scrolling: touch !important;
-  }
-
-  table {
-    min-width: 760px !important;
-    display: table !important;
-    white-space: normal !important;
-  }
-
-  th,
-  td {
-    padding: 10px !important;
-    font-size: 13px !important;
-  }
-
-  .actions {
-    min-width: 220px !important;
-  }
-
-  .actions button,
-  td button {
-    margin: 3px !important;
-    padding: 8px 9px !important;
-    font-size: 12px !important;
-  }
-
-  input,
-  select,
-  textarea,
-  button {
-    min-height: 42px !important;
-    font-size: 16px !important;
-  }
-
-  .document-line-head {
-    display: none !important;
-  }
-
-  .document-form-footer {
-    justify-content: stretch !important;
-    align-items: stretch !important;
-    flex-direction: column !important;
-  }
-
-  .document-form-footer button,
-  .document-form-footer .total-box {
-    width: 100% !important;
-  }
-
-  .modal {
-    padding: 10px !important;
-  }
-
-  .modal-content {
-    width: 100% !important;
-    max-width: 100% !important;
-    padding: 12px !important;
-    border-radius: 16px !important;
-  }
-
-  .modal-actions {
-    flex-wrap: wrap !important;
-    justify-content: stretch !important;
-  }
-
-  .modal-actions button {
-    flex: 1 1 140px !important;
-  }
-
-  .print-area {
-    overflow-x: auto !important;
-  }
-
-  .invoice-pink-template,
-  .invoice-template {
-    transform: scale(0.48) !important;
-    transform-origin: top left !important;
-    margin-bottom: -145mm !important;
+    min-width: 0 !important;
+    max-width: none !important;
   }
 }
 
-@media (max-width: 430px) {
-  .content {
-    padding-left: 10px !important;
-    padding-right: 10px !important;
+@media (max-width: 700px) {
+  .clients-page .clients-toolbar {
+    grid-template-columns: 1fr !important;
   }
 
-  .stats {
-    grid-template-columns: 1fr 1fr !important;
+  .clients-page .clients-table-card {
+    overflow-x: auto !important;
   }
 
-  .sidebar button {
-    min-width: 78px !important;
-    max-width: 92px !important;
-    font-size: 10.5px !important;
-  }
-
-  .page-header h2,
-  .content h2 {
-    font-size: 22px !important;
+  .clients-page .clients-table-card table {
+    min-width: 560px !important;
   }
 }
 

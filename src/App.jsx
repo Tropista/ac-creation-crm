@@ -1,97 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "./supabase";
 import * as XLSX from "xlsx";
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
 import "./App.css";
-
-
-const MOBILE_CSS = `
-@media (max-width: 768px) {
-  body {
-    font-size: 14px;
-  }
-
-  .layout,
-  .app-layout,
-  .main-layout {
-    flex-direction: column !important;
-  }
-
-  .sidebar,
-  .nav,
-  .menu {
-    width: 100% !important;
-    height: auto !important;
-  }
-
-  .sidebar {
-    position: fixed !important;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    z-index: 9999;
-    display: flex !important;
-    flex-direction: row !important;
-    justify-content: space-around;
-    gap: 4px;
-    padding: 8px;
-    border-top: 1px solid rgba(255,255,255,0.1);
-    overflow-x: auto;
-  }
-
-  .sidebar button,
-  .nav button,
-  .menu button {
-    flex: 1;
-    min-width: 70px;
-    margin: 2px;
-    font-size: 12px;
-    padding: 10px 4px;
-    white-space: nowrap;
-  }
-
-  .content,
-  .main,
-  main {
-    padding-bottom: 110px !important;
-    width: 100% !important;
-  }
-
-  table {
-    display: block;
-    overflow-x: auto;
-    white-space: nowrap;
-  }
-
-  input,
-  select,
-  textarea,
-  button {
-    min-height: 42px;
-    font-size: 16px;
-  }
-
-  .documents-grid,
-  .dashboard-grid,
-  .stats-grid,
-  .grid {
-    grid-template-columns: 1fr !important;
-  }
-
-  .topbar,
-  .actions,
-  .row {
-    flex-direction: column !important;
-    gap: 10px;
-  }
-
-  .card,
-  .stat {
-    width: 100%;
-  }
-}
-`;
 
 const STORAGE_KEY = "crm_local_data_v2";
 const SESSION_KEY = "crm_current_user_v2";
@@ -103,8 +13,6 @@ const emptyData = {
   settings: {
     companyName: "Mon Entreprise",
     companyEmail: "contact@monentreprise.com",
-    gmailSenderEmail: "ac.creation.officiel@gmail.com",
-    gmailSenders: "ac.creation.officiel@gmail.com|AC Création\ndos.santos.alves.daniel@gmail.com|Daniel personnel",
     companyPhone: "+352 00 00 00 00",
     companyAddress: "Adresse de l'entreprise",
     vatNumber: "LU00000000",
@@ -248,92 +156,8 @@ function money(value) {
   return Number(value || 0).toLocaleString("fr-FR", { style: "currency", currency: "EUR" });
 }
 
-function parseDecimal(value) {
-  if (value === null || value === undefined || value === "") return 0;
-  return Number(String(value).replace(",", ".").replace(/[^\d.-]/g, "")) || 0;
-}
-
-function productLabel(product) {
-  if (!product) return "";
-  return `${product.category ? `${product.category} — ` : ""}${product.name} - ${money(product.price)}`;
-}
-
 function today() {
   return new Date().toLocaleDateString("fr-FR");
-}
-
-function dateInputTodayPlus(days = 30) {
-  const date = new Date();
-  date.setDate(date.getDate() + days);
-  return date.toISOString().slice(0, 10);
-}
-
-function inputDateToFrench(value) {
-  if (!value) return "";
-  const [year, month, day] = String(value).split("-");
-  if (!year || !month || !day) return value;
-  return `${day}/${month}/${year}`;
-}
-
-function frenchDateToInput(value) {
-  if (!value) return "";
-  const text = String(value);
-  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
-  const parts = text.split("/");
-  if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
-  return "";
-}
-
-function dateValueFromAny(value) {
-  if (!value) return 0;
-  const input = frenchDateToInput(value);
-  return new Date(input || value).getTime() || 0;
-}
-
-function isInvoiceOverdue(doc) {
-  if (!doc?.dueDate || doc.status === "Payée") return false;
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  return dateValueFromAny(doc.dueDate) < todayStart.getTime();
-}
-
-function remainingAmount(doc) {
-  return Math.max(0, Number(doc?.totalTTC || 0) - Number(doc?.paidAmount || 0));
-}
-
-function getInvoicePaymentStatus(doc) {
-  const total = Number(doc?.totalTTC || 0);
-  const paid = Number(doc?.paidAmount || 0);
-  const rawStatus = String(doc?.status || "").toLowerCase().trim();
-
-  if (total > 0 && paid >= total) return "Payée";
-  if (paid > 0 && paid < total) return isInvoiceOverdue(doc) ? "En retard" : "Partiel";
-  if (isInvoiceOverdue(doc)) return "En retard";
-
-  if (rawStatus.includes("payée") || rawStatus.includes("payee")) return "Payée";
-  if (rawStatus.includes("partiel")) return "Partiel";
-  if (rawStatus.includes("retard")) return "En retard";
-
-  return "Non payée";
-}
-
-function buildReminderMessage(doc, client, settings) {
-  const status = getInvoicePaymentStatus(doc);
-  return `Bonjour ${client?.name || ""},
-
-Je me permets de vous relancer concernant la facture ${doc.number}, d'un montant total de ${money(doc.totalTTC)}.
-
-Montant déjà payé : ${money(doc.paidAmount || 0)}
-Montant restant à payer : ${money(remainingAmount(doc))}
-Date d'échéance : ${doc.dueDate || "non renseignée"}
-Statut : ${status}
-
-Sauf erreur de notre part, le règlement reste en attente.
-
-Vous pouvez effectuer le paiement avec les informations bancaires indiquées sur la facture.
-
-Cordialement,
-${settings.companyName || ""}`;
 }
 
 function clientName(data, id) {
@@ -345,31 +169,9 @@ function statusClass(status) {
 }
 
 export default function App() {
-
-  useEffect(() => {
-    const existing = document.getElementById("crm-mobile-css");
-    if (existing) return;
-
-    const style = document.createElement("style");
-    style.id = "crm-mobile-css";
-    style.textContent = MOBILE_CSS;
-    document.head.appendChild(style);
-
-    return () => {
-      const current = document.getElementById("crm-mobile-css");
-      if (current) current.remove();
-    };
-  }, []);
-
   const [data, setData] = useState(loadData);
   const [currentUser, setCurrentUser] = useState(() => JSON.parse(localStorage.getItem(SESSION_KEY) || "null"));
   const [page, setPage] = useState("dashboard");
-  const [invoiceFilter, setInvoiceFilter] = useState("all");
-
-  const openInvoiceFilter = (filter) => {
-    setInvoiceFilter(filter);
-    setPage("invoices");
-  };
   const [loading, setLoading] = useState(true);
   const [syncStatus, setSyncStatus] = useState("Connexion à Supabase...");
 
@@ -454,23 +256,21 @@ export default function App() {
         <button onClick={() => setPage("products")}>📦 Produits</button>
         <button onClick={() => setPage("categories")}>🏷️ Catégories</button>
         <button onClick={() => setPage("quotes")}>🧾 Devis</button>
-        <button onClick={() => { setInvoiceFilter("all"); setPage("invoices"); }}>💶 Factures</button>
+        <button onClick={() => setPage("invoices")}>💶 Factures</button>
         <button onClick={() => setPage("settings")}>⚙️ Paramètres</button>
         <button onClick={() => setPage("import")}>📥 Import Excel</button>
-        <button onClick={() => setPage("backup")}>💾 Sauvegarde</button>
         <button className="danger" onClick={logout}>Déconnexion</button>
       </aside>
 
       <main className="content">
-        {page === "dashboard" && <Dashboard data={data} openInvoiceFilter={openInvoiceFilter} />}
+        {page === "dashboard" && <Dashboard data={data} />}
         {page === "clients" && <Clients data={data} setData={updateData} />}
         {page === "products" && <Products data={data} setData={updateData} />}
         {page === "categories" && <Categories data={data} setData={updateData} />}
         {page === "quotes" && <Documents type="quote" data={data} setData={updateData} />}
-        {page === "invoices" && <Documents type="invoice" data={data} setData={updateData} invoiceFilter={invoiceFilter} setInvoiceFilter={setInvoiceFilter} />}
+        {page === "invoices" && <Documents type="invoice" data={data} setData={updateData} />}
         {page === "settings" && <Settings data={data} setData={updateData} />}
         {page === "import" && <ExcelImport data={data} setData={updateData} />}
-        {page === "backup" && <BackupRestore data={data} setData={updateData} />}
       </main>
     </div>
   );
@@ -656,9 +456,7 @@ function AuthPage({ data, setData, setCurrentUser }) {
   );
 }
 
-
-
-function Dashboard({ data, openInvoiceFilter }) {
+function Dashboard({ data }) {
   const invoices = data.invoices || [];
   const quotes = data.quotes || [];
   const clients = data.clients || [];
@@ -666,15 +464,11 @@ function Dashboard({ data, openInvoiceFilter }) {
   const categories = data.categories || [];
 
   const totalInvoices = invoices.reduce((sum, inv) => sum + Number(inv.totalTTC || 0), 0);
-  const paidInvoices = invoices.reduce((sum, inv) => sum + Number(inv.paidAmount || (inv.status === "Payée" ? inv.totalTTC : 0) || 0), 0);
-  const unpaidInvoices = invoices.reduce((sum, inv) => sum + remainingAmount(inv), 0);
-  const unpaidCount = invoices.filter((i) => {
-    const total = Number(i?.totalTTC || 0);
-    const paid = Number(i?.paidAmount || 0);
-    return total > 0 && paid <= 0;
-  }).length;
-  const partialCount = invoices.filter((i) => getInvoicePaymentStatus(i) === "Partiel").length;
-  const overdueCount = invoices.filter((i) => getInvoicePaymentStatus(i) === "En retard").length;
+  const paidInvoices = invoices
+    .filter((i) => i.status === "Payée")
+    .reduce((sum, inv) => sum + Number(inv.totalTTC || 0), 0);
+  const unpaidInvoices = totalInvoices - paidInvoices;
+  const unpaidCount = invoices.filter((i) => i.status !== "Payée").length;
   const acceptedQuotes = quotes.filter((q) => q.status === "Accepté").length;
 
   const invoiceLines = invoices.flatMap((invoice) =>
@@ -690,7 +484,7 @@ function Dashboard({ data, openInvoiceFilter }) {
 
   const productStats = products
     .map((product) => {
-      const lines = invoiceLines.filter((line) => line.productId === product.id);
+      const lines = invoiceLines.filter((line) => String(line.productId) === String(product.id));
       const quantity = lines.reduce((sum, line) => sum + Number(line.quantity || 0), 0);
       const revenue = lines.reduce((sum, line) => sum + Number(line.totalHT || 0), 0);
       return { ...product, quantity, revenue };
@@ -711,15 +505,30 @@ function Dashboard({ data, openInvoiceFilter }) {
 
   const categoryStats = categories
     .map((category) => {
-      const categoryProducts = products.filter((p) => p.categoryId === category.id);
-      const categoryProductIds = categoryProducts.map((p) => p.id);
-      const revenue = invoiceLines
-        .filter((line) => categoryProductIds.includes(line.productId))
-        .reduce((sum, line) => sum + Number(line.totalHT || 0), 0);
-      const quantity = invoiceLines
-        .filter((line) => categoryProductIds.includes(line.productId))
-        .reduce((sum, line) => sum + Number(line.quantity || 0), 0);
-      return { ...category, revenue, quantity };
+      const categoryName = category.name || category.label || category.category || "";
+      const normalizedCategoryName = String(categoryName).trim().toLowerCase();
+
+      const categoryProducts = products.filter((p) =>
+        String(p.categoryId || "") === String(category.id || "") ||
+        String(p.category || "").trim().toLowerCase() === normalizedCategoryName
+      );
+
+      const categoryProductIds = categoryProducts.map((p) => String(p.id));
+
+      const lines = invoiceLines.filter((line) => {
+        const lineProductId = String(line.productId || "");
+        const lineCategory = String(line.category || "").trim().toLowerCase();
+
+        return (
+          categoryProductIds.includes(lineProductId) ||
+          lineCategory === normalizedCategoryName
+        );
+      });
+
+      const revenue = lines.reduce((sum, line) => sum + Number(line.totalHT || line.subtotal || 0), 0);
+      const quantity = lines.reduce((sum, line) => sum + Number(line.quantity || 0), 0);
+
+      return { ...category, name: categoryName || "Sans catégorie", revenue, quantity };
     })
     .filter((c) => c.revenue > 0 || c.quantity > 0)
     .sort((a, b) => b.revenue - a.revenue);
@@ -743,9 +552,7 @@ function Dashboard({ data, openInvoiceFilter }) {
         <div className="card stat"><span>Devis</span><strong>{quotes.length}</strong></div>
         <div className="card stat"><span>Devis acceptés</span><strong>{acceptedQuotes}</strong></div>
         <div className="card stat"><span>Factures</span><strong>{invoices.length}</strong></div>
-        <button type="button" className="card stat clickable" onClick={() => openInvoiceFilter && openInvoiceFilter("unpaid")}><span>Non payées</span><strong>{unpaidCount}</strong></button>
-        <button type="button" className="card stat clickable" onClick={() => openInvoiceFilter && openInvoiceFilter("partial")}><span>Partielles</span><strong>{partialCount}</strong></button>
-        <button type="button" className="card stat clickable" onClick={() => openInvoiceFilter && openInvoiceFilter("overdue")}><span>En retard</span><strong>{overdueCount}</strong></button>
+        <div className="card stat"><span>Non payées</span><strong>{unpaidCount}</strong></div>
         <div className="card stat"><span>Total facturé</span><strong>{money(totalInvoices)}</strong></div>
         <div className="card stat"><span>Payé</span><strong>{money(paidInvoices)}</strong></div>
         <div className="card stat"><span>À encaisser</span><strong>{money(unpaidInvoices)}</strong></div>
@@ -831,7 +638,7 @@ function Dashboard({ data, openInvoiceFilter }) {
                       <td>{invoice.number}</td>
                       <td>{clientName(data, invoice.clientId)}</td>
                       <td>{money(invoice.totalTTC)}</td>
-                      <td><span className={statusClass(getInvoicePaymentStatus(invoice))}>{getInvoicePaymentStatus(invoice)}</span></td>
+                      <td><span className={statusClass(invoice.status)}>{invoice.status}</span></td>
                     </tr>
                   ))}
                 </tbody>
@@ -844,220 +651,12 @@ function Dashboard({ data, openInvoiceFilter }) {
   );
 }
 
-
-function BackupRestore({ data, setData }) {
-  const [message, setMessage] = useState("");
-
-  const backupData = normalizeData(data);
-  const backupDate = new Date().toISOString().slice(0, 10);
-  const backupName = `crm-backup-${backupDate}`;
-
-  function downloadFile(filename, content, type) {
-    const blob = new Blob([content], { type });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  }
-
-  function exportJSON() {
-    const payload = {
-      app: "CRM Electron React Supabase",
-      version: 1,
-      exportedAt: new Date().toISOString(),
-      data: backupData,
-    };
-
-    downloadFile(`${backupName}.json`, JSON.stringify(payload, null, 2), "application/json;charset=utf-8");
-    setMessage("Sauvegarde JSON exportée.");
-  }
-
-  function exportExcel() {
-    const workbook = XLSX.utils.book_new();
-
-    const clientsSheet = (backupData.clients || []).map((client) => ({
-      ID: client.id,
-      Nom: client.name || "",
-      Email: client.email || "",
-      Téléphone: client.phone || "",
-      Société: client.company || "",
-      Adresse: client.address || "",
-      Statut: client.status || "",
-      Notes: client.notes || "",
-    }));
-
-    const productsSheet = (backupData.products || []).map((product) => ({
-      ID: product.id,
-      Nom: product.name || "",
-      Catégorie: product.category || "",
-      "Prix HT": product.price || 0,
-      Stock: product.stock || 0,
-      Description: product.description || "",
-    }));
-
-    const categoriesSheet = (backupData.categories || []).map((category) => ({
-      ID: category.id,
-      Nom: category.name || "",
-    }));
-
-    const quotesSheet = (backupData.quotes || []).map((quote) => ({
-      ID: quote.id,
-      Numéro: quote.number || "",
-      Date: quote.date || "",
-      Client: clientName(backupData, quote.clientId),
-      "ID client": quote.clientId || "",
-      Statut: quote.status || "",
-      "Total HT": quote.totalHT || 0,
-      TVA: quote.taxAmount || 0,
-      "Total TTC": quote.totalTTC || 0,
-      Notes: quote.notes || "",
-    }));
-
-    const invoicesSheet = (backupData.invoices || []).map((invoice) => ({
-      ID: invoice.id,
-      Numéro: invoice.number || "",
-      Date: invoice.date || "",
-      Client: clientName(backupData, invoice.clientId),
-      "ID client": invoice.clientId || "",
-      Statut: getInvoicePaymentStatus(invoice),
-      "Date échéance": invoice.dueDate || "",
-      "Montant payé": invoice.paidAmount || 0,
-      "Reste à payer": remainingAmount(invoice),
-      "Total HT": invoice.totalHT || 0,
-      TVA: invoice.taxAmount || 0,
-      "Total TTC": invoice.totalTTC || 0,
-      Notes: invoice.notes || "",
-    }));
-
-    const linesSheet = [
-      ...(backupData.quotes || []).flatMap((doc) =>
-        (doc.lines || []).map((line, index) => ({
-          Type: "Devis",
-          "ID document": doc.id,
-          Numéro: doc.number || "",
-          Ligne: index + 1,
-          Produit: line.description || "",
-          "ID produit": line.productId || "",
-          Quantité: line.quantity || 0,
-          "Prix HT": line.price || 0,
-          "Remise %": line.discount || 0,
-          "Total HT": line.totalHT || 0,
-        }))
-      ),
-      ...(backupData.invoices || []).flatMap((doc) =>
-        (doc.lines || []).map((line, index) => ({
-          Type: "Facture",
-          "ID document": doc.id,
-          Numéro: doc.number || "",
-          Ligne: index + 1,
-          Produit: line.description || "",
-          "ID produit": line.productId || "",
-          Quantité: line.quantity || 0,
-          "Prix HT": line.price || 0,
-          "Remise %": line.discount || 0,
-          "Total HT": line.totalHT || 0,
-        }))
-      ),
-    ];
-
-    const settingsSheet = Object.entries(backupData.settings || {}).map(([key, value]) => ({
-      Clé: key,
-      Valeur: typeof value === "object" ? JSON.stringify(value) : value,
-    }));
-
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(clientsSheet), "Clients");
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(productsSheet), "Produits");
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(categoriesSheet), "Categories");
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(quotesSheet), "Devis");
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(invoicesSheet), "Factures");
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(linesSheet), "Lignes");
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(settingsSheet), "Parametres");
-
-    XLSX.writeFile(workbook, `${backupName}.xlsx`);
-    setMessage("Sauvegarde Excel exportée.");
-  }
-
-  function restoreBackup(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const confirmed = window.confirm(
-      "Restaurer cette sauvegarde va remplacer les données actuelles du CRM. Continuer ?"
-    );
-
-    if (!confirmed) {
-      e.target.value = "";
-      return;
-    }
-
-    const reader = new FileReader();
-
-    reader.onload = async (event) => {
-      try {
-        const parsed = JSON.parse(event.target.result);
-        const restoredData = normalizeData(parsed.data || parsed);
-
-        await setData(restoredData);
-        setMessage("Sauvegarde restaurée avec succès. Les données ont aussi été synchronisées avec Supabase.");
-      } catch (error) {
-        console.error(error);
-        setMessage("Erreur : fichier de sauvegarde JSON invalide.");
-      } finally {
-        e.target.value = "";
-      }
-    };
-
-    reader.readAsText(file);
-  }
-
-  return (
-    <section>
-      <div className="page-header">
-        <div>
-          <h2>Sauvegarde / backup</h2>
-          <p>Exporte ou restaure toutes les données importantes du CRM.</p>
-        </div>
-      </div>
-
-      <div className="stats">
-        <div className="card stat"><span>Clients</span><strong>{backupData.clients.length}</strong></div>
-        <div className="card stat"><span>Produits</span><strong>{backupData.products.length}</strong></div>
-        <div className="card stat"><span>Factures</span><strong>{backupData.invoices.length}</strong></div>
-        <div className="card stat"><span>Devis</span><strong>{backupData.quotes.length}</strong></div>
-      </div>
-
-      <div className="grid two">
-        <div className="card">
-          <h3>Exporter une sauvegarde</h3>
-          <p className="muted">Le JSON sert à restaurer le CRM. L'Excel sert à consulter ou archiver les données.</p>
-          <div className="actions">
-            <button type="button" className="primary" onClick={exportJSON}>Exporter en JSON</button>
-            <button type="button" onClick={exportExcel}>Exporter en Excel</button>
-          </div>
-        </div>
-
-        <div className="card">
-          <h3>Restaurer une sauvegarde</h3>
-          <p className="muted">Sélectionne un fichier JSON exporté depuis ce CRM. Les données actuelles seront remplacées.</p>
-          <input type="file" accept=".json,application/json" onChange={restoreBackup} />
-        </div>
-      </div>
-
-      {message && <div className="card"><strong>{message}</strong></div>}
-    </section>
-  );
-}
-
 function Settings({ data, setData }) {
   const [form, setForm] = useState(data.settings);
 
   function submit(e) {
     e.preventDefault();
-    setData({ ...data, settings: { ...form, taxRate: parseDecimal(form.taxRate) } });
+    setData({ ...data, settings: { ...form, taxRate: Number(form.taxRate || 0) } });
     alert("Paramètres sauvegardés.");
   }
 
@@ -1067,24 +666,6 @@ function Settings({ data, setData }) {
       <form className="card form-grid" onSubmit={submit}>
         <input placeholder="Nom entreprise" value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })} />
         <input placeholder="Email entreprise" value={form.companyEmail} onChange={(e) => setForm({ ...form, companyEmail: e.target.value })} />
-        <label>Adresse Gmail à utiliser pour l'envoi</label>
-        <select value={form.gmailSenderEmail || ""} onChange={(e) => setForm({ ...form, gmailSenderEmail: e.target.value })}>
-          {(form.gmailSenders || "ac.creation.officiel@gmail.com|AC Création").split("\n").map((line) => {
-            const [email, label] = line.split("|");
-            const cleanEmail = (email || "").trim();
-            if (!cleanEmail) return null;
-            return <option key={cleanEmail} value={cleanEmail}>{label ? `${label.trim()} — ${cleanEmail}` : cleanEmail}</option>;
-          })}
-        </select>
-        <textarea
-          placeholder={"Adresses Gmail disponibles, une par ligne. Exemple :\nac.creation.officiel@gmail.com|AC Création\ndos.santos.alves.daniel@gmail.com|Daniel personnel"}
-          value={form.gmailSenders || ""}
-          onChange={(e) => {
-            const value = e.target.value;
-            const firstEmail = value.split("\n").map((line) => line.split("|")[0]?.trim()).find(Boolean) || "";
-            setForm({ ...form, gmailSenders: value, gmailSenderEmail: form.gmailSenderEmail || firstEmail });
-          }}
-        />
         <input placeholder="Téléphone entreprise" value={form.companyPhone} onChange={(e) => setForm({ ...form, companyPhone: e.target.value })} />
         <input placeholder="Adresse entreprise" value={form.companyAddress} onChange={(e) => setForm({ ...form, companyAddress: e.target.value })} />
         <input placeholder="N° TVA" value={form.vatNumber} onChange={(e) => setForm({ ...form, vatNumber: e.target.value })} />
@@ -1139,14 +720,30 @@ function Clients({ data, setData }) {
   const [selectedClientId, setSelectedClientId] = useState(null);
   const [editing, setEditing] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [sortBy, setSortBy] = useState("nameAsc");
   const [form, setForm] = useState({ name: "", email: "", phone: "", company: "", address: "", status: "Prospect", notes: "" });
 
   const itemsPerPage = 10;
-  const clients = data.clients.filter((c) => [c.name, c.email, c.phone, c.company, c.status, c.address].join(" ").toLowerCase().includes(search.toLowerCase()));
+  const clients = (data.clients || [])
+    .filter((c) => [c.name, c.email, c.phone, c.company, c.status, c.address].join(" ").toLowerCase().includes(search.trim().toLowerCase()))
+    .sort((a, b) => {
+      if (sortBy === "nameAsc") return String(a.name || "").localeCompare(String(b.name || ""));
+      if (sortBy === "nameDesc") return String(b.name || "").localeCompare(String(a.name || ""));
+      if (sortBy === "dateDesc") return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+      if (sortBy === "dateAsc") return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
+      if (sortBy === "status") return String(a.status || "").localeCompare(String(b.status || ""));
+      return 0;
+    });
   const clientTotalPages = Math.max(1, Math.ceil(clients.length / itemsPerPage));
   const clientPage = Math.min(currentPage, clientTotalPages);
   const paginatedClients = clients.slice((clientPage - 1) * itemsPerPage, clientPage * itemsPerPage);
-  const selectedClient = data.clients.find((c) => c.id === selectedClientId);
+  const selectedClient = (data.clients || []).find((c) => c.id === selectedClientId);
+  const selectedClientInvoices = selectedClient
+    ? (data.invoices || [])
+        .filter((invoice) => String(invoice.clientId) === String(selectedClient.id))
+        .sort((a, b) => new Date(b.createdAt || b.date || 0) - new Date(a.createdAt || a.date || 0))
+    : [];
+  const selectedClientInvoiceTotal = selectedClientInvoices.reduce((sum, invoice) => sum + Number(invoice.totalTTC || 0), 0);
 
   function reset() {
     setEditing(null);
@@ -1157,7 +754,7 @@ function Clients({ data, setData }) {
     e.preventDefault();
     if (!form.name) return alert("Le nom du client est obligatoire.");
     if (editing) {
-      setData({ ...data, clients: data.clients.map((c) => (c.id === editing ? { ...c, ...form } : c)) });
+      setData({ ...data, clients: data.paginatedClients.map((c) => (c.id === editing ? { ...c, ...form } : c)) });
     } else {
       const client = { id: uid(), createdAt: today(), ...form };
       setData({ ...data, clients: [...data.clients, client] });
@@ -1182,7 +779,7 @@ function Clients({ data, setData }) {
   }
 
   return (
-    <section>
+    <section className="clients-page">
       <div className="page-header"><div><h2>Clients</h2><p>Ajoute tes prospects et clients.</p></div></div>
 
       <form className="card form-grid" onSubmit={submit}>
@@ -1199,18 +796,33 @@ function Clients({ data, setData }) {
         {editing && <button type="button" onClick={reset}>Annuler</button>}
       </form>
 
-      <input className="search" placeholder="Rechercher un client..." value={search} onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }} />
+      <div className="clients-toolbar">
+        <input className="search" placeholder="Rechercher un client..." value={search} onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }} />
+        <select className="client-sort" value={sortBy} onChange={(e) => { setSortBy(e.target.value); setCurrentPage(1); }}>
+          <option value="nameAsc">Nom : A → Z</option>
+          <option value="nameDesc">Nom : Z → A</option>
+          <option value="dateDesc">Date : récent</option>
+          <option value="dateAsc">Date : ancien</option>
+          <option value="status">Statut</option>
+        </select>
+      </div>
 
-      <div className="two-columns">
-        <div className="table card">
+      <div className="two-columns clients-layout">
+        <div className="table card clients-table-card">
           <table>
-            <thead><tr><th>Nom</th><th>Email</th><th>Téléphone</th><th>Statut</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Nom du client</th><th>Actions</th></tr></thead>
             <tbody>
               {paginatedClients.map((c) => (
-                <tr key={c.id}>
-                  <td><button className="link-button" onClick={() => setSelectedClientId(c.id)}>{c.name}</button></td>
-                  <td>{c.email}</td><td>{c.phone}</td><td><span className={statusClass(c.status)}>{c.status}</span></td>
-                  <td><button onClick={() => edit(c)}>Modifier</button><button className="danger" onClick={() => remove(c.id)}>Supprimer</button></td>
+                <tr key={c.id} className={selectedClientId === c.id ? "selected-client-row" : ""}>
+                  <td>
+                    <button className="link-button client-name-button" onClick={() => setSelectedClientId(c.id)}>
+                      <strong>{c.name}</strong>
+                    </button>
+                  </td>
+                  <td className="client-actions">
+                    <button onClick={() => edit(c)}>Modifier</button>
+                    <button className="danger" onClick={() => remove(c.id)}>Supprimer</button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -1224,7 +836,7 @@ function Clients({ data, setData }) {
           />
         </div>
 
-        <div className="card">
+        <div className="card client-side-card">
           <h3>Fiche client</h3>
           {!selectedClient ? <p className="muted">Clique sur un client pour voir sa fiche.</p> : (
             <div className="client-card">
@@ -1236,6 +848,33 @@ function Clients({ data, setData }) {
               <p><strong>Statut :</strong> <span className={statusClass(selectedClient.status)}>{selectedClient.status}</span></p>
               <p><strong>Créé le :</strong> {selectedClient.createdAt}</p>
               <p><strong>Notes :</strong><br />{selectedClient.notes || "-"}</p>
+
+              <div className="client-history">
+                <h4>Historique factures</h4>
+                <div className="client-history-total">
+                  <span>{selectedClientInvoices.length} facture(s)</span>
+                  <strong>{money(selectedClientInvoiceTotal)}</strong>
+                </div>
+
+                {selectedClientInvoices.length === 0 ? (
+                  <p className="muted">Aucune facture pour ce client.</p>
+                ) : (
+                  <div className="client-history-list">
+                    {selectedClientInvoices.slice(0, 5).map((invoice) => (
+                      <div className="client-history-item" key={invoice.id}>
+                        <div>
+                          <strong>{invoice.number || "Facture"}</strong>
+                          <span>{invoice.date || invoice.createdAt || "-"}</span>
+                        </div>
+                        <div>
+                          <strong>{money(invoice.totalTTC || 0)}</strong>
+                          <span className={statusClass(invoice.status)}>{invoice.status}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -1244,26 +883,19 @@ function Clients({ data, setData }) {
   );
 }
 
-function Documents({ type, data, setData, invoiceFilter = "all", setInvoiceFilter}) {
+function Documents({ type, data, setData }) {
   const isQuote = type === "quote";
   const listKey = isQuote ? "quotes" : "invoices";
   const title = isQuote ? "Devis" : "Factures";
   const prefix = isQuote ? "DEV" : "FAC";
   const defaultStatus = isQuote ? "Brouillon" : "Non payée";
 
-  const emptyLine = { productId: "", productSearch: "", description: "", quantity: 1, price: 0, discount: 0 };
+  const emptyLine = { productId: "", description: "", quantity: 1, price: 0, discount: 0 };
   const [editingId, setEditingId] = useState(null);
   const [previewDoc, setPreviewDoc] = useState(null);
-  const [reminderDoc, setReminderDoc] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [sortBy, setSortBy] = useState("dateDesc");
-  const [form, setForm] = useState({
-    clientId: "",
-    status: defaultStatus,
-    dueDate: isQuote ? "" : dateInputTodayPlus(30),
-    paidAmount: 0,
-    lines: [{ ...emptyLine }],
-  });
+  const [form, setForm] = useState({ clientId: "", status: defaultStatus, lines: [{ ...emptyLine }] });
 
   const itemsPerPage = 10;
   const documents = data[listKey];
@@ -1299,26 +931,13 @@ function Documents({ type, data, setData, invoiceFilter = "all", setInvoiceFilte
     });
   }, [documents, sortBy, data]);
 
-  const filteredDocuments = type === "invoice" && invoiceFilter !== "all"
-    ? sortedDocuments.filter((doc) => {
-        const status = getInvoicePaymentStatus(doc);
-        const total = Number(doc?.totalTTC || 0);
-        const paid = Number(doc?.paidAmount || 0);
-
-        if (invoiceFilter === "unpaid") return total > 0 && paid <= 0;
-        if (invoiceFilter === "partial") return status === "Partiel";
-        if (invoiceFilter === "overdue") return status === "En retard";
-        return true;
-      })
-    : sortedDocuments;
-
-  const documentTotalPages = Math.max(1, Math.ceil(filteredDocuments.length / itemsPerPage));
+  const documentTotalPages = Math.max(1, Math.ceil(sortedDocuments.length / itemsPerPage));
   const documentPage = Math.min(currentPage, documentTotalPages);
-  const paginatedDocuments = filteredDocuments.slice((documentPage - 1) * itemsPerPage, documentPage * itemsPerPage);
+  const paginatedDocuments = sortedDocuments.slice((documentPage - 1) * itemsPerPage, documentPage * itemsPerPage);
 
   function lineTotal(line) {
-    const subtotal = parseDecimal(line.quantity) * parseDecimal(line.price);
-    const discountAmount = subtotal * (parseDecimal(line.discount) / 100);
+    const subtotal = Number(line.quantity || 0) * Number(line.price || 0);
+    const discountAmount = subtotal * (Number(line.discount || 0) / 100);
     const totalHT = subtotal - discountAmount;
     return { subtotal, discountAmount, totalHT };
   }
@@ -1327,7 +946,7 @@ function Documents({ type, data, setData, invoiceFilter = "all", setInvoiceFilte
     const subtotal = form.lines.reduce((sum, line) => sum + lineTotal(line).subtotal, 0);
     const discountAmount = form.lines.reduce((sum, line) => sum + lineTotal(line).discountAmount, 0);
     const totalHT = form.lines.reduce((sum, line) => sum + lineTotal(line).totalHT, 0);
-    const taxAmount = totalHT * (parseDecimal(data.settings.taxRate) / 100);
+    const taxAmount = totalHT * (Number(data.settings.taxRate || 0) / 100);
     const totalTTC = totalHT + taxAmount;
     return { subtotal, discountAmount, totalHT, taxAmount, totalTTC };
   }, [form.lines, data.settings.taxRate]);
@@ -1343,26 +962,23 @@ function Documents({ type, data, setData, invoiceFilter = "all", setInvoiceFilte
     const product = (data.products || []).find((p) => String(p.id) === String(productId));
 
     if (!product) {
-      updateLine(index, { productId: "", productSearch: "", description: "", price: 0 });
+      updateLine(index, {
+        productId: "",
+        category: "",
+        categoryId: "",
+        description: "",
+        price: 0,
+      });
       return;
     }
 
     updateLine(index, {
       productId: product.id,
-      productSearch: productLabel(product),
+      category: product.category || "Sans catégorie",
+      categoryId: product.categoryId || "",
       description: product.description || product.name || "",
-      price: product.price,
+      price: Number(product.price || 0),
     });
-  }
-
-  function updateProductSearch(index, value) {
-    const product = (data.products || []).find((p) => productLabel(p) === value);
-
-    if (product) {
-      selectProduct(index, product.id);
-    } else {
-      updateLine(index, { productId: "", productSearch: value });
-    }
   }
 
   function addLine() {
@@ -1376,13 +992,7 @@ function Documents({ type, data, setData, invoiceFilter = "all", setInvoiceFilte
 
   function reset() {
     setEditingId(null);
-    setForm({
-      clientId: "",
-      status: defaultStatus,
-      dueDate: isQuote ? "" : dateInputTodayPlus(30),
-      paidAmount: 0,
-      lines: [{ ...emptyLine }],
-    });
+    setForm({ clientId: "", status: defaultStatus, lines: [{ ...emptyLine }] });
   }
 
   function submit(e) {
@@ -1390,13 +1000,19 @@ function Documents({ type, data, setData, invoiceFilter = "all", setInvoiceFilte
     if (!form.clientId) return alert("Choisis un client.");
 
     const cleanLines = form.lines
-      .map((line) => ({
-        ...line,
-        quantity: parseDecimal(line.quantity),
-        price: parseDecimal(line.price),
-        discount: parseDecimal(line.discount),
-        ...lineTotal(line),
-      }))
+      .map((line) => {
+        const product = (data.products || []).find((p) => String(p.id) === String(line.productId));
+        return {
+          ...line,
+          productId: product?.id || line.productId || "",
+          category: product?.category || line.category || "Sans catégorie",
+          categoryId: product?.categoryId || line.categoryId || "",
+          quantity: Number(line.quantity || 0),
+          price: Number(line.price || 0),
+          discount: Number(line.discount || 0),
+          ...lineTotal(line),
+        };
+      })
       .filter((line) => line.description && line.quantity > 0);
 
     if (cleanLines.length === 0) return alert("Ajoute au moins un produit ou une prestation.");
@@ -1408,17 +1024,7 @@ function Documents({ type, data, setData, invoiceFilter = "all", setInvoiceFilte
         ...data,
         [listKey]: documents.map((d) =>
           d.id === editingId
-            ? {
-                ...d,
-                clientId: form.clientId,
-                status: isQuote ? form.status : getInvoicePaymentStatus({ ...d, ...totals, paidAmount: parseDecimal(form.paidAmount), dueDate: inputDateToFrench(form.dueDate) }),
-                dueDate: isQuote ? d.dueDate : inputDateToFrench(form.dueDate),
-                paidAmount: isQuote ? d.paidAmount : parseDecimal(form.paidAmount),
-                description: firstDescription,
-                lines: cleanLines,
-                taxRate: data.settings.taxRate,
-                ...totals,
-              }
+            ? { ...d, clientId: form.clientId, status: form.status, description: firstDescription, lines: cleanLines, taxRate: data.settings.taxRate, ...totals }
             : d
         ),
       });
@@ -1429,9 +1035,7 @@ function Documents({ type, data, setData, invoiceFilter = "all", setInvoiceFilte
         date: today(),
         taxRate: data.settings.taxRate,
         clientId: form.clientId,
-        status: isQuote ? form.status : getInvoicePaymentStatus({ totalTTC: totals.totalTTC, paidAmount: parseDecimal(form.paidAmount), dueDate: inputDateToFrench(form.dueDate), status: form.status }),
-        dueDate: isQuote ? "" : inputDateToFrench(form.dueDate),
-        paidAmount: isQuote ? 0 : parseDecimal(form.paidAmount),
+        status: form.status,
         description: firstDescription,
         lines: cleanLines,
         ...totals,
@@ -1445,21 +1049,10 @@ function Documents({ type, data, setData, invoiceFilter = "all", setInvoiceFilte
   function edit(doc) {
     const lines = doc.lines?.length
       ? doc.lines
-      : [{ productId: doc.productId || "", productSearch: "", description: doc.description || "", quantity: doc.quantity || 1, price: doc.price || 0, discount: doc.discount || 0 }];
-
-    const linesWithSearch = lines.map((line) => {
-      const product = (data.products || []).find((p) => String(p.id) === String(line.productId));
-      return { ...emptyLine, ...line, productSearch: line.productSearch || productLabel(product) };
-    });
+      : [{ productId: doc.productId || "", description: doc.description || "", quantity: doc.quantity || 1, price: doc.price || 0, discount: doc.discount || 0 }];
 
     setEditingId(doc.id);
-    setForm({
-      clientId: doc.clientId,
-      status: isQuote ? (doc.status || defaultStatus) : getInvoicePaymentStatus(doc),
-      dueDate: isQuote ? "" : frenchDateToInput(doc.dueDate) || dateInputTodayPlus(30),
-      paidAmount: doc.paidAmount || (doc.status === "Payée" ? doc.totalTTC : 0) || 0,
-      lines: linesWithSearch,
-    });
+    setForm({ clientId: doc.clientId, status: doc.status || defaultStatus, lines });
   }
 
   function remove(id) {
@@ -1468,58 +1061,18 @@ function Documents({ type, data, setData, invoiceFilter = "all", setInvoiceFilte
   }
 
   function updateStatus(id, status) {
-    setData({
-      ...data,
-      [listKey]: documents.map((d) => {
-        if (d.id !== id) return d;
-        if (isQuote) return { ...d, status };
-
-        let paidAmount = Number(d.paidAmount || 0);
-        if (status === "Payée") paidAmount = Number(d.totalTTC || 0);
-        if (status === "Non payée") paidAmount = 0;
-
-        return { ...d, status, paidAmount };
-      }),
-    });
-  }
-
-  function updatePaidAmount(id, paidAmount) {
-    setData({
-      ...data,
-      [listKey]: documents.map((d) =>
-        d.id === id
-          ? { ...d, paidAmount: parseDecimal(paidAmount), status: getInvoicePaymentStatus({ ...d, paidAmount: parseDecimal(paidAmount) }) }
-          : d
-      ),
-    });
+    setData({ ...data, [listKey]: documents.map((d) => (d.id === id ? { ...d, status } : d)) });
   }
 
   function convertQuoteToInvoice(doc) {
-    const invoice = {
-      ...doc,
-      id: uid(),
-      number: `FAC-${String(data.invoices.length + 1).padStart(4, "0")}`,
-      date: today(),
-      dueDate: inputDateToFrench(dateInputTodayPlus(30)),
-      paidAmount: 0,
-      status: "Non payée",
-      convertedFrom: doc.number,
-    };
+    const invoice = { ...doc, id: uid(), number: `FAC-${String(data.invoices.length + 1).padStart(4, "0")}`, date: today(), status: "Non payée", convertedFrom: doc.number };
     setData({ ...data, invoices: [...data.invoices, invoice] });
     alert("Devis converti en facture.");
   }
 
   return (
     <section>
-      <div className="page-header"><div><h2>{title}</h2>
-      {type === "invoice" && invoiceFilter !== "all" && (
-        <div className="filter-banner">
-          <strong>Filtre actif :</strong>{" "}
-          {invoiceFilter === "unpaid" ? "Factures non payées" : invoiceFilter === "partial" ? "Factures partielles" : "Factures en retard"}
-          <button type="button" onClick={() => setInvoiceFilter("all")}>Afficher toutes</button>
-        </div>
-      )}
-<p>Crée des {isQuote ? "devis" : "factures"} avec plusieurs produits ou prestations.</p></div></div>
+      <div className="page-header"><div><h2>{title}</h2><p>Crée des {isQuote ? "devis" : "factures"} avec plusieurs produits ou prestations.</p></div></div>
 
       <form className="card" onSubmit={submit}>
         <div className="document-form-header">
@@ -1529,36 +1082,9 @@ function Documents({ type, data, setData, invoiceFilter = "all", setInvoiceFilte
           </select>
 
           <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-            {isQuote ? <><option>Brouillon</option><option>Envoyé</option><option>Accepté</option><option>Refusé</option></> : <><option>Non payée</option><option>Partiel</option><option>Payée</option><option>En retard</option></>}
+            {isQuote ? <><option>Brouillon</option><option>Envoyé</option><option>Accepté</option><option>Refusé</option></> : <><option>Non payée</option><option>Payée</option><option>En retard</option></>}
           </select>
         </div>
-
-        {!isQuote && (
-          <div className="document-form-header" style={{ marginTop: 12 }}>
-            <label>
-              Date d'échéance
-              <input
-                type="date"
-                value={form.dueDate || ""}
-                onChange={(e) => setForm({ ...form, dueDate: e.target.value })}
-              />
-            </label>
-            <label>
-              Montant déjà payé
-              <input
-                type="text"
-                inputMode="decimal"
-                value={form.paidAmount || ""}
-                onChange={(e) => setForm({ ...form, paidAmount: e.target.value })}
-                placeholder="0,00"
-              />
-            </label>
-            <div className="total-box">
-              <span>Restant : {money(Math.max(0, totals.totalTTC - parseDecimal(form.paidAmount)))}</span>
-              <strong>Statut : {getInvoicePaymentStatus({ totalTTC: totals.totalTTC, paidAmount: parseDecimal(form.paidAmount), dueDate: inputDateToFrench(form.dueDate), status: form.status })}</strong>
-            </div>
-          </div>
-        )}
 
         <div className="document-lines">
           <div className="document-line document-line-head">
@@ -1569,20 +1095,13 @@ function Documents({ type, data, setData, invoiceFilter = "all", setInvoiceFilte
             const total = lineTotal(line).totalHT;
             return (
               <div className="document-line" key={index}>
-                <>
-                  <input
-                    list={`products-list-${index}`}
-                    placeholder="Rechercher un produit"
-                    value={line.productSearch || ""}
-                    onChange={(e) => updateProductSearch(index, e.target.value)}
-                  />
-                  <datalist id={`products-list-${index}`}>
-                    {(data.products || []).map((p) => <option key={p.id} value={productLabel(p)} />)}
-                  </datalist>
-                </>
+                <select value={line.productId || ""} onChange={(e) => selectProduct(index, e.target.value)}>
+                  <option value="">Produit libre</option>
+                  {(data.products || []).map((p) => <option key={p.id} value={p.id}>{p.category ? `${p.category} — ` : ""}{p.name} - {money(p.price)}</option>)}
+                </select>
                 <input placeholder="Produit / Prestation" value={line.description} onChange={(e) => updateLine(index, { description: e.target.value })} />
                 <input type="number" min="1" value={line.quantity} onChange={(e) => updateLine(index, { quantity: e.target.value })} />
-                <input type="text" inputMode="decimal" value={line.price} onChange={(e) => updateLine(index, { price: e.target.value })} />
+                <input type="number" min="0" value={line.price} onChange={(e) => updateLine(index, { price: e.target.value })} />
                 <input type="number" min="0" max="100" value={line.discount} onChange={(e) => updateLine(index, { discount: e.target.value })} />
                 <strong>{money(total)}</strong>
                 <button type="button" className="danger" onClick={() => removeLine(index)}>✕</button>
@@ -1625,51 +1144,20 @@ function Documents({ type, data, setData, invoiceFilter = "all", setInvoiceFilte
         </div>
 
         <table>
-          <thead>
-            <tr>
-              <th>N°</th>
-              <th>Date</th>
-              {!isQuote && <th>Échéance</th>}
-              <th>Client</th>
-              <th>Lignes</th>
-              <th>Total TTC</th>
-              {!isQuote && <th>Payé</th>}
-              {!isQuote && <th>Restant</th>}
-              <th>Statut</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
+          <thead><tr><th>N°</th><th>Date</th><th>Client</th><th>Lignes</th><th>Total TTC</th><th>Statut</th><th>Actions</th></tr></thead>
           <tbody>
             {paginatedDocuments.map((d) => (
               <tr key={d.id}>
-                <td>{d.number}</td>
-                <td>{d.date}</td>
-                {!isQuote && <td>{d.dueDate || "-"}</td>}
-                <td>{clientName(data, d.clientId)}</td>
-                <td>{d.lines?.length || 1}</td>
-                <td>{money(d.totalTTC)}</td>
-                {!isQuote && (
-                  <td>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={d.paidAmount || ""}
-                      onChange={(e) => updatePaidAmount(d.id, e.target.value)}
-                      style={{ width: 90 }}
-                    />
-                  </td>
-                )}
-                {!isQuote && <td>{money(remainingAmount(d))}</td>}
+                <td>{d.number}</td><td>{d.date}</td><td>{clientName(data, d.clientId)}</td><td>{d.lines?.length || 1}</td><td>{money(d.totalTTC)}</td>
                 <td>
-                  <select value={isQuote ? d.status : getInvoicePaymentStatus(d)} onChange={(e) => updateStatus(d.id, e.target.value)}>
-                    {isQuote ? <><option>Brouillon</option><option>Envoyé</option><option>Accepté</option><option>Refusé</option></> : <><option>Non payée</option><option>Partiel</option><option>Payée</option><option>En retard</option></>}
+                  <select value={d.status} onChange={(e) => updateStatus(d.id, e.target.value)}>
+                    {isQuote ? <><option>Brouillon</option><option>Envoyé</option><option>Accepté</option><option>Refusé</option></> : <><option>Non payée</option><option>Payée</option><option>En retard</option></>}
                   </select>
                 </td>
                 <td className="actions">
                   <button onClick={() => setPreviewDoc(d)}>Voir</button>
                   <button onClick={() => edit(d)}>Modifier</button>
                   {isQuote && <button onClick={() => convertQuoteToInvoice(d)}>Convertir</button>}
-                  {!isQuote && remainingAmount(d) > 0 && <button onClick={() => setReminderDoc(d)}>Relance</button>}
                   <button className="danger" onClick={() => remove(d.id)}>Supprimer</button>
                 </td>
               </tr>
@@ -1687,59 +1175,14 @@ function Documents({ type, data, setData, invoiceFilter = "all", setInvoiceFilte
       </div>
 
       {previewDoc && <DocumentPreview doc={previewDoc} type={type} data={data} onClose={() => setPreviewDoc(null)} />}
-
-      {reminderDoc && (
-        <ReminderModal
-          doc={reminderDoc}
-          client={data.clients.find((c) => c.id === reminderDoc.clientId)}
-          settings={data.settings}
-          onClose={() => setReminderDoc(null)}
-        />
-      )}
     </section>
   );
 }
 
-
-function ReminderModal({ doc, client, settings, onClose }) {
-  const message = buildReminderMessage(doc, client, settings);
-
-  async function copyReminder() {
-    try {
-      await navigator.clipboard.writeText(message);
-      alert("Relance copiée. Tu peux la coller dans Gmail.");
-    } catch {
-      alert("Impossible de copier automatiquement. Sélectionne le texte puis copie-le.");
-    }
-  }
-
-  return (
-    <div className="modal">
-      <div className="modal-content">
-        <div className="no-print modal-actions">
-          <button onClick={onClose}>Fermer</button>
-          <button className="primary" onClick={copyReminder}>Copier la relance</button>
-        </div>
-
-        <h2>Relance client</h2>
-        <p className="muted">
-          Facture {doc.number} — restant à payer : <strong>{money(remainingAmount(doc))}</strong>
-        </p>
-        <textarea
-          readOnly
-          value={message}
-          style={{ width: "100%", minHeight: 320, marginTop: 12 }}
-        />
-      </div>
-    </div>
-  );
-}
-
 function DocumentPreview({ doc, type, data, onClose }) {
-  const invoiceRef = useRef(null);
   const isQuote = type === "quote";
   const client = data.clients.find((c) => c.id === doc.clientId);
-  const amountDue = isQuote ? (doc.totalTTC || 0) : remainingAmount(doc);
+  const amountDue = doc.status === "Payée" ? 0 : (doc.totalTTC || 0);
   const lines = doc.lines?.length
     ? doc.lines
     : [
@@ -1753,56 +1196,33 @@ function DocumentPreview({ doc, type, data, onClose }) {
         },
       ];
 
-
-
-  async function createPdf(saveFile = true) {
-    if (!invoiceRef.current) return null;
-
-    const documentLabel = isQuote ? "devis" : "facture";
-    const safeNumber = String(doc.number || "document").replace(/[^a-zA-Z0-9_-]/g, "-");
-    const filename = `${documentLabel}-${safeNumber}.pdf`;
-
-    const canvas = await html2canvas(invoiceRef.current, {
-      scale: 2,
-      useCORS: true,
-      backgroundColor: "#ffffff",
-      scrollX: 0,
-      scrollY: 0,
-    });
-
-    const imgData = canvas.toDataURL("image/png");
-    const pdf = new jsPDF("p", "mm", "a4");
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-    const margin = 8;
-    const usableWidth = pageWidth - margin * 2;
-    const imgHeight = (canvas.height * usableWidth) / canvas.width;
-
-    let heightLeft = imgHeight;
-    let position = margin;
-
-    pdf.addImage(imgData, "PNG", margin, position, usableWidth, imgHeight);
-    heightLeft -= pageHeight - margin * 2;
-
-    while (heightLeft > 0) {
-      position = heightLeft - imgHeight + margin;
-      pdf.addPage();
-      pdf.addImage(imgData, "PNG", margin, position, usableWidth, imgHeight);
-      heightLeft -= pageHeight - margin * 2;
+  function sendEmail() {
+    if (!client?.email) {
+      alert("Ce client n'a pas d'adresse email enregistrée.");
+      return;
     }
 
-    if (saveFile) pdf.save(filename);
+    const documentName = isQuote ? "devis" : "facture";
+    const subject = `${isQuote ? "Devis" : "Facture"} ${doc.number} - ${data.settings.companyName}`;
+    const body = `Bonjour ${client?.name || ""},
 
-    return { pdf, filename };
-  }
+Veuillez trouver ci-dessous les informations de votre ${documentName}.
 
-  async function downloadPdf() {
-    try {
-      await createPdf(true);
-    } catch (error) {
-      console.error(error);
-      alert("Impossible de générer le PDF. Vérifie que html2canvas et jspdf sont bien installés.");
-    }
+${isQuote ? "Devis" : "Facture"} : ${doc.number}
+Date : ${doc.date}
+Montant total TTC : ${money(doc.totalTTC)}
+Statut : ${doc.status}
+
+${data.settings.paymentTerms || ""}
+
+${data.settings.bankInfo || ""}
+
+Cordialement,
+${data.settings.companyName}
+${data.settings.companyPhone || ""}
+${data.settings.companyEmail || ""}`;
+
+    window.location.href = `mailto:${encodeURIComponent(client.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   }
 
   return (
@@ -1810,15 +1230,13 @@ function DocumentPreview({ doc, type, data, onClose }) {
       <div className="modal-content invoice-modal">
         <div className="no-print modal-actions">
           <button onClick={onClose}>Fermer</button>
-                    <button className="primary" onClick={downloadPdf}>
-            Télécharger PDF
-          </button>
-          <button onClick={() => window.print()}>
-            Imprimer
+          <button onClick={sendEmail}>Envoyer par email</button>
+          <button className="primary" onClick={() => window.print()}>
+            Imprimer / PDF
           </button>
         </div>
 
-        <div ref={invoiceRef} className="print-area invoice-template invoice-pink-template">
+        <div className="print-area invoice-template invoice-pink-template">
           <div
             className="invoice-modern-header"
             style={{
@@ -1869,12 +1287,6 @@ function DocumentPreview({ doc, type, data, onClose }) {
                 <span>Date d'émission :</span>
                 <strong>{doc.date}</strong>
               </div>
-              {!isQuote && (
-                <div className="invoice-date-box">
-                  <span>Date d'échéance :</span>
-                  <strong>{doc.dueDate || "-"}</strong>
-                </div>
-              )}
             </div>
           </div>
 
@@ -1962,14 +1374,8 @@ function DocumentPreview({ doc, type, data, onClose }) {
                 <span>Remise</span>
                 <strong>{money(doc.discountAmount)}</strong>
               </div>
-              {!isQuote && (
-                <div>
-                  <span>Déjà payé</span>
-                  <strong>{money(doc.paidAmount || 0)}</strong>
-                </div>
-              )}
               <div className="invoice-final-due">
-                <span>{isQuote ? "À PAYER" : "RESTANT À PAYER"}</span>
+                <span>À PAYER</span>
                 <strong>{money(amountDue)}</strong>
               </div>
             </div>
@@ -2165,8 +1571,8 @@ function Products({ data, setData }) {
 
     const productData = {
       ...form,
-      price: parseDecimal(form.price),
-      stock: parseDecimal(form.stock),
+      price: Number(form.price || 0),
+      stock: Number(form.stock || 0),
     };
 
     if (editing) {
