@@ -3173,3 +3173,500 @@ tr:hover td {
   line-height: 1.5;
   margin: 0 0 18px;
 }
+
+
+/* =========================================================
+   PERMISSIONS PAR RÔLE
+   ========================================================= */
+
+.role-card {
+  border: 1px solid rgba(96, 165, 250, 0.25) !important;
+  background: rgba(59, 130, 246, 0.09) !important;
+}
+
+.role-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.role-badge.admin {
+  background: rgba(168, 85, 247, 0.24);
+  color: #ead5ff;
+  border: 1px solid rgba(196, 181, 253, 0.45);
+}
+
+.role-badge.employe {
+  background: rgba(59, 130, 246, 0.22);
+  color: #bfdbfe;
+  border: 1px solid rgba(96, 165, 250, 0.45);
+}
+
+.role-badge.comptable {
+  background: rgba(34, 197, 94, 0.20);
+  color: #bbf7d0;
+  border: 1px solid rgba(74, 222, 128, 0.45);
+}
+
+
+/* =========================================================
+   SAUVEGARDES CLOUD
+   ========================================================= */
+
+.backup-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(260px, 1fr));
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.backup-card {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.backup-card h3 {
+  margin: 0;
+  color: #ffffff !important;
+}
+
+.backup-card button,
+.backup-card select {
+  width: 100%;
+}
+
+@media (max-width: 850px) {
+  .backup-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* =========================================================
+   PDF PREMIUM — DEVIS / FACTURES
+   ========================================================= */
+
+.invoice-modal {
+  max-width: 1180px !important;
+}
+
+.invoice-pdf-area.invoice-pink-template {
+  width: 210mm !important;
+  min-height: 297mm !important;
+  padding: 13mm !important;
+  background: #ffffff !important;
+  color: #111827 !important;
+  box-shadow: 0 30px 90px rgba(0,0,0,0.18) !important;
+}
+
+.invoice-pdf-area .invoice-modern-header {
+  width: 100% !important;
+  grid-template-columns: 120px 1fr 270px !important;
+  gap: 18px !important;
+  margin-bottom: 24px !important;
+  align-items: stretch !important;
+}
+
+.invoice-pdf-area .invoice-logo-box {
+  display: flex !important;
+  justify-content: center !important;
+  align-items: flex-start !important;
+}
+
+.invoice-pdf-area .invoice-main-logo {
+  max-width: 110px !important;
+  max-height: 95px !important;
+  object-fit: contain !important;
+}
+
+.invoice-pdf-area .invoice-company-info {
+  border-left: 3px solid var(--invoice-pink-dark, #f25aa3) !important;
+  border-right: 0 !important;
+  padding: 0 18px !important;
+  min-height: 0 !important;
+}
+
+.invoice-pdf-area .invoice-company-info h1 {
+  font-size: 26px !important;
+  margin: 0 0 10px !important;
+  color: var(--invoice-pink-dark, #f25aa3) !important;
+}
+
+.invoice-pdf-area .invoice-company-info p {
+  font-size: 12px !important;
+  margin: 4px 0 !important;
+}
+
+.invoice-pdf-area .invoice-document-head {
+  width: 270px !important;
+  max-width: 270px !important;
+}
+
+.invoice-pdf-area .invoice-document-head h2 {
+  font-size: 40px !important;
+  margin: 0 0 12px !important;
+  color: var(--invoice-pink-dark, #f25aa3) !important;
+}
+
+.invoice-pdf-area .invoice-number-box,
+.invoice-pdf-area .invoice-date-box {
+  grid-template-columns: 130px 1fr !important;
+}
+
+.invoice-pdf-area .invoice-number-box span,
+.invoice-pdf-area .invoice-number-box strong,
+.invoice-pdf-area .invoice-date-box span,
+.invoice-pdf-area .invoice-date-box strong {
+  padding: 8px 10px !important;
+  font-size: 12px !important;
+}
+
+.invoice-pdf-area .invoice-info-grid {
+  grid-template-columns: 1fr 1fr !important;
+  gap: 16px !important;
+  margin-bottom: 22px !important;
+}
+
+.invoice-pdf-area .invoice-info-card {
+  grid-template-columns: 44px 1fr !important;
+  gap: 12px !important;
+  padding: 16px !important;
+  min-height: 100px !important;
+  border-radius: 14px !important;
+}
+
+.invoice-pdf-area .invoice-round-icon {
+  width: 40px !important;
+  height: 40px !important;
+  font-size: 18px !important;
+}
+
+.invoice-pdf-area .invoice-info-card h3 {
+  font-size: 13px !important;
+  margin: 0 0 8px !important;
+}
+
+.invoice-pdf-area .invoice-info-card p,
+.invoice-pdf-area .invoice-info-card strong {
+  font-size: 12px !important;
+  margin: 3px 0 !important;
+}
+
+.invoice-pdf-area .invoice-modern-table {
+  margin-bottom: 24px !important;
+  border-radius: 14px !important;
+}
+
+.invoice-pdf-area .invoice-modern-table th {
+  padding: 11px 9px !important;
+  font-size: 10px !important;
+}
+
+.invoice-pdf-area .invoice-modern-table td {
+  padding: 10px 9px !important;
+  font-size: 11.5px !important;
+  height: auto !important;
+}
+
+.invoice-pdf-area .invoice-bottom-modern {
+  grid-template-columns: 1fr 300px !important;
+  gap: 18px !important;
+  margin-bottom: 18px !important;
+}
+
+.invoice-pdf-area .invoice-payment-modern {
+  padding: 16px !important;
+  border-radius: 14px !important;
+  background: #fafafa !important;
+  border: 1px solid #e5e7eb !important;
+  font-size: 11px !important;
+}
+
+.invoice-pdf-area .invoice-payment-modern pre {
+  font-size: 10.5px !important;
+  line-height: 1.35 !important;
+}
+
+.invoice-pdf-area .invoice-section-heading {
+  margin-bottom: 10px !important;
+}
+
+.invoice-pdf-area .invoice-total-modern {
+  border-radius: 14px !important;
+}
+
+.invoice-pdf-area .invoice-total-modern div {
+  padding: 9px 12px !important;
+}
+
+.invoice-pdf-area .invoice-total-modern span,
+.invoice-pdf-area .invoice-total-modern strong {
+  font-size: 12px !important;
+}
+
+.invoice-pdf-area .invoice-final-due {
+  padding: 14px 12px !important;
+}
+
+.invoice-pdf-area .invoice-final-due span,
+.invoice-pdf-area .invoice-final-due strong {
+  font-size: 20px !important;
+}
+
+.invoice-legal-note {
+  width: 100% !important;
+  margin: 12px auto 16px !important;
+  padding: 12px 14px !important;
+  border-radius: 12px !important;
+  background: #fff7fb !important;
+  border: 1px solid #ffd1e8 !important;
+  font-size: 10.5px !important;
+}
+
+.invoice-legal-note strong {
+  color: var(--invoice-pink-dark, #f25aa3) !important;
+  font-size: 12px !important;
+}
+
+.invoice-legal-note p {
+  margin: 4px 0 0 !important;
+  color: #4b5563 !important;
+  line-height: 1.35 !important;
+}
+
+.invoice-pdf-area .invoice-thank-you {
+  grid-template-columns: 42px 1fr 100px !important;
+  padding: 12px 14px !important;
+  margin: 12px auto 16px !important;
+}
+
+.invoice-pdf-area .invoice-signature {
+  font-size: 26px !important;
+}
+
+.invoice-pdf-area .invoice-modern-footer {
+  padding-top: 10px !important;
+  font-size: 10.5px !important;
+}
+
+@media print {
+  .invoice-pdf-area.invoice-pink-template {
+    width: 210mm !important;
+    min-height: 297mm !important;
+    padding: 11mm !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+  }
+}
+
+/* =========================================================
+   MODULE STOCK + PAIEMENTS — PREMIUM
+   ========================================================= */
+.product-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.product-kpi {
+  position: relative;
+  overflow: hidden;
+}
+
+.product-kpi span,
+.product-kpi small {
+  color: var(--crm-muted) !important;
+}
+
+.product-kpi strong {
+  display: block;
+  color: #ffffff !important;
+  font-size: 28px;
+  margin: 8px 0 4px;
+}
+
+.product-kpi.alert {
+  border-color: rgba(239, 68, 68, 0.45) !important;
+}
+
+.product-form {
+  display: grid;
+  gap: 16px;
+}
+
+.product-form-title h3 {
+  margin: 0 0 4px;
+  color: #ffffff !important;
+  font-size: 22px;
+}
+
+.check-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 10px 12px;
+  border-radius: 13px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(2, 6, 23, 0.34);
+}
+
+.check-card input {
+  width: auto;
+}
+
+.product-filters {
+  grid-template-columns: 1fr 240px 240px;
+}
+
+.product-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.product-tile {
+  background: rgba(2, 6, 23, 0.42);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 22px;
+  padding: 18px;
+  display: grid;
+  gap: 12px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+.product-tile-top,
+.product-price-row,
+.product-stock-row,
+.product-actions,
+.select-visible-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.product-tile-top input {
+  width: auto;
+}
+
+.product-tile h3 {
+  margin: 0;
+  color: #ffffff !important;
+  font-size: 20px;
+}
+
+.product-price-row strong {
+  color: #ffffff !important;
+  font-size: 24px;
+}
+
+.product-price-row span,
+.product-stock-row span,
+.product-stock-row small,
+.product-supplier,
+.product-description {
+  color: var(--crm-muted) !important;
+}
+
+.stock-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 6px 11px;
+  font-size: 12px;
+  font-weight: 900;
+  border: 1px solid rgba(255,255,255,0.14);
+}
+
+.stock-pill.success { background: rgba(34,197,94,0.18); color: #bbf7d0 !important; }
+.stock-pill.warning { background: rgba(245,158,11,0.18); color: #fde68a !important; }
+.stock-pill.danger { background: rgba(239,68,68,0.18); color: #fecaca !important; }
+.stock-pill.neutral { background: rgba(148,163,184,0.18); color: #e2e8f0 !important; }
+
+.stock-meter {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.22);
+  overflow: hidden;
+}
+
+.stock-meter div {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #2563eb, #3b82f6);
+}
+
+.product-stock-row strong {
+  color: #ffffff !important;
+  font-size: 22px;
+}
+
+.product-description {
+  min-height: 38px;
+  line-height: 1.4;
+}
+
+.product-actions {
+  justify-content: flex-start;
+  padding-top: 6px;
+}
+
+.payment-modal {
+  max-width: 760px !important;
+}
+
+.payment-history-list {
+  margin-top: 20px;
+  display: grid;
+  gap: 10px;
+}
+
+.payment-history-list h3 {
+  margin: 0;
+  color: #ffffff !important;
+}
+
+.payment-history-item {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1.4fr;
+  gap: 10px;
+  align-items: center;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(2, 6, 23, 0.38);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.payment-history-item strong {
+  color: #ffffff !important;
+}
+
+.payment-history-item span,
+.payment-history-item em {
+  color: var(--crm-muted) !important;
+}
+
+.badge.partiellement-payee {
+  background: rgba(245, 158, 11, 0.18) !important;
+  color: #fde68a !important;
+}
+
+@media (max-width: 850px) {
+  .product-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .payment-history-item {
+    grid-template-columns: 1fr;
+  }
+}

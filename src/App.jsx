@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "./supabase";
 import * as XLSX from "xlsx";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 import "./App.css";
 
 const STORAGE_KEY = "crm_local_data_v2";
@@ -33,6 +35,50 @@ function userRole(email, users = []) {
   return found?.role || "Utilisateur";
 }
 
+const ROLE_PERMISSIONS = {
+  Admin: {
+    pages: ["dashboard", "clients", "products", "categories", "quotes", "invoices", "users", "settings", "import", "backups"],
+    canDelete: true,
+    canEditSettings: true,
+    canManageUsers: true,
+    canImport: true,
+  },
+  Employé: {
+    pages: ["dashboard", "clients", "quotes", "invoices"],
+    canDelete: false,
+    canEditSettings: false,
+    canManageUsers: false,
+    canImport: false,
+  },
+  Comptable: {
+    pages: ["dashboard", "invoices"],
+    canDelete: false,
+    canEditSettings: false,
+    canManageUsers: false,
+    canImport: false,
+  },
+  Utilisateur: {
+    pages: ["dashboard"],
+    canDelete: false,
+    canEditSettings: false,
+    canManageUsers: false,
+    canImport: false,
+  },
+};
+
+function getPermissions(role) {
+  return ROLE_PERMISSIONS[role] || ROLE_PERMISSIONS.Utilisateur;
+}
+
+function canAccessPage(role, page) {
+  return getPermissions(role).pages.includes(page);
+}
+
+function canDeleteData(role) {
+  return getPermissions(role).canDelete;
+}
+
+
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
 
@@ -54,6 +100,7 @@ const emptyData = {
   invoices: [],
   products: [],
   categories: [],
+  backups: [],
 };
 
 function normalizeData(data) {
@@ -67,6 +114,7 @@ function normalizeData(data) {
     invoices: data?.invoices || [],
     products: data?.products || [],
     categories: data?.categories || [],
+    backups: data?.backups || [],
   };
 }
 
@@ -81,6 +129,42 @@ function loadData() {
 function saveData(data) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }
+
+function createBackupSnapshot(data, label = "Sauvegarde automatique") {
+  const safeData = normalizeData(data);
+  return {
+    id: uid(),
+    label,
+    createdAt: new Date().toISOString(),
+    clientsCount: safeData.clients.length,
+    productsCount: safeData.products.length,
+    invoicesCount: safeData.invoices.length,
+    quotesCount: safeData.quotes.length,
+    data: {
+      ...safeData,
+      backups: [],
+    },
+  };
+}
+
+function pruneBackups(backups, max = 12) {
+  return [...(backups || [])]
+    .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+    .slice(0, max);
+}
+
+function downloadJson(filename, data) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 
 function hasLocalBusinessData(data) {
   return Boolean(
@@ -196,6 +280,65 @@ function statusClass(status) {
   return "badge " + String(status || "").toLowerCase().replaceAll(" ", "-").replaceAll("é", "e");
 }
 
+function invoicePaidAmount(invoice) {
+  const historyTotal = (invoice.paymentHistory || []).reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+  return Number(invoice.paidAmount ?? historyTotal ?? 0);
+}
+
+function invoiceRemainingAmount(invoice) {
+  return Math.max(0, Number(invoice.totalTTC || 0) - invoicePaidAmount(invoice));
+}
+
+function invoicePaymentStatus(invoice) {
+  const paid = invoicePaidAmount(invoice);
+  const total = Number(invoice.totalTTC || 0);
+  if (total > 0 && paid >= total) return "Payée";
+  if (paid > 0) return "Partiellement payée";
+  return invoice.status || "Non payée";
+}
+
+function stockStatus(product) {
+  if (product.trackStock === false) return { label: "Non suivi", className: "neutral", level: 100 };
+  const stock = Number(product.stock || 0);
+  const min = Number(product.stockMin || 0);
+  if (stock <= 0) return { label: "Rupture", className: "danger", level: 0 };
+  if (min > 0 && stock <= min) return { label: "Stock faible", className: "warning", level: 25 };
+  return { label: "Disponible", className: "success", level: 100 };
+}
+
+function buildStockMovement(type, quantity, reason, documentNumber = "") {
+  return {
+    id: uid(),
+    type,
+    quantity: Number(quantity || 0),
+    reason,
+    documentNumber,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+function applyStockDelta(products, lines = [], direction = -1, reason = "Mouvement stock", documentNumber = "") {
+  return (products || []).map((product) => {
+    const quantity = (lines || [])
+      .filter((line) => String(line.productId || "") === String(product.id || ""))
+      .reduce((sum, line) => sum + Number(line.quantity || 0), 0);
+
+    if (!quantity || product.trackStock === false) return product;
+
+    const movementQuantity = quantity * direction;
+    const nextStock = Math.max(0, Number(product.stock || 0) + movementQuantity);
+
+    return {
+      ...product,
+      stock: nextStock,
+      stockHistory: [
+        buildStockMovement(direction < 0 ? "Sortie" : "Entrée", Math.abs(quantity), reason, documentNumber),
+        ...(product.stockHistory || []),
+      ].slice(0, 30),
+    };
+  });
+}
+
 export default function App() {
   const [data, setData] = useState(loadData);
   const [currentUser, setCurrentUser] = useState(() => JSON.parse(localStorage.getItem(SESSION_KEY) || "null"));
@@ -205,6 +348,7 @@ export default function App() {
 
   const isAdmin = isAdminEmail(currentUser?.email);
   const currentRole = userRole(currentUser?.email, data.users);
+  const permissions = getPermissions(currentRole);
 
   useEffect(() => {
     initializeCloudData();
@@ -254,6 +398,46 @@ export default function App() {
     }
   }
 
+  async function createCloudBackup(label = "Sauvegarde manuelle") {
+    const backup = createBackupSnapshot(data, label);
+    const next = normalizeData({
+      ...data,
+      backups: pruneBackups([backup, ...(data.backups || [])], 12),
+    });
+
+    setData(next);
+    saveData(next);
+
+    try {
+      setSyncStatus("Création sauvegarde cloud...");
+      await syncSupabaseData(next, data);
+      setSyncStatus("Sauvegarde cloud créée");
+    } catch (error) {
+      console.error(error);
+      setSyncStatus("Erreur sauvegarde cloud");
+      alert("Erreur pendant la sauvegarde cloud.");
+    }
+  }
+
+  useEffect(() => {
+    if (!currentUser || !isAllowedUser(currentUser.email, data.users)) return;
+
+    const lastBackupAt = localStorage.getItem("crm_last_auto_backup_at");
+    const now = Date.now();
+    const twelveHours = 12 * 60 * 60 * 1000;
+
+    if (!lastBackupAt || now - Number(lastBackupAt) > twelveHours) {
+      localStorage.setItem("crm_last_auto_backup_at", String(now));
+      createCloudBackup("Sauvegarde automatique");
+    }
+  }, [currentUser?.email]);
+
+  useEffect(() => {
+    if (currentUser && !canAccessPage(currentRole, page)) {
+      setPage("dashboard");
+    }
+  }, [currentUser, currentRole, page]);
+
   async function logout() {
     await supabase.auth.signOut();
     localStorage.removeItem(SESSION_KEY);
@@ -288,28 +472,31 @@ export default function App() {
         <h1>{data.settings.companyName}</h1>
         <p className="user">Connecté : {currentUser.name}<br /><span>{currentRole}</span></p>
         <p className="cloud-status">☁️ {syncStatus}</p>
-        <button onClick={() => setPage("dashboard")}>📊 Tableau de bord</button>
-        <button onClick={() => setPage("clients")}>👥 Clients</button>
-        <button onClick={() => setPage("products")}>📦 Produits</button>
-        <button onClick={() => setPage("categories")}>🏷️ Catégories</button>
-        <button onClick={() => setPage("quotes")}>🧾 Devis</button>
-        <button onClick={() => setPage("invoices")}>💶 Factures</button>
-        {isAdmin && <button onClick={() => setPage("users")}>🔐 Utilisateurs</button>}
-        {isAdmin && <button onClick={() => setPage("settings")}>⚙️ Paramètres</button>}
-        {isAdmin && <button onClick={() => setPage("import")}>📥 Import Excel</button>}
+        {permissions.pages.includes("dashboard") && <button onClick={() => setPage("dashboard")}>📊 Tableau de bord</button>}
+        {permissions.pages.includes("clients") && <button onClick={() => setPage("clients")}>👥 Clients</button>}
+        {permissions.pages.includes("products") && <button onClick={() => setPage("products")}>📦 Produits</button>}
+        {permissions.pages.includes("categories") && <button onClick={() => setPage("categories")}>🏷️ Catégories</button>}
+        {permissions.pages.includes("quotes") && <button onClick={() => setPage("quotes")}>🧾 Devis</button>}
+        {permissions.pages.includes("invoices") && <button onClick={() => setPage("invoices")}>💶 Factures</button>}
+        {permissions.canManageUsers && <button onClick={() => setPage("users")}>🔐 Utilisateurs</button>}
+        {permissions.canEditSettings && <button onClick={() => setPage("settings")}>⚙️ Paramètres</button>}
+        {permissions.canImport && <button onClick={() => setPage("import")}>📥 Import Excel</button>}
+        {permissions.canManageUsers && <button onClick={() => setPage("backups")}>💾 Sauvegardes</button>}
         <button className="danger" onClick={logout}>Déconnexion</button>
       </aside>
 
       <main className="content">
-        {page === "dashboard" && <Dashboard data={data} />}
-        {page === "clients" && <Clients data={data} setData={updateData} />}
-        {page === "products" && <Products data={data} setData={updateData} />}
-        {page === "categories" && <Categories data={data} setData={updateData} />}
-        {page === "quotes" && <Documents type="quote" data={data} setData={updateData} />}
-        {page === "invoices" && <Documents type="invoice" data={data} setData={updateData} />}
-        {page === "users" && isAdmin && <UsersAdmin data={data} setData={updateData} />}
-        {page === "settings" && isAdmin && <Settings data={data} setData={updateData} />}
-        {page === "import" && isAdmin && <ExcelImport data={data} setData={updateData} />}
+        {!canAccessPage(currentRole, page) && <AccessDenied user={currentUser} logout={logout} />}
+        {page === "dashboard" && canAccessPage(currentRole, "dashboard") && <Dashboard data={data} currentRole={currentRole} />}
+        {page === "clients" && canAccessPage(currentRole, "clients") && <Clients data={data} setData={updateData} currentRole={currentRole} />}
+        {page === "products" && canAccessPage(currentRole, "products") && <Products data={data} setData={updateData} currentRole={currentRole} />}
+        {page === "categories" && canAccessPage(currentRole, "categories") && <Categories data={data} setData={updateData} currentRole={currentRole} />}
+        {page === "quotes" && canAccessPage(currentRole, "quotes") && <Documents type="quote" data={data} setData={updateData} currentRole={currentRole} />}
+        {page === "invoices" && canAccessPage(currentRole, "invoices") && <Documents type="invoice" data={data} setData={updateData} currentRole={currentRole} />}
+        {page === "users" && permissions.canManageUsers && <UsersAdmin data={data} setData={updateData} />}
+        {page === "settings" && permissions.canEditSettings && <Settings data={data} setData={updateData} />}
+        {page === "import" && permissions.canImport && <ExcelImport data={data} setData={updateData} />}
+        {page === "backups" && permissions.canManageUsers && <Backups data={data} setData={updateData} createCloudBackup={createCloudBackup} />}
       </main>
     </div>
   );
@@ -465,11 +652,9 @@ function Dashboard({ data }) {
   const categories = data.categories || [];
 
   const totalInvoices = invoices.reduce((sum, inv) => sum + Number(inv.totalTTC || 0), 0);
-  const paidInvoices = invoices
-    .filter((i) => i.status === "Payée")
-    .reduce((sum, inv) => sum + Number(inv.totalTTC || 0), 0);
-  const unpaidInvoices = totalInvoices - paidInvoices;
-  const unpaidCount = invoices.filter((i) => i.status !== "Payée").length;
+  const paidInvoices = invoices.reduce((sum, inv) => sum + invoicePaidAmount(inv), 0);
+  const unpaidInvoices = invoices.reduce((sum, inv) => sum + invoiceRemainingAmount(inv), 0);
+  const unpaidCount = invoices.filter((i) => invoiceRemainingAmount(i) > 0).length;
   const acceptedQuotes = quotes.filter((q) => q.status === "Accepté").length;
 
   const invoiceLines = invoices.flatMap((invoice) =>
@@ -550,6 +735,7 @@ function Dashboard({ data }) {
       <div className="stats">
         <div className="card stat"><span>Clients</span><strong>{clients.length}</strong></div>
         <div className="card stat"><span>Produits</span><strong>{products.length}</strong></div>
+        <div className="card stat"><span>Alertes stock</span><strong>{products.filter((p) => stockStatus(p).className !== "success" && p.trackStock !== false).length}</strong></div>
         <div className="card stat"><span>Devis</span><strong>{quotes.length}</strong></div>
         <div className="card stat"><span>Devis acceptés</span><strong>{acceptedQuotes}</strong></div>
         <div className="card stat"><span>Factures</span><strong>{invoices.length}</strong></div>
@@ -653,6 +839,125 @@ function Dashboard({ data }) {
 }
 
 
+
+function Backups({ data, setData, createCloudBackup }) {
+  const [selectedBackupId, setSelectedBackupId] = useState("");
+  const backups = pruneBackups(data.backups || [], 50);
+  const selectedBackup = backups.find((backup) => backup.id === selectedBackupId);
+
+  function exportFullJson() {
+    const filename = `crm-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    downloadJson(filename, normalizeData({ ...data, backups: data.backups || [] }));
+  }
+
+  async function restoreBackup() {
+    if (!selectedBackup) return alert("Choisis une sauvegarde à restaurer.");
+    if (!confirm("Restaurer cette sauvegarde ? Les données actuelles seront remplacées.")) return;
+
+    const restored = normalizeData({
+      ...selectedBackup.data,
+      backups: pruneBackups([
+        createBackupSnapshot(data, "Avant restauration"),
+        ...(data.backups || []),
+      ], 12),
+    });
+
+    await setData(restored);
+    alert("Sauvegarde restaurée.");
+  }
+
+  function deleteBackup(id) {
+    if (!confirm("Supprimer cette sauvegarde ?")) return;
+    setData({
+      ...data,
+      backups: (data.backups || []).filter((backup) => backup.id !== id),
+    });
+  }
+
+  return (
+    <section>
+      <div className="page-header">
+        <div>
+          <h2>Sauvegardes</h2>
+          <p>Sauvegarde automatique cloud et restauration complète du CRM.</p>
+        </div>
+      </div>
+
+      <div className="backup-grid">
+        <div className="card backup-card">
+          <h3>Créer une sauvegarde</h3>
+          <p className="muted">
+            Une sauvegarde automatique est créée environ toutes les 12 heures.
+          </p>
+          <button className="primary" onClick={() => createCloudBackup("Sauvegarde manuelle")}>
+            💾 Créer une sauvegarde cloud
+          </button>
+          <button onClick={exportFullJson}>
+            ⬇️ Export JSON complet
+          </button>
+        </div>
+
+        <div className="card backup-card">
+          <h3>Restaurer une sauvegarde</h3>
+          <select value={selectedBackupId} onChange={(e) => setSelectedBackupId(e.target.value)}>
+            <option value="">Choisir une sauvegarde</option>
+            {backups.map((backup) => (
+              <option key={backup.id} value={backup.id}>
+                {new Date(backup.createdAt).toLocaleString()} — {backup.label}
+              </option>
+            ))}
+          </select>
+          <button className="danger" onClick={restoreBackup}>
+            Restaurer la sauvegarde sélectionnée
+          </button>
+        </div>
+      </div>
+
+      <div className="table card">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Type</th>
+              <th>Clients</th>
+              <th>Produits</th>
+              <th>Factures</th>
+              <th>Devis</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {backups.map((backup) => (
+              <tr key={backup.id}>
+                <td>{new Date(backup.createdAt).toLocaleString()}</td>
+                <td>{backup.label}</td>
+                <td>{backup.clientsCount}</td>
+                <td>{backup.productsCount}</td>
+                <td>{backup.invoicesCount}</td>
+                <td>{backup.quotesCount}</td>
+                <td>
+                  <button onClick={() => downloadJson(`crm-backup-${backup.createdAt.slice(0,10)}.json`, backup.data)}>
+                    Exporter
+                  </button>
+                  <button className="danger" onClick={() => deleteBackup(backup.id)}>
+                    Supprimer
+                  </button>
+                </td>
+              </tr>
+            ))}
+
+            {backups.length === 0 && (
+              <tr>
+                <td colSpan="7" className="muted">Aucune sauvegarde créée pour le moment.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 function UsersAdmin({ data, setData }) {
   const [form, setForm] = useState({ name: "", email: "", role: "Utilisateur", status: "Actif" });
   const users = data.users || [];
@@ -713,6 +1018,13 @@ function UsersAdmin({ data, setData }) {
         </p>
       </div>
 
+      <div className="card role-card">
+        <h3>Permissions</h3>
+        <p><span className="role-badge admin">👑 Admin</span> Accès complet, suppression, paramètres, import et utilisateurs.</p>
+        <p><span className="role-badge employe">👨‍💼 Employé</span> Dashboard, clients, devis et factures. Pas de suppression.</p>
+        <p><span className="role-badge comptable">💰 Comptable</span> Dashboard et factures. Pas de suppression.</p>
+      </div>
+
       <form className="card form-grid" onSubmit={addUser}>
         <input
           placeholder="Nom utilisateur"
@@ -726,8 +1038,10 @@ function UsersAdmin({ data, setData }) {
           onChange={(e) => setForm({ ...form, email: e.target.value })}
         />
         <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-          <option>Utilisateur</option>
+          <option>Employé</option>
+          <option>Comptable</option>
           <option>Admin</option>
+          <option>Utilisateur</option>
         </select>
         <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
           <option>Actif</option>
@@ -762,8 +1076,10 @@ function UsersAdmin({ data, setData }) {
                 <td>{user.email}</td>
                 <td>
                   <select value={user.role || "Utilisateur"} onChange={(e) => updateUser(user.id, { role: e.target.value })}>
-                    <option>Utilisateur</option>
+                    <option>Employé</option>
+                    <option>Comptable</option>
                     <option>Admin</option>
+                    <option>Utilisateur</option>
                   </select>
                 </td>
                 <td>
@@ -854,7 +1170,7 @@ function PaginationControls({ page, totalPages, onPageChange, totalItems, perPag
   );
 }
 
-function Clients({ data, setData }) {
+function Clients({ data, setData, currentRole = 'Admin' }) {
   const [search, setSearch] = useState("");
   const [selectedClientId, setSelectedClientId] = useState(null);
   const [editing, setEditing] = useState(null);
@@ -912,6 +1228,7 @@ function Clients({ data, setData }) {
   }
 
   function remove(id) {
+    if (!canDeleteData(currentRole)) return alert("Ton rôle ne permet pas de supprimer.");
     if (!confirm("Supprimer ce client ?")) return;
     setData({ ...data, clients: data.clients.filter((c) => c.id !== id) });
     if (selectedClientId === id) setSelectedClientId(null);
@@ -1022,7 +1339,7 @@ function Clients({ data, setData }) {
   );
 }
 
-function Documents({ type, data, setData }) {
+function Documents({ type, data, setData, currentRole = 'Admin' }) {
   const isQuote = type === "quote";
   const listKey = isQuote ? "quotes" : "invoices";
   const title = isQuote ? "Devis" : "Factures";
@@ -1034,6 +1351,8 @@ function Documents({ type, data, setData }) {
   const [previewDoc, setPreviewDoc] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [sortBy, setSortBy] = useState("dateDesc");
+  const [paymentDoc, setPaymentDoc] = useState(null);
+  const [paymentForm, setPaymentForm] = useState({ amount: "", method: "Virement", note: "" });
   const [form, setForm] = useState({ clientId: "", status: defaultStatus, lines: [{ ...emptyLine }] });
 
   const itemsPerPage = 10;
@@ -1159,13 +1478,21 @@ function Documents({ type, data, setData }) {
     const firstDescription = cleanLines.length === 1 ? cleanLines[0].description : `${cleanLines.length} lignes`;
 
     if (editingId) {
+      const previousDoc = documents.find((d) => d.id === editingId);
+      const updatedDoc = previousDoc
+        ? { ...previousDoc, clientId: form.clientId, status: form.status, description: firstDescription, lines: cleanLines, taxRate: data.settings.taxRate, ...totals }
+        : null;
+
+      let nextProducts = data.products || [];
+      if (!isQuote && previousDoc) {
+        nextProducts = applyStockDelta(nextProducts, previousDoc.lines || [], 1, `Correction ${previousDoc.number}`, previousDoc.number);
+        nextProducts = applyStockDelta(nextProducts, cleanLines, -1, `Facture modifiée ${previousDoc.number}`, previousDoc.number);
+      }
+
       setData({
         ...data,
-        [listKey]: documents.map((d) =>
-          d.id === editingId
-            ? { ...d, clientId: form.clientId, status: form.status, description: firstDescription, lines: cleanLines, taxRate: data.settings.taxRate, ...totals }
-            : d
-        ),
+        products: nextProducts,
+        [listKey]: documents.map((d) => (d.id === editingId && updatedDoc ? updatedDoc : d)),
       });
     } else {
       const doc = {
@@ -1177,9 +1504,12 @@ function Documents({ type, data, setData }) {
         status: form.status,
         description: firstDescription,
         lines: cleanLines,
+        paidAmount: !isQuote && form.status === "Payée" ? totals.totalTTC : 0,
+        paymentHistory: !isQuote && form.status === "Payée" ? [{ id: uid(), amount: totals.totalTTC, method: "Paiement complet", date: today(), note: "Facture marquée payée à la création" }] : [],
         ...totals,
       };
-      setData({ ...data, [listKey]: [...documents, doc] });
+      const nextProducts = isQuote ? data.products : applyStockDelta(data.products || [], cleanLines, -1, `Facture ${doc.number}`, doc.number);
+      setData({ ...data, products: nextProducts, [listKey]: [...documents, doc] });
     }
 
     reset();
@@ -1196,17 +1526,59 @@ function Documents({ type, data, setData }) {
 
   function remove(id) {
     if (!confirm(`Supprimer ce ${isQuote ? "devis" : "facture"} ?`)) return;
-    setData({ ...data, [listKey]: documents.filter((d) => d.id !== id) });
+    const doc = documents.find((d) => d.id === id);
+    const nextProducts = !isQuote && doc ? applyStockDelta(data.products || [], doc.lines || [], 1, `Suppression ${doc.number}`, doc.number) : data.products;
+    setData({ ...data, products: nextProducts, [listKey]: documents.filter((d) => d.id !== id) });
   }
 
   function updateStatus(id, status) {
-    setData({ ...data, [listKey]: documents.map((d) => (d.id === id ? { ...d, status } : d)) });
+    setData({ ...data, [listKey]: documents.map((d) => {
+      if (d.id !== id) return d;
+      const fullPaid = !isQuote && status === "Payée";
+      return {
+        ...d,
+        status,
+        paidAmount: fullPaid ? Number(d.totalTTC || 0) : d.paidAmount,
+        paymentHistory: fullPaid && invoicePaidAmount(d) < Number(d.totalTTC || 0)
+          ? [{ id: uid(), amount: invoiceRemainingAmount(d), method: "Marquage manuel", date: today(), note: "Statut passé en Payée" }, ...(d.paymentHistory || [])]
+          : (d.paymentHistory || []),
+      };
+    }) });
+  }
+
+  function openPayment(doc) {
+    setPaymentDoc(doc);
+    setPaymentForm({ amount: String(invoiceRemainingAmount(doc) || ""), method: "Virement", note: "" });
+  }
+
+  function addPayment(e) {
+    e.preventDefault();
+    if (!paymentDoc) return;
+    const amount = Number(String(paymentForm.amount || "0").replace(",", "."));
+    if (!amount || amount <= 0) return alert("Montant du paiement obligatoire.");
+
+    setData({
+      ...data,
+      invoices: (data.invoices || []).map((invoice) => {
+        if (invoice.id !== paymentDoc.id) return invoice;
+        const payment = { id: uid(), amount, method: paymentForm.method, date: today(), note: paymentForm.note };
+        const paidAmount = Math.min(Number(invoice.totalTTC || 0), invoicePaidAmount(invoice) + amount);
+        return {
+          ...invoice,
+          paidAmount,
+          paymentHistory: [payment, ...(invoice.paymentHistory || [])],
+          status: paidAmount >= Number(invoice.totalTTC || 0) ? "Payée" : "Partiellement payée",
+        };
+      }),
+    });
+    setPaymentDoc(null);
   }
 
   function convertQuoteToInvoice(doc) {
-    const invoice = { ...doc, id: uid(), number: `FAC-${String(data.invoices.length + 1).padStart(4, "0")}`, date: today(), status: "Non payée", convertedFrom: doc.number };
-    setData({ ...data, invoices: [...data.invoices, invoice] });
-    alert("Devis converti en facture.");
+    const invoice = { ...doc, id: uid(), number: `FAC-${String(data.invoices.length + 1).padStart(4, "0")}`, date: today(), status: "Non payée", paidAmount: 0, paymentHistory: [], convertedFrom: doc.number };
+    const nextProducts = applyStockDelta(data.products || [], invoice.lines || [], -1, `Conversion ${invoice.number}`, invoice.number);
+    setData({ ...data, products: nextProducts, invoices: [...data.invoices, invoice] });
+    alert("Devis converti en facture. Le stock a été déduit automatiquement.");
   }
 
   return (
@@ -1221,7 +1593,7 @@ function Documents({ type, data, setData }) {
           </select>
 
           <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-            {isQuote ? <><option>Brouillon</option><option>Envoyé</option><option>Accepté</option><option>Refusé</option></> : <><option>Non payée</option><option>Payée</option><option>En retard</option></>}
+            {isQuote ? <><option>Brouillon</option><option>Envoyé</option><option>Accepté</option><option>Refusé</option></> : <><option>Non payée</option><option>Partiellement payée</option><option>Payée</option><option>En retard</option></>}
           </select>
         </div>
 
@@ -1283,18 +1655,20 @@ function Documents({ type, data, setData }) {
         </div>
 
         <table>
-          <thead><tr><th>N°</th><th>Date</th><th>Client</th><th>Lignes</th><th>Total TTC</th><th>Statut</th><th>Actions</th></tr></thead>
+          <thead><tr><th>N°</th><th>Date</th><th>Client</th><th>Lignes</th><th>Total TTC</th>{!isQuote && <th>Payé / Reste</th>}<th>Statut</th><th>Actions</th></tr></thead>
           <tbody>
             {paginatedDocuments.map((d) => (
               <tr key={d.id}>
                 <td>{d.number}</td><td>{d.date}</td><td>{clientName(data, d.clientId)}</td><td>{d.lines?.length || 1}</td><td>{money(d.totalTTC)}</td>
+                {!isQuote && <td><strong>{money(invoicePaidAmount(d))}</strong><br /><span className="muted">Reste {money(invoiceRemainingAmount(d))}</span></td>}
                 <td>
                   <select value={d.status} onChange={(e) => updateStatus(d.id, e.target.value)}>
-                    {isQuote ? <><option>Brouillon</option><option>Envoyé</option><option>Accepté</option><option>Refusé</option></> : <><option>Non payée</option><option>Payée</option><option>En retard</option></>}
+                    {isQuote ? <><option>Brouillon</option><option>Envoyé</option><option>Accepté</option><option>Refusé</option></> : <><option>Non payée</option><option>Partiellement payée</option><option>Payée</option><option>En retard</option></>}
                   </select>
                 </td>
                 <td className="actions">
                   <button onClick={() => setPreviewDoc(d)}>Voir</button>
+                  {!isQuote && <button className="primary" onClick={() => openPayment(d)}>Paiement</button>}
                   <button onClick={() => edit(d)}>Modifier</button>
                   {isQuote && <button onClick={() => convertQuoteToInvoice(d)}>Convertir</button>}
                   <button className="danger" onClick={() => remove(d.id)}>Supprimer</button>
@@ -1312,6 +1686,34 @@ function Documents({ type, data, setData }) {
           onPageChange={setCurrentPage}
         />
       </div>
+
+      {paymentDoc && (
+        <div className="modal">
+          <form className="modal-content payment-modal" onSubmit={addPayment}>
+            <div className="modal-actions no-print">
+              <button type="button" onClick={() => setPaymentDoc(null)}>Fermer</button>
+              <button className="primary">Enregistrer le paiement</button>
+            </div>
+            <h2>Paiement {paymentDoc.number}</h2>
+            <p className="muted">Total : {money(paymentDoc.totalTTC)} · Déjà payé : {money(invoicePaidAmount(paymentDoc))} · Reste : {money(invoiceRemainingAmount(paymentDoc))}</p>
+            <div className="form-grid">
+              <input type="text" inputMode="decimal" placeholder="Montant reçu" value={paymentForm.amount} onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })} />
+              <select value={paymentForm.method} onChange={(e) => setPaymentForm({ ...paymentForm, method: e.target.value })}>
+                <option>Virement</option><option>Carte bancaire</option><option>Espèces</option><option>PayPal</option><option>Chèque</option><option>Autre</option>
+              </select>
+              <textarea placeholder="Note paiement" value={paymentForm.note} onChange={(e) => setPaymentForm({ ...paymentForm, note: e.target.value })} />
+            </div>
+            <div className="payment-history-list">
+              <h3>Historique des paiements</h3>
+              {(paymentDoc.paymentHistory || []).length === 0 ? <p className="muted">Aucun paiement enregistré.</p> : (paymentDoc.paymentHistory || []).map((payment) => (
+                <div className="payment-history-item" key={payment.id}>
+                  <strong>{money(payment.amount)}</strong><span>{payment.method}</span><span>{payment.date}</span><em>{payment.note}</em>
+                </div>
+              ))}
+            </div>
+          </form>
+        </div>
+      )}
 
       {previewDoc && <DocumentPreview doc={previewDoc} type={type} data={data} onClose={() => setPreviewDoc(null)} />}
     </section>
@@ -1334,6 +1736,45 @@ function DocumentPreview({ doc, type, data, onClose }) {
           totalHT: doc.totalHT,
         },
       ];
+
+  async function downloadPdf() {
+    const element = document.querySelector(".invoice-pdf-area");
+    if (!element) return alert("Zone PDF introuvable.");
+
+    try {
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+      });
+
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF("p", "mm", "a4");
+
+      const pdfWidth = 210;
+      const pdfHeight = 297;
+      const imgWidth = pdfWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+      heightLeft -= pdfHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+        heightLeft -= pdfHeight;
+      }
+
+      pdf.save(`${isQuote ? "devis" : "facture"}-${doc.number || "document"}.pdf`);
+    } catch (error) {
+      console.error(error);
+      alert("Impossible de générer le PDF.");
+    }
+  }
 
   function sendEmail() {
     if (!client?.email) {
@@ -1370,12 +1811,15 @@ ${data.settings.companyEmail || ""}`;
         <div className="no-print modal-actions">
           <button onClick={onClose}>Fermer</button>
           <button onClick={sendEmail}>Envoyer par email</button>
-          <button className="primary" onClick={() => window.print()}>
-            Imprimer / PDF
+          <button onClick={() => window.print()}>
+            Imprimer
+          </button>
+          <button className="primary" onClick={downloadPdf}>
+            Télécharger PDF
           </button>
         </div>
 
-        <div className="print-area invoice-template invoice-pink-template">
+        <div className="print-area invoice-template invoice-pink-template invoice-pdf-area">
           <div
             className="invoice-modern-header"
             style={{
@@ -1447,6 +1891,8 @@ ${data.settings.companyEmail || ""}`;
               <div>
                 <h3>RÉFÉRENCE</h3>
                 <strong>{doc.convertedFrom || doc.number}</strong>
+                <p><strong>Statut :</strong> {doc.status}</p>
+                {!isQuote && doc.dueDate && <p><strong>Échéance :</strong> {doc.dueDate}</p>}
               </div>
             </div>
           </div>
@@ -1520,6 +1966,11 @@ ${data.settings.companyEmail || ""}`;
             </div>
           </div>
 
+          <div className="invoice-legal-note">
+            <strong>Mentions</strong>
+            <p>Document généré électroniquement. Aucun escompte accordé sauf indication contraire. En cas de retard de paiement, des pénalités peuvent être appliquées selon les conditions convenues.</p>
+          </div>
+
           <div className="invoice-thank-you">
             <div className="invoice-round-icon">i</div>
             <div>
@@ -1530,7 +1981,7 @@ ${data.settings.companyEmail || ""}`;
           </div>
 
           <div className="invoice-modern-footer">
-            <strong>{data.settings.companyName} — Solutions digitales</strong>
+            <strong>{data.settings.companyName} — Personnalisation</strong>
             <span>
               {data.settings.companyAddress} — {data.settings.companyPhone} — {data.settings.companyEmail}
             </span>
@@ -1542,7 +1993,7 @@ ${data.settings.companyEmail || ""}`;
   );
 }
 
-function Categories({ data, setData }) {
+function Categories({ data, setData, currentRole = 'Admin' }) {
   const [form, setForm] = useState({ name: "", description: "" });
   const [editing, setEditing] = useState(null);
 
@@ -1666,33 +2117,45 @@ function Categories({ data, setData }) {
   );
 }
 
-function Products({ data, setData }) {
+function Products({ data, setData, currentRole = 'Admin' }) {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
+  const [stockFilter, setStockFilter] = useState("");
   const [editing, setEditing] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedProductIds, setSelectedProductIds] = useState([]);
   const [bulkCategory, setBulkCategory] = useState("");
+  const [movementProduct, setMovementProduct] = useState(null);
+  const [movementForm, setMovementForm] = useState({ type: "Entrée", quantity: "", reason: "Ajustement manuel" });
   const [form, setForm] = useState({
     name: "",
     sku: "",
     category: "",
     price: "",
+    purchasePrice: "",
     stock: "",
+    stockMin: "",
+    supplier: "",
+    trackStock: true,
     description: "",
   });
 
   const categories = data.categories || [];
   const itemsPerPage = 10;
+  const allProducts = data.products || [];
+  const stockAlerts = allProducts.filter((product) => product.trackStock !== false && stockStatus(product).className !== "success");
+  const totalStockValue = allProducts.reduce((sum, product) => sum + Number(product.stock || 0) * Number(product.price || 0), 0);
+  const totalPurchaseValue = allProducts.reduce((sum, product) => sum + Number(product.stock || 0) * Number(product.purchasePrice || 0), 0);
 
-  const products = (data.products || []).filter((product) => {
-    const matchesSearch = [product.name, product.sku, product.category, product.description]
+  const products = allProducts.filter((product) => {
+    const matchesSearch = [product.name, product.sku, product.category, product.description, product.supplier]
       .join(" ")
       .toLowerCase()
       .includes(search.toLowerCase());
-
     const matchesCategory = !categoryFilter || product.category === categoryFilter;
-    return matchesSearch && matchesCategory;
+    const status = stockStatus(product);
+    const matchesStock = !stockFilter || status.className === stockFilter;
+    return matchesSearch && matchesCategory && matchesStock;
   });
 
   const productTotalPages = Math.max(1, Math.ceil(products.length / itemsPerPage));
@@ -1701,7 +2164,7 @@ function Products({ data, setData }) {
 
   function reset() {
     setEditing(null);
-    setForm({ name: "", sku: "", category: "", price: "", stock: "", description: "" });
+    setForm({ name: "", sku: "", category: "", price: "", purchasePrice: "", stock: "", stockMin: "", supplier: "", trackStock: true, description: "" });
   }
 
   function submit(e) {
@@ -1711,20 +2174,23 @@ function Products({ data, setData }) {
     const productData = {
       ...form,
       price: Number(form.price || 0),
+      purchasePrice: Number(form.purchasePrice || 0),
       stock: Number(form.stock || 0),
+      stockMin: Number(form.stockMin || 0),
+      trackStock: Boolean(form.trackStock),
     };
 
     if (editing) {
       setData({
         ...data,
-        products: (data.products || []).map((p) =>
-          p.id === editing ? { ...p, ...productData } : p
+        products: allProducts.map((p) =>
+          p.id === editing ? { ...p, ...productData, updatedAt: today() } : p
         ),
       });
     } else {
       setData({
         ...data,
-        products: [...(data.products || []), { id: uid(), createdAt: today(), ...productData }],
+        products: [...allProducts, { id: uid(), createdAt: today(), stockHistory: [], ...productData }],
       });
     }
 
@@ -1738,163 +2204,198 @@ function Products({ data, setData }) {
       sku: product.sku || "",
       category: product.category || "",
       price: product.price || "",
+      purchasePrice: product.purchasePrice || "",
       stock: product.stock || "",
+      stockMin: product.stockMin || "",
+      supplier: product.supplier || "",
+      trackStock: product.trackStock !== false,
       description: product.description || "",
     });
   }
 
   function remove(id) {
+    if (!canDeleteData(currentRole)) return alert("Ton rôle ne permet pas de supprimer.");
     if (!confirm("Supprimer ce produit ?")) return;
-    setData({ ...data, products: (data.products || []).filter((p) => p.id !== id) });
+    setData({ ...data, products: allProducts.filter((p) => p.id !== id) });
     setSelectedProductIds(selectedProductIds.filter((productId) => productId !== id));
   }
 
   function toggleProductSelection(id) {
-    setSelectedProductIds((current) =>
-      current.includes(id)
-        ? current.filter((productId) => productId !== id)
-        : [...current, id]
-    );
+    setSelectedProductIds((current) => current.includes(id) ? current.filter((productId) => productId !== id) : [...current, id]);
   }
 
   function toggleVisibleProducts() {
     const visibleIds = paginatedProducts.map((product) => product.id);
     const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedProductIds.includes(id));
-
-    if (allVisibleSelected) {
-      setSelectedProductIds(selectedProductIds.filter((id) => !visibleIds.includes(id)));
-    } else {
-      setSelectedProductIds([...new Set([...selectedProductIds, ...visibleIds])]);
-    }
+    setSelectedProductIds(allVisibleSelected ? selectedProductIds.filter((id) => !visibleIds.includes(id)) : [...new Set([...selectedProductIds, ...visibleIds])]);
   }
 
   function applyBulkCategory() {
     if (!selectedProductIds.length) return alert("Sélectionne au moins un produit.");
     if (!bulkCategory) return alert("Choisis une catégorie.");
-
-    setData({
-      ...data,
-      products: (data.products || []).map((product) =>
-        selectedProductIds.includes(product.id)
-          ? { ...product, category: bulkCategory }
-          : product
-      ),
-    });
-
+    setData({ ...data, products: allProducts.map((product) => selectedProductIds.includes(product.id) ? { ...product, category: bulkCategory } : product) });
     setSelectedProductIds([]);
     setBulkCategory("");
     alert("Catégorie appliquée aux produits sélectionnés.");
   }
 
+  function openMovement(product) {
+    setMovementProduct(product);
+    setMovementForm({ type: "Entrée", quantity: "", reason: "Ajustement manuel" });
+  }
+
+  function saveMovement(e) {
+    e.preventDefault();
+    if (!movementProduct) return;
+    const quantity = Number(movementForm.quantity || 0);
+    if (!quantity || quantity <= 0) return alert("Quantité obligatoire.");
+    const direction = movementForm.type === "Entrée" ? 1 : -1;
+    setData({
+      ...data,
+      products: allProducts.map((product) => {
+        if (product.id !== movementProduct.id) return product;
+        const nextStock = Math.max(0, Number(product.stock || 0) + quantity * direction);
+        return {
+          ...product,
+          stock: nextStock,
+          stockHistory: [buildStockMovement(movementForm.type, quantity, movementForm.reason), ...(product.stockHistory || [])].slice(0, 30),
+        };
+      }),
+    });
+    setMovementProduct(null);
+  }
+
   return (
-    <section>
+    <section className="products-page">
       <div className="page-header">
         <div>
-          <h2>Produits</h2>
-          <p>Gère tes produits, prix, références et stocks.</p>
+          <h2>Produits & Stock</h2>
+          <p>Catalogue premium, valorisation du stock, alertes et mouvements.</p>
         </div>
       </div>
 
-      <form className="card form-grid" onSubmit={submit}>
-        <input placeholder="Nom produit *" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-        <input placeholder="Référence SKU" value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} />
-        <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
-          <option value="">Sans catégorie</option>
-          {categories.map((category) => (
-            <option key={category.id} value={category.name}>{category.name}</option>
-          ))}
-        </select>
-        <input
-          type="text"
-          inputMode="decimal"
-          placeholder="Prix HT"
-          value={String(form.price).replace(".", ",")}
-          onChange={(e) => setForm({ ...form, price: e.target.value.replace(",", ".") })}
-        />
-        <input type="number" min="0" placeholder="Stock" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} />
-        <textarea placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-        <button className="primary">{editing ? "Modifier" : "Ajouter produit"}</button>
-        {editing && <button type="button" onClick={reset}>Annuler</button>}
+      <div className="product-kpi-grid">
+        <div className="card product-kpi"><span>Produits actifs</span><strong>{allProducts.length}</strong><small>Catalogue complet</small></div>
+        <div className="card product-kpi"><span>Valeur vente stock</span><strong>{money(totalStockValue)}</strong><small>Stock × prix HT</small></div>
+        <div className="card product-kpi"><span>Valeur achat stock</span><strong>{money(totalPurchaseValue)}</strong><small>Stock × coût achat</small></div>
+        <div className="card product-kpi alert"><span>Alertes stock</span><strong>{stockAlerts.length}</strong><small>Faible ou rupture</small></div>
+      </div>
+
+      <form className="card product-form" onSubmit={submit}>
+        <div className="product-form-title">
+          <h3>{editing ? "Modifier un produit" : "Nouveau produit"}</h3>
+          <p className="muted">Les champs stock minimum et fournisseur alimentent les alertes et la fiche produit.</p>
+        </div>
+        <div className="form-grid">
+          <input placeholder="Nom produit *" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          <input placeholder="Référence SKU" value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })} />
+          <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
+            <option value="">Sans catégorie</option>
+            {categories.map((category) => <option key={category.id} value={category.name}>{category.name}</option>)}
+          </select>
+          <input type="text" inputMode="decimal" placeholder="Prix vente HT" value={String(form.price).replace(".", ",")} onChange={(e) => setForm({ ...form, price: e.target.value.replace(",", ".") })} />
+          <input type="text" inputMode="decimal" placeholder="Coût achat HT" value={String(form.purchasePrice).replace(".", ",")} onChange={(e) => setForm({ ...form, purchasePrice: e.target.value.replace(",", ".") })} />
+          <input type="number" min="0" placeholder="Stock actuel" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} />
+          <input type="number" min="0" placeholder="Stock minimum" value={form.stockMin} onChange={(e) => setForm({ ...form, stockMin: e.target.value })} />
+          <input placeholder="Fournisseur" value={form.supplier} onChange={(e) => setForm({ ...form, supplier: e.target.value })} />
+          <label className="check-card"><input type="checkbox" checked={form.trackStock} onChange={(e) => setForm({ ...form, trackStock: e.target.checked })} /> Suivre le stock</label>
+          <textarea placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+        </div>
+        <div className="document-form-footer">
+          <button className="primary">{editing ? "Modifier" : "Ajouter produit"}</button>
+          {editing && <button type="button" onClick={reset}>Annuler</button>}
+        </div>
       </form>
 
-      <div className="filters-row">
-        <input className="search" placeholder="Rechercher un produit..." value={search} onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }} />
+      <div className="filters-row product-filters">
+        <input className="search" placeholder="Rechercher nom, SKU, fournisseur..." value={search} onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }} />
         <select value={categoryFilter} onChange={(e) => { setCategoryFilter(e.target.value); setCurrentPage(1); }}>
           <option value="">Toutes les catégories</option>
-          {categories.map((category) => (
-            <option key={category.id} value={category.name}>{category.name}</option>
-          ))}
+          {categories.map((category) => <option key={category.id} value={category.name}>{category.name}</option>)}
+        </select>
+        <select value={stockFilter} onChange={(e) => { setStockFilter(e.target.value); setCurrentPage(1); }}>
+          <option value="">Tous les statuts stock</option>
+          <option value="success">Disponible</option>
+          <option value="warning">Stock faible</option>
+          <option value="danger">Rupture</option>
+          <option value="neutral">Non suivi</option>
         </select>
       </div>
 
-      <div className="table card">
+      <div className="table card product-table-card">
         <div className="bulk-actions">
           <strong>{selectedProductIds.length} produit(s) sélectionné(s)</strong>
-
           <select value={bulkCategory} onChange={(e) => setBulkCategory(e.target.value)}>
             <option value="">Choisir une catégorie</option>
-            {categories.map((category) => (
-              <option key={category.id} value={category.name}>{category.name}</option>
-            ))}
+            {categories.map((category) => <option key={category.id} value={category.name}>{category.name}</option>)}
           </select>
-
-          <button type="button" className="primary" onClick={applyBulkCategory}>
-            Appliquer la catégorie
-          </button>
-
-          {selectedProductIds.length > 0 && (
-            <button type="button" onClick={() => setSelectedProductIds([])}>
-              Désélectionner
-            </button>
-          )}
+          <button type="button" className="primary" onClick={applyBulkCategory}>Appliquer la catégorie</button>
+          {selectedProductIds.length > 0 && <button type="button" onClick={() => setSelectedProductIds([])}>Désélectionner</button>}
         </div>
 
-        <table>
-          <thead>
-            <tr>
-              <th>
-                <input
-                  type="checkbox"
-                  checked={paginatedProducts.length > 0 && paginatedProducts.every((product) => selectedProductIds.includes(product.id))}
-                  onChange={toggleVisibleProducts}
-                />
-              </th>
-              <th>Produit</th><th>SKU</th><th>Catégorie</th><th>Prix HT</th><th>Stock</th><th>Description</th><th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {paginatedProducts.map((product) => (
-              <tr key={product.id}>
-                <td>
-                  <input
-                    type="checkbox"
-                    checked={selectedProductIds.includes(product.id)}
-                    onChange={() => toggleProductSelection(product.id)}
-                  />
-                </td>
-                <td>{product.name}</td>
-                <td>{product.sku}</td>
-                <td>{product.category}</td>
-                <td>{money(product.price)}</td>
-                <td>{product.stock}</td>
-                <td>{product.description}</td>
-                <td>
+        <div className="product-card-grid">
+          {paginatedProducts.map((product) => {
+            const status = stockStatus(product);
+            const margin = Number(product.price || 0) - Number(product.purchasePrice || 0);
+            const maxLevel = Math.max(Number(product.stockMin || 0) * 2, Number(product.stock || 0), 1);
+            const level = Math.min(100, Math.round((Number(product.stock || 0) / maxLevel) * 100));
+            return (
+              <article className="product-tile" key={product.id}>
+                <div className="product-tile-top">
+                  <input type="checkbox" checked={selectedProductIds.includes(product.id)} onChange={() => toggleProductSelection(product.id)} />
+                  <span className={`stock-pill ${status.className}`}>{status.label}</span>
+                </div>
+                <h3>{product.name}</h3>
+                <p className="muted">{product.sku || "Sans SKU"} · {product.category || "Sans catégorie"}</p>
+                <div className="product-price-row"><strong>{money(product.price)}</strong><span>Marge {money(margin)}</span></div>
+                <div className="stock-meter"><div style={{ width: `${level}%` }} /></div>
+                <div className="product-stock-row"><span>Stock</span><strong>{product.trackStock === false ? "Non suivi" : product.stock}</strong><small>Min. {product.stockMin || 0}</small></div>
+                {product.supplier && <p className="product-supplier">Fournisseur : {product.supplier}</p>}
+                {product.description && <p className="product-description">{product.description}</p>}
+                <div className="product-actions">
+                  <button onClick={() => openMovement(product)}>Stock</button>
                   <button onClick={() => edit(product)}>Modifier</button>
                   <button className="danger" onClick={() => remove(product.id)}>Supprimer</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                </div>
+              </article>
+            );
+          })}
+        </div>
 
-        <PaginationControls
-          page={productPage}
-          totalPages={productTotalPages}
-          totalItems={products.length}
-          perPage={itemsPerPage}
-          onPageChange={setCurrentPage}
-        />
+        <div className="select-visible-row">
+          <button type="button" onClick={toggleVisibleProducts}>Sélectionner / désélectionner cette page</button>
+        </div>
+
+        <PaginationControls page={productPage} totalPages={productTotalPages} totalItems={products.length} perPage={itemsPerPage} onPageChange={setCurrentPage} />
       </div>
+
+      {movementProduct && (
+        <div className="modal">
+          <form className="modal-content payment-modal" onSubmit={saveMovement}>
+            <div className="modal-actions no-print">
+              <button type="button" onClick={() => setMovementProduct(null)}>Fermer</button>
+              <button className="primary">Enregistrer</button>
+            </div>
+            <h2>Mouvement stock — {movementProduct.name}</h2>
+            <p className="muted">Stock actuel : {movementProduct.stock || 0}</p>
+            <div className="form-grid">
+              <select value={movementForm.type} onChange={(e) => setMovementForm({ ...movementForm, type: e.target.value })}>
+                <option>Entrée</option><option>Sortie</option>
+              </select>
+              <input type="number" min="1" placeholder="Quantité" value={movementForm.quantity} onChange={(e) => setMovementForm({ ...movementForm, quantity: e.target.value })} />
+              <input placeholder="Motif" value={movementForm.reason} onChange={(e) => setMovementForm({ ...movementForm, reason: e.target.value })} />
+            </div>
+            <div className="payment-history-list">
+              <h3>Derniers mouvements</h3>
+              {(movementProduct.stockHistory || []).length === 0 ? <p className="muted">Aucun mouvement enregistré.</p> : (movementProduct.stockHistory || []).slice(0, 10).map((move) => (
+                <div className="payment-history-item" key={move.id}>
+                  <strong>{move.type}</strong><span>{move.quantity}</span><span>{move.reason}</span><em>{move.documentNumber || new Date(move.createdAt).toLocaleDateString("fr-FR")}</em>
+                </div>
+              ))}
+            </div>
+          </form>
+        </div>
+      )}
     </section>
   );
 }
