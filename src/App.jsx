@@ -591,16 +591,100 @@ function Dashboard({ data }) {
   const clients = data.clients || [];
   const products = data.products || [];
   const categories = data.categories || [];
+  const [dashboardYear, setDashboardYear] = useState("all");
 
-  const totalInvoices = invoices.reduce((sum, inv) => sum + Number(inv.totalTTC || 0), 0);
-  const paidInvoices = invoices
+  const getDocumentYear = (document) => {
+    const possibleDates = [
+      document?.date,
+      document?.invoiceDate,
+      document?.createdAt,
+      document?.created_at,
+      document?.updatedAt,
+      document?.updated_at,
+    ].filter(Boolean);
+
+    for (const value of possibleDates) {
+      if (value instanceof Date && !Number.isNaN(value.getTime())) {
+        return value.getFullYear();
+      }
+
+      if (typeof value === "number") {
+        const date = new Date(value);
+        if (!Number.isNaN(date.getTime())) return date.getFullYear();
+      }
+
+      const text = String(value).trim();
+      if (!text) continue;
+
+      // Format ISO / Supabase : 2025-12-31, 2025/12/31, 2025-12-31T...
+      const isoYear = text.match(/^(20\d{2}|19\d{2})/);
+      if (isoYear) return Number(isoYear[1]);
+
+      // Format français utilisé par l'app : 31/12/2025, 31-12-2025, 31.12.2025
+      const frenchDate = text.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](20\d{2}|19\d{2})$/);
+      if (frenchDate) return Number(frenchDate[3]);
+
+      // Format avec heure : 31/12/2025 14:30
+      const frenchDateTime = text.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](20\d{2}|19\d{2})\s+/);
+      if (frenchDateTime) return Number(frenchDateTime[3]);
+
+      const parsedDate = new Date(text);
+      if (!Number.isNaN(parsedDate.getTime())) return parsedDate.getFullYear();
+    }
+
+    // Dernier secours si le numéro contient une année, ex : FAC-2025-0048
+    const numberYear = String(document?.number || "").match(/(20\d{2}|19\d{2})/);
+    return numberYear ? Number(numberYear[1]) : null;
+  };
+
+  const availableDashboardYears = useMemo(() => {
+    const years = new Set([2025, 2026, 2027, new Date().getFullYear()]);
+    [...invoices, ...quotes].forEach((document) => {
+      const year = getDocumentYear(document);
+      if (year) years.add(year);
+    });
+    return Array.from(years).sort((a, b) => b - a);
+  }, [invoices, quotes]);
+
+  const selectedDashboardYear = dashboardYear === "all" ? null : Number(dashboardYear);
+  const invoicesForDashboard = selectedDashboardYear
+    ? invoices.filter((invoice) => getDocumentYear(invoice) === selectedDashboardYear)
+    : invoices;
+  const quotesForDashboard = selectedDashboardYear
+    ? quotes.filter((quote) => getDocumentYear(quote) === selectedDashboardYear)
+    : quotes;
+
+  const totalInvoices = invoicesForDashboard.reduce((sum, inv) => sum + Number(inv.totalTTC || 0), 0);
+  const paidInvoices = invoicesForDashboard
     .filter((i) => i.status === "Payée")
     .reduce((sum, inv) => sum + Number(inv.totalTTC || 0), 0);
   const unpaidInvoices = totalInvoices - paidInvoices;
-  const unpaidCount = invoices.filter((i) => i.status !== "Payée").length;
-  const acceptedQuotes = quotes.filter((q) => q.status === "Accepté").length;
+  const unpaidCount = invoicesForDashboard.filter((i) => i.status !== "Payée").length;
+  const acceptedQuotes = quotesForDashboard.filter((q) => q.status === "Accepté").length;
 
-  const invoiceLines = invoices.flatMap((invoice) =>
+  const isPaidInvoice = (invoice) =>
+    ["payée", "payee", "paid"].includes(String(invoice.status || "").trim().toLowerCase());
+
+  const invoiceTaxAmount = (invoice) => {
+    const taxAmount = Number(invoice.taxAmount || 0);
+    if (Number.isFinite(taxAmount) && taxAmount > 0) return taxAmount;
+
+    const totalHT = Number(invoice.totalHT || 0);
+    const totalTTC = Number(invoice.totalTTC || 0);
+    const taxRate = Number(invoice.taxRate || data.settings?.taxRate || 0);
+
+    if (totalHT > 0 && totalTTC > totalHT) return totalTTC - totalHT;
+    if (totalHT > 0 && taxRate > 0) return totalHT * (taxRate / 100);
+    if (totalTTC > 0 && taxRate > 0) return totalTTC - totalTTC / (1 + taxRate / 100);
+
+    return 0;
+  };
+
+  const paidTaxAmount = invoicesForDashboard
+    .filter(isPaidInvoice)
+    .reduce((sum, invoice) => sum + invoiceTaxAmount(invoice), 0);
+
+  const invoiceLines = invoicesForDashboard.flatMap((invoice) =>
     (invoice.lines || []).map((line) => ({
       ...line,
       invoiceId: invoice.id,
@@ -624,7 +708,7 @@ function Dashboard({ data }) {
 
   const clientStats = clients
     .map((client) => {
-      const clientInvoices = invoices.filter((invoice) => invoice.clientId === client.id);
+      const clientInvoices = invoicesForDashboard.filter((invoice) => invoice.clientId === client.id);
       const total = clientInvoices.reduce((sum, inv) => sum + Number(inv.totalTTC || 0), 0);
       return { ...client, invoiceCount: clientInvoices.length, total };
     })
@@ -668,22 +752,36 @@ function Dashboard({ data }) {
 
   return (
     <section>
-      <div className="page-header">
+      <div className="page-header dashboard-header">
         <div>
           <h2>Tableau de bord</h2>
-          <p>Statistiques de ventes, clients, produits et catégories.</p>
+          <p>
+            Statistiques de ventes, clients, produits et catégories
+            {selectedDashboardYear ? ` pour l'année ${selectedDashboardYear}.` : " toutes années confondues."}
+          </p>
         </div>
+
+        <label className="dashboard-year-filter">
+          <span>Année</span>
+          <select value={dashboardYear} onChange={(e) => setDashboardYear(e.target.value)}>
+            <option value="all">Toutes</option>
+            {availableDashboardYears.map((year) => (
+              <option key={year} value={year}>{year}</option>
+            ))}
+          </select>
+        </label>
       </div>
 
       <div className="stats">
         <div className="card stat"><span>Clients</span><strong>{clients.length}</strong></div>
         <div className="card stat"><span>Produits</span><strong>{products.length}</strong></div>
-        <div className="card stat"><span>Devis</span><strong>{quotes.length}</strong></div>
+        <div className="card stat"><span>Devis</span><strong>{quotesForDashboard.length}</strong></div>
         <div className="card stat"><span>Devis acceptés</span><strong>{acceptedQuotes}</strong></div>
-        <div className="card stat"><span>Factures</span><strong>{invoices.length}</strong></div>
+        <div className="card stat"><span>Factures</span><strong>{invoicesForDashboard.length}</strong></div>
         <div className="card stat"><span>Non payées</span><strong>{unpaidCount}</strong></div>
         <div className="card stat"><span>Total facturé</span><strong>{money(totalInvoices)}</strong></div>
         <div className="card stat"><span>Payé</span><strong>{money(paidInvoices)}</strong></div>
+        <div className="card stat"><span>TVA encaissée</span><strong>{money(paidTaxAmount)}</strong></div>
         <div className="card stat"><span>À encaisser</span><strong>{money(unpaidInvoices)}</strong></div>
       </div>
 
@@ -753,8 +851,8 @@ function Dashboard({ data }) {
 
         <div className="card">
           <h3>Dernières factures</h3>
-          {invoices.length === 0 ? (
-            <p className="muted">Aucune facture pour le moment.</p>
+          {invoicesForDashboard.length === 0 ? (
+            <p className="muted">Aucune facture pour cette période.</p>
           ) : (
             <div className="table compact-table">
               <table>
@@ -762,7 +860,7 @@ function Dashboard({ data }) {
                   <tr><th>N°</th><th>Client</th><th>Total TTC</th><th>Statut</th></tr>
                 </thead>
                 <tbody>
-                  {invoices.slice(-6).reverse().map((invoice) => (
+                  {invoicesForDashboard.slice(-6).reverse().map((invoice) => (
                     <tr key={invoice.id}>
                       <td>{invoice.number}</td>
                       <td>{clientName(data, invoice.clientId)}</td>
@@ -1118,9 +1216,9 @@ function Clients({ data, setData, currentRole = 'Admin' }) {
   const [editing, setEditing] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [sortBy, setSortBy] = useState("nameAsc");
-  const [form, setForm] = useState({ name: "", email: "", phone: "", company: "", address: "", status: "Prospect", notes: "" });
+  const [form, setForm] = useState({ name: "", email: "", phone: "", company: "", address: "", status: "Prospect", taxRate: "", notes: "" });
 
-  const itemsPerPage = 25;
+  const itemsPerPage = 10;
   const clients = (data.clients || [])
     .filter((c) => [c.name, c.email, c.phone, c.company, c.status, c.address].join(" ").toLowerCase().includes(search.trim().toLowerCase()))
     .sort((a, b) => {
@@ -1144,16 +1242,16 @@ function Clients({ data, setData, currentRole = 'Admin' }) {
 
   function reset() {
     setEditing(null);
-    setForm({ name: "", email: "", phone: "", company: "", address: "", status: "Prospect", notes: "" });
+    setForm({ name: "", email: "", phone: "", company: "", address: "", status: "Prospect", taxRate: "", notes: "" });
   }
 
   function submit(e) {
     e.preventDefault();
     if (!form.name) return alert("Le nom du client est obligatoire.");
     if (editing) {
-      setData({ ...data, clients: data.paginatedClients.map((c) => (c.id === editing ? { ...c, ...form } : c)) });
+      setData({ ...data, clients: data.clients.map((c) => (c.id === editing ? { ...c, ...form, taxRate: form.taxRate === "" ? "" : Number(form.taxRate) } : c)) });
     } else {
-      const client = { id: uid(), createdAt: today(), ...form };
+      const client = { id: uid(), createdAt: today(), ...form, taxRate: form.taxRate === "" ? "" : Number(form.taxRate) };
       setData({ ...data, clients: [...data.clients, client] });
       setSelectedClientId(client.id);
     }
@@ -1165,7 +1263,7 @@ function Clients({ data, setData, currentRole = 'Admin' }) {
     setForm({
       name: client.name || "", email: client.email || "", phone: client.phone || "",
       company: client.company || "", address: client.address || "",
-      status: client.status || "Prospect", notes: client.notes || "",
+      status: client.status || "Prospect", taxRate: client.taxRate ?? "", notes: client.notes || "",
     });
   }
 
@@ -1189,6 +1287,7 @@ function Clients({ data, setData, currentRole = 'Admin' }) {
         <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
           <option>Prospect</option><option>Client</option><option>VIP</option><option>Inactif</option>
         </select>
+        <input type="number" min="0" step="0.01" placeholder={`TVA client % (par défaut ${data.settings.taxRate || 0}%)`} value={form.taxRate} onChange={(e) => setForm({ ...form, taxRate: e.target.value })} />
         <textarea placeholder="Notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
         <button className="primary">{editing ? "Modifier" : "Ajouter"}</button>
         {editing && <button type="button" onClick={reset}>Annuler</button>}
@@ -1293,10 +1392,23 @@ function Documents({ type, data, setData, currentRole = 'Admin' }) {
   const [previewDoc, setPreviewDoc] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [sortBy, setSortBy] = useState("dateDesc");
-  const [form, setForm] = useState({ clientId: "", status: defaultStatus, lines: [{ ...emptyLine }] });
+  const [form, setForm] = useState({ clientId: "", status: defaultStatus, taxRate: Number(data.settings.taxRate || 0), lines: [{ ...emptyLine }] });
 
-  const itemsPerPage = 25;
+  const itemsPerPage = 10;
   const documents = data[listKey];
+
+  function taxRateForClient(clientId) {
+    const client = (data.clients || []).find((c) => String(c.id) === String(clientId));
+    const clientTaxRate = client?.taxRate;
+    if (clientTaxRate !== undefined && clientTaxRate !== null && clientTaxRate !== "") {
+      return Number(clientTaxRate || 0);
+    }
+    return Number(data.settings.taxRate || 0);
+  }
+
+  function handleClientChange(clientId) {
+    setForm({ ...form, clientId, taxRate: taxRateForClient(clientId) });
+  }
 
   const sortedDocuments = useMemo(() => {
     const list = [...documents];
@@ -1344,10 +1456,10 @@ function Documents({ type, data, setData, currentRole = 'Admin' }) {
     const subtotal = form.lines.reduce((sum, line) => sum + lineTotal(line).subtotal, 0);
     const discountAmount = form.lines.reduce((sum, line) => sum + lineTotal(line).discountAmount, 0);
     const totalHT = form.lines.reduce((sum, line) => sum + lineTotal(line).totalHT, 0);
-    const taxAmount = totalHT * (Number(data.settings.taxRate || 0) / 100);
+    const taxAmount = totalHT * (Number(form.taxRate || 0) / 100);
     const totalTTC = totalHT + taxAmount;
     return { subtotal, discountAmount, totalHT, taxAmount, totalTTC };
-  }, [form.lines, data.settings.taxRate]);
+  }, [form.lines, form.taxRate]);
 
   function updateLine(index, changes) {
     setForm({
@@ -1390,7 +1502,7 @@ function Documents({ type, data, setData, currentRole = 'Admin' }) {
 
   function reset() {
     setEditingId(null);
-    setForm({ clientId: "", status: defaultStatus, lines: [{ ...emptyLine }] });
+    setForm({ clientId: "", status: defaultStatus, taxRate: Number(data.settings.taxRate || 0), lines: [{ ...emptyLine }] });
   }
 
   function submit(e) {
@@ -1422,7 +1534,7 @@ function Documents({ type, data, setData, currentRole = 'Admin' }) {
         ...data,
         [listKey]: documents.map((d) =>
           d.id === editingId
-            ? { ...d, clientId: form.clientId, status: form.status, description: firstDescription, lines: cleanLines, taxRate: data.settings.taxRate, ...totals }
+            ? { ...d, clientId: form.clientId, status: form.status, description: firstDescription, lines: cleanLines, taxRate: Number(form.taxRate || 0), ...totals }
             : d
         ),
       });
@@ -1431,7 +1543,7 @@ function Documents({ type, data, setData, currentRole = 'Admin' }) {
         id: uid(),
         number: `${prefix}-${String(documents.length + 1).padStart(4, "0")}`,
         date: today(),
-        taxRate: data.settings.taxRate,
+        taxRate: Number(form.taxRate || 0),
         clientId: form.clientId,
         status: form.status,
         description: firstDescription,
@@ -1450,7 +1562,7 @@ function Documents({ type, data, setData, currentRole = 'Admin' }) {
       : [{ productId: doc.productId || "", description: doc.description || "", quantity: doc.quantity || 1, price: doc.price || 0, discount: doc.discount || 0 }];
 
     setEditingId(doc.id);
-    setForm({ clientId: doc.clientId, status: doc.status || defaultStatus, lines });
+    setForm({ clientId: doc.clientId, status: doc.status || defaultStatus, taxRate: Number(doc.taxRate ?? taxRateForClient(doc.clientId)), lines });
   }
 
   function remove(id) {
@@ -1474,14 +1586,16 @@ function Documents({ type, data, setData, currentRole = 'Admin' }) {
 
       <form className="card" onSubmit={submit}>
         <div className="document-form-header">
-          <select value={form.clientId} onChange={(e) => setForm({ ...form, clientId: e.target.value })}>
+          <select value={form.clientId} onChange={(e) => handleClientChange(e.target.value)}>
             <option value="">Choisir un client</option>
-            {data.clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {data.clients.map((c) => <option key={c.id} value={c.id}>{c.name}{c.taxRate !== undefined && c.taxRate !== null && c.taxRate !== "" ? ` — TVA ${c.taxRate}%` : ""}</option>)}
           </select>
 
           <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
             {isQuote ? <><option>Brouillon</option><option>Envoyé</option><option>Accepté</option><option>Refusé</option></> : <><option>Non payée</option><option>Payée</option><option>En retard</option></>}
           </select>
+
+          <input type="number" min="0" step="0.01" placeholder="TVA %" value={form.taxRate} onChange={(e) => setForm({ ...form, taxRate: e.target.value })} />
         </div>
 
         <div className="document-lines">
@@ -1510,7 +1624,7 @@ function Documents({ type, data, setData, currentRole = 'Admin' }) {
 
         <div className="document-form-footer">
           <button type="button" onClick={addLine}>+ Ajouter une ligne</button>
-          <div className="total-box"><span>HT : {money(totals.totalHT)}</span><span>TVA : {money(totals.taxAmount)}</span><strong>TTC : {money(totals.totalTTC)}</strong></div>
+          <div className="total-box"><span>HT : {money(totals.totalHT)}</span><span>TVA {Number(form.taxRate || 0)}% : {money(totals.taxAmount)}</span><strong>TTC : {money(totals.totalTTC)}</strong></div>
           <button className="primary">{editingId ? "Modifier" : `Créer ${isQuote ? "le devis" : "la facture"}`}</button>
           {editingId && <button type="button" onClick={reset}>Annuler</button>}
         </div>
@@ -2052,7 +2166,7 @@ function Products({ data, setData, currentRole = 'Admin' }) {
 
 
   const categories = data.categories || [];
-  const itemsPerPage = 25;
+  const itemsPerPage = 10;
 
   const allProducts = (data.products || []).map((product) => ({
     ...product,
@@ -2519,7 +2633,6 @@ function Products({ data, setData, currentRole = 'Admin' }) {
 
                   <div className="product-tags-row">
                     <span>SKU : {product.sku || "Sans SKU"}</span>
-                    <span>Prix HT : {money(product.price || 0)}</span>
                   </div>
 
                   {product.description && (

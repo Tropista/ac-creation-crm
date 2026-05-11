@@ -4659,58 +4659,58 @@ tr:hover td {
 }
 
 
+/* TVA personnalisable par client dans les devis / factures */
+.document-form-header {
+  grid-template-columns: 1fr 220px 160px !important;
+}
+
+@media (max-width: 1000px) {
+  .document-form-header {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+
 /* =========================================================
-   CORRECTION PRODUITS — 25/PAGE + IMAGE PLUS GRANDE + PRIX HT
+   FILTRE ANNÉE — TABLEAU DE BORD
    ========================================================= */
-
-.product-premium-card {
-  min-height: 330px !important;
+.dashboard-header {
+  gap: 18px;
+  align-items: flex-start !important;
 }
 
-.product-visual {
-  width: 112px !important;
-  height: 112px !important;
-  border-radius: 26px !important;
-  margin: 14px auto 14px !important;
+.dashboard-year-filter {
+  min-width: 210px;
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid var(--crm-border, rgba(148, 163, 184, 0.22));
+  box-shadow: 0 18px 45px rgba(0,0,0,0.18);
 }
 
-.product-visual span {
-  font-size: 50px !important;
+.dashboard-year-filter span {
+  color: var(--crm-muted, #aebed4) !important;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .5px;
 }
 
-.product-visual img {
-  width: 100% !important;
-  height: 100% !important;
-  object-fit: cover !important;
-  display: block !important;
-}
-
-.product-tags-row {
-  margin-bottom: 12px !important;
-}
-
-.product-tags-row span {
-  font-size: 11px !important;
-  padding: 6px 9px !important;
-}
-
-.product-image-field {
-  min-width: 280px !important;
-}
-
-.product-image-preview {
-  grid-template-columns: 110px 1fr !important;
-}
-
-.product-image-preview img {
-  width: 110px !important;
-  height: 110px !important;
-  border-radius: 18px !important;
+.dashboard-year-filter select {
+  height: 44px;
+  margin: 0 !important;
 }
 
 @media (max-width: 850px) {
-  .product-visual {
-    width: 100px !important;
-    height: 100px !important;
+  .dashboard-header {
+    display: grid !important;
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-year-filter {
+    width: 100%;
+    min-width: 0;
   }
 }
