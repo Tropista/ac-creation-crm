@@ -580,20 +580,25 @@ option {
 
 
 .filters-row {
-  display: grid;
-  grid-template-columns: 1fr 260px;
+  display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 18px;
+  width: 100%;
+  align-items: center;
+}
+
+.filters-row > * {
+  min-width: 180px;
+  flex: 1 1 180px;
+}
+
+.filters-row button {
+  flex: 0 0 auto;
 }
 
 .filters-row .search {
   margin-bottom: 0;
-}
-
-@media (max-width: 850px) {
-  .filters-row {
-    grid-template-columns: 1fr;
-  }
 }
 
 
@@ -4562,7 +4567,7 @@ tr:hover td {
 .filters-bottom-row {
   display: flex !important;
   align-items: center !important;
-  justify-content: flex-end !important;
+  justify-content: space-between !important;
   gap: 14px !important;
   padding-top: 18px !important;
   border-top: 1px solid rgba(147, 197, 253, 0.16) !important;
@@ -4659,58 +4664,172 @@ tr:hover td {
 }
 
 
-/* TVA personnalisable par client dans les devis / factures */
-.document-form-header {
-  grid-template-columns: 1fr 220px 160px !important;
+/* =========================================================
+   CORRECTIONS PRODUITS — VERSION RESTAURÉE
+   ========================================================= */
+
+/* Filtres produits : empêche les champs de dépasser du cadre */
+.product-search-panel.filters-card {
+  overflow: hidden !important;
 }
 
-@media (max-width: 1000px) {
-  .document-form-header {
+.filters-main-row {
+  grid-template-columns: minmax(220px, 1.4fr) minmax(150px, .85fr) minmax(140px, .75fr) minmax(140px, .75fr) minmax(150px, .75fr) !important;
+  gap: 12px !important;
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+.filters-search-wrap,
+.filters-price-wrap,
+.filters-select {
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+.filters-bottom-row {
+  justify-content: flex-end !important;
+}
+
+.filters-quick-stats,
+.filter-chip {
+  display: none !important;
+}
+
+/* Cartes produits : image plus grande, infos simplifiées */
+.product-premium-card {
+  min-height: 310px !important;
+}
+
+.product-premium-top {
+  justify-content: flex-start !important;
+}
+
+.stock-badge,
+.stock-progress,
+.product-stock-row,
+.product-price-premium {
+  display: none !important;
+}
+
+.product-visual {
+  width: 108px !important;
+  height: 108px !important;
+  border-radius: 28px !important;
+  margin: 16px auto 14px !important;
+  overflow: hidden !important;
+}
+
+.product-visual span {
+  font-size: 50px !important;
+}
+
+.product-visual img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  display: block !important;
+}
+
+.product-tags-row-sku-price {
+  margin-bottom: 12px !important;
+}
+
+.product-tags-row-sku-price span {
+  font-size: 11px !important;
+  padding: 7px 10px !important;
+}
+
+@media (max-width: 1250px) {
+  .filters-main-row {
+    grid-template-columns: 1fr 1fr !important;
+  }
+  .filters-search-wrap {
+    grid-column: 1 / -1 !important;
+  }
+}
+
+@media (max-width: 700px) {
+  .filters-main-row {
+    grid-template-columns: 1fr !important;
+  }
+  .product-visual {
+    width: 96px !important;
+    height: 96px !important;
+  }
+}
+/* Correction débordement filtres produits */
+.product-search-panel,
+.filters-card {
+  overflow: hidden !important;
+}
+
+.filters-main-row {
+  display: grid !important;
+  grid-template-columns: minmax(220px, 1.4fr) repeat(4, minmax(145px, 0.8fr)) !important;
+  gap: 12px !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  align-items: center !important;
+}
+
+.filters-main-row > * {
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+.filters-search-wrap,
+.filters-main-row select,
+.filters-main-row button {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+@media (max-width: 1200px) {
+  .filters-main-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 700px) {
+  .filters-main-row {
     grid-template-columns: 1fr !important;
   }
 }
-
-
-/* =========================================================
-   FILTRE ANNÉE — TABLEAU DE BORD
-   ========================================================= */
-.dashboard-header {
-  gap: 18px;
-  align-items: flex-start !important;
+.products-filters-fixed {
+  display: grid !important;
+  grid-template-columns: 1.4fr 1fr 1fr !important;
+  gap: 12px !important;
+  width: 100% !important;
 }
 
-.dashboard-year-filter {
-  min-width: 210px;
-  display: grid;
-  gap: 8px;
-  padding: 14px;
-  border-radius: 18px;
-  background: rgba(255,255,255,0.08);
-  border: 1px solid var(--crm-border, rgba(148, 163, 184, 0.22));
-  box-shadow: 0 18px 45px rgba(0,0,0,0.18);
+.products-filters-fixed > * {
+  min-width: 0 !important;
+  width: 100% !important;
 }
 
-.dashboard-year-filter span {
-  color: var(--crm-muted, #aebed4) !important;
-  font-size: 13px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: .5px;
+.products-filters-fixed select,
+.products-filters-fixed input,
+.products-filters-fixed button {
+  width: 100% !important;
+  max-width: 100% !important;
 }
 
-.dashboard-year-filter select {
-  height: 44px;
-  margin: 0 !important;
+.filters-bottom-row {
+  display: flex !important;
+  justify-content: flex-end !important;
+  width: 100% !important;
+  margin-top: 14px !important;
 }
 
-@media (max-width: 850px) {
-  .dashboard-header {
-    display: grid !important;
-    grid-template-columns: 1fr;
+@media (max-width: 1100px) {
+  .products-filters-fixed {
+    grid-template-columns: 1fr 1fr !important;
   }
+}
 
-  .dashboard-year-filter {
-    width: 100%;
-    min-width: 0;
+@media (max-width: 700px) {
+  .products-filters-fixed {
+    grid-template-columns: 1fr !important;
   }
 }
