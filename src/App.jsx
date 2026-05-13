@@ -2885,7 +2885,7 @@ function BarcodeLabels({ data }) {
 }
 
 function ProductLabel({ product, showPrice, showQr = false }) {
-  const codeValue = product.sku || product.name || product.id;
+  const codeValue = String(product.sku || product.id || product.name || "").trim();
   return (
     <div className="product-label">
       <strong>{product.name || "Produit"}</strong>
@@ -2945,20 +2945,48 @@ function ProductScan({ data, setData }) {
   const [message, setMessage] = useState("Scanne un code-barres, un QR code ou saisis un SKU.");
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const scannerRef = useRef(null);
+  const lastScanRef = useRef({ value: "", time: 0 });
   const containerId = "crm-html5-qrcode-scanner";
 
+  function normalizeScanValue(value) {
+    return String(value || "")
+      .trim()
+      .split(/\r?\n/)[0]
+      .trim()
+      .toUpperCase();
+  }
+
+  function compactScanValue(value) {
+    return normalizeScanValue(value).replace(/[^A-Z0-9]/g, "");
+  }
+
   function findProduct(rawValue) {
-    const query = String(rawValue || "").trim().toLowerCase();
-    if (!query) return null;
+    const query = normalizeScanValue(rawValue);
+    const compactQuery = compactScanValue(rawValue);
+    if (!query && !compactQuery) return null;
+
+    const exactMatch = products.find((product) => {
+      const possibleValues = [
+        product.sku,
+        product.id,
+        product.barcode,
+        product.qrCode,
+      ].filter(Boolean);
+
+      return possibleValues.some((value) => {
+        const normalizedValue = normalizeScanValue(value);
+        const compactValue = compactScanValue(value);
+        return normalizedValue === query || compactValue === compactQuery;
+      });
+    });
+
+    if (exactMatch) return exactMatch;
+
     return products.find((product) =>
-      [product.sku, product.id, product.name]
-        .filter(Boolean)
-        .some((value) => String(value).trim().toLowerCase() === query)
-    ) || products.find((product) =>
       [product.sku, product.name, product.category]
         .filter(Boolean)
         .join(" ")
-        .toLowerCase()
+        .toUpperCase()
         .includes(query)
     ) || null;
   }
@@ -2983,11 +3011,23 @@ function ProductScan({ data, setData }) {
   }
 
   function handleScan(rawValue, autoApply = false) {
-    const product = findProduct(rawValue);
-    setScanValue(String(rawValue || ""));
+    const cleanValue = normalizeScanValue(rawValue);
+
+    if (autoApply) {
+      const now = Date.now();
+      const previous = lastScanRef.current;
+      if (previous.value === cleanValue && now - previous.time < 1800) {
+        return;
+      }
+      lastScanRef.current = { value: cleanValue, time: now };
+    }
+
+    const product = findProduct(cleanValue);
+    setScanValue(cleanValue);
+
     if (!product) {
       setFoundProduct(null);
-      setMessage("Produit introuvable. Vérifie le SKU, le code-barres ou le QR code.");
+      setMessage(`Produit introuvable pour le code : ${cleanValue || "vide"}. Vérifie le SKU, le code-barres ou le QR code.`);
       return;
     }
 
