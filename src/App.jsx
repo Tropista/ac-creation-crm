@@ -9,8 +9,6 @@ const STORAGE_KEY = "crm_local_data_v2";
 const SESSION_KEY = "crm_current_user_v2";
 
 const ADMIN_EMAILS = ["ac.creation.officiel@gmail.com"];
-const COMPANIES_TABLE = "compagnies";
-const COMPANY_MEMBERS_TABLE = "company_members";
 
 function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
@@ -39,7 +37,7 @@ function userRole(email, users = []) {
 
 const ROLE_PERMISSIONS = {
   Admin: {
-    pages: ["dashboard", "clients", "products", "categories", "quotes", "invoices", "users", "companies", "settings", "import", "backups"],
+    pages: ["dashboard", "clients", "products", "categories", "quotes", "invoices", "users", "settings", "import", "backups"],
     canDelete: true,
     canEditSettings: true,
     canManageUsers: true,
@@ -86,8 +84,6 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2);
 
 const emptyData = {
   users: [],
-  companies: [],
-  activeCompanyId: "",
   settings: {
     companyName: "Mon Entreprise",
     companyEmail: "contact@monentreprise.com",
@@ -113,8 +109,6 @@ function normalizeData(data) {
     ...data,
     settings: { ...emptyData.settings, ...(data?.settings || {}) },
     users: data?.users || [],
-    companies: data?.companies || [],
-    activeCompanyId: data?.activeCompanyId || data?.companies?.[0]?.id || "",
     clients: data?.clients || [],
     quotes: data?.quotes || [],
     invoices: data?.invoices || [],
@@ -183,152 +177,20 @@ function hasLocalBusinessData(data) {
 }
 
 function rowsToItems(rows) {
-  return (rows || []).map((row) => ({
-    id: row.id,
-    ...(row.data || {}),
-    companyId: row.company_id || row.data?.companyId || "",
-  }));
-}
-
-function rowsToCompanies(rows) {
-  return (rows || []).map((row) => ({
-    id: row.id,
-    ownerEmail: row.owner_email || row.data?.ownerEmail || "",
-    ...(row.data || {}),
-  }));
-}
-
-function makeDefaultCompany(userEmail, settings = emptyData.settings) {
-  return {
-    id: "company_" + uid(),
-    name: settings.companyName || "Mon Entreprise",
-    email: settings.companyEmail || "",
-    phone: settings.companyPhone || "",
-    address: settings.companyAddress || "",
-    vatNumber: settings.vatNumber || "",
-    logoUrl: settings.logoUrl || "",
-    ownerEmail: normalizeEmail(userEmail || ADMIN_EMAILS[0]),
-    createdAt: new Date().toISOString(),
-  };
-}
-
-function ensureCompanyData(data, userEmail) {
-  const normalized = normalizeData(data);
-  let companies = normalized.companies || [];
-  let activeCompanyId = normalized.activeCompanyId || companies[0]?.id || "";
-
-  if (!companies.length) {
-    const defaultCompany = makeDefaultCompany(userEmail, normalized.settings);
-    companies = [defaultCompany];
-    activeCompanyId = defaultCompany.id;
-  }
-
-  if (!activeCompanyId || !companies.some((company) => company.id === activeCompanyId)) {
-    activeCompanyId = companies[0]?.id || "";
-  }
-
-  const assignCompany = (items) =>
-    (items || []).map((item) => ({
-      ...item,
-      companyId: item.companyId || activeCompanyId,
-    }));
-
-  return normalizeData({
-    ...normalized,
-    companies,
-    activeCompanyId,
-    clients: assignCompany(normalized.clients),
-    products: assignCompany(normalized.products),
-    categories: assignCompany(normalized.categories),
-    quotes: assignCompany(normalized.quotes),
-    invoices: assignCompany(normalized.invoices),
-  });
-}
-
-function filterCompanyItems(items, companyId) {
-  if (!companyId) return items || [];
-  return (items || []).filter((item) => !item.companyId || item.companyId === companyId);
-}
-
-function scopeDataForCompany(data, companyId) {
-  const normalized = normalizeData(data);
-  const activeCompany = normalized.companies.find((company) => company.id === companyId);
-
-  return normalizeData({
-    ...normalized,
-    settings: {
-      ...normalized.settings,
-      companyName: activeCompany?.name || normalized.settings.companyName,
-      companyEmail: activeCompany?.email || normalized.settings.companyEmail,
-      companyPhone: activeCompany?.phone || normalized.settings.companyPhone,
-      companyAddress: activeCompany?.address || normalized.settings.companyAddress,
-      vatNumber: activeCompany?.vatNumber || normalized.settings.vatNumber,
-      logoUrl: activeCompany?.logoUrl || normalized.settings.logoUrl,
-    },
-    clients: filterCompanyItems(normalized.clients, companyId),
-    products: filterCompanyItems(normalized.products, companyId),
-    categories: filterCompanyItems(normalized.categories, companyId),
-    quotes: filterCompanyItems(normalized.quotes, companyId),
-    invoices: filterCompanyItems(normalized.invoices, companyId),
-  });
-}
-
-function mergeCompanyItems(allItems, scopedItems, companyId) {
-  const scoped = (scopedItems || []).map((item) => ({ ...item, companyId }));
-  const scopedIds = new Set(scoped.map((item) => item.id));
-  const otherCompanies = (allItems || []).filter((item) => item.companyId && item.companyId !== companyId);
-  const legacyOutsideScope = (allItems || []).filter((item) => !item.companyId && !scopedIds.has(item.id));
-  return [...otherCompanies, ...legacyOutsideScope, ...scoped];
-}
-
-function mergeScopedData(allData, scopedNextData, companyId) {
-  const current = normalizeData(allData);
-  const scoped = normalizeData(scopedNextData);
-  const activeCompany = current.companies.find((company) => company.id === companyId);
-
-  const nextCompanies = activeCompany
-    ? current.companies.map((company) =>
-        company.id === companyId
-          ? {
-              ...company,
-              name: scoped.settings.companyName || company.name,
-              email: scoped.settings.companyEmail || company.email,
-              phone: scoped.settings.companyPhone || company.phone,
-              address: scoped.settings.companyAddress || company.address,
-              vatNumber: scoped.settings.vatNumber || company.vatNumber,
-              logoUrl: scoped.settings.logoUrl || company.logoUrl,
-            }
-          : company
-      )
-    : current.companies;
-
-  return normalizeData({
-    ...current,
-    settings: scoped.settings,
-    companies: nextCompanies,
-    activeCompanyId: companyId,
-    users: scoped.users?.length ? scoped.users : current.users,
-    clients: mergeCompanyItems(current.clients, scoped.clients, companyId),
-    products: mergeCompanyItems(current.products, scoped.products, companyId),
-    categories: mergeCompanyItems(current.categories, scoped.categories, companyId),
-    quotes: mergeCompanyItems(current.quotes, scoped.quotes, companyId),
-    invoices: mergeCompanyItems(current.invoices, scoped.invoices, companyId),
-    backups: scoped.backups?.length ? scoped.backups : current.backups,
-  });
+  return (rows || []).map((row) => ({ id: row.id, ...(row.data || {}) }));
 }
 
 async function loadSupabaseData() {
-  const [companiesRes, settingsRes, clientsRes, productsRes, categoriesRes, quotesRes, invoicesRes] = await Promise.all([
-    supabase.from(COMPANIES_TABLE).select("id,owner_email,data").order("created_at", { ascending: true }),
-    supabase.from("settings").select("id,data,company_id").order("created_at", { ascending: true }),
-    supabase.from("clients").select("id,data,company_id").order("created_at", { ascending: true }),
-    supabase.from("products").select("id,data,company_id").order("created_at", { ascending: true }),
-    supabase.from("categories").select("id,data,company_id").order("created_at", { ascending: true }),
-    supabase.from("quotes").select("id,data,company_id").order("created_at", { ascending: true }),
-    supabase.from("invoices").select("id,data,company_id").order("created_at", { ascending: true }),
+  const [settingsRes, clientsRes, productsRes, categoriesRes, quotesRes, invoicesRes] = await Promise.all([
+    supabase.from("settings").select("id,data").eq("id", "main").maybeSingle(),
+    supabase.from("clients").select("id,data").order("created_at", { ascending: true }),
+    supabase.from("products").select("id,data").order("created_at", { ascending: true }),
+    supabase.from("categories").select("id,data").order("created_at", { ascending: true }),
+    supabase.from("quotes").select("id,data").order("created_at", { ascending: true }),
+    supabase.from("invoices").select("id,data").order("created_at", { ascending: true }),
   ]);
 
-  const errors = [companiesRes, settingsRes, clientsRes, productsRes, categoriesRes, quotesRes, invoicesRes]
+  const errors = [settingsRes, clientsRes, productsRes, categoriesRes, quotesRes, invoicesRes]
     .map((res) => res.error)
     .filter(Boolean);
 
@@ -337,19 +199,8 @@ async function loadSupabaseData() {
     throw errors[0];
   }
 
-  const companies = rowsToCompanies(companiesRes.data);
-  const settingsRows = settingsRes.data || [];
-  const activeCompanyId = companies[0]?.id || "";
-  const activeSettings =
-    settingsRows.find((row) => row.company_id === activeCompanyId)?.data ||
-    settingsRows.find((row) => row.id === "main")?.data ||
-    settingsRows[0]?.data ||
-    emptyData.settings;
-
   const cloudData = normalizeData({
-    settings: activeSettings,
-    companies,
-    activeCompanyId,
+    settings: settingsRes.data?.data || emptyData.settings,
     clients: rowsToItems(clientsRes.data),
     products: rowsToItems(productsRes.data),
     categories: rowsToItems(categoriesRes.data),
@@ -360,8 +211,7 @@ async function loadSupabaseData() {
   return {
     data: cloudData,
     hasCloudData: Boolean(
-      companiesRes.data?.length ||
-      settingsRes.data?.length ||
+      settingsRes.data ||
       clientsRes.data?.length ||
       productsRes.data?.length ||
       categoriesRes.data?.length ||
@@ -371,15 +221,14 @@ async function loadSupabaseData() {
   };
 }
 
-async function syncTable(tableName, nextItems, previousItems, companyId = "") {
+async function syncTable(tableName, nextItems, previousItems) {
   const next = nextItems || [];
   const previous = previousItems || [];
 
   if (next.length) {
     const payload = next.map((item) => ({
       id: item.id,
-      company_id: item.companyId || companyId || null,
-      data: { ...item, companyId: item.companyId || companyId || "" },
+      data: item,
       updated_at: new Date().toISOString(),
     }));
 
@@ -396,88 +245,22 @@ async function syncTable(tableName, nextItems, previousItems, companyId = "") {
   }
 }
 
-
-async function getAuthenticatedUserId(fallbackUserId = "") {
-  if (fallbackUserId) return fallbackUserId;
-  const { data, error } = await supabase.auth.getUser();
-  if (error) return "";
-  return data?.user?.id || "";
-}
-
-async function syncCompanyMemberships(companies, currentUser = null) {
-  const userId = await getAuthenticatedUserId(currentUser?.id);
-  const userEmail = normalizeEmail(currentUser?.email || "");
-
-  if (!userId || !(companies || []).length) return;
-
-  const companyIds = (companies || []).map((company) => company.id).filter(Boolean);
-  if (!companyIds.length) return;
-
-  const { data: existingRows, error: readError } = await supabase
-    .from(COMPANY_MEMBERS_TABLE)
-    .select("company_id,user_id")
-    .eq("user_id", userId)
-    .in("company_id", companyIds);
-
-  if (readError) throw readError;
-
-  const existingKeys = new Set((existingRows || []).map((row) => `${row.company_id}:${row.user_id}`));
-  const rowsToInsert = (companies || [])
-    .filter((company) => company.id && !existingKeys.has(`${company.id}:${userId}`))
-    .map((company) => ({
-      company_id: company.id,
-      user_id: userId,
-      role: isAdminEmail(userEmail) || normalizeEmail(company.ownerEmail) === userEmail ? "admin" : "employee",
-    }));
-
-  if (!rowsToInsert.length) return;
-
-  const { error: insertError } = await supabase.from(COMPANY_MEMBERS_TABLE).insert(rowsToInsert);
-  if (insertError) throw insertError;
-}
-
-async function syncCompanies(companies) {
-  const payload = (companies || []).map((company) => ({
-    id: company.id,
-    owner_email: normalizeEmail(company.ownerEmail || ADMIN_EMAILS[0]),
-    data: company,
-    updated_at: new Date().toISOString(),
-  }));
-
-  if (!payload.length) return;
-
-  const { error } = await supabase.from(COMPANIES_TABLE).upsert(payload, { onConflict: "id" });
-  if (error) throw error;
-}
-
-async function syncSupabaseData(nextData, previousData, activeCompanyId = "", currentUser = null) {
-  const next = ensureCompanyData(nextData, nextData?.currentUserEmail);
-  const previous = ensureCompanyData(previousData, nextData?.currentUserEmail);
-  const companyId = activeCompanyId || next.activeCompanyId || next.companies[0]?.id || "";
-
-  await syncCompanies(next.companies);
-  await syncCompanyMemberships(next.companies, currentUser);
+async function syncSupabaseData(nextData, previousData) {
+  const next = normalizeData(nextData);
+  const previous = normalizeData(previousData);
 
   const { error: settingsError } = await supabase
     .from("settings")
-    .upsert(
-      {
-        id: `settings_${companyId || "main"}`,
-        company_id: companyId || null,
-        data: next.settings,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "id" }
-    );
+    .upsert({ id: "main", data: next.settings, updated_at: new Date().toISOString() }, { onConflict: "id" });
 
   if (settingsError) throw settingsError;
 
   await Promise.all([
-    syncTable("clients", next.clients, previous.clients, companyId),
-    syncTable("products", next.products, previous.products, companyId),
-    syncTable("categories", next.categories, previous.categories, companyId),
-    syncTable("quotes", next.quotes, previous.quotes, companyId),
-    syncTable("invoices", next.invoices, previous.invoices, companyId),
+    syncTable("clients", next.clients, previous.clients),
+    syncTable("products", next.products, previous.products),
+    syncTable("categories", next.categories, previous.categories),
+    syncTable("quotes", next.quotes, previous.quotes),
+    syncTable("invoices", next.invoices, previous.invoices),
   ]);
 }
 
@@ -503,9 +286,6 @@ export default function App() {
   const [page, setPage] = useState("dashboard");
   const [loading, setLoading] = useState(true);
   const [syncStatus, setSyncStatus] = useState("Connexion à Supabase...");
-  const activeCompanyId = data.activeCompanyId || data.companies?.[0]?.id || "";
-  const activeCompany = data.companies?.find((company) => company.id === activeCompanyId);
-  const scopedData = useMemo(() => scopeDataForCompany(data, activeCompanyId), [data, activeCompanyId]);
 
   const isAdmin = isAdminEmail(currentUser?.email);
   const currentRole = userRole(currentUser?.email, data.users);
@@ -523,25 +303,16 @@ export default function App() {
       const cloud = await loadSupabaseData();
 
       if (cloud.hasCloudData) {
-        const migratedData = ensureCompanyData(cloud.data, currentUser?.email);
-        setData(migratedData);
-        saveData(migratedData);
-
-        if (JSON.stringify(migratedData) !== JSON.stringify(cloud.data)) {
-          await syncSupabaseData(migratedData, cloud.data, migratedData.activeCompanyId, currentUser);
-          setSyncStatus("Données migrées en multi-entreprise");
-        } else {
-          setSyncStatus("Synchronisé avec Supabase");
-        }
+        setData(cloud.data);
+        saveData(cloud.data);
+        setSyncStatus("Synchronisé avec Supabase");
       } else if (hasLocalBusinessData(localData)) {
-        const migratedLocalData = ensureCompanyData(localData, currentUser?.email);
-        await syncSupabaseData(migratedLocalData, emptyData, migratedLocalData.activeCompanyId, currentUser);
-        setData(migratedLocalData);
+        await syncSupabaseData(localData, emptyData);
+        setData(localData);
         setSyncStatus("Données locales envoyées vers Supabase");
       } else {
-        const emptyCompanyData = ensureCompanyData(emptyData, currentUser?.email);
-        await syncSupabaseData(emptyCompanyData, emptyData, emptyCompanyData.activeCompanyId, currentUser);
-        setData(emptyCompanyData);
+        await syncSupabaseData(emptyData, emptyData);
+        setData(emptyData);
         setSyncStatus("Supabase prêt");
       }
     } catch (error) {
@@ -560,32 +331,11 @@ export default function App() {
 
     try {
       setSyncStatus("Sauvegarde Supabase...");
-      await syncSupabaseData(normalized, previous, normalized.activeCompanyId || activeCompanyId, currentUser);
+      await syncSupabaseData(normalized, previous);
       setSyncStatus("Synchronisé avec Supabase");
     } catch (error) {
       console.error(error);
       setSyncStatus("Erreur de sauvegarde Supabase");
-    }
-  }
-
-  async function updateScopedData(nextScopedData) {
-    const companyId = activeCompanyId || data.companies?.[0]?.id || "";
-    const mergedData = mergeScopedData(data, nextScopedData, companyId);
-    await updateData(mergedData);
-  }
-
-  async function switchCompany(companyId) {
-    const next = normalizeData({ ...data, activeCompanyId: companyId });
-    setData(next);
-    saveData(next);
-
-    try {
-      setSyncStatus("Changement d’entreprise...");
-      await syncSupabaseData(next, data, companyId, currentUser);
-      setSyncStatus("Entreprise active synchronisée");
-    } catch (error) {
-      console.error(error);
-      setSyncStatus("Erreur changement d’entreprise");
     }
   }
 
@@ -601,7 +351,7 @@ export default function App() {
 
     try {
       setSyncStatus("Création sauvegarde cloud...");
-      await syncSupabaseData(next, data, next.activeCompanyId || activeCompanyId, currentUser);
+      await syncSupabaseData(next, data);
       setSyncStatus("Sauvegarde cloud créée");
     } catch (error) {
       console.error(error);
@@ -660,19 +410,9 @@ export default function App() {
   return (
     <div className="app">
       <aside className="sidebar">
-        <h1>{scopedData.settings.companyName}</h1>
+        <h1>{data.settings.companyName}</h1>
         <p className="user">Connecté : {currentUser.name}<br /><span>{currentRole}</span></p>
         <p className="cloud-status">☁️ {syncStatus}</p>
-        {data.companies?.length > 0 && (
-          <div className="company-selector">
-            <label>Entreprise active</label>
-            <select value={activeCompanyId} onChange={(e) => switchCompany(e.target.value)}>
-              {data.companies.map((company) => (
-                <option key={company.id} value={company.id}>{company.name}</option>
-              ))}
-            </select>
-          </div>
-        )}
         {permissions.pages.includes("dashboard") && <button onClick={() => setPage("dashboard")}>📊 Tableau de bord</button>}
         {permissions.pages.includes("clients") && <button onClick={() => setPage("clients")}>👥 Clients</button>}
         {permissions.pages.includes("products") && <button onClick={() => setPage("products")}>📦 Produits</button>}
@@ -680,7 +420,6 @@ export default function App() {
         {permissions.pages.includes("quotes") && <button onClick={() => setPage("quotes")}>🧾 Devis</button>}
         {permissions.pages.includes("invoices") && <button onClick={() => setPage("invoices")}>💶 Factures</button>}
         {permissions.canManageUsers && <button onClick={() => setPage("users")}>🔐 Utilisateurs</button>}
-        {permissions.canManageUsers && <button onClick={() => setPage("companies")}>🏢 Entreprises</button>}
         {permissions.canEditSettings && <button onClick={() => setPage("settings")}>⚙️ Paramètres</button>}
         {permissions.canImport && <button onClick={() => setPage("import")}>📥 Import Excel</button>}
         {permissions.canManageUsers && <button onClick={() => setPage("backups")}>💾 Sauvegardes</button>}
@@ -689,16 +428,15 @@ export default function App() {
 
       <main className="content">
         {!canAccessPage(currentRole, page) && <AccessDenied user={currentUser} logout={logout} />}
-        {page === "dashboard" && canAccessPage(currentRole, "dashboard") && <Dashboard data={scopedData} currentRole={currentRole} />}
-        {page === "clients" && canAccessPage(currentRole, "clients") && <Clients data={scopedData} setData={updateScopedData} currentRole={currentRole} />}
-        {page === "products" && canAccessPage(currentRole, "products") && <Products data={scopedData} setData={updateScopedData} currentRole={currentRole} />}
-        {page === "categories" && canAccessPage(currentRole, "categories") && <Categories data={scopedData} setData={updateScopedData} currentRole={currentRole} />}
-        {page === "quotes" && canAccessPage(currentRole, "quotes") && <Documents type="quote" data={scopedData} setData={updateScopedData} currentRole={currentRole} />}
-        {page === "invoices" && canAccessPage(currentRole, "invoices") && <Documents type="invoice" data={scopedData} setData={updateScopedData} currentRole={currentRole} />}
+        {page === "dashboard" && canAccessPage(currentRole, "dashboard") && <Dashboard data={data} currentRole={currentRole} />}
+        {page === "clients" && canAccessPage(currentRole, "clients") && <Clients data={data} setData={updateData} currentRole={currentRole} />}
+        {page === "products" && canAccessPage(currentRole, "products") && <Products data={data} setData={updateData} currentRole={currentRole} />}
+        {page === "categories" && canAccessPage(currentRole, "categories") && <Categories data={data} setData={updateData} currentRole={currentRole} />}
+        {page === "quotes" && canAccessPage(currentRole, "quotes") && <Documents type="quote" data={data} setData={updateData} currentRole={currentRole} />}
+        {page === "invoices" && canAccessPage(currentRole, "invoices") && <Documents type="invoice" data={data} setData={updateData} currentRole={currentRole} />}
         {page === "users" && permissions.canManageUsers && <UsersAdmin data={data} setData={updateData} />}
-        {page === "companies" && permissions.canManageUsers && <CompaniesAdmin data={data} setData={updateData} activeCompanyId={activeCompanyId} switchCompany={switchCompany} currentUser={currentUser} />}
-        {page === "settings" && permissions.canEditSettings && <Settings data={scopedData} setData={updateScopedData} />}
-        {page === "import" && permissions.canImport && <ExcelImport data={scopedData} setData={updateScopedData} />}
+        {page === "settings" && permissions.canEditSettings && <Settings data={data} setData={updateData} />}
+        {page === "import" && permissions.canImport && <ExcelImport data={data} setData={updateData} />}
         {page === "backups" && permissions.canManageUsers && <Backups data={data} setData={updateData} createCloudBackup={createCloudBackup} />}
       </main>
     </div>
@@ -1303,136 +1041,6 @@ function UsersAdmin({ data, setData }) {
                 <td colSpan="5" className="muted">Aucun utilisateur ajouté pour le moment.</td>
               </tr>
             )}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
-
-
-function CompaniesAdmin({ data, setData, activeCompanyId, switchCompany, currentUser }) {
-  const [form, setForm] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    address: "",
-    vatNumber: "",
-    logoUrl: "",
-  });
-
-  function resetForm() {
-    setForm({ name: "", email: "", phone: "", address: "", vatNumber: "", logoUrl: "" });
-  }
-
-  async function addCompany(e) {
-    e.preventDefault();
-
-    if (!form.name.trim()) {
-      alert("Indique le nom de l’entreprise.");
-      return;
-    }
-
-    const company = {
-      id: "company_" + uid(),
-      name: form.name.trim(),
-      email: form.email.trim(),
-      phone: form.phone.trim(),
-      address: form.address.trim(),
-      vatNumber: form.vatNumber.trim(),
-      logoUrl: form.logoUrl.trim(),
-      ownerEmail: normalizeEmail(currentUser?.email || ADMIN_EMAILS[0]),
-      createdAt: new Date().toISOString(),
-    };
-
-    await setData(normalizeData({
-      ...data,
-      companies: [...(data.companies || []), company],
-      activeCompanyId: company.id,
-    }));
-
-    resetForm();
-  }
-
-  async function updateCompany(companyId, field, value) {
-    const nextCompanies = (data.companies || []).map((company) =>
-      company.id === companyId ? { ...company, [field]: value } : company
-    );
-
-    await setData(normalizeData({ ...data, companies: nextCompanies }));
-  }
-
-  async function deleteCompany(companyId) {
-    if ((data.companies || []).length <= 1) {
-      alert("Tu dois garder au moins une entreprise.");
-      return;
-    }
-
-    const company = data.companies.find((item) => item.id === companyId);
-    if (!confirm(`Supprimer l’entreprise "${company?.name || ""}" ? Les données liées restent dans Supabase mais ne seront plus affichées.`)) {
-      return;
-    }
-
-    const nextCompanies = data.companies.filter((item) => item.id !== companyId);
-    const nextActiveCompanyId = activeCompanyId === companyId ? nextCompanies[0]?.id || "" : activeCompanyId;
-
-    await setData(normalizeData({
-      ...data,
-      companies: nextCompanies,
-      activeCompanyId: nextActiveCompanyId,
-    }));
-  }
-
-  return (
-    <section>
-      <div className="page-header">
-        <div>
-          <h2>Entreprises</h2>
-          <p>Gère les espaces de travail de ton CRM SaaS.</p>
-        </div>
-      </div>
-
-      <div className="card">
-        <h3>Créer une entreprise</h3>
-        <form className="form-grid" onSubmit={addCompany}>
-          <input placeholder="Nom de l’entreprise" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          <input placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-          <input placeholder="Téléphone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-          <input placeholder="Adresse" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
-          <input placeholder="N° TVA" value={form.vatNumber} onChange={(e) => setForm({ ...form, vatNumber: e.target.value })} />
-          <input placeholder="URL logo" value={form.logoUrl} onChange={(e) => setForm({ ...form, logoUrl: e.target.value })} />
-          <button className="primary">Créer l’entreprise</button>
-        </form>
-      </div>
-
-      <div className="card table">
-        <table>
-          <thead>
-            <tr>
-              <th>Active</th>
-              <th>Entreprise</th>
-              <th>Email</th>
-              <th>Téléphone</th>
-              <th>N° TVA</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(data.companies || []).map((company) => (
-              <tr key={company.id}>
-                <td>{company.id === activeCompanyId ? <span className="badge payee">Active</span> : <button onClick={() => switchCompany(company.id)}>Activer</button>}</td>
-                <td>
-                  <input value={company.name || ""} onChange={(e) => updateCompany(company.id, "name", e.target.value)} />
-                  <input className="company-small-input" placeholder="Adresse" value={company.address || ""} onChange={(e) => updateCompany(company.id, "address", e.target.value)} />
-                </td>
-                <td><input value={company.email || ""} onChange={(e) => updateCompany(company.id, "email", e.target.value)} /></td>
-                <td><input value={company.phone || ""} onChange={(e) => updateCompany(company.id, "phone", e.target.value)} /></td>
-                <td><input value={company.vatNumber || ""} onChange={(e) => updateCompany(company.id, "vatNumber", e.target.value)} /></td>
-                <td className="actions">
-                  <button className="danger" onClick={() => deleteCompany(company.id)}>Supprimer</button>
-                </td>
-              </tr>
-            ))}
           </tbody>
         </table>
       </div>
@@ -2738,7 +2346,7 @@ function Products({ data, setData, currentRole = 'Admin' }) {
           </div>
         </div>
 
-        <div className="filters-main-row products-filters-fixed">
+        <div className="filters-main-row products-filters-two-rows">
           <div className="filters-search-wrap">
             <span>⌕</span>
             <input
@@ -2905,7 +2513,6 @@ function Products({ data, setData, currentRole = 'Admin' }) {
                     />
                     <span>Sélection</span>
                   </label>
-
                 </div>
 
                 <div className="product-visual">
@@ -2919,7 +2526,7 @@ function Products({ data, setData, currentRole = 'Admin' }) {
                 <div className="product-premium-body">
                   <h3>{product.name}</h3>
 
-                  <div className="product-tags-row product-tags-row-sku-price">
+                  <div className="product-tags-row">
                     <span>SKU : {product.sku || "Sans SKU"}</span>
                     <span>Prix HT : {money(product.price)}</span>
                   </div>
