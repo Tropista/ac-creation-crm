@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./supabase";
 import * as XLSX from "xlsx";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
+import QRCode from "qrcode";
+import { Html5QrcodeScanner } from "html5-qrcode";
 import "./App.css";
 
 const STORAGE_KEY = "crm_local_data_v2";
@@ -37,14 +39,14 @@ function userRole(email, users = []) {
 
 const ROLE_PERMISSIONS = {
   Admin: {
-    pages: ["dashboard", "clients", "products", "labels", "categories", "quotes", "invoices", "users", "settings", "import", "backups"],
+    pages: ["dashboard", "clients", "products", "labels", "scan", "categories", "quotes", "invoices", "users", "settings", "import", "backups"],
     canDelete: true,
     canEditSettings: true,
     canManageUsers: true,
     canImport: true,
   },
   Employé: {
-    pages: ["dashboard", "clients", "quotes", "invoices"],
+    pages: ["dashboard", "clients", "products", "labels", "scan", "quotes", "invoices"],
     canDelete: false,
     canEditSettings: false,
     canManageUsers: false,
@@ -417,6 +419,7 @@ export default function App() {
         {permissions.pages.includes("clients") && <button onClick={() => setPage("clients")}>👥 Clients</button>}
         {permissions.pages.includes("products") && <button onClick={() => setPage("products")}>📦 Produits</button>}
         {permissions.pages.includes("labels") && <button onClick={() => setPage("labels")}>🏷️ Étiquettes</button>}
+        {permissions.pages.includes("scan") && <button onClick={() => setPage("scan")}>📷 Scan produit</button>}
         {permissions.pages.includes("categories") && <button onClick={() => setPage("categories")}>🏷️ Catégories</button>}
         {permissions.pages.includes("quotes") && <button onClick={() => setPage("quotes")}>🧾 Devis</button>}
         {permissions.pages.includes("invoices") && <button onClick={() => setPage("invoices")}>💶 Factures</button>}
@@ -433,6 +436,7 @@ export default function App() {
         {page === "clients" && canAccessPage(currentRole, "clients") && <Clients data={data} setData={updateData} currentRole={currentRole} />}
         {page === "products" && canAccessPage(currentRole, "products") && <Products data={data} setData={updateData} currentRole={currentRole} />}
         {page === "labels" && canAccessPage(currentRole, "labels") && <BarcodeLabels data={data} />}
+        {page === "scan" && canAccessPage(currentRole, "scan") && <ProductScan data={data} setData={updateData} />}
         {page === "categories" && canAccessPage(currentRole, "categories") && <Categories data={data} setData={updateData} currentRole={currentRole} />}
         {page === "quotes" && canAccessPage(currentRole, "quotes") && <Documents type="quote" data={data} setData={updateData} currentRole={currentRole} />}
         {page === "invoices" && canAccessPage(currentRole, "invoices") && <Documents type="invoice" data={data} setData={updateData} currentRole={currentRole} />}
@@ -2761,6 +2765,7 @@ function BarcodeLabels({ data }) {
   const [search, setSearch] = useState("");
   const [selectedProductIds, setSelectedProductIds] = useState([]);
   const [showPrice, setShowPrice] = useState(true);
+  const [showQr, setShowQr] = useState(true);
   const [copies, setCopies] = useState(1);
 
   const filteredProducts = useMemo(() => {
@@ -2830,6 +2835,10 @@ function BarcodeLabels({ data }) {
           <input type="checkbox" checked={showPrice} onChange={(event) => setShowPrice(event.target.checked)} />
           Afficher le prix
         </label>
+        <label className="labels-checkbox">
+          <input type="checkbox" checked={showQr} onChange={(event) => setShowQr(event.target.checked)} />
+          Afficher QR code
+        </label>
         <button type="button" onClick={selectVisibleProducts}>Sélectionner / désélectionner les produits visibles</button>
         <button type="button" onClick={() => setSelectedProductIds([])}>Vider la sélection</button>
       </div>
@@ -2858,7 +2867,7 @@ function BarcodeLabels({ data }) {
           <p className="muted">{labelsToPrint.length} étiquette(s) prête(s) à imprimer.</p>
           <div className="labels-sheet labels-sheet-preview">
             {labelsToPrint.map((product, index) => (
-              <ProductLabel key={`${product.id}-${index}`} product={product} showPrice={showPrice} />
+              <ProductLabel key={`${product.id}-${index}`} product={product} showPrice={showPrice} showQr={showQr} />
             ))}
           </div>
         </div>
@@ -2867,7 +2876,7 @@ function BarcodeLabels({ data }) {
       <div className="labels-print-area">
         <div className="labels-sheet">
           {labelsToPrint.map((product, index) => (
-            <ProductLabel key={`${product.id}-print-${index}`} product={product} showPrice={showPrice} />
+            <ProductLabel key={`${product.id}-print-${index}`} product={product} showPrice={showPrice} showQr={showQr} />
           ))}
         </div>
       </div>
@@ -2875,16 +2884,221 @@ function BarcodeLabels({ data }) {
   );
 }
 
-function ProductLabel({ product, showPrice }) {
+function ProductLabel({ product, showPrice, showQr = false }) {
+  const codeValue = product.sku || product.name || product.id;
   return (
     <div className="product-label">
       <strong>{product.name || "Produit"}</strong>
-      <BarcodeSvg value={product.sku || product.name || product.id} />
+      <div className="product-label-code-row">
+        <BarcodeSvg value={codeValue} />
+        {showQr && <QrCodeImage value={codeValue} className="product-label-qr" />}
+      </div>
       <div className="product-label-footer">
         <span>{product.sku || "Sans SKU"}</span>
         {showPrice && <span>{money(product.price)}</span>}
       </div>
     </div>
+  );
+}
+
+function QrCodeImage({ value, className = "qr-code-img" }) {
+  const [src, setSrc] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!value) {
+      setSrc("");
+      return;
+    }
+
+    QRCode.toDataURL(String(value), {
+      margin: 1,
+      width: 180,
+      errorCorrectionLevel: "M",
+      color: {
+        dark: "#111827",
+        light: "#ffffff",
+      },
+    })
+      .then((url) => {
+        if (!cancelled) setSrc(url);
+      })
+      .catch(() => {
+        if (!cancelled) setSrc("");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [value]);
+
+  if (!src) return <span className={className} />;
+  return <img className={className} src={src} alt={`QR code ${value}`} />;
+}
+
+function ProductScan({ data, setData }) {
+  const products = data.products || [];
+  const [scanValue, setScanValue] = useState("");
+  const [mode, setMode] = useState("out");
+  const [quantity, setQuantity] = useState(1);
+  const [foundProduct, setFoundProduct] = useState(null);
+  const [message, setMessage] = useState("Scanne un code-barres, un QR code ou saisis un SKU.");
+  const [cameraEnabled, setCameraEnabled] = useState(false);
+  const scannerRef = useRef(null);
+  const containerId = "crm-html5-qrcode-scanner";
+
+  function findProduct(rawValue) {
+    const query = String(rawValue || "").trim().toLowerCase();
+    if (!query) return null;
+    return products.find((product) =>
+      [product.sku, product.id, product.name]
+        .filter(Boolean)
+        .some((value) => String(value).trim().toLowerCase() === query)
+    ) || products.find((product) =>
+      [product.sku, product.name, product.category]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(query)
+    ) || null;
+  }
+
+  function applyStock(product, actionMode = mode, amount = quantity) {
+    if (!product) return;
+    const qty = Math.max(1, Number(amount) || 1);
+    const currentStock = Number(product.stock || 0);
+    const nextStock = actionMode === "in" ? currentStock + qty : Math.max(0, currentStock - qty);
+
+    setData({
+      ...data,
+      products: products.map((item) =>
+        item.id === product.id
+          ? { ...item, stock: nextStock, updatedAt: today() }
+          : item
+      ),
+    });
+
+    setFoundProduct({ ...product, stock: nextStock });
+    setMessage(`${actionMode === "in" ? "Entrée" : "Sortie"} stock : ${qty} pièce(s) — ${product.name} (${nextStock} en stock).`);
+  }
+
+  function handleScan(rawValue, autoApply = false) {
+    const product = findProduct(rawValue);
+    setScanValue(String(rawValue || ""));
+    if (!product) {
+      setFoundProduct(null);
+      setMessage("Produit introuvable. Vérifie le SKU, le code-barres ou le QR code.");
+      return;
+    }
+
+    setFoundProduct(product);
+    setMessage(`Produit trouvé : ${product.name} — ${product.sku || "Sans SKU"}`);
+    if (autoApply) applyStock(product);
+  }
+
+  function handleSubmit(event) {
+    event.preventDefault();
+    handleScan(scanValue, false);
+  }
+
+  useEffect(() => {
+    if (!cameraEnabled) {
+      if (scannerRef.current) {
+        scannerRef.current.clear().catch(() => {});
+        scannerRef.current = null;
+      }
+      return;
+    }
+
+    const scanner = new Html5QrcodeScanner(
+      containerId,
+      { fps: 10, qrbox: { width: 250, height: 250 }, rememberLastUsedCamera: true },
+      false
+    );
+
+    scanner.render(
+      (decodedText) => {
+        handleScan(decodedText, true);
+      },
+      () => {}
+    );
+
+    scannerRef.current = scanner;
+
+    return () => {
+      scanner.clear().catch(() => {});
+      scannerRef.current = null;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cameraEnabled]);
+
+  return (
+    <section className="scan-page">
+      <div className="page-header">
+        <div>
+          <h2>Scan produit</h2>
+          <p>Scanne un SKU, un code-barres ou un QR code pour retrouver un produit et ajuster le stock.</p>
+        </div>
+        <button className="primary" type="button" onClick={() => setCameraEnabled((value) => !value)}>
+          {cameraEnabled ? "Arrêter caméra" : "Activer caméra"}
+        </button>
+      </div>
+
+      <div className="scan-grid">
+        <div className="card scan-card">
+          <h3>Scanner / rechercher</h3>
+          <form onSubmit={handleSubmit} className="scan-form">
+            <input
+              autoFocus
+              value={scanValue}
+              onChange={(event) => setScanValue(event.target.value)}
+              placeholder="Scanner ici ou saisir le SKU..."
+            />
+            <button className="primary" type="submit">Rechercher</button>
+          </form>
+
+          <div className="scan-options">
+            <label>
+              Action stock
+              <select value={mode} onChange={(event) => setMode(event.target.value)}>
+                <option value="out">Sortie stock</option>
+                <option value="in">Entrée stock</option>
+              </select>
+            </label>
+            <label>
+              Quantité
+              <input type="number" min="1" value={quantity} onChange={(event) => setQuantity(event.target.value)} />
+            </label>
+          </div>
+
+          <p className="scan-message">{message}</p>
+
+          {foundProduct && (
+            <div className="scan-result-card">
+              <div>
+                <h3>{foundProduct.name}</h3>
+                <p>{foundProduct.sku || "Sans SKU"} {foundProduct.category ? `• ${foundProduct.category}` : ""}</p>
+                <strong>Stock actuel : {Number(foundProduct.stock || 0)}</strong>
+              </div>
+              <div className="scan-product-codes">
+                <QrCodeImage value={foundProduct.sku || foundProduct.id} />
+                <BarcodeSvg value={foundProduct.sku || foundProduct.id} height={46} />
+              </div>
+              <div className="scan-actions">
+                <button type="button" className="primary" onClick={() => applyStock(foundProduct, "in")}>+ Entrée stock</button>
+                <button type="button" className="danger" onClick={() => applyStock(foundProduct, "out")}>- Sortie stock</button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="card camera-card">
+          <h3>Caméra / QR code</h3>
+          {!cameraEnabled && <p className="muted">Clique sur “Activer caméra” pour scanner avec la webcam ou le téléphone.</p>}
+          <div id={containerId} className={cameraEnabled ? "camera-scanner active" : "camera-scanner"}></div>
+        </div>
+      </div>
+    </section>
   );
 }
 

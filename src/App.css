@@ -5170,3 +5170,144 @@ tr:hover td {
     height: 54px !important;
   }
 }
+
+
+/* =========================================================
+   SCAN PRODUIT + QR CODE
+   ========================================================= */
+.scan-grid {
+  display: grid;
+  grid-template-columns: minmax(320px, 1fr) minmax(300px, 0.8fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.scan-card,
+.camera-card {
+  overflow: hidden;
+}
+
+.scan-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.scan-options {
+  display: grid;
+  grid-template-columns: 1fr 140px;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.scan-options label {
+  display: grid;
+  gap: 8px;
+  color: var(--crm-muted) !important;
+  font-weight: 800;
+}
+
+.scan-message {
+  background: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(96, 165, 250, 0.28);
+  border-radius: 14px;
+  padding: 12px 14px;
+  color: #dbeafe !important;
+  font-weight: 800;
+}
+
+.scan-result-card {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: 1fr 170px;
+  gap: 16px;
+  align-items: center;
+  padding: 18px;
+  border-radius: 20px;
+  background: rgba(2, 6, 23, 0.35);
+  border: 1px solid var(--crm-border);
+}
+
+.scan-result-card h3 {
+  margin: 0 0 8px;
+}
+
+.scan-result-card p {
+  margin: 0 0 10px;
+  color: var(--crm-muted) !important;
+}
+
+.scan-product-codes {
+  display: grid;
+  gap: 10px;
+  justify-items: center;
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 12px;
+}
+
+.qr-code-img {
+  width: 110px;
+  height: 110px;
+  object-fit: contain;
+  background: #ffffff;
+  border-radius: 10px;
+}
+
+.product-label-qr {
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
+  background: #ffffff;
+  flex: 0 0 auto;
+}
+
+.product-label-code-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+}
+
+.scan-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.camera-scanner {
+  min-height: 240px;
+  border: 1px dashed rgba(148, 163, 184, 0.35);
+  border-radius: 18px;
+  padding: 12px;
+  background: rgba(2, 6, 23, 0.24);
+}
+
+.camera-scanner.active {
+  background: #ffffff;
+  color: #111827 !important;
+}
+
+.camera-scanner * {
+  color: #111827 !important;
+}
+
+.camera-scanner video {
+  border-radius: 14px;
+}
+
+@media (max-width: 950px) {
+  .scan-grid,
+  .scan-form,
+  .scan-options,
+  .scan-result-card {
+    grid-template-columns: 1fr;
+  }
+
+  .scan-product-codes {
+    justify-items: start;
+  }
+}
