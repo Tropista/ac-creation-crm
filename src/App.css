@@ -5579,734 +5579,558 @@ tr:hover td {
   }
 }
 
+
 /* =========================================================
-   V3 NEOCRM — PAGE ÉTIQUETTES FUTURISTE + APERÇU SANS DÉPASSEMENT
-   À garder tout en bas du fichier CSS
+   PRODUITS — VRAI VIEWER 3D .GLB / .GLTF
    ========================================================= */
-.labels-neo-page {
-  display: grid !important;
-  gap: 24px !important;
+
+.product-visual {
+  overflow: hidden !important;
+}
+
+.product-3d-viewer {
+  width: 100%;
+  height: 230px;
+  min-height: 230px;
+  position: relative;
+  overflow: hidden;
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 50% 28%, rgba(96, 165, 250, 0.22), transparent 36%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.30), rgba(2, 6, 23, 0.72));
+  border: 1px solid rgba(96, 165, 250, 0.20);
+}
+
+.product-model-preview .product-3d-viewer {
+  height: 280px;
+  min-height: 280px;
+}
+
+.product-3d-viewer canvas {
   width: 100% !important;
-  max-width: none !important;
-  overflow-x: hidden !important;
+  height: 100% !important;
+  display: block !important;
+  cursor: grab;
 }
 
-.labels-neo-header {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: space-between !important;
-  gap: 18px !important;
-  padding: 4px 0 8px !important;
+.product-3d-viewer canvas:active {
+  cursor: grabbing;
 }
 
-.labels-neo-title {
-  display: flex !important;
-  align-items: center !important;
-  gap: 16px !important;
+.product-3d-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: rgba(2, 6, 23, 0.72);
+  border: 1px solid rgba(96, 165, 250, 0.28);
+  color: #dbeafe;
+  font-size: 11px;
+  font-weight: 800;
+  pointer-events: none;
+  white-space: nowrap;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.25);
 }
 
-.labels-neo-icon {
-  width: 44px !important;
-  height: 44px !important;
-  display: grid !important;
-  place-items: center !important;
-  border-radius: 14px !important;
-  background: linear-gradient(135deg, rgba(37,99,235,.25), rgba(147,51,234,.22)) !important;
-  border: 1px solid rgba(96,165,250,.45) !important;
-  box-shadow: 0 0 28px rgba(59,130,246,.22) !important;
+.product-3d-placeholder,
+.product-3d-fallback {
+  width: 100%;
+  min-height: 220px;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 50% 20%, rgba(96, 165, 250, 0.18), transparent 35%),
+    rgba(2, 6, 23, 0.42);
+  border: 1px dashed rgba(147, 197, 253, 0.30);
 }
 
-.labels-neo-title h2 {
-  margin: 0 !important;
-  font-size: 30px !important;
-  color: #ffffff !important;
-  letter-spacing: -0.8px !important;
+.product-3d-placeholder span {
+  width: 82px;
+  height: 82px;
+  display: grid;
+  place-items: center;
+  border-radius: 28px;
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  color: white;
+  font-size: 44px;
+  font-weight: 900;
 }
 
-.labels-neo-title p {
-  margin: 4px 0 0 !important;
-  color: #aebed4 !important;
-}
-
-.labels-neo-actions {
-  display: flex !important;
-  gap: 14px !important;
-  align-items: center !important;
-  flex-wrap: wrap !important;
-}
-
-.labels-ghost-btn,
-.labels-print-btn {
-  min-height: 56px !important;
-  padding: 0 28px !important;
-  border-radius: 16px !important;
-  font-size: 16px !important;
-  font-weight: 800 !important;
-}
-
-.labels-ghost-btn {
-  background: rgba(2, 6, 23, .48) !important;
+.product-3d-fallback {
+  align-content: center;
+  gap: 8px;
   color: #dbeafe !important;
-  border: 1px solid rgba(96,165,250,.32) !important;
+  padding: 22px;
 }
 
-.labels-print-btn {
-  background: linear-gradient(135deg, #1478ff, #9333ea) !important;
-  box-shadow: 0 0 34px rgba(59,130,246,.35), 0 0 38px rgba(147,51,234,.22) !important;
-}
-
-.labels-neo-controls {
-  display: grid !important;
-  grid-template-columns: minmax(260px, 1fr) 120px auto auto auto !important;
-  gap: 12px !important;
-  align-items: center !important;
-  background: linear-gradient(180deg, rgba(15,35,80,.58), rgba(2,6,23,.38)) !important;
-  border: 1px solid rgba(96,165,250,.20) !important;
-  border-radius: 20px !important;
-  padding: 16px !important;
-}
-
-.labels-neo-preview {
-  width: 100% !important;
-  max-width: 100% !important;
-  overflow: hidden !important;
-  padding: 28px 34px 32px !important;
-  border-radius: 20px !important;
-  background: linear-gradient(180deg, rgba(2, 12, 32, .58), rgba(2, 6, 23, .54)) !important;
-  border: 1px solid rgba(96,165,250,.28) !important;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.06), 0 24px 80px rgba(0,0,0,.28) !important;
-}
-
-.labels-preview-head {
-  display: flex !important;
-  justify-content: space-between !important;
-  align-items: flex-end !important;
-  margin-bottom: 24px !important;
-}
-
-.labels-preview-head h3 {
-  text-align: left !important;
-  font-size: 32px !important;
-  line-height: 1.1 !important;
-  margin: 0 0 8px !important;
+.product-3d-fallback strong {
   color: #ffffff !important;
 }
 
-.labels-preview-head .muted {
-  text-align: left !important;
-  font-size: 18px !important;
-  color: #cfe0ff !important;
-  margin: 0 !important;
-}
-
-.labels-single-preview {
-  width: 100% !important;
-  max-width: 100% !important;
-  min-height: 280px !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  padding: 40px !important;
-  overflow: hidden !important;
-  border-radius: 16px !important;
-  background: rgba(1, 8, 22, .18) !important;
-  border: 1px solid rgba(96,165,250,.20) !important;
-  box-shadow: inset 0 0 60px rgba(59,130,246,.08) !important;
-}
-
-.labels-single-preview .product-label,
-.labels-sheet-preview.labels-single-preview .product-label,
-.labels-sheet-preview.labels-single-preview .product-label:first-child {
-  width: min(100%, 980px) !important;
-  max-width: 100% !important;
-  height: 170px !important;
-  min-height: 170px !important;
-  flex: 0 1 auto !important;
-  display: grid !important;
-  grid-template-columns: 150px minmax(180px, 1fr) 120px !important;
-  grid-template-rows: 44px 78px 28px !important;
-  gap: 0 20px !important;
-  padding: 24px 28px 20px !important;
-  border-radius: 26px !important;
-  border: 1px solid rgba(59,130,246,.55) !important;
-  outline: 1px dashed rgba(37,99,235,.55) !important;
-  outline-offset: -22px !important;
-  background: #ffffff !important;
-  color: #111827 !important;
-  box-shadow: 0 25px 60px rgba(0,0,0,.25) !important;
-  overflow: hidden !important;
-}
-
-.labels-single-preview .product-label strong,
-.labels-sheet-preview.labels-single-preview .product-label strong,
-.labels-sheet-preview.labels-single-preview .product-label:first-child strong {
-  grid-column: 1 / -1 !important;
-  grid-row: 1 !important;
-  align-self: start !important;
-  justify-self: center !important;
-  width: calc(100% - 60px) !important;
-  text-align: center !important;
-  font-size: clamp(18px, 2vw, 26px) !important;
-  line-height: 1.15 !important;
-  font-weight: 900 !important;
-  color: #111827 !important;
-  white-space: nowrap !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-}
-
-.labels-single-preview .product-label-code-row,
-.labels-sheet-preview.labels-single-preview .product-label-code-row,
-.labels-sheet-preview.labels-single-preview .product-label:first-child .product-label-code-row {
-  grid-column: 1 / -1 !important;
-  grid-row: 2 / 4 !important;
-  width: 100% !important;
-  min-width: 0 !important;
-  display: grid !important;
-  grid-template-columns: 150px minmax(180px, 1fr) 120px !important;
-  gap: 20px !important;
-  align-items: center !important;
-  overflow: hidden !important;
-}
-
-.labels-single-preview .barcode-svg,
-.labels-sheet-preview.labels-single-preview .product-label .barcode-svg,
-.labels-sheet-preview.labels-single-preview .product-label:first-child .barcode-svg {
-  grid-column: 2 !important;
-  justify-self: center !important;
-  width: min(240px, 80%) !important;
-  height: 52px !important;
-  max-height: 52px !important;
-  display: block !important;
-}
-
-.labels-single-preview .product-label-qr,
-.labels-single-preview .qr-code-img,
-.labels-sheet-preview.labels-single-preview .product-label-qr,
-.labels-sheet-preview.labels-single-preview .qr-code-img,
-.labels-sheet-preview.labels-single-preview .product-label:first-child .product-label-qr,
-.labels-sheet-preview.labels-single-preview .product-label:first-child .qr-code-img {
-  grid-column: 3 !important;
-  justify-self: end !important;
-  align-self: center !important;
-  width: 76px !important;
-  height: 76px !important;
-  max-width: 76px !important;
-  max-height: 76px !important;
-  object-fit: contain !important;
-}
-
-.labels-single-preview .product-label-footer,
-.labels-sheet-preview.labels-single-preview .product-label-footer,
-.labels-sheet-preview.labels-single-preview .product-label:first-child .product-label-footer {
-  grid-column: 1 !important;
-  grid-row: 3 !important;
-  align-self: end !important;
-  justify-self: start !important;
-  display: block !important;
-  min-width: 0 !important;
-  font-size: 22px !important;
-  line-height: 1 !important;
-  font-weight: 900 !important;
-  color: #111827 !important;
-}
-
-.labels-empty-preview {
-  width: 100% !important;
-  min-height: 140px !important;
-  display: grid !important;
-  place-items: center !important;
-  border: 1px dashed rgba(96,165,250,.35) !important;
-  border-radius: 20px !important;
-  color: #cfe0ff !important;
-  text-align: center !important;
-  padding: 30px !important;
-}
-
-.labels-neo-info-grid {
-  display: grid !important;
-  grid-template-columns: repeat(3, minmax(220px, 1fr)) !important;
-  gap: 16px !important;
-}
-
-.labels-info-card,
-.labels-neo-tip {
-  background: linear-gradient(180deg, rgba(15,35,80,.56), rgba(2,6,23,.42)) !important;
-  border: 1px solid rgba(96,165,250,.20) !important;
-  border-radius: 18px !important;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.05) !important;
-}
-
-.labels-info-card {
-  min-height: 108px !important;
-  display: flex !important;
-  align-items: center !important;
-  gap: 18px !important;
-  padding: 22px !important;
-}
-
-.labels-info-card > span {
-  width: 46px !important;
-  height: 46px !important;
-  display: grid !important;
-  place-items: center !important;
-  border-radius: 14px !important;
-  background: linear-gradient(135deg, rgba(37,99,235,.38), rgba(147,51,234,.30)) !important;
-  box-shadow: 0 0 22px rgba(59,130,246,.22) !important;
-}
-
-.labels-info-card small {
-  display: block !important;
+.product-3d-fallback span {
   color: #aebed4 !important;
-  font-size: 15px !important;
-  margin-bottom: 6px !important;
+  font-size: 13px;
 }
 
-.labels-info-card strong {
+.product-3d-upload-button {
+  background: linear-gradient(135deg, #2563eb, #7c3aed) !important;
   color: #ffffff !important;
-  font-size: 18px !important;
+  border-color: rgba(147, 197, 253, 0.35) !important;
+  box-shadow: 0 18px 38px rgba(37,99,235,0.25);
 }
 
-.labels-neo-product-list {
-  max-height: none !important;
+.product-model-preview {
+  display: grid;
+  gap: 12px;
+}
+
+
+
+/* =========================================================
+   CORRECTION PRODUITS 3D — OBJET PLUS GRAND DANS LA CARTE
+   ========================================================= */
+
+.product-visual {
+  width: 100% !important;
+  min-height: 270px !important;
+  height: 270px !important;
+  padding: 0 !important;
+  display: grid !important;
+  place-items: center !important;
   overflow: visible !important;
 }
 
-.labels-list-head {
-  display: flex !important;
-  align-items: center !important;
-  justify-content: space-between !important;
-  gap: 14px !important;
-  margin-bottom: 14px !important;
+.product-premium-card {
+  overflow: visible !important;
 }
 
-.labels-list-head h3 {
-  margin: 0 !important;
-  color: #ffffff !important;
+.product-3d-viewer {
+  width: 100% !important;
+  height: 270px !important;
+  min-height: 270px !important;
+  border-radius: 24px !important;
+  overflow: hidden !important;
 }
 
-.labels-list-head span {
-  color: #93c5fd !important;
-  font-weight: 800 !important;
+.product-model-preview .product-3d-viewer {
+  height: 340px !important;
+  min-height: 340px !important;
 }
 
-.labels-product-grid {
-  display: grid !important;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)) !important;
-  gap: 10px !important;
-  max-height: 260px !important;
-  overflow: auto !important;
-  padding-right: 4px !important;
+.product-3d-viewer canvas {
+  width: 100% !important;
+  height: 100% !important;
 }
 
-.labels-neo-tip {
-  display: flex !important;
-  align-items: center !important;
-  gap: 16px !important;
-  padding: 22px 26px !important;
+.product-3d-hint {
+  bottom: 10px !important;
 }
 
-.labels-neo-tip > span {
-  width: 42px !important;
-  height: 42px !important;
+
+/* =========================================================
+   PRODUITS 3D — ZOOM MAXIMUM MUG / OBJET 3D
+   À garder tout en bas du fichier CSS
+   ========================================================= */
+
+.product-visual {
+  width: 100% !important;
+  min-height: 360px !important;
+  height: 360px !important;
+  padding: 0 !important;
   display: grid !important;
   place-items: center !important;
-  border-radius: 50% !important;
-  background: rgba(37,99,235,.22) !important;
-  color: #38bdf8 !important;
+  overflow: visible !important;
+}
+
+.product-premium-card {
+  overflow: visible !important;
+}
+
+.product-3d-viewer {
+  width: 100% !important;
+  height: 360px !important;
+  min-height: 360px !important;
+  border-radius: 24px !important;
+  overflow: hidden !important;
+}
+
+.product-model-preview .product-3d-viewer {
+  height: 420px !important;
+  min-height: 420px !important;
+}
+
+.product-3d-viewer canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.product-3d-hint {
+  bottom: 8px !important;
+  transform: scale(0.9);
+}
+
+
+.image-upload-button{
+display:flex;
+align-items:center;
+justify-content:center;
+padding:14px;
+border-radius:16px;
+cursor:pointer;
+margin-top:10px;
+background:rgba(255,255,255,.08);
+border:1px solid rgba(255,255,255,.12);
+}
+.image-upload-button input{
+display:none;
+}
+
+
+/* =========================================================
+   CONFIGURATEUR MUG 3D — VISUEL SUR MUG + RÉGLAGES
+   ========================================================= */
+
+.mug-design-controls {
+  display: grid;
+  gap: 12px;
+  margin: 14px 0;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(2, 6, 23, 0.36);
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.mug-design-controls label {
+  display: grid;
+  gap: 8px;
+  color: #dbeafe !important;
+  font-weight: 800;
+  font-size: 13px;
+}
+
+.mug-design-controls input[type="range"] {
+  width: 100% !important;
+  accent-color: #3b82f6;
+  background: transparent !important;
+  padding: 0 !important;
+  border: 0 !important;
+}
+
+.product-3d-viewer {
+  background:
+    radial-gradient(circle at 50% 38%, rgba(59, 130, 246, 0.22), transparent 34%),
+    rgba(2, 6, 23, 0.34) !important;
+}
+
+
+/* =========================================================
+   FIX MUG CONFIGURATEUR — GRAND APERÇU + IMAGE VISIBLE
+   ========================================================= */
+
+.product-visual {
+  width: 100% !important;
+  min-height: 460px !important;
+  height: 460px !important;
+  padding: 0 !important;
+  display: grid !important;
+  place-items: center !important;
+  overflow: visible !important;
+}
+
+.product-3d-viewer {
+  position: relative !important;
+  width: 100% !important;
+  height: 460px !important;
+  min-height: 460px !important;
+  border-radius: 26px !important;
+  overflow: hidden !important;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(59, 130, 246, 0.30), transparent 34%),
+    rgba(2, 6, 23, 0.40) !important;
+}
+
+.product-3d-viewer canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.product-model-preview .product-3d-viewer {
+  height: 520px !important;
+  min-height: 520px !important;
+}
+
+.product-premium-card {
+  overflow: visible !important;
+}
+
+.mug-design-overlay {
+  position: absolute !important;
+  left: 50% !important;
+  top: 49% !important;
+  max-width: 220px !important;
+  max-height: 190px !important;
+  height: auto !important;
+  object-fit: contain !important;
+  pointer-events: none !important;
+  z-index: 12 !important;
+  filter: drop-shadow(0 8px 14px rgba(0,0,0,0.22));
+  border-radius: 8px;
+}
+
+.product-3d-hint {
+  z-index: 20 !important;
+  bottom: 12px !important;
+}
+
+.mug-design-controls {
+  margin-bottom: 18px !important;
+}
+
+
+/* =========================================================
+   CONFIGURATEUR MUG — GRAND APERÇU CLAIR AVEC IMAGE
+   ========================================================= */
+
+.mug-customizer-preview {
+  width: 100% !important;
+  min-height: 520px !important;
+  margin: 18px 0 !important;
+  padding: 28px !important;
+  border-radius: 30px !important;
+  background:
+    radial-gradient(circle at 50% 35%, rgba(59, 130, 246, 0.34), transparent 36%),
+    linear-gradient(180deg, rgba(30, 58, 138, 0.36), rgba(15, 23, 42, 0.72)) !important;
+  border: 1px solid rgba(148, 163, 184, 0.28) !important;
+  display: grid !important;
+  place-items: center !important;
+  overflow: visible !important;
+}
+
+.mug-mockup {
+  position: relative !important;
+  width: 430px !important;
+  height: 390px !important;
+  display: grid !important;
+  place-items: center !important;
+}
+
+.mug-body {
+  position: relative !important;
+  width: 270px !important;
+  height: 330px !important;
+  border-radius: 34px 34px 48px 48px !important;
+  background:
+    linear-gradient(90deg, #e5e7eb 0%, #ffffff 28%, #f8fafc 58%, #d1d5db 100%) !important;
+  border: 2px solid rgba(255,255,255,0.85) !important;
+  box-shadow:
+    inset 18px 0 30px rgba(15,23,42,0.10),
+    inset -22px 0 35px rgba(15,23,42,0.15),
+    0 28px 70px rgba(0,0,0,0.38) !important;
+  overflow: hidden !important;
+  z-index: 2 !important;
+}
+
+.mug-body::before {
+  content: "";
+  position: absolute;
+  inset: 26px 34px 42px;
+  border: 2px dashed rgba(37,99,235,0.42);
+  border-radius: 22px;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.mug-shine {
+  position: absolute !important;
+  top: 0 !important;
+  left: 28px !important;
+  width: 70px !important;
+  height: 100% !important;
+  background: linear-gradient(90deg, rgba(255,255,255,0.42), rgba(255,255,255,0)) !important;
+  z-index: 5 !important;
+  pointer-events: none !important;
+}
+
+.mug-handle {
+  position: absolute !important;
+  right: 18px !important;
+  top: 108px !important;
+  width: 110px !important;
+  height: 150px !important;
+  border: 22px solid #e5e7eb !important;
+  border-left: 0 !important;
+  border-radius: 0 90px 90px 0 !important;
+  box-shadow: 18px 18px 42px rgba(0,0,0,0.24) !important;
+  z-index: 1 !important;
+}
+
+.mug-print-image {
+  position: absolute !important;
+  left: 50% !important;
+  top: 50% !important;
+  max-width: 220px !important;
+  max-height: 220px !important;
+  object-fit: contain !important;
+  z-index: 4 !important;
+  pointer-events: none !important;
+  filter: drop-shadow(0 6px 12px rgba(0,0,0,0.18)) !important;
+}
+
+.mug-empty-zone {
+  position: absolute !important;
+  inset: 95px 46px !important;
+  border-radius: 20px !important;
+  border: 2px dashed rgba(37,99,235,0.45) !important;
+  display: grid !important;
+  place-items: center !important;
+  color: #2563eb !important;
   font-weight: 900 !important;
+  background: rgba(37,99,235,0.06) !important;
+  z-index: 4 !important;
 }
 
-.labels-neo-tip strong {
-  color: #38bdf8 !important;
-  font-size: 18px !important;
+.mug-preview-note {
+  margin: 0 !important;
+  color: #cbd5e1 !important;
+  font-size: 14px !important;
+  font-weight: 800 !important;
+  text-align: center !important;
 }
 
-.labels-neo-tip p {
-  margin: 6px 0 0 !important;
-  color: #cfe0ff !important;
+.product-3d-viewer {
+  width: 100% !important;
+  min-height: 520px !important;
+  height: 520px !important;
+  border-radius: 28px !important;
 }
 
-@media (max-width: 1100px) {
-  .labels-neo-header,
-  .labels-preview-head {
-    align-items: flex-start !important;
-    flex-direction: column !important;
-  }
+.product-model-preview .product-3d-viewer {
+  min-height: 560px !important;
+  height: 560px !important;
+}
 
-  .labels-neo-controls,
-  .labels-neo-info-grid {
-    grid-template-columns: 1fr !important;
-  }
-
-  .labels-single-preview {
-    padding: 18px !important;
-  }
-
-  .labels-single-preview .product-label,
-  .labels-sheet-preview.labels-single-preview .product-label,
-  .labels-sheet-preview.labels-single-preview .product-label:first-child {
-    height: 150px !important;
-    min-height: 150px !important;
-    grid-template-columns: 90px minmax(120px,1fr) 84px !important;
-    grid-template-rows: 38px 68px 22px !important;
-    padding: 20px !important;
-  }
-
-  .labels-single-preview .product-label-code-row,
-  .labels-sheet-preview.labels-single-preview .product-label-code-row,
-  .labels-sheet-preview.labels-single-preview .product-label:first-child .product-label-code-row {
-    grid-template-columns: 90px minmax(120px,1fr) 84px !important;
-  }
-
-  .labels-single-preview .product-label-qr,
-  .labels-single-preview .qr-code-img {
-    width: 62px !important;
-    height: 62px !important;
-  }
-
-  .labels-single-preview .product-label-footer {
-    font-size: 18px !important;
-  }
+.product-visual {
+  width: 100% !important;
+  min-height: 520px !important;
+  height: auto !important;
 }
 
 @media (max-width: 700px) {
-  .labels-single-preview .product-label,
-  .labels-sheet-preview.labels-single-preview .product-label,
-  .labels-sheet-preview.labels-single-preview .product-label:first-child {
-    grid-template-columns: 1fr 70px !important;
-    grid-template-rows: 38px 64px 24px !important;
-    height: 150px !important;
-    outline-offset: -12px !important;
+  .mug-mockup {
+    width: 320px !important;
+    height: 340px !important;
   }
 
-  .labels-single-preview .product-label-code-row,
-  .labels-sheet-preview.labels-single-preview .product-label-code-row,
-  .labels-sheet-preview.labels-single-preview .product-label:first-child .product-label-code-row {
-    grid-template-columns: 1fr 70px !important;
+  .mug-body {
+    width: 220px !important;
+    height: 290px !important;
   }
 
-  .labels-single-preview .product-label-footer {
-    grid-column: 1 !important;
+  .mug-handle {
+    right: 10px !important;
+    top: 100px !important;
+    width: 90px !important;
+    height: 120px !important;
   }
 }
 
-@media print {
-  .labels-neo-page .no-print,
-  .labels-neo-header,
-  .labels-neo-controls,
-  .labels-neo-preview,
-  .labels-neo-info-grid,
-  .labels-neo-product-list,
-  .labels-neo-tip {
-    display: none !important;
-  }
-
-  body .labels-print-area .product-label {
-    width: 63mm !important;
-    height: 36mm !important;
-    max-width: 63mm !important;
-    overflow: hidden !important;
-  }
-}
 
 /* =========================================================
-   CORRECTION ÉTIQUETTES V3 — aperçu visible + impression 90x25 mm
-   À garder tout en bas du fichier CSS
+   FIX FINAL — APERÇU IMAGE INTÉGRÉ DANS LA ZONE 3D
    ========================================================= */
-.labels-single-preview {
-  min-height: 260px !important;
-  padding: 34px !important;
-  overflow: hidden !important;
+
+/* On masque l'ancien grand aperçu séparé pour éviter tout décalage */
+.mug-customizer-preview,
+.mug-mockup,
+.mug-body,
+.mug-handle,
+.mug-preview-note {
+  display: none !important;
 }
 
-.labels-single-preview .product-label,
-.labels-sheet-preview.labels-single-preview .product-label,
-.labels-sheet-preview.labels-single-preview .product-label:first-child {
-  width: min(100%, 980px) !important;
+/* La carte produit ne doit plus sortir du CRM */
+.product-premium-card,
+.product-model-preview,
+.product-visual,
+.product-3d-viewer {
   max-width: 100% !important;
-  height: 170px !important;
-  min-height: 170px !important;
-  display: grid !important;
-  grid-template-columns: 140px minmax(180px, 1fr) 100px !important;
-  grid-template-rows: 36px 70px 24px !important;
-  gap: 0 18px !important;
-  padding: 18px 28px !important;
-  border-radius: 24px !important;
-  outline: 1px dashed rgba(37,99,235,.55) !important;
-  outline-offset: -22px !important;
-  overflow: hidden !important;
+  box-sizing: border-box !important;
 }
 
-.labels-single-preview .product-label strong,
-.labels-sheet-preview.labels-single-preview .product-label strong,
-.labels-sheet-preview.labels-single-preview .product-label:first-child strong {
-  grid-column: 1 / -1 !important;
-  grid-row: 1 !important;
-  align-self: center !important;
-  justify-self: center !important;
-  text-align: center !important;
-  font-size: 28px !important;
-  line-height: 1.05 !important;
-  max-width: calc(100% - 120px) !important;
-}
-
-.labels-single-preview .product-label-code-row,
-.labels-sheet-preview.labels-single-preview .product-label-code-row,
-.labels-sheet-preview.labels-single-preview .product-label:first-child .product-label-code-row {
-  grid-column: 1 / -1 !important;
-  grid-row: 2 !important;
-  display: grid !important;
-  grid-template-columns: 140px minmax(180px, 1fr) 100px !important;
-  gap: 18px !important;
-  align-items: center !important;
+/* Grande zone 3D intégrée, mais contenue dans la carte */
+.product-visual {
   width: 100% !important;
+  min-height: 390px !important;
+  height: auto !important;
+  padding: 0 !important;
+  display: grid !important;
+  place-items: center !important;
   overflow: hidden !important;
 }
 
-.labels-single-preview .barcode-svg,
-.labels-sheet-preview.labels-single-preview .product-label .barcode-svg,
-.labels-sheet-preview.labels-single-preview .product-label:first-child .barcode-svg {
-  grid-column: 2 !important;
-  justify-self: center !important;
-  width: 150px !important;
-  height: 48px !important;
-  max-width: 100% !important;
-  max-height: 48px !important;
+.product-3d-viewer {
+  position: relative !important;
+  width: 100% !important;
+  height: 390px !important;
+  min-height: 390px !important;
+  border-radius: 26px !important;
+  overflow: hidden !important;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(59, 130, 246, 0.24), transparent 36%),
+    rgba(2, 6, 23, 0.42) !important;
 }
 
-.labels-single-preview .product-label-qr,
-.labels-single-preview .qr-code-img,
-.labels-sheet-preview.labels-single-preview .product-label-qr,
-.labels-sheet-preview.labels-single-preview .qr-code-img,
-.labels-sheet-preview.labels-single-preview .product-label:first-child .product-label-qr,
-.labels-sheet-preview.labels-single-preview .product-label:first-child .qr-code-img {
-  grid-column: 3 !important;
-  justify-self: center !important;
-  align-self: center !important;
-  width: 70px !important;
-  height: 70px !important;
-  max-width: 70px !important;
-  max-height: 70px !important;
+.product-3d-viewer canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Image posée par-dessus le mug, dans LA MÊME zone */
+.mug-design-overlay-integrated {
+  position: absolute !important;
+  left: 50% !important;
+  top: 49% !important;
+  max-width: 180px !important;
+  max-height: 160px !important;
   object-fit: contain !important;
+  pointer-events: none !important;
+  z-index: 30 !important;
+  border-radius: 8px !important;
+  filter: drop-shadow(0 7px 12px rgba(0,0,0,0.22)) !important;
 }
 
-.labels-single-preview .product-label-footer,
-.labels-sheet-preview.labels-single-preview .product-label-footer,
-.labels-sheet-preview.labels-single-preview .product-label:first-child .product-label-footer {
-  grid-column: 1 !important;
-  grid-row: 3 !important;
-  align-self: center !important;
-  justify-self: start !important;
-  display: block !important;
-  font-size: 22px !important;
-  line-height: 1 !important;
-  font-weight: 900 !important;
-  color: #111827 !important;
-  transform: none !important;
+/* Le bouton retirer ne doit pas masquer le mug */
+.product-3d-viewer .secondary,
+.product-3d-viewer button {
+  z-index: 40 !important;
 }
 
-@media print {
-  @page {
-    size: A4;
-    margin: 0;
-  }
-
-  html,
-  body {
-    width: 210mm !important;
-    min-height: 297mm !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    background: #ffffff !important;
-    overflow: visible !important;
-    -webkit-print-color-adjust: exact !important;
-    print-color-adjust: exact !important;
-  }
-
-  body * {
-    visibility: hidden !important;
-  }
-
-  body .app,
-  body .content,
-  body .labels-page,
-  body .labels-print-area,
-  body .labels-print-area * {
-    visibility: visible !important;
-  }
-
-  body .sidebar,
-  body .labels-neo-page .no-print,
-  body .labels-neo-header,
-  body .labels-neo-controls,
-  body .labels-neo-preview,
-  body .labels-neo-info-grid,
-  body .labels-neo-product-list,
-  body .labels-neo-tip,
-  body .content > section.labels-page > *:not(.labels-print-area) {
-    display: none !important;
-  }
-
-  body .app,
-  body .content,
-  body .labels-page,
-  body .labels-print-area {
-    display: block !important;
-    width: 210mm !important;
-    min-height: 297mm !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    background: #ffffff !important;
-    overflow: visible !important;
-    position: static !important;
-  }
-
-  body .labels-print-area .labels-sheet {
-    display: grid !important;
-    width: 210mm !important;
-    min-height: 297mm !important;
-    margin: 0 !important;
-    padding: 10mm 12mm !important;
-    grid-template-columns: repeat(2, 90mm) !important;
-    gap: 7mm 6mm !important;
-    justify-content: center !important;
-    align-content: start !important;
-    align-items: start !important;
-    background: #ffffff !important;
-    color: #111827 !important;
-  }
-
-  body .labels-print-area .product-label {
-    width: 90mm !important;
-    height: 25mm !important;
-    max-width: 90mm !important;
-    min-height: 25mm !important;
-    display: grid !important;
-    grid-template-columns: 20mm 1fr 18mm !important;
-    grid-template-rows: 4mm 13mm 4mm !important;
-    gap: 0 3mm !important;
-    padding: 2mm 4mm !important;
-    border: 0.25mm dashed #cbd5e1 !important;
-    border-radius: 2mm !important;
-    box-shadow: none !important;
-    background: #ffffff !important;
-    color: #111827 !important;
-    overflow: hidden !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
-  }
-
-  body .labels-print-area .product-label strong {
-    grid-column: 1 / -1 !important;
-    grid-row: 1 !important;
-    justify-self: center !important;
-    align-self: center !important;
-    max-width: 100% !important;
-    text-align: center !important;
-    font-size: 8.5pt !important;
-    font-weight: 900 !important;
-    line-height: 1 !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-    color: #111827 !important;
-  }
-
-  body .labels-print-area .product-label-code-row {
-    grid-column: 1 / -1 !important;
-    grid-row: 2 !important;
-    display: grid !important;
-    grid-template-columns: 20mm 1fr 18mm !important;
-    gap: 3mm !important;
-    align-items: center !important;
-    width: 100% !important;
-    min-width: 0 !important;
-    overflow: hidden !important;
-  }
-
-  body .labels-print-area .barcode-svg {
-    grid-column: 2 !important;
-    justify-self: center !important;
-    width: 30mm !important;
-    height: 8mm !important;
-    max-width: 30mm !important;
-    max-height: 8mm !important;
-    display: block !important;
-  }
-
-  body .labels-print-area .product-label-qr,
-  body .labels-print-area .qr-code-img {
-    grid-column: 3 !important;
-    justify-self: end !important;
-    align-self: center !important;
-    width: 13mm !important;
-    height: 13mm !important;
-    max-width: 13mm !important;
-    max-height: 13mm !important;
-    object-fit: contain !important;
-    display: block !important;
-  }
-
-  body .labels-print-area .product-label-footer {
-    grid-column: 1 !important;
-    grid-row: 3 !important;
-    justify-self: start !important;
-    align-self: center !important;
-    display: block !important;
-    font-size: 8pt !important;
-    line-height: 1 !important;
-    font-weight: 900 !important;
-    color: #111827 !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-  }
+/* Réglages plus compacts */
+.mug-design-controls {
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 12px 0 16px !important;
 }
 
-/* =========================================================
-   FIX IMPRESSION ÉTIQUETTES — SUPPRESSION DES TRAITS EN X
-   À garder tout en bas du fichier CSS
-   ========================================================= */
-@media print {
-  html::before,
-  html::after,
-  body::before,
-  body::after,
-  #root::before,
-  #root::after,
-  .app::before,
-  .app::after,
-  .content::before,
-  .content::after,
-  .labels-page::before,
-  .labels-page::after,
-  .labels-print-area::before,
-  .labels-print-area::after,
-  .labels-sheet::before,
-  .labels-sheet::after {
-    content: none !important;
-    display: none !important;
-    visibility: hidden !important;
-    background: none !important;
-    background-image: none !important;
-    box-shadow: none !important;
-    border: 0 !important;
+/* Évite les débordements horizontaux */
+.content,
+section,
+.card {
+  max-width: 100% !important;
+}
+
+@media (max-width: 700px) {
+  .product-3d-viewer {
+    height: 330px !important;
+    min-height: 330px !important;
   }
 
-  body .app,
-  body .content,
-  body .labels-page,
-  body .labels-print-area,
-  body .labels-print-area .labels-sheet {
-    background: #ffffff !important;
-    background-image: none !important;
-    box-shadow: none !important;
-  }
-
-  body .labels-print-area .labels-sheet {
-    isolation: isolate !important;
-    position: relative !important;
-    z-index: 9999 !important;
+  .mug-design-overlay-integrated {
+    max-width: 145px !important;
+    max-height: 125px !important;
   }
 }

@@ -14,6 +14,8 @@
     "dist": "vite build && electron-builder"
   },
   "dependencies": {
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.6.1",
     "@supabase/supabase-js": "^2.105.4",
     "html2canvas": "^1.4.1",
     "html5-qrcode": "^2.3.8",
@@ -22,6 +24,7 @@
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
     "react-qr-code": "^2.0.21",
+    "three": "^0.184.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

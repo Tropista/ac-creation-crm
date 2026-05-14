@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "./supabase";
 import * as XLSX from "xlsx";
 import html2canvas from "html2canvas";
@@ -6,6 +6,9 @@ import jsPDF from "jspdf";
 import QRCode from "qrcode";
 import { Html5QrcodeScanner } from "html5-qrcode";
 import "./App.css";
+import { Canvas } from "@react-three/fiber";
+import * as THREE from "three";
+import { Bounds, Center, Environment, OrbitControls, useGLTF } from "@react-three/drei";
 
 const STORAGE_KEY = "crm_local_data_v2";
 const SESSION_KEY = "crm_current_user_v2";
@@ -2047,6 +2050,160 @@ function Categories({ data, setData, currentRole = 'Admin' }) {
   );
 }
 
+
+class Product3DErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidUpdate(previousProps) {
+    if (previousProps.resetKey !== this.props.resetKey && this.state.hasError) {
+      this.setState({ hasError: false });
+    }
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="product-3d-fallback">
+          <strong>Modèle 3D non lisible</strong>
+          <span>Réimporte un fichier .glb ou .gltf valide.</span>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+function Product3DModel({ modelUrl }) {
+  const { scene } = useGLTF(modelUrl);
+
+  return (
+    <Bounds fit clip observe margin={0.12}>
+      <Center>
+        <primitive object={scene} />
+      </Center>
+    </Bounds>
+  );
+}
+
+
+function MugDesignPatch({ imageUrl, size = 1, posX = 0, posY = 0 }) {
+  const [texture, setTexture] = React.useState(null);
+
+  React.useEffect(() => {
+    if (!imageUrl) {
+      setTexture(null);
+      return;
+    }
+
+    const loader = new THREE.TextureLoader();
+    loader.load(
+      imageUrl,
+      (loadedTexture) => {
+        loadedTexture.colorSpace = THREE.SRGBColorSpace;
+        loadedTexture.anisotropy = 16;
+        loadedTexture.needsUpdate = true;
+        setTexture(loadedTexture);
+      },
+      undefined,
+      () => setTexture(null)
+    );
+  }, [imageUrl]);
+
+  if (!texture) return null;
+
+  return (
+    <mesh
+      position={[posX, posY, 1.05]}
+      rotation={[0, 0, 0]}
+      scale={[0.85 * size, 0.55 * size, 1]}
+    >
+      <planeGeometry args={[1, 1]} />
+      <meshBasicMaterial
+        map={texture}
+        transparent
+        side={THREE.DoubleSide}
+        toneMapped={false}
+      />
+    </mesh>
+  );
+}
+
+
+function MugCustomizerPreview({ designImage, designSize = 1, designX = 0, designY = 0 }) {
+  return (
+    <div className="mug-customizer-preview">
+      <div className="mug-mockup">
+        <div className="mug-body">
+          <div className="mug-shine" />
+          {designImage ? (
+            <img
+              className="mug-print-image"
+              src={designImage}
+              alt="Visuel personnalisé"
+              style={{
+                width: `${180 * Number(designSize || 1)}px`,
+                transform: `translate(calc(-50% + ${Number(designX || 0) * 110}px), calc(-50% + ${Number(designY || 0) * -110}px))`,
+              }}
+            />
+          ) : (
+            <div className="mug-empty-zone">Ajoutez une image</div>
+          )}
+        </div>
+        <div className="mug-handle" />
+      </div>
+      <p className="mug-preview-note">Aperçu de la zone d’impression du mug</p>
+    </div>
+  );
+}
+
+
+function Product3DViewer({ modelUrl, designImage, designSize = 1, designX = 0, designY = 0, fallbackLetter = "P" }) {
+  if (!modelUrl) {
+    return (
+      <div className="product-3d-placeholder">
+        <span>{fallbackLetter}</span>
+      </div>
+    );
+  }
+
+  return (
+    <Product3DErrorBoundary resetKey={modelUrl}>
+      <div className="product-3d-viewer">
+        <Canvas
+          camera={{ position: [0, 0.15, 4.8], fov: 28 }}
+          gl={{ antialias: true, alpha: true, preserveDrawingBuffer: true }}
+        >
+          <ambientLight intensity={1.4} />
+          <directionalLight position={[4, 6, 5]} intensity={2.4} />
+          <directionalLight position={[-4, 2, -3]} intensity={0.8} />
+          <Suspense fallback={null}>
+            <Product3DModel modelUrl={modelUrl} />
+            <Environment preset="city" />
+          </Suspense>
+          <OrbitControls
+            makeDefault
+            enableDamping
+            dampingFactor={0.08}
+            enablePan={false}
+            minDistance={0.35}
+            maxDistance={5}
+          />
+        </Canvas>
+        <div className="product-3d-hint">↔ tourner · molette zoom</div>
+      </div>
+    </Product3DErrorBoundary>
+  );
+}
+
+
 function Products({ data, setData, currentRole = 'Admin' }) {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
@@ -2066,6 +2223,7 @@ function Products({ data, setData, currentRole = 'Admin' }) {
     price: "",
     stock: "",
     imageUrl: "",
+    model3dUrl: "",
     description: "",
   });
 
@@ -2122,6 +2280,46 @@ function Products({ data, setData, currentRole = 'Admin' }) {
   function removeProductImage() {
     setForm((current) => ({ ...current, imageUrl: "" }));
   }
+
+
+  function handleProduct3DUpload(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const fileName = String(file.name || "").toLowerCase();
+    const is3DFile =
+      fileName.endsWith(".glb") ||
+      fileName.endsWith(".gltf") ||
+      file.type === "model/gltf-binary" ||
+      file.type === "model/gltf+json";
+
+    if (!is3DFile) {
+      alert("Choisis un vrai fichier 3D au format .glb ou .gltf.");
+      event.target.value = "";
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = (readerEvent) => {
+      setForm((current) => ({
+        ...current,
+        model3dUrl: readerEvent.target.result,
+      }));
+    };
+
+    reader.onerror = () => {
+      alert("Impossible de lire le modèle 3D.");
+    };
+
+    reader.readAsDataURL(file);
+    event.target.value = "";
+  }
+
+  function removeProduct3D() {
+    setForm((current) => ({ ...current, model3dUrl: "" }));
+  }
+
 
 
   const categories = data.categories || [];
@@ -2362,7 +2560,7 @@ function Products({ data, setData, currentRole = 'Admin' }) {
 
   function reset() {
     setEditing(null);
-    setForm({ name: "", sku: "", category: "", price: "", stock: "", imageUrl: "", description: "" });
+    setForm({ name: "", sku: "", category: "", price: "", stock: "", imageUrl: "", model3dUrl: "", description: "" });
   }
 
   function submit(e) {
@@ -2404,6 +2602,7 @@ function Products({ data, setData, currentRole = 'Admin' }) {
       price: product.price || "",
       stock: product.stock || "",
       imageUrl: product.imageUrl || "",
+      model3dUrl: product.model3dUrl || "",
       description: product.description || "",
     });
   }
@@ -2534,6 +2733,81 @@ function Products({ data, setData, currentRole = 'Admin' }) {
               <img src={form.imageUrl} alt="Aperçu produit" />
               <button type="button" onClick={removeProductImage}>
                 Retirer
+              </button>
+            </div>
+          )}
+
+          <label className="image-upload-button product-3d-upload-button">
+            🧊 Importer modèle 3D
+            <input
+              type="file"
+              accept=".glb,.gltf,model/gltf-binary,model/gltf+json"
+              onChange={handleProduct3DUpload}
+            />
+          </label>
+
+          
+
+          <label className="image-upload-button">
+            🎨 Ajouter design mug
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (!file) return;
+                const url = URL.createObjectURL(file);
+                setForm({ ...form, designImage: url, designSize: form.designSize || 1, designX: form.designX || 0, designY: form.designY || 0 });
+              }}
+            />
+          </label>
+
+
+          {form.designImage && (
+            <div className="mug-design-controls">
+              <label>
+                <span>Taille du visuel</span>
+                <input
+                  type="range"
+                  min="0.4"
+                  max="2"
+                  step="0.05"
+                  value={form.designSize || 1}
+                  onChange={(e) => setForm({ ...form, designSize: e.target.value })}
+                />
+              </label>
+
+              <label>
+                <span>Position horizontale</span>
+                <input
+                  type="range"
+                  min="-0.8"
+                  max="0.8"
+                  step="0.02"
+                  value={form.designX || 0}
+                  onChange={(e) => setForm({ ...form, designX: e.target.value })}
+                />
+              </label>
+
+              <label>
+                <span>Position verticale</span>
+                <input
+                  type="range"
+                  min="-0.8"
+                  max="0.8"
+                  step="0.02"
+                  value={form.designY || 0}
+                  onChange={(e) => setForm({ ...form, designY: e.target.value })}
+                />
+              </label>
+            </div>
+          )}
+
+          {form.model3dUrl && (
+            <div className="product-image-preview product-model-preview">
+              <Product3DViewer modelUrl={form.model3dUrl} designImage={form.designImage} designSize={Number(form.designSize || 1)} designX={Number(form.designX || 0)} designY={Number(form.designY || 0)} fallbackLetter={(form.name || "P").slice(0, 1).toUpperCase()} />
+              <button type="button" onClick={removeProduct3D}>
+                Retirer le modèle 3D
               </button>
             </div>
           )}
@@ -2728,7 +3002,9 @@ function Products({ data, setData, currentRole = 'Admin' }) {
                 </div>
 
                 <div className="product-visual">
-                  {product.imageUrl ? (
+                  {product.model3dUrl ? (
+                    <Product3DViewer modelUrl={product.model3dUrl} designImage={product.designImage} designSize={Number(product.designSize || 1)} designX={Number(product.designX || 0)} designY={Number(product.designY || 0)} fallbackLetter={(product.name || "P").slice(0, 1).toUpperCase()} />
+                  ) : product.imageUrl ? (
                     <img src={product.imageUrl} alt={product.name || "Produit"} />
                   ) : (
                     <span>{(product.name || "P").slice(0, 1).toUpperCase()}</span>
@@ -2864,7 +3140,7 @@ function BarcodeLabels({ data }) {
 
   function selectVisibleProducts() {
     const visibleIds = filteredProducts.map((product) => product.id);
-    const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedProductIds.includes(id));
+    const allVisibleSelected = visibleIds.every((id) => selectedProductIds.includes(id));
     setSelectedProductIds((current) =>
       allVisibleSelected
         ? current.filter((id) => !visibleIds.includes(id))
@@ -2872,27 +3148,19 @@ function BarcodeLabels({ data }) {
     );
   }
 
-  const previewProducts = labelsToPrint.length ? labelsToPrint : selectedProducts.slice(0, 1);
-
   return (
-    <section className="labels-page labels-neo-page">
-      <div className="labels-neo-header no-print">
-        <div className="labels-neo-title">
-          <span className="labels-neo-icon">🏷️</span>
-          <div>
-            <h2>Étiquettes</h2>
-            <p>Prévisualise tes codes-barres avant impression.</p>
-          </div>
+    <section className="labels-page">
+      <div className="page-header no-print">
+        <div>
+          <h2>Étiquettes & codes-barres</h2>
+          <p>Génère des étiquettes produits imprimables à partir des SKU.</p>
         </div>
-        <div className="labels-neo-actions">
-          <button type="button" className="labels-ghost-btn">⚙️ Paramètres d’impression</button>
-          <button className="primary labels-print-btn" onClick={() => window.print()} disabled={!labelsToPrint.length}>
-            🖨️ Imprimer
-          </button>
-        </div>
+        <button className="primary" onClick={() => window.print()} disabled={!labelsToPrint.length}>
+          Imprimer les étiquettes
+        </button>
       </div>
 
-      <div className="labels-controls labels-neo-controls no-print">
+      <div className="card labels-controls no-print">
         <input
           placeholder="Rechercher un produit, SKU ou catégorie..."
           value={search}
@@ -2908,64 +3176,16 @@ function BarcodeLabels({ data }) {
         />
         <label className="labels-checkbox">
           <input type="checkbox" checked={showQr} onChange={(event) => setShowQr(event.target.checked)} />
-          QR code
+          Afficher QR code
         </label>
-        <button type="button" onClick={selectVisibleProducts}>Tout sélectionner</button>
-        <button type="button" onClick={() => setSelectedProductIds([])}>Vider</button>
+        <button type="button" onClick={selectVisibleProducts}>Sélectionner / désélectionner les produits visibles</button>
+        <button type="button" onClick={() => setSelectedProductIds([])}>Vider la sélection</button>
       </div>
 
-      <div className="card labels-preview-card labels-neo-preview no-print">
-        <div className="labels-preview-head">
-          <div>
-            <h3>Aperçu impression</h3>
-            <p className="muted">{labelsToPrint.length} étiquette(s) prête(s) à imprimer.</p>
-          </div>
-        </div>
-
-        <div className="labels-sheet labels-sheet-preview labels-single-preview">
-          {previewProducts.length > 0 ? (
-            previewProducts.slice(0, 1).map((product, index) => (
-              <ProductLabel key={`${product.id}-${index}`} product={product} showPrice={showPrice} showQr={showQr} />
-            ))
-          ) : (
-            <div className="labels-empty-preview">
-              Sélectionne un produit pour afficher l’aperçu de l’étiquette.
-            </div>
-          )}
-        </div>
-      </div>
-
-      <div className="labels-neo-info-grid no-print">
-        <div className="labels-info-card">
-          <span>🧾</span>
-          <div>
-            <small>Modèle d’étiquette</small>
-            <strong>Porte-clé Prénom</strong>
-          </div>
-        </div>
-        <div className="labels-info-card">
-          <span>📄</span>
-          <div>
-            <small>Format papier</small>
-            <strong>A4 (210 x 297 mm)</strong>
-          </div>
-        </div>
-        <div className="labels-info-card">
-          <span>🔖</span>
-          <div>
-            <small>Taille étiquette</small>
-            <strong>90 x 25 mm</strong>
-          </div>
-        </div>
-      </div>
-
-      <div className="card labels-product-list labels-neo-product-list no-print">
-        <div className="labels-list-head">
+      <div className="labels-layout no-print">
+        <div className="card labels-product-list">
           <h3>Produits</h3>
-          <span>{selectedProductIds.length} sélectionné(s)</span>
-        </div>
-        {filteredProducts.length === 0 && <p className="muted">Aucun produit trouvé.</p>}
-        <div className="labels-product-grid">
+          {filteredProducts.length === 0 && <p className="muted">Aucun produit trouvé.</p>}
           {filteredProducts.map((product) => (
             <label className="label-product-row" key={product.id}>
               <input
@@ -2980,13 +3200,15 @@ function BarcodeLabels({ data }) {
             </label>
           ))}
         </div>
-      </div>
 
-      <div className="labels-neo-tip no-print">
-        <span>ⓘ</span>
-        <div>
-          <strong>Conseils d’impression</strong>
-          <p>Assurez-vous que votre imprimante est bien configurée sur le format sélectionné.</p>
+        <div className="card labels-preview-card">
+          <h3>Aperçu impression</h3>
+          <p className="muted">{labelsToPrint.length} étiquette(s) prête(s) à imprimer.</p>
+          <div className="labels-sheet labels-sheet-preview">
+            {labelsToPrint.map((product, index) => (
+              <ProductLabel key={`${product.id}-${index}`} product={product} showPrice={showPrice} showQr={showQr} />
+            ))}
+          </div>
         </div>
       </div>
 
