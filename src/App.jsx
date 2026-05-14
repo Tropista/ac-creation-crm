@@ -1328,7 +1328,7 @@ function Documents({ type, data, setData, currentRole = 'Admin' }) {
   const [previewDoc, setPreviewDoc] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [sortBy, setSortBy] = useState("dateDesc");
-  const [form, setForm] = useState({ clientId: "", status: defaultStatus, lines: [{ ...emptyLine }] });
+  const [form, setForm] = useState({ clientId: "", status: defaultStatus, globalDiscount: 0, lines: [{ ...emptyLine }] });
 
   const itemsPerPage = 25;
   const documents = data[listKey];
@@ -1377,12 +1377,16 @@ function Documents({ type, data, setData, currentRole = 'Admin' }) {
 
   const totals = useMemo(() => {
     const subtotal = form.lines.reduce((sum, line) => sum + lineTotal(line).subtotal, 0);
-    const discountAmount = form.lines.reduce((sum, line) => sum + lineTotal(line).discountAmount, 0);
-    const totalHT = form.lines.reduce((sum, line) => sum + lineTotal(line).totalHT, 0);
+    const lineDiscountAmount = form.lines.reduce((sum, line) => sum + lineTotal(line).discountAmount, 0);
+    const totalBeforeGlobalDiscount = form.lines.reduce((sum, line) => sum + lineTotal(line).totalHT, 0);
+    const globalDiscountRate = Math.min(100, Math.max(0, Number(form.globalDiscount || 0)));
+    const globalDiscountAmount = totalBeforeGlobalDiscount * (globalDiscountRate / 100);
+    const discountAmount = lineDiscountAmount + globalDiscountAmount;
+    const totalHT = Math.max(0, totalBeforeGlobalDiscount - globalDiscountAmount);
     const taxAmount = totalHT * (Number(data.settings.taxRate || 0) / 100);
     const totalTTC = totalHT + taxAmount;
-    return { subtotal, discountAmount, totalHT, taxAmount, totalTTC };
-  }, [form.lines, data.settings.taxRate]);
+    return { subtotal, lineDiscountAmount, globalDiscountRate, globalDiscountAmount, discountAmount, totalHT, taxAmount, totalTTC };
+  }, [form.lines, form.globalDiscount, data.settings.taxRate]);
 
   function updateLine(index, changes) {
     setForm({
@@ -1425,7 +1429,7 @@ function Documents({ type, data, setData, currentRole = 'Admin' }) {
 
   function reset() {
     setEditingId(null);
-    setForm({ clientId: "", status: defaultStatus, lines: [{ ...emptyLine }] });
+    setForm({ clientId: "", status: defaultStatus, globalDiscount: 0, lines: [{ ...emptyLine }] });
   }
 
   function submit(e) {
@@ -1457,7 +1461,7 @@ function Documents({ type, data, setData, currentRole = 'Admin' }) {
         ...data,
         [listKey]: documents.map((d) =>
           d.id === editingId
-            ? { ...d, clientId: form.clientId, status: form.status, description: firstDescription, lines: cleanLines, taxRate: data.settings.taxRate, ...totals }
+            ? { ...d, clientId: form.clientId, status: form.status, globalDiscount: Number(form.globalDiscount || 0), description: firstDescription, lines: cleanLines, taxRate: data.settings.taxRate, ...totals }
             : d
         ),
       });
@@ -1469,6 +1473,7 @@ function Documents({ type, data, setData, currentRole = 'Admin' }) {
         taxRate: data.settings.taxRate,
         clientId: form.clientId,
         status: form.status,
+        globalDiscount: Number(form.globalDiscount || 0),
         description: firstDescription,
         lines: cleanLines,
         ...totals,
@@ -1485,7 +1490,7 @@ function Documents({ type, data, setData, currentRole = 'Admin' }) {
       : [{ productId: doc.productId || "", description: doc.description || "", quantity: doc.quantity || 1, price: doc.price || 0, discount: doc.discount || 0 }];
 
     setEditingId(doc.id);
-    setForm({ clientId: doc.clientId, status: doc.status || defaultStatus, lines });
+    setForm({ clientId: doc.clientId, status: doc.status || defaultStatus, globalDiscount: doc.globalDiscount || 0, lines });
   }
 
   function remove(id) {
@@ -1552,7 +1557,25 @@ function Documents({ type, data, setData, currentRole = 'Admin' }) {
 
         <div className="document-form-footer">
           <button type="button" onClick={addLine}>+ Ajouter une ligne</button>
-          <div className="total-box"><span>HT : {money(totals.totalHT)}</span><span>TVA : {money(totals.taxAmount)}</span><strong>TTC : {money(totals.totalTTC)}</strong></div>
+          <label className="global-discount-field">
+            Remise globale %
+            <input
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              value={form.globalDiscount || 0}
+              onChange={(e) => setForm({ ...form, globalDiscount: e.target.value })}
+            />
+          </label>
+          <div className="total-box">
+            <span>Sous-total HT : {money(totals.subtotal)}</span>
+            <span>Remise lignes : {money(totals.lineDiscountAmount)}</span>
+            <span>Remise globale : {money(totals.globalDiscountAmount)}</span>
+            <span>HT : {money(totals.totalHT)}</span>
+            <span>TVA : {money(totals.taxAmount)}</span>
+            <strong>TTC : {money(totals.totalTTC)}</strong>
+          </div>
           <button className="primary">{editingId ? "Modifier" : `Créer ${isQuote ? "le devis" : "la facture"}`}</button>
           {editingId && <button type="button" onClick={reset}>Annuler</button>}
         </div>
@@ -1843,6 +1866,18 @@ ${data.settings.companyEmail || ""}`;
 
             <div className="invoice-total-modern">
               <div>
+                <span>Sous-total HT</span>
+                <strong>{money(doc.subtotal || doc.totalHT)}</strong>
+              </div>
+              <div>
+                <span>Remise lignes</span>
+                <strong>{money(doc.lineDiscountAmount || 0)}</strong>
+              </div>
+              <div>
+                <span>Remise globale {doc.globalDiscount ? `(${doc.globalDiscount}%)` : ""}</span>
+                <strong>{money(doc.globalDiscountAmount || 0)}</strong>
+              </div>
+              <div>
                 <span>Total HT</span>
                 <strong>{money(doc.totalHT)}</strong>
               </div>
@@ -1853,10 +1888,6 @@ ${data.settings.companyEmail || ""}`;
               <div>
                 <span>Total TTC</span>
                 <strong>{money(doc.totalTTC)}</strong>
-              </div>
-              <div>
-                <span>Remise</span>
-                <strong>{money(doc.discountAmount)}</strong>
               </div>
               <div className="invoice-final-due">
                 <span>À PAYER</span>
@@ -2787,7 +2818,7 @@ function BarcodeSvg({ value, height = 58 }) {
   const width = x + quiet;
 
   return (
-    <svg className="barcode-svg" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Code-barres ${product.sku || "sans SKU"}`}>
+    <svg className="barcode-svg" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Code-barres ${value || "sans SKU"}`}>
       <rect x="0" y="0" width={width} height={height} fill="#ffffff" />
       {bars.map((bar) => (
         <rect key={bar.key} x={bar.x} y="4" width={bar.width} height={height - 14} fill="#111827" />
@@ -2947,7 +2978,7 @@ function QrCodeImage({ value, className = "qr-code-img" }) {
       return;
     }
 
-    QRCode.toDataURL(String(product.sku), {
+    QRCode.toDataURL(String(value), {
       margin: 1,
       width: 180,
       errorCorrectionLevel: "M",

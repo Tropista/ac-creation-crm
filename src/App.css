@@ -5240,3 +5240,27 @@ tr:hover td {
     grid-template-columns: repeat(2, minmax(360px, 1fr)) !important;
   }
 }
+
+
+/* =========================================================
+   CORRECTIF REMISE GLOBALE FACTURE / DEVIS
+   ========================================================= */
+.global-discount-field {
+  display: grid !important;
+  gap: 6px !important;
+  min-width: 170px !important;
+  color: #ffffff !important;
+  font-weight: 800 !important;
+  font-size: 13px !important;
+}
+
+.global-discount-field input {
+  min-width: 150px !important;
+}
+
+@media (max-width: 850px) {
+  .global-discount-field,
+  .global-discount-field input {
+    width: 100% !important;
+  }
+}
