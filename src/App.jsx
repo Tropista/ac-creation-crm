@@ -541,54 +541,83 @@ function AuthPage({ data, setData, setCurrentUser }) {
   }
 
   return (
-    <div className="modern-auth">
-      <div className="auth-orb orb-one"></div>
-      <div className="auth-orb orb-two"></div>
+    <div className="neo-auth">
+      <div className="neo-stars"></div>
+      <div className="neo-grid"></div>
+      <div className="neo-planet"></div>
+      <div className="neo-wave"></div>
 
-      <section className="auth-showcase">
-        <div className="brand-icon">📊</div>
-        <h1>
-          Mon <span>CRM</span>
-        </h1>
-        <p className="brand-text">
-          Accès privé réservé aux utilisateurs autorisés par l’administrateur.
-        </p>
+      <section className="neo-auth-left">
+        <div className="neo-brand-row">
+          <div className="neo-logo-mark"><span></span></div>
+          <div>
+            <h1>NEO<span>CRM</span></h1>
+            <p>NEXT GENERATION CRM</p>
+          </div>
+        </div>
 
-        <div className="auth-features">
-          <div className="feature-item">
-            <div>🔐</div>
-            <span>
+        <div className="neo-hero-copy">
+          <h2>Bienvenue</h2>
+          <p className="neo-gradient-text">La nouvelle ère de la gestion client</p>
+          <p className="neo-lead">
+            Connectez-vous à votre espace sécurisé et pilotez votre activité avec intelligence.
+          </p>
+        </div>
+
+        <div className="neo-feature-list">
+          <div className="neo-feature-card">
+            <div className="neo-feature-icon shield">🛡️</div>
+            <div>
               <strong>Accès sécurisé</strong>
-              L’inscription publique est désactivée.
-            </span>
+              <p>Vos données sont protégées avec un chiffrement de niveau entreprise.</p>
+            </div>
           </div>
 
-          <div className="feature-item">
-            <div>👑</div>
-            <span>
-              <strong>Mode admin</strong>
-              Seul l’admin peut autoriser de nouveaux utilisateurs.
-            </span>
+          <div className="neo-feature-card">
+            <div className="neo-feature-icon ai">🧠</div>
+            <div>
+              <strong>Assistant IA intégré</strong>
+              <p>Analysez vos performances et vos opportunités en temps réel.</p>
+            </div>
           </div>
 
-          <div className="feature-item">
-            <div>☁️</div>
-            <span>
-              <strong>Supabase</strong>
-              Données synchronisées dans le cloud.
-            </span>
+          <div className="neo-feature-card">
+            <div className="neo-feature-icon cloud">⚡</div>
+            <div>
+              <strong>Synchronisation cloud</strong>
+              <p>Accédez à vos données partout, à tout moment.</p>
+            </div>
           </div>
+
+          <div className="neo-feature-card">
+            <div className="neo-feature-icon chart">▮▮▮</div>
+            <div>
+              <strong>Pilotage intelligent</strong>
+              <p>Des insights avancés pour prendre les meilleures décisions.</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="neo-trust-line">
+          <span>◇ 100% Sécurisé</span>
+          <span>•</span>
+          <span>Conforme RGPD</span>
+          <span>•</span>
+          <span>Hébergé en Europe</span>
         </div>
       </section>
 
-      <form className="modern-auth-card" onSubmit={login}>
-        <div className="lock-icon">🔒</div>
+      <form className="neo-login-card" onSubmit={login}>
+        <div className="neo-lock-shell">
+          <div className="neo-lock-ring"></div>
+          <div className="neo-lock-icon">🔒</div>
+        </div>
 
-        <h2>Bienvenue !</h2>
-        <p className="auth-subtitle">Connectez-vous à votre espace privé</p>
+        <h2>Connexion</h2>
+        <p className="neo-login-subtitle">Accédez à votre tableau de bord</p>
 
-        <label className="modern-field">
-          <span>✉️</span>
+        <label className="neo-field">
+          <span>✉</span>
           <input
             placeholder="Email"
             type="email"
@@ -597,8 +626,8 @@ function AuthPage({ data, setData, setCurrentUser }) {
           />
         </label>
 
-        <label className="modern-field">
-          <span>🔑</span>
+        <label className="neo-field">
+          <span>⌘</span>
           <input
             placeholder="Mot de passe"
             type="password"
@@ -607,14 +636,28 @@ function AuthPage({ data, setData, setCurrentUser }) {
           />
         </label>
 
-        {error && <p className="modern-error">{error}</p>}
+        <div className="neo-login-options">
+          <label>
+            <input type="checkbox" defaultChecked />
+            <span>Se souvenir de moi</span>
+          </label>
+          <button type="button">Mot de passe oublié ?</button>
+        </div>
 
-        <button className="modern-primary" type="submit">
-          Se connecter
-          <span>→</span>
+        {error && <p className="neo-error">{error}</p>}
+
+        <button className="neo-primary" type="submit">
+          Se connecter <span>→</span>
         </button>
 
-        <p className="auth-note">🛡️ Compte requis et validé par l’administrateur.</p>
+        <div className="neo-separator"><span></span><p>OU</p><span></span></div>
+
+        <button className="neo-google" type="button">
+          <strong>G</strong>
+          Continuer avec Google
+        </button>
+
+        <p className="neo-note">◇ Compte requis et validé par l’administrateur.</p>
       </form>
     </div>
   );
