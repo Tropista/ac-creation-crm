@@ -5264,3 +5264,831 @@ tr:hover td {
     width: 100% !important;
   }
 }
+
+/* =========================================================
+   CORRECTION FINALE ÉTIQUETTES — QR / code-barres plus petits
+   À garder tout en bas du fichier CSS
+   ========================================================= */
+.product-label {
+  grid-template-rows: 18px 1fr 16px !important;
+  gap: 2px !important;
+  padding: 5px 7px !important;
+}
+
+.product-label-code-row {
+  display: grid !important;
+  grid-template-columns: 1fr 30mm !important;
+  gap: 3mm !important;
+  align-items: center !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.product-label-qr,
+.qr-code-img {
+  width: 24mm !important;
+  height: 24mm !important;
+  max-width: 24mm !important;
+  max-height: 24mm !important;
+  object-fit: contain !important;
+  display: block !important;
+  justify-self: center !important;
+}
+
+.product-label .barcode-svg {
+  height: 16mm !important;
+  max-height: 16mm !important;
+  width: 100% !important;
+}
+
+.labels-sheet-preview .product-label {
+  height: 96px !important;
+}
+
+.labels-sheet-preview .product-label-code-row {
+  grid-template-columns: 1fr 76px !important;
+  gap: 8px !important;
+}
+
+.labels-sheet-preview .product-label-qr,
+.labels-sheet-preview .qr-code-img {
+  width: 64px !important;
+  height: 64px !important;
+  max-width: 64px !important;
+  max-height: 64px !important;
+}
+
+.labels-sheet-preview .product-label .barcode-svg {
+  height: 42px !important;
+}
+
+@media print {
+  body .labels-print-area .product-label {
+    width: 63mm !important;
+    height: 36mm !important;
+    grid-template-rows: 5mm 1fr 5mm !important;
+    padding: 3mm !important;
+  }
+
+  body .labels-print-area .product-label-code-row {
+    display: grid !important;
+    grid-template-columns: 1fr 24mm !important;
+    gap: 3mm !important;
+    align-items: center !important;
+    overflow: hidden !important;
+  }
+
+  body .labels-print-area .product-label-qr,
+  body .labels-print-area .qr-code-img {
+    width: 21mm !important;
+    height: 21mm !important;
+    max-width: 21mm !important;
+    max-height: 21mm !important;
+  }
+
+  body .labels-print-area .barcode-svg {
+    height: 13mm !important;
+    max-height: 13mm !important;
+  }
+}
+
+
+/* =========================================================
+   ÉTIQUETTES — VISUEL PROPRE TYPE APERÇU IMPRESSION
+   À garder tout en bas du fichier CSS
+   ========================================================= */
+.labels-controls {
+  grid-template-columns: minmax(240px, 1.5fr) 120px auto auto !important;
+}
+
+.labels-preview-card {
+  padding: 26px !important;
+  background: rgba(15, 35, 80, 0.72) !important;
+}
+
+.labels-preview-card h3 {
+  text-align: center !important;
+  font-size: 26px !important;
+  margin: 0 0 20px !important;
+  color: #ffffff !important;
+}
+
+.labels-preview-card > .muted {
+  text-align: center !important;
+  font-size: 16px !important;
+  margin: 0 0 24px !important;
+  color: #dbeafe !important;
+}
+
+.labels-sheet-preview {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(210px, 1fr)) !important;
+  gap: 14px 18px !important;
+  width: 100% !important;
+  max-height: none !important;
+  overflow: visible !important;
+  padding: 24px !important;
+  border-radius: 22px !important;
+  background: #ffffff !important;
+  box-shadow: 0 18px 45px rgba(0,0,0,0.18) !important;
+}
+
+.labels-sheet-preview .product-label {
+  width: 100% !important;
+  height: 88px !important;
+  min-height: 88px !important;
+  border: 1px dashed #bfccdf !important;
+  border-radius: 10px !important;
+  padding: 14px 16px 10px !important;
+  display: grid !important;
+  grid-template-columns: 72px 1fr 58px !important;
+  grid-template-rows: 22px 34px 18px !important;
+  gap: 0 12px !important;
+  background: #ffffff !important;
+  color: #111827 !important;
+  box-shadow: none !important;
+}
+
+.labels-sheet-preview .product-label:first-child {
+  grid-column: 1 / -1 !important;
+  height: 128px !important;
+  min-height: 128px !important;
+  grid-template-columns: 110px 1fr 78px !important;
+  grid-template-rows: 30px 54px 22px !important;
+  padding: 18px 24px 14px !important;
+}
+
+.labels-sheet-preview .product-label strong {
+  grid-column: 1 / -1 !important;
+  grid-row: 1 !important;
+  text-align: center !important;
+  align-self: start !important;
+  font-size: 14px !important;
+  font-weight: 900 !important;
+  color: #111827 !important;
+  line-height: 1.15 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+.labels-sheet-preview .product-label:first-child strong {
+  font-size: 16px !important;
+}
+
+.labels-sheet-preview .product-label-code-row {
+  grid-column: 1 / -1 !important;
+  grid-row: 2 / 4 !important;
+  display: grid !important;
+  grid-template-columns: 72px 1fr 58px !important;
+  gap: 12px !important;
+  align-items: center !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.labels-sheet-preview .product-label:first-child .product-label-code-row {
+  grid-template-columns: 110px 1fr 78px !important;
+}
+
+.labels-sheet-preview .product-label .barcode-svg {
+  grid-column: 2 !important;
+  justify-self: center !important;
+  width: 78px !important;
+  height: 30px !important;
+  max-height: 30px !important;
+}
+
+.labels-sheet-preview .product-label:first-child .barcode-svg {
+  width: 110px !important;
+  height: 42px !important;
+  max-height: 42px !important;
+}
+
+.labels-sheet-preview .product-label-qr,
+.labels-sheet-preview .qr-code-img {
+  grid-column: 3 !important;
+  justify-self: end !important;
+  width: 46px !important;
+  height: 46px !important;
+  max-width: 46px !important;
+  max-height: 46px !important;
+  object-fit: contain !important;
+}
+
+.labels-sheet-preview .product-label:first-child .product-label-qr,
+.labels-sheet-preview .product-label:first-child .qr-code-img {
+  width: 58px !important;
+  height: 58px !important;
+  max-width: 58px !important;
+  max-height: 58px !important;
+}
+
+.labels-sheet-preview .product-label-footer {
+  grid-column: 1 !important;
+  grid-row: 3 !important;
+  display: block !important;
+  align-self: end !important;
+  font-size: 12px !important;
+  font-weight: 900 !important;
+  color: #111827 !important;
+}
+
+.labels-sheet-preview .product-label:first-child .product-label-footer {
+  font-size: 13px !important;
+}
+
+@media (max-width: 1350px) {
+  .labels-sheet-preview {
+    grid-template-columns: repeat(3, minmax(210px, 1fr)) !important;
+  }
+}
+
+@media (max-width: 1050px) {
+  .labels-sheet-preview {
+    grid-template-columns: repeat(2, minmax(210px, 1fr)) !important;
+  }
+}
+
+@media (max-width: 700px) {
+  .labels-sheet-preview {
+    grid-template-columns: 1fr !important;
+    padding: 14px !important;
+  }
+}
+
+@media print {
+  body .labels-print-area .product-label {
+    width: 63mm !important;
+    height: 36mm !important;
+    padding: 3mm 4mm !important;
+    display: grid !important;
+    grid-template-columns: 18mm 1fr 18mm !important;
+    grid-template-rows: 6mm 17mm 5mm !important;
+    gap: 0 3mm !important;
+    border: 1px dashed #cbd5e1 !important;
+    border-radius: 2mm !important;
+    background: #ffffff !important;
+    color: #111827 !important;
+  }
+
+  body .labels-print-area .product-label strong {
+    grid-column: 1 / -1 !important;
+    grid-row: 1 !important;
+    text-align: center !important;
+    font-size: 9pt !important;
+    font-weight: 900 !important;
+    line-height: 1.1 !important;
+  }
+
+  body .labels-print-area .product-label-code-row {
+    grid-column: 1 / -1 !important;
+    grid-row: 2 / 4 !important;
+    display: grid !important;
+    grid-template-columns: 18mm 1fr 18mm !important;
+    gap: 3mm !important;
+    align-items: center !important;
+    overflow: hidden !important;
+  }
+
+  body .labels-print-area .barcode-svg {
+    grid-column: 2 !important;
+    justify-self: center !important;
+    width: 24mm !important;
+    height: 10mm !important;
+    max-height: 10mm !important;
+  }
+
+  body .labels-print-area .product-label-qr,
+  body .labels-print-area .qr-code-img {
+    grid-column: 3 !important;
+    justify-self: end !important;
+    width: 16mm !important;
+    height: 16mm !important;
+    max-width: 16mm !important;
+    max-height: 16mm !important;
+  }
+
+  body .labels-print-area .product-label-footer {
+    grid-column: 1 !important;
+    grid-row: 3 !important;
+    display: block !important;
+    align-self: end !important;
+    font-size: 8pt !important;
+    font-weight: 900 !important;
+  }
+}
+
+/* =========================================================
+   CRM ULTRA FUTURISTE — COMMAND CENTER V3
+   Ajout visuel sans casser la logique existante
+   ========================================================= */
+:root {
+  --neo-bg: #020617;
+  --neo-panel: rgba(8, 16, 36, 0.72);
+  --neo-panel-strong: rgba(15, 23, 42, 0.88);
+  --neo-border: rgba(56, 189, 248, 0.22);
+  --neo-text: #f8fbff;
+  --neo-muted: #8da2c0;
+  --neo-blue: #2f7bff;
+  --neo-cyan: #19e6ff;
+  --neo-purple: #9b5cff;
+  --neo-green: #35ff9c;
+  --neo-amber: #ffb82e;
+}
+
+body {
+  background:
+    radial-gradient(circle at top left, rgba(47, 123, 255, 0.22), transparent 34%),
+    radial-gradient(circle at bottom right, rgba(155, 92, 255, 0.20), transparent 35%),
+    linear-gradient(135deg, #020617 0%, #06111f 42%, #030712 100%) !important;
+  color: var(--neo-text) !important;
+}
+
+.app {
+  background:
+    linear-gradient(90deg, rgba(2,6,23,0.98), rgba(4,11,27,0.94)),
+    radial-gradient(circle at 70% 0%, rgba(25, 230, 255, 0.16), transparent 34%) !important;
+}
+
+.sidebar {
+  background:
+    linear-gradient(180deg, rgba(2, 8, 23, 0.98), rgba(4, 11, 32, 0.94)) !important;
+  border-right: 1px solid rgba(56, 189, 248, 0.18) !important;
+  box-shadow: 22px 0 80px rgba(0,0,0,0.35), inset -1px 0 0 rgba(255,255,255,0.04) !important;
+}
+
+.sidebar h1 {
+  font-size: 24px !important;
+  letter-spacing: -0.04em;
+  background: linear-gradient(90deg, #ffffff, #7dd3fc, #c4b5fd);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent !important;
+}
+
+.sidebar .user,
+.cloud-status {
+  color: #9eb7d8 !important;
+}
+
+.sidebar button {
+  position: relative;
+  overflow: hidden;
+  background: rgba(15, 23, 42, 0.54) !important;
+  color: #cfe7ff !important;
+  border: 1px solid rgba(125, 211, 252, 0.12) !important;
+  border-radius: 15px !important;
+  margin: 8px 0 !important;
+  transition: transform .22s ease, border-color .22s ease, background .22s ease, box-shadow .22s ease;
+}
+
+.sidebar button:hover {
+  opacity: 1 !important;
+  transform: translateX(6px);
+  background: linear-gradient(135deg, rgba(47, 123, 255, 0.25), rgba(155, 92, 255, 0.18)) !important;
+  border-color: rgba(25, 230, 255, 0.45) !important;
+  box-shadow: 0 0 28px rgba(47, 123, 255, 0.18);
+}
+
+.content {
+  position: relative;
+  background: transparent !important;
+  color: var(--neo-text) !important;
+}
+
+.neo-dashboard {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  gap: 18px;
+}
+
+.neo-bg-orb {
+  position: fixed;
+  z-index: -1;
+  pointer-events: none;
+  filter: blur(5px);
+  opacity: .75;
+}
+
+.neo-bg-orb.orb-a {
+  top: 90px;
+  right: 110px;
+  width: 340px;
+  height: 340px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(25,230,255,.16), transparent 64%);
+}
+
+.neo-bg-orb.orb-b {
+  bottom: 35px;
+  left: 270px;
+  width: 420px;
+  height: 420px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(155,92,255,.14), transparent 65%);
+}
+
+.neo-hero,
+.neo-panel,
+.neo-metric-card {
+  border: 1px solid var(--neo-border);
+  background: linear-gradient(180deg, rgba(15,23,42,.76), rgba(2,6,23,.72));
+  box-shadow: 0 24px 80px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.05);
+  backdrop-filter: blur(18px);
+}
+
+.neo-hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: center;
+  padding: 26px;
+  border-radius: 28px;
+  overflow: hidden;
+}
+
+.neo-hero::after {
+  content: "";
+  position: absolute;
+  inset: auto -20% -75% 25%;
+  height: 170px;
+  background: linear-gradient(90deg, transparent, rgba(25,230,255,.18), rgba(155,92,255,.16), transparent);
+  transform: rotate(-3deg);
+}
+
+.neo-eyebrow {
+  display: inline-flex;
+  margin-bottom: 8px;
+  color: #7dd3fc;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .16em;
+}
+
+.neo-hero h2 {
+  margin: 0;
+  color: white !important;
+  font-size: clamp(32px, 4vw, 54px) !important;
+  font-weight: 950 !important;
+  letter-spacing: -0.06em;
+}
+
+.neo-hero p,
+.neo-panel p,
+.neo-panel small,
+.neo-metric-card small {
+  color: var(--neo-muted) !important;
+}
+
+.neo-hero-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.neo-primary,
+.neo-ghost {
+  min-height: 44px;
+  border-radius: 15px !important;
+  font-weight: 900;
+  color: white !important;
+  border: 1px solid rgba(125,211,252,.25) !important;
+}
+
+.neo-primary {
+  background: linear-gradient(135deg, var(--neo-blue), var(--neo-purple)) !important;
+  box-shadow: 0 0 32px rgba(47,123,255,.34), inset 0 1px 0 rgba(255,255,255,.2);
+}
+
+.neo-primary.full { width: 100%; }
+
+.neo-ghost {
+  background: rgba(15,23,42,.62) !important;
+}
+
+.neo-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(180px, 1fr));
+  gap: 16px;
+}
+
+.neo-metric-card {
+  position: relative;
+  min-height: 164px;
+  padding: 20px;
+  border-radius: 24px;
+  overflow: hidden;
+}
+
+.neo-metric-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 82% 20%, rgba(255,255,255,.13), transparent 22%);
+  pointer-events: none;
+}
+
+.neo-metric-card span,
+.neo-panel h3 {
+  color: #f8fbff !important;
+  font-weight: 900;
+}
+
+.neo-metric-card strong {
+  display: block;
+  margin: 10px 0 4px;
+  color: white !important;
+  font-size: clamp(25px, 2.3vw, 38px);
+  letter-spacing: -0.04em;
+}
+
+.neo-metric-card.cyan { box-shadow: 0 20px 70px rgba(25,230,255,.08), inset 0 0 35px rgba(25,230,255,.06); }
+.neo-metric-card.purple { box-shadow: 0 20px 70px rgba(155,92,255,.10), inset 0 0 35px rgba(155,92,255,.08); }
+.neo-metric-card.blue { box-shadow: 0 20px 70px rgba(47,123,255,.12), inset 0 0 35px rgba(47,123,255,.08); }
+.neo-metric-card.amber { box-shadow: 0 20px 70px rgba(255,184,46,.10), inset 0 0 35px rgba(255,184,46,.06); }
+
+.sparkline {
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 16px;
+  display: flex;
+  align-items: end;
+  gap: 7px;
+  height: 38px;
+}
+
+.sparkline i {
+  flex: 1;
+  border-radius: 999px 999px 0 0;
+  background: linear-gradient(180deg, rgba(125,211,252,.9), rgba(47,123,255,.12));
+  box-shadow: 0 0 14px rgba(25,230,255,.28);
+}
+.sparkline i:nth-child(1) { height: 30%; }
+.sparkline i:nth-child(2) { height: 48%; }
+.sparkline i:nth-child(3) { height: 38%; }
+.sparkline i:nth-child(4) { height: 62%; }
+.sparkline i:nth-child(5) { height: 54%; }
+.sparkline i:nth-child(6) { height: 82%; }
+
+.neo-layout-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(300px, .8fr);
+  gap: 16px;
+}
+
+.neo-layout-grid.lower {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.neo-panel {
+  padding: 22px;
+  border-radius: 26px;
+  overflow: hidden;
+}
+
+.neo-panel-head {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.neo-panel-head h3,
+.neo-panel h3 {
+  margin: 0 0 4px !important;
+  font-size: 19px;
+}
+
+.neo-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  color: #bfdbfe;
+  background: rgba(47,123,255,.14);
+  border: 1px solid rgba(96,165,250,.26);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.neo-holo-chart {
+  height: 260px;
+  display: flex;
+  align-items: end;
+  gap: 14px;
+  padding: 24px;
+  border-radius: 22px;
+  background:
+    linear-gradient(rgba(125,211,252,.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(125,211,252,.08) 1px, transparent 1px),
+    radial-gradient(circle at 50% 100%, rgba(25,230,255,.16), transparent 50%);
+  background-size: 100% 52px, 52px 100%, auto;
+  border: 1px solid rgba(125,211,252,.12);
+}
+
+.neo-holo-chart span {
+  flex: 1;
+  min-width: 18px;
+  border-radius: 18px 18px 5px 5px;
+  background: linear-gradient(180deg, rgba(25,230,255,.98), rgba(47,123,255,.28));
+  box-shadow: 0 0 25px rgba(25,230,255,.28);
+}
+
+.neo-ai-panel {
+  text-align: center;
+  display: grid;
+  gap: 12px;
+  place-items: center;
+}
+
+.ai-core {
+  width: 86px;
+  height: 86px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: white;
+  font-weight: 950;
+  letter-spacing: .08em;
+  background: radial-gradient(circle, #19e6ff, #2f7bff 48%, #9b5cff 100%);
+  box-shadow: 0 0 45px rgba(25,230,255,.42), 0 0 90px rgba(155,92,255,.22);
+}
+
+.ai-ring {
+  --score: 72%;
+  width: 138px;
+  height: 138px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: conic-gradient(var(--neo-cyan) var(--score), rgba(148,163,184,.14) 0);
+  box-shadow: inset 0 0 0 12px rgba(2,6,23,.88), 0 0 35px rgba(25,230,255,.16);
+}
+
+.ai-ring span {
+  color: white;
+  font-size: 34px;
+  font-weight: 950;
+}
+
+.neo-pipeline {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.neo-stage {
+  min-height: 130px;
+  padding: 16px;
+  border-radius: 20px;
+  background: rgba(15,23,42,.62);
+  border: 1px solid rgba(148,163,184,.16);
+  display: grid;
+  align-content: space-between;
+}
+
+.neo-stage span { font-weight: 900; color: white; }
+.neo-stage strong { font-size: 32px; color: white; }
+.neo-stage small { color: var(--neo-muted); }
+.neo-stage.cyan { border-top: 3px solid var(--neo-cyan); }
+.neo-stage.blue { border-top: 3px solid var(--neo-blue); }
+.neo-stage.purple { border-top: 3px solid var(--neo-purple); }
+.neo-stage.green { border-top: 3px solid var(--neo-green); }
+
+.neo-activity-list {
+  display: grid;
+  gap: 12px;
+}
+
+.neo-activity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(15,23,42,.55);
+  border: 1px solid rgba(125,211,252,.10);
+}
+
+.neo-activity > span {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  color: white;
+  background: linear-gradient(135deg, var(--neo-blue), var(--neo-purple));
+}
+
+.neo-activity strong {
+  color: white;
+  display: block;
+}
+
+.neo-activity small {
+  color: var(--neo-muted);
+}
+
+.neo-bars .bar-row {
+  padding: 10px;
+  border-radius: 16px;
+  background: rgba(15,23,42,.45);
+  border: 1px solid rgba(148,163,184,.10);
+}
+
+.bar-info strong,
+.bar-info span,
+.neo-category strong,
+.neo-category span,
+.neo-category small {
+  color: var(--neo-text) !important;
+}
+
+.bar-track {
+  background: rgba(148,163,184,.18) !important;
+  height: 10px !important;
+}
+
+.bar-fill {
+  background: linear-gradient(90deg, var(--neo-cyan), var(--neo-blue), var(--neo-purple)) !important;
+  box-shadow: 0 0 24px rgba(25,230,255,.26) !important;
+}
+
+.category-wide {
+  margin-bottom: 22px;
+}
+
+.neo-category-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+}
+
+.neo-category {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(15,23,42,.5);
+  border: 1px solid rgba(125,211,252,.12);
+}
+
+.card,
+.table,
+form.card {
+  background: var(--neo-panel-strong) !important;
+  border: 1px solid rgba(125,211,252,.14) !important;
+  color: var(--neo-text) !important;
+}
+
+input,
+select,
+textarea {
+  border-color: rgba(125,211,252,.18) !important;
+}
+
+@media (max-width: 1180px) {
+  .neo-metrics-grid,
+  .neo-pipeline {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .neo-layout-grid,
+  .neo-layout-grid.lower {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .neo-hero {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 20px;
+  }
+
+  .neo-hero-actions {
+    justify-content: stretch;
+  }
+
+  .neo-hero-actions button {
+    flex: 1;
+  }
+
+  .neo-metrics-grid,
+  .neo-pipeline {
+    grid-template-columns: 1fr;
+  }
+
+  .neo-holo-chart {
+    height: 210px;
+    padding: 16px;
+    gap: 8px;
+  }
+}
