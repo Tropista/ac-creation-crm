@@ -541,83 +541,54 @@ function AuthPage({ data, setData, setCurrentUser }) {
   }
 
   return (
-    <div className="neo-auth">
-      <div className="neo-stars"></div>
-      <div className="neo-grid"></div>
-      <div className="neo-planet"></div>
-      <div className="neo-wave"></div>
+    <div className="modern-auth">
+      <div className="auth-orb orb-one"></div>
+      <div className="auth-orb orb-two"></div>
 
-      <section className="neo-auth-left">
-        <div className="neo-brand-row">
-          <div className="neo-logo-mark"><span></span></div>
-          <div>
-            <h1>NEO<span>CRM</span></h1>
-            <p>NEXT GENERATION CRM</p>
-          </div>
-        </div>
+      <section className="auth-showcase">
+        <div className="brand-icon">📊</div>
+        <h1>
+          Mon <span>CRM</span>
+        </h1>
+        <p className="brand-text">
+          Accès privé réservé aux utilisateurs autorisés par l’administrateur.
+        </p>
 
-        <div className="neo-hero-copy">
-          <h2>Bienvenue</h2>
-          <p className="neo-gradient-text">La nouvelle ère de la gestion client</p>
-          <p className="neo-lead">
-            Connectez-vous à votre espace sécurisé et pilotez votre activité avec intelligence.
-          </p>
-        </div>
-
-        <div className="neo-feature-list">
-          <div className="neo-feature-card">
-            <div className="neo-feature-icon shield">🛡️</div>
-            <div>
+        <div className="auth-features">
+          <div className="feature-item">
+            <div>🔐</div>
+            <span>
               <strong>Accès sécurisé</strong>
-              <p>Vos données sont protégées avec un chiffrement de niveau entreprise.</p>
-            </div>
+              L’inscription publique est désactivée.
+            </span>
           </div>
 
-          <div className="neo-feature-card">
-            <div className="neo-feature-icon ai">🧠</div>
-            <div>
-              <strong>Assistant IA intégré</strong>
-              <p>Analysez vos performances et vos opportunités en temps réel.</p>
-            </div>
+          <div className="feature-item">
+            <div>👑</div>
+            <span>
+              <strong>Mode admin</strong>
+              Seul l’admin peut autoriser de nouveaux utilisateurs.
+            </span>
           </div>
 
-          <div className="neo-feature-card">
-            <div className="neo-feature-icon cloud">⚡</div>
-            <div>
-              <strong>Synchronisation cloud</strong>
-              <p>Accédez à vos données partout, à tout moment.</p>
-            </div>
+          <div className="feature-item">
+            <div>☁️</div>
+            <span>
+              <strong>Supabase</strong>
+              Données synchronisées dans le cloud.
+            </span>
           </div>
-
-          <div className="neo-feature-card">
-            <div className="neo-feature-icon chart">▮▮▮</div>
-            <div>
-              <strong>Pilotage intelligent</strong>
-              <p>Des insights avancés pour prendre les meilleures décisions.</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="neo-trust-line">
-          <span>◇ 100% Sécurisé</span>
-          <span>•</span>
-          <span>Conforme RGPD</span>
-          <span>•</span>
-          <span>Hébergé en Europe</span>
         </div>
       </section>
 
-      <form className="neo-login-card" onSubmit={login}>
-        <div className="neo-lock-shell">
-          <div className="neo-lock-ring"></div>
-          <div className="neo-lock-icon">🔒</div>
-        </div>
+      <form className="modern-auth-card" onSubmit={login}>
+        <div className="lock-icon">🔒</div>
 
-        <h2>Connexion</h2>
-        <p className="neo-login-subtitle">Accédez à votre tableau de bord</p>
+        <h2>Bienvenue !</h2>
+        <p className="auth-subtitle">Connectez-vous à votre espace privé</p>
 
-        <label className="neo-field">
-          <span>✉</span>
+        <label className="modern-field">
+          <span>✉️</span>
           <input
             placeholder="Email"
             type="email"
@@ -626,8 +597,8 @@ function AuthPage({ data, setData, setCurrentUser }) {
           />
         </label>
 
-        <label className="neo-field">
-          <span>⌘</span>
+        <label className="modern-field">
+          <span>🔑</span>
           <input
             placeholder="Mot de passe"
             type="password"
@@ -636,28 +607,14 @@ function AuthPage({ data, setData, setCurrentUser }) {
           />
         </label>
 
-        <div className="neo-login-options">
-          <label>
-            <input type="checkbox" defaultChecked />
-            <span>Se souvenir de moi</span>
-          </label>
-          <button type="button">Mot de passe oublié ?</button>
-        </div>
+        {error && <p className="modern-error">{error}</p>}
 
-        {error && <p className="neo-error">{error}</p>}
-
-        <button className="neo-primary" type="submit">
-          Se connecter <span>→</span>
+        <button className="modern-primary" type="submit">
+          Se connecter
+          <span>→</span>
         </button>
 
-        <div className="neo-separator"><span></span><p>OU</p><span></span></div>
-
-        <button className="neo-google" type="button">
-          <strong>G</strong>
-          Continuer avec Google
-        </button>
-
-        <p className="neo-note">◇ Compte requis et validé par l’administrateur.</p>
+        <p className="auth-note">🛡️ Compte requis et validé par l’administrateur.</p>
       </form>
     </div>
   );
@@ -674,10 +631,9 @@ function Dashboard({ data }) {
   const paidInvoices = invoices
     .filter((i) => i.status === "Payée")
     .reduce((sum, inv) => sum + Number(inv.totalTTC || 0), 0);
-  const unpaidInvoices = Math.max(0, totalInvoices - paidInvoices);
+  const unpaidInvoices = totalInvoices - paidInvoices;
   const unpaidCount = invoices.filter((i) => i.status !== "Payée").length;
   const acceptedQuotes = quotes.filter((q) => q.status === "Accepté").length;
-  const conversionRate = quotes.length ? Math.round((acceptedQuotes / quotes.length) * 100) : 0;
 
   const invoiceLines = invoices.flatMap((invoice) =>
     (invoice.lines || []).map((line) => ({
@@ -715,203 +671,145 @@ function Dashboard({ data }) {
     .map((category) => {
       const categoryName = category.name || category.label || category.category || "";
       const normalizedCategoryName = String(categoryName).trim().toLowerCase();
+
       const categoryProducts = products.filter((p) =>
         String(p.categoryId || "") === String(category.id || "") ||
         String(p.category || "").trim().toLowerCase() === normalizedCategoryName
       );
+
       const categoryProductIds = categoryProducts.map((p) => String(p.id));
+
       const lines = invoiceLines.filter((line) => {
         const lineProductId = String(line.productId || "");
         const lineCategory = String(line.category || "").trim().toLowerCase();
-        return categoryProductIds.includes(lineProductId) || lineCategory === normalizedCategoryName;
+
+        return (
+          categoryProductIds.includes(lineProductId) ||
+          lineCategory === normalizedCategoryName
+        );
       });
+
       const revenue = lines.reduce((sum, line) => sum + Number(line.totalHT || line.subtotal || 0), 0);
       const quantity = lines.reduce((sum, line) => sum + Number(line.quantity || 0), 0);
+
       return { ...category, name: categoryName || "Sans catégorie", revenue, quantity };
     })
     .filter((c) => c.revenue > 0 || c.quantity > 0)
-    .sort((a, b) => b.revenue - a.revenue)
-    .slice(0, 5);
+    .sort((a, b) => b.revenue - a.revenue);
 
   const maxProductRevenue = Math.max(...productStats.map((p) => p.revenue), 1);
   const maxClientRevenue = Math.max(...clientStats.map((c) => c.total), 1);
   const maxCategoryRevenue = Math.max(...categoryStats.map((c) => c.revenue), 1);
-  const pipelineTotal = totalInvoices + quotes.reduce((sum, quote) => sum + Number(quote.totalTTC || quote.totalHT || 0), 0);
-
-  const pipelineStages = [
-    { label: "Prospection", value: clients.length, amount: totalInvoices * 0.18, color: "cyan" },
-    { label: "Qualification", value: quotes.length, amount: pipelineTotal * 0.24, color: "blue" },
-    { label: "Proposition", value: Math.max(acceptedQuotes, quotes.length - acceptedQuotes), amount: pipelineTotal * 0.32, color: "purple" },
-    { label: "Fermeture", value: invoices.length, amount: paidInvoices, color: "green" },
-  ];
-
-  const recentInvoices = invoices.slice(-5).reverse();
-  const aiScore = Math.min(98, Math.max(42, conversionRate + 38));
 
   return (
-    <section className="neo-dashboard">
-      <div className="neo-bg-orb orb-a"></div>
-      <div className="neo-bg-orb orb-b"></div>
-
-      <div className="neo-hero">
+    <section>
+      <div className="page-header">
         <div>
-          <span className="neo-eyebrow">Command center CRM</span>
-          <h2>Tableau de bord futuriste</h2>
-          <p>Vue globale des ventes, clients, factures, produits et opportunités en temps réel.</p>
-        </div>
-        <div className="neo-hero-actions">
-          <button type="button" className="neo-ghost">◌ Mode analyse</button>
-          <button type="button" className="neo-primary">✦ Nouvelle activité</button>
+          <h2>Tableau de bord</h2>
+          <p>Statistiques de ventes, clients, produits et catégories.</p>
         </div>
       </div>
 
-      <div className="neo-metrics-grid">
-        <div className="neo-metric-card cyan">
-          <span>Chiffre d'affaires</span>
-          <strong>{money(totalInvoices)}</strong>
-          <small>↗ Encaissement : {money(paidInvoices)}</small>
-          <div className="sparkline"><i></i><i></i><i></i><i></i><i></i><i></i></div>
-        </div>
-        <div className="neo-metric-card purple">
-          <span>Pipeline estimé</span>
-          <strong>{money(pipelineTotal)}</strong>
-          <small>↗ Devis actifs : {quotes.length}</small>
-          <div className="sparkline"><i></i><i></i><i></i><i></i><i></i><i></i></div>
-        </div>
-        <div className="neo-metric-card blue">
-          <span>Taux conversion</span>
-          <strong>{conversionRate}%</strong>
-          <small>{acceptedQuotes} devis accepté(s)</small>
-          <div className="sparkline"><i></i><i></i><i></i><i></i><i></i><i></i></div>
-        </div>
-        <div className="neo-metric-card amber">
-          <span>À encaisser</span>
-          <strong>{money(unpaidInvoices)}</strong>
-          <small>{unpaidCount} facture(s) ouverte(s)</small>
-          <div className="sparkline"><i></i><i></i><i></i><i></i><i></i><i></i></div>
-        </div>
+      <div className="stats">
+        <div className="card stat"><span>Clients</span><strong>{clients.length}</strong></div>
+        <div className="card stat"><span>Produits</span><strong>{products.length}</strong></div>
+        <div className="card stat"><span>Devis</span><strong>{quotes.length}</strong></div>
+        <div className="card stat"><span>Devis acceptés</span><strong>{acceptedQuotes}</strong></div>
+        <div className="card stat"><span>Factures</span><strong>{invoices.length}</strong></div>
+        <div className="card stat"><span>Non payées</span><strong>{unpaidCount}</strong></div>
+        <div className="card stat"><span>Total facturé</span><strong>{money(totalInvoices)}</strong></div>
+        <div className="card stat"><span>Payé</span><strong>{money(paidInvoices)}</strong></div>
+        <div className="card stat"><span>À encaisser</span><strong>{money(unpaidInvoices)}</strong></div>
       </div>
 
-      <div className="neo-layout-grid">
-        <div className="neo-panel neo-chart-panel">
-          <div className="neo-panel-head">
-            <div>
-              <h3>Évolution commerciale</h3>
-              <p>Projection visuelle basée sur vos données CRM</p>
-            </div>
-            <span className="neo-chip">Live</span>
-          </div>
-          <div className="neo-holo-chart">
-            {[42, 58, 52, 74, 66, 88, 79, 96].map((height, index) => (
-              <span key={index} style={{ height: `${height}%` }}></span>
-            ))}
-          </div>
-        </div>
-
-        <div className="neo-panel neo-ai-panel">
-          <div className="ai-core">AI</div>
-          <h3>Assistant NEO</h3>
-          <p>Score opportunité : <strong>{aiScore}%</strong></p>
-          <div className="ai-ring" style={{ "--score": `${aiScore}%` }}>
-            <span>{aiScore}</span>
-          </div>
-          <button type="button" className="neo-primary full">Analyser le pipeline</button>
-        </div>
-      </div>
-
-      <div className="neo-layout-grid lower">
-        <div className="neo-panel">
-          <div className="neo-panel-head">
-            <div>
-              <h3>Pipeline de ventes</h3>
-              <p>Étapes clés et valeur estimée</p>
-            </div>
-            <span className="neo-chip">{money(pipelineTotal)}</span>
-          </div>
-          <div className="neo-pipeline">
-            {pipelineStages.map((stage) => (
-              <div className={`neo-stage ${stage.color}`} key={stage.label}>
-                <span>{stage.label}</span>
-                <strong>{stage.value}</strong>
-                <small>{money(stage.amount)}</small>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="neo-panel">
-          <div className="neo-panel-head">
-            <div>
-              <h3>Dernières factures</h3>
-              <p>Suivi rapide des paiements</p>
-            </div>
-          </div>
-          {recentInvoices.length === 0 ? (
-            <p className="muted">Aucune facture pour le moment.</p>
+      <div className="dashboard-grid">
+        <div className="card">
+          <h3>Top produits vendus</h3>
+          {productStats.length === 0 ? (
+            <p className="muted">Aucune vente produit pour le moment.</p>
           ) : (
-            <div className="neo-activity-list">
-              {recentInvoices.map((invoice) => (
-                <div className="neo-activity" key={invoice.id}>
-                  <span>€</span>
-                  <div>
-                    <strong>{invoice.number} — {clientName(data, invoice.clientId)}</strong>
-                    <small>{money(invoice.totalTTC)} · {invoice.status}</small>
+            <div className="bar-list">
+              {productStats.map((product) => (
+                <div className="bar-row" key={product.id}>
+                  <div className="bar-info">
+                    <strong>{product.name}</strong>
+                    <span>{product.quantity} vendu(s) — {money(product.revenue)} HT</span>
+                  </div>
+                  <div className="bar-track">
+                    <div className="bar-fill" style={{ width: `${Math.max(6, (product.revenue / maxProductRevenue) * 100)}%` }} />
                   </div>
                 </div>
               ))}
             </div>
           )}
         </div>
-      </div>
 
-      <div className="neo-layout-grid lower">
-        <div className="neo-panel">
-          <h3>Top produits vendus</h3>
-          {productStats.length === 0 ? <p className="muted">Aucune vente produit pour le moment.</p> : (
-            <div className="bar-list neo-bars">
-              {productStats.map((product) => (
-                <div className="bar-row" key={product.id}>
-                  <div className="bar-info"><strong>{product.name}</strong><span>{product.quantity} vendu(s) — {money(product.revenue)} HT</span></div>
-                  <div className="bar-track"><div className="bar-fill" style={{ width: `${Math.max(6, (product.revenue / maxProductRevenue) * 100)}%` }} /></div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="neo-panel">
+        <div className="card">
           <h3>Meilleurs clients</h3>
-          {clientStats.length === 0 ? <p className="muted">Aucune facture client pour le moment.</p> : (
-            <div className="bar-list neo-bars">
+          {clientStats.length === 0 ? (
+            <p className="muted">Aucune facture client pour le moment.</p>
+          ) : (
+            <div className="bar-list">
               {clientStats.map((client) => (
                 <div className="bar-row" key={client.id}>
-                  <div className="bar-info"><strong>{client.name}</strong><span>{client.invoiceCount} facture(s) — {money(client.total)} TTC</span></div>
-                  <div className="bar-track"><div className="bar-fill" style={{ width: `${Math.max(6, (client.total / maxClientRevenue) * 100)}%` }} /></div>
+                  <div className="bar-info">
+                    <strong>{client.name}</strong>
+                    <span>{client.invoiceCount} facture(s) — {money(client.total)} TTC</span>
+                  </div>
+                  <div className="bar-track">
+                    <div className="bar-fill" style={{ width: `${Math.max(6, (client.total / maxClientRevenue) * 100)}%` }} />
+                  </div>
                 </div>
               ))}
             </div>
           )}
         </div>
-      </div>
 
-      <div className="neo-panel category-wide">
-        <div className="neo-panel-head">
-          <div>
-            <h3>Ventes par catégorie</h3>
-            <p>Répartition intelligente des revenus par univers produit.</p>
-          </div>
+        <div className="card">
+          <h3>Ventes par catégorie</h3>
+          {categoryStats.length === 0 ? (
+            <p className="muted">Aucune vente par catégorie pour le moment.</p>
+          ) : (
+            <div className="bar-list">
+              {categoryStats.map((category) => (
+                <div className="bar-row" key={category.id}>
+                  <div className="bar-info">
+                    <strong>{category.name}</strong>
+                    <span>{category.quantity} article(s) — {money(category.revenue)} HT</span>
+                  </div>
+                  <div className="bar-track">
+                    <div className="bar-fill" style={{ width: `${Math.max(6, (category.revenue / maxCategoryRevenue) * 100)}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-        {categoryStats.length === 0 ? <p className="muted">Aucune vente par catégorie pour le moment.</p> : (
-          <div className="neo-category-grid">
-            {categoryStats.map((category) => (
-              <div className="neo-category" key={category.id}>
-                <strong>{category.name}</strong>
-                <span>{money(category.revenue)} HT</span>
-                <small>{category.quantity} article(s)</small>
-                <div className="bar-track"><div className="bar-fill" style={{ width: `${Math.max(6, (category.revenue / maxCategoryRevenue) * 100)}%` }} /></div>
-              </div>
-            ))}
-          </div>
-        )}
+
+        <div className="card">
+          <h3>Dernières factures</h3>
+          {invoices.length === 0 ? (
+            <p className="muted">Aucune facture pour le moment.</p>
+          ) : (
+            <div className="table compact-table">
+              <table>
+                <thead>
+                  <tr><th>N°</th><th>Client</th><th>Total TTC</th><th>Statut</th></tr>
+                </thead>
+                <tbody>
+                  {invoices.slice(-6).reverse().map((invoice) => (
+                    <tr key={invoice.id}>
+                      <td>{invoice.number}</td>
+                      <td>{clientName(data, invoice.clientId)}</td>
+                      <td>{money(invoice.totalTTC)}</td>
+                      <td><span className={statusClass(invoice.status)}>{invoice.status}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     </section>
   );
@@ -2966,7 +2864,7 @@ function BarcodeLabels({ data }) {
 
   function selectVisibleProducts() {
     const visibleIds = filteredProducts.map((product) => product.id);
-    const allVisibleSelected = visibleIds.every((id) => selectedProductIds.includes(id));
+    const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedProductIds.includes(id));
     setSelectedProductIds((current) =>
       allVisibleSelected
         ? current.filter((id) => !visibleIds.includes(id))
@@ -2974,19 +2872,27 @@ function BarcodeLabels({ data }) {
     );
   }
 
+  const previewProducts = labelsToPrint.length ? labelsToPrint : selectedProducts.slice(0, 1);
+
   return (
-    <section className="labels-page">
-      <div className="page-header no-print">
-        <div>
-          <h2>Étiquettes & codes-barres</h2>
-          <p>Génère des étiquettes produits imprimables à partir des SKU.</p>
+    <section className="labels-page labels-neo-page">
+      <div className="labels-neo-header no-print">
+        <div className="labels-neo-title">
+          <span className="labels-neo-icon">🏷️</span>
+          <div>
+            <h2>Étiquettes</h2>
+            <p>Prévisualise tes codes-barres avant impression.</p>
+          </div>
         </div>
-        <button className="primary" onClick={() => window.print()} disabled={!labelsToPrint.length}>
-          Imprimer les étiquettes
-        </button>
+        <div className="labels-neo-actions">
+          <button type="button" className="labels-ghost-btn">⚙️ Paramètres d’impression</button>
+          <button className="primary labels-print-btn" onClick={() => window.print()} disabled={!labelsToPrint.length}>
+            🖨️ Imprimer
+          </button>
+        </div>
       </div>
 
-      <div className="card labels-controls no-print">
+      <div className="labels-controls labels-neo-controls no-print">
         <input
           placeholder="Rechercher un produit, SKU ou catégorie..."
           value={search}
@@ -3002,16 +2908,64 @@ function BarcodeLabels({ data }) {
         />
         <label className="labels-checkbox">
           <input type="checkbox" checked={showQr} onChange={(event) => setShowQr(event.target.checked)} />
-          Afficher QR code
+          QR code
         </label>
-        <button type="button" onClick={selectVisibleProducts}>Sélectionner / désélectionner les produits visibles</button>
-        <button type="button" onClick={() => setSelectedProductIds([])}>Vider la sélection</button>
+        <button type="button" onClick={selectVisibleProducts}>Tout sélectionner</button>
+        <button type="button" onClick={() => setSelectedProductIds([])}>Vider</button>
       </div>
 
-      <div className="labels-layout no-print">
-        <div className="card labels-product-list">
+      <div className="card labels-preview-card labels-neo-preview no-print">
+        <div className="labels-preview-head">
+          <div>
+            <h3>Aperçu impression</h3>
+            <p className="muted">{labelsToPrint.length} étiquette(s) prête(s) à imprimer.</p>
+          </div>
+        </div>
+
+        <div className="labels-sheet labels-sheet-preview labels-single-preview">
+          {previewProducts.length > 0 ? (
+            previewProducts.slice(0, 1).map((product, index) => (
+              <ProductLabel key={`${product.id}-${index}`} product={product} showPrice={showPrice} showQr={showQr} />
+            ))
+          ) : (
+            <div className="labels-empty-preview">
+              Sélectionne un produit pour afficher l’aperçu de l’étiquette.
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="labels-neo-info-grid no-print">
+        <div className="labels-info-card">
+          <span>🧾</span>
+          <div>
+            <small>Modèle d’étiquette</small>
+            <strong>Porte-clé Prénom</strong>
+          </div>
+        </div>
+        <div className="labels-info-card">
+          <span>📄</span>
+          <div>
+            <small>Format papier</small>
+            <strong>A4 (210 x 297 mm)</strong>
+          </div>
+        </div>
+        <div className="labels-info-card">
+          <span>🔖</span>
+          <div>
+            <small>Taille étiquette</small>
+            <strong>90 x 25 mm</strong>
+          </div>
+        </div>
+      </div>
+
+      <div className="card labels-product-list labels-neo-product-list no-print">
+        <div className="labels-list-head">
           <h3>Produits</h3>
-          {filteredProducts.length === 0 && <p className="muted">Aucun produit trouvé.</p>}
+          <span>{selectedProductIds.length} sélectionné(s)</span>
+        </div>
+        {filteredProducts.length === 0 && <p className="muted">Aucun produit trouvé.</p>}
+        <div className="labels-product-grid">
           {filteredProducts.map((product) => (
             <label className="label-product-row" key={product.id}>
               <input
@@ -3026,15 +2980,13 @@ function BarcodeLabels({ data }) {
             </label>
           ))}
         </div>
+      </div>
 
-        <div className="card labels-preview-card">
-          <h3>Aperçu impression</h3>
-          <p className="muted">{labelsToPrint.length} étiquette(s) prête(s) à imprimer.</p>
-          <div className="labels-sheet labels-sheet-preview">
-            {labelsToPrint.map((product, index) => (
-              <ProductLabel key={`${product.id}-${index}`} product={product} showPrice={showPrice} showQr={showQr} />
-            ))}
-          </div>
+      <div className="labels-neo-tip no-print">
+        <span>ⓘ</span>
+        <div>
+          <strong>Conseils d’impression</strong>
+          <p>Assurez-vous que votre imprimante est bien configurée sur le format sélectionné.</p>
         </div>
       </div>
 
