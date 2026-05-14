@@ -105,17 +105,41 @@ const emptyData = {
   backups: [],
 };
 
+function dedupeItemsById(items = []) {
+  const map = new Map();
+
+  for (const item of items || []) {
+    if (!item) continue;
+    const key = String(item.id || item.number || JSON.stringify(item));
+    map.set(key, { ...map.get(key), ...item });
+  }
+
+  return Array.from(map.values());
+}
+
+function dedupeDocuments(items = []) {
+  const map = new Map();
+
+  for (const item of items || []) {
+    if (!item) continue;
+    const key = String(item.id || item.number || JSON.stringify(item));
+    map.set(key, { ...map.get(key), ...item });
+  }
+
+  return Array.from(map.values());
+}
+
 function normalizeData(data) {
   return {
     ...emptyData,
     ...data,
     settings: { ...emptyData.settings, ...(data?.settings || {}) },
-    users: data?.users || [],
-    clients: data?.clients || [],
-    quotes: data?.quotes || [],
-    invoices: data?.invoices || [],
-    products: data?.products || [],
-    categories: data?.categories || [],
+    users: dedupeItemsById(data?.users || []),
+    clients: dedupeItemsById(data?.clients || []),
+    quotes: dedupeDocuments(data?.quotes || []),
+    invoices: dedupeDocuments(data?.invoices || []),
+    products: dedupeItemsById(data?.products || []),
+    categories: dedupeItemsById(data?.categories || []),
     backups: data?.backups || [],
   };
 }
@@ -224,22 +248,27 @@ async function loadSupabaseData() {
 }
 
 async function syncTable(tableName, nextItems, previousItems) {
-  const next = nextItems || [];
-  const previous = previousItems || [];
+  const next = dedupeItemsById(nextItems || []);
+  const previous = dedupeItemsById(previousItems || []);
 
   if (next.length) {
-    const payload = next.map((item) => ({
-      id: item.id,
-      data: item,
-      updated_at: new Date().toISOString(),
-    }));
+    const payload = next
+      .filter((item) => item?.id)
+      .map((item) => ({
+        id: item.id,
+        data: item,
+      }));
 
-    const { error } = await supabase.from(tableName).upsert(payload, { onConflict: "id" });
-    if (error) throw error;
+    if (payload.length) {
+      const { error } = await supabase.from(tableName).upsert(payload, { onConflict: "id" });
+      if (error) throw error;
+    }
   }
 
-  const nextIds = new Set(next.map((item) => item.id));
-  const deletedIds = previous.map((item) => item.id).filter((id) => !nextIds.has(id));
+  const nextIds = new Set(next.map((item) => item.id).filter(Boolean));
+  const deletedIds = previous
+    .map((item) => item.id)
+    .filter((id) => id && !nextIds.has(id));
 
   if (deletedIds.length) {
     const { error } = await supabase.from(tableName).delete().in("id", deletedIds);
@@ -1465,7 +1494,14 @@ function Documents({ type, data, setData, currentRole = 'Admin' }) {
   }
 
   function updateStatus(id, status) {
-    setData({ ...data, [listKey]: documents.map((d) => (d.id === id ? { ...d, status } : d)) });
+    const nextDocuments = dedupeDocuments((data[listKey] || []).map((d) =>
+      String(d.id) === String(id) ? { ...d, status } : d
+    ));
+
+    setData({
+      ...data,
+      [listKey]: nextDocuments,
+    });
   }
 
   function convertQuoteToInvoice(doc) {
@@ -1551,7 +1587,7 @@ function Documents({ type, data, setData, currentRole = 'Admin' }) {
           <thead><tr><th>N°</th><th>Date</th><th>Client</th><th>Lignes</th><th>Total TTC</th><th>Statut</th><th>Actions</th></tr></thead>
           <tbody>
             {paginatedDocuments.map((d) => (
-              <tr key={d.id}>
+              <tr key={`${d.id || d.number}-${d.number || ""}`}>
                 <td>{d.number}</td><td>{d.date}</td><td>{clientName(data, d.clientId)}</td><td>{d.lines?.length || 1}</td><td>{money(d.totalTTC)}</td>
                 <td>
                   <select value={d.status} onChange={(e) => updateStatus(d.id, e.target.value)}>
@@ -2751,7 +2787,7 @@ function BarcodeSvg({ value, height = 58 }) {
   const width = x + quiet;
 
   return (
-    <svg className="barcode-svg" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Code-barres ${value || "sans SKU"}`}>
+    <svg className="barcode-svg" viewBox={`0 0 ${width} ${height}`} role="img" aria-label={`Code-barres ${product.sku || "sans SKU"}`}>
       <rect x="0" y="0" width={width} height={height} fill="#ffffff" />
       {bars.map((bar) => (
         <rect key={bar.key} x={bar.x} y="4" width={bar.width} height={height - 14} fill="#111827" />
@@ -2885,7 +2921,7 @@ function BarcodeLabels({ data }) {
 }
 
 function ProductLabel({ product, showPrice, showQr = false }) {
-  const codeValue = String(product.sku || product.id || product.name || "").trim();
+  const codeValue = product.sku || product.name || product.id;
   return (
     <div className="product-label">
       <strong>{product.name || "Produit"}</strong>
@@ -2911,7 +2947,7 @@ function QrCodeImage({ value, className = "qr-code-img" }) {
       return;
     }
 
-    QRCode.toDataURL(String(value), {
+    QRCode.toDataURL(String(product.sku), {
       margin: 1,
       width: 180,
       errorCorrectionLevel: "M",
@@ -2945,48 +2981,20 @@ function ProductScan({ data, setData }) {
   const [message, setMessage] = useState("Scanne un code-barres, un QR code ou saisis un SKU.");
   const [cameraEnabled, setCameraEnabled] = useState(false);
   const scannerRef = useRef(null);
-  const lastScanRef = useRef({ value: "", time: 0 });
   const containerId = "crm-html5-qrcode-scanner";
 
-  function normalizeScanValue(value) {
-    return String(value || "")
-      .trim()
-      .split(/\r?\n/)[0]
-      .trim()
-      .toUpperCase();
-  }
-
-  function compactScanValue(value) {
-    return normalizeScanValue(value).replace(/[^A-Z0-9]/g, "");
-  }
-
   function findProduct(rawValue) {
-    const query = normalizeScanValue(rawValue);
-    const compactQuery = compactScanValue(rawValue);
-    if (!query && !compactQuery) return null;
-
-    const exactMatch = products.find((product) => {
-      const possibleValues = [
-        product.sku,
-        product.id,
-        product.barcode,
-        product.qrCode,
-      ].filter(Boolean);
-
-      return possibleValues.some((value) => {
-        const normalizedValue = normalizeScanValue(value);
-        const compactValue = compactScanValue(value);
-        return normalizedValue === query || compactValue === compactQuery;
-      });
-    });
-
-    if (exactMatch) return exactMatch;
-
+    const query = String(rawValue || "").trim().toLowerCase();
+    if (!query) return null;
     return products.find((product) =>
+      [product.sku, product.id, product.name]
+        .filter(Boolean)
+        .some((value) => String(value).trim().toLowerCase() === query)
+    ) || products.find((product) =>
       [product.sku, product.name, product.category]
         .filter(Boolean)
         .join(" ")
-        .toUpperCase()
+        .toLowerCase()
         .includes(query)
     ) || null;
   }
@@ -3011,23 +3019,11 @@ function ProductScan({ data, setData }) {
   }
 
   function handleScan(rawValue, autoApply = false) {
-    const cleanValue = normalizeScanValue(rawValue);
-
-    if (autoApply) {
-      const now = Date.now();
-      const previous = lastScanRef.current;
-      if (previous.value === cleanValue && now - previous.time < 1800) {
-        return;
-      }
-      lastScanRef.current = { value: cleanValue, time: now };
-    }
-
-    const product = findProduct(cleanValue);
-    setScanValue(cleanValue);
-
+    const product = findProduct(rawValue);
+    setScanValue(String(rawValue || ""));
     if (!product) {
       setFoundProduct(null);
-      setMessage(`Produit introuvable pour le code : ${cleanValue || "vide"}. Vérifie le SKU, le code-barres ou le QR code.`);
+      setMessage("Produit introuvable. Vérifie le SKU, le code-barres ou le QR code.");
       return;
     }
 
