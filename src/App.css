@@ -6135,71 +6135,293 @@ section,
   }
 }
 
-
 /* =========================================================
-   PRODUITS 3D — APERÇU GRAND ET CENTRÉ
+   MUG — ZONE D'IMPRESSION 21 x 9 CM SUR LA TASSE
    À garder tout en bas du fichier CSS
    ========================================================= */
-
-.product-image-field.has-3d-model {
-  grid-column: 1 / -1 !important;
-  width: min(100%, 980px) !important;
-  max-width: 980px !important;
-  margin: 10px auto 18px !important;
-  justify-self: center !important;
+.product-3d-viewer {
+  position: relative !important;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(59, 130, 246, 0.24), transparent 36%),
+    rgba(2, 6, 23, 0.42) !important;
 }
 
-.product-image-field.has-3d-model .product-model-preview {
+.mug-print-zone-21x9 {
+  --design-scale: 1;
+  --design-x: 0;
+  --design-y: 0;
+  position: absolute !important;
+  left: 50% !important;
+  top: 50% !important;
+  width: min(46vw, 420px) !important;
+  aspect-ratio: 21 / 9 !important;
+  transform:
+    translate(
+      calc(-50% + (var(--design-x) * 120px)),
+      calc(-50% + (var(--design-y) * -90px))
+    )
+    perspective(900px)
+    rotateY(-13deg)
+    scale(var(--design-scale)) !important;
+  transform-origin: center center !important;
+  z-index: 25 !important;
+  pointer-events: none !important;
+  overflow: hidden !important;
+  border-radius: 28% / 50% !important;
+  opacity: 0.96 !important;
+  mix-blend-mode: multiply !important;
+  filter: drop-shadow(0 8px 12px rgba(0,0,0,0.18)) !important;
+  box-shadow:
+    inset 24px 0 34px rgba(0,0,0,0.12),
+    inset -26px 0 34px rgba(255,255,255,0.18) !important;
+}
+
+.mug-print-zone-21x9::before {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 4 !important;
+  border-radius: inherit !important;
+  background:
+    linear-gradient(90deg,
+      rgba(0,0,0,0.13) 0%,
+      rgba(255,255,255,0.06) 20%,
+      rgba(255,255,255,0.18) 50%,
+      rgba(0,0,0,0.10) 100%) !important;
+  pointer-events: none !important;
+}
+
+.mug-print-zone-21x9::after {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 5 !important;
+  border-radius: inherit !important;
+  border: 2px dashed rgba(37, 99, 235, 0.55) !important;
+  pointer-events: none !important;
+}
+
+.mug-print-zone-21x9 img {
   width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+  display: block !important;
+  border-radius: inherit !important;
+}
+
+.mug-print-zone-label {
+  position: absolute !important;
+  left: 50% !important;
+  top: -30px !important;
+  transform: translateX(-50%) !important;
+  padding: 6px 10px !important;
+  border-radius: 999px !important;
+  background: rgba(2, 6, 23, 0.75) !important;
+  border: 1px solid rgba(96, 165, 250, 0.35) !important;
+  color: #dbeafe !important;
+  font-size: 11px !important;
+  font-weight: 900 !important;
+  white-space: nowrap !important;
+  z-index: 8 !important;
+}
+
+.mug-print-zone-empty {
+  width: 100% !important;
+  height: 100% !important;
   display: grid !important;
-  grid-template-columns: 1fr !important;
-  gap: 14px !important;
-  align-items: center !important;
-  padding: 18px !important;
+  place-items: center !important;
+  text-align: center !important;
+  color: #2563eb !important;
+  font-size: 13px !important;
+  font-weight: 900 !important;
+  background: rgba(37, 99, 235, 0.07) !important;
+}
+
+.mug-design-controls::before {
+  content: "Zone d'impression : 21 cm x 9 cm" !important;
+  color: #bfdbfe !important;
+  font-size: 13px !important;
+  font-weight: 900 !important;
+}
+
+@media (max-width: 700px) {
+  .mug-print-zone-21x9 {
+    width: min(78vw, 330px) !important;
+    transform:
+      translate(
+        calc(-50% + (var(--design-x) * 75px)),
+        calc(-50% + (var(--design-y) * -65px))
+      )
+      perspective(700px)
+      rotateY(-13deg)
+      scale(var(--design-scale)) !important;
+  }
+}
+
+/* =========================================================
+   FIX FINAL MUG 3D — DESIGN EN TEXTURE CYLINDRIQUE 21 x 9 CM
+   ========================================================= */
+
+/* On désactive l'ancien aperçu HTML qui créait une petite image sur le côté */
+.mug-print-zone-21x9,
+.mug-design-overlay,
+.mug-design-overlay-integrated,
+.mug-customizer-preview,
+.mug-mockup,
+.mug-body,
+.mug-handle,
+.mug-preview-note {
+  display: none !important;
+}
+
+.product-model-preview {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+.product-visual,
+.product-3d-viewer {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.product-3d-viewer {
+  position: relative !important;
+  height: 520px !important;
+  min-height: 520px !important;
   border-radius: 28px !important;
-  background: rgba(2, 6, 23, 0.34) !important;
-  border: 1px solid rgba(96, 165, 250, 0.30) !important;
-}
-
-.product-image-field.has-3d-model .product-3d-viewer,
-.product-model-preview .product-3d-viewer {
-  width: 100% !important;
-  height: 680px !important;
-  min-height: 680px !important;
-  max-height: 74vh !important;
-  margin: 0 auto !important;
-  border-radius: 30px !important;
-}
-
-.product-image-field.has-3d-model .product-visual {
-  width: 100% !important;
-  min-height: 680px !important;
-  height: auto !important;
-}
-
-.product-image-field.has-3d-model .product-model-preview > button {
-  justify-self: center !important;
-  min-width: 220px !important;
+  overflow: hidden !important;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(59, 130, 246, 0.24), transparent 36%),
+    rgba(2, 6, 23, 0.42) !important;
 }
 
 .product-3d-viewer canvas {
   width: 100% !important;
   height: 100% !important;
+  display: block !important;
 }
 
-@media (max-width: 900px) {
-  .product-image-field.has-3d-model .product-3d-viewer,
-  .product-model-preview .product-3d-viewer {
-    height: 480px !important;
-    min-height: 480px !important;
-    max-height: none !important;
+.product-3d-hint {
+  z-index: 30 !important;
+  bottom: 12px !important;
+}
+
+.mug-design-controls {
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 12px 0 16px !important;
+  display: grid !important;
+  gap: 12px !important;
+}
+
+.mug-design-controls::before {
+  content: "Zone d'impression : 21 cm × 9 cm";
+  display: block;
+  color: #dbeafe !important;
+  font-weight: 900 !important;
+  font-size: 13px !important;
+  padding: 8px 10px !important;
+  border-radius: 12px !important;
+  background: rgba(59, 130, 246, 0.14) !important;
+  border: 1px solid rgba(96, 165, 250, 0.22) !important;
+}
+
+@media (max-width: 700px) {
+  .product-3d-viewer {
+    height: 380px !important;
+    min-height: 380px !important;
   }
 }
 
-@media (max-width: 600px) {
-  .product-image-field.has-3d-model .product-3d-viewer,
-  .product-model-preview .product-3d-viewer {
-    height: 360px !important;
-    min-height: 360px !important;
+
+/* =========================================================
+   FIX FINAL — APERÇU 3D MUG CENTRÉ ET GRAND DANS LE FORMULAIRE
+   ========================================================= */
+
+/* Le champ image/3D prend toute la largeur du formulaire au lieu de rester en colonne à droite */
+.form-grid > .product-image-field {
+  grid-column: 1 / -1 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(220px, 1fr)) !important;
+  gap: 14px !important;
+  align-items: start !important;
+}
+
+.form-grid > .product-image-field > .image-upload-button,
+.form-grid > .product-image-field > .product-image-preview:not(.product-model-preview) {
+  width: 100% !important;
+}
+
+/* Les réglages du design restent au-dessus, centrés, pas collés sur la droite */
+.form-grid > .product-image-field > .mug-design-controls {
+  grid-column: 1 / -1 !important;
+  width: min(100%, 760px) !important;
+  justify-self: center !important;
+  margin: 8px auto 10px !important;
+  padding: 16px !important;
+  border-radius: 18px !important;
+}
+
+/* L'aperçu 3D prend toute la ligne et se place au centre comme ton exemple */
+.form-grid > .product-image-field > .product-model-preview {
+  grid-column: 1 / -1 !important;
+  width: min(100%, 980px) !important;
+  justify-self: center !important;
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 14px !important;
+  padding: 18px !important;
+  border-radius: 28px !important;
+  background: rgba(2, 6, 23, 0.28) !important;
+  border: 1px solid rgba(96, 165, 250, 0.25) !important;
+}
+
+.form-grid > .product-image-field > .product-model-preview .product-3d-viewer {
+  width: 100% !important;
+  height: 560px !important;
+  min-height: 560px !important;
+  border-radius: 28px !important;
+  overflow: hidden !important;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(59, 130, 246, 0.25), transparent 36%),
+    rgba(2, 6, 23, 0.42) !important;
+}
+
+.form-grid > .product-image-field > .product-model-preview canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.form-grid > .product-image-field > .product-model-preview > button {
+  width: 100% !important;
+  min-height: 50px !important;
+  border-radius: 14px !important;
+  font-weight: 900 !important;
+}
+
+/* Les aperçus 3D dans les cartes produits restent compacts */
+.product-premium-card .product-visual .product-3d-viewer {
+  height: 300px !important;
+  min-height: 300px !important;
+  border-radius: 22px !important;
+}
+
+.product-premium-card .product-visual {
+  min-height: 300px !important;
+  height: auto !important;
+}
+
+@media (max-width: 900px) {
+  .form-grid > .product-image-field {
+    grid-template-columns: 1fr !important;
+  }
+
+  .form-grid > .product-image-field > .product-model-preview .product-3d-viewer {
+    height: 420px !important;
+    min-height: 420px !important;
   }
 }

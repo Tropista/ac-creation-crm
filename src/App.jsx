@@ -2086,21 +2086,20 @@ function Product3DModel({ modelUrl }) {
 
   return (
     <Bounds fit clip observe margin={1.2}>
-  <Center>
-    <group
-      rotation={[-Math.PI / 2, 0, 0]}
-      position={[0, 0, 0]}
-    >
-      <primitive
-        object={scene}
-        scale={1.25}
-        rotation={[0, 0, 0]}
-      />
-    </group>
-  </Center>
-</Bounds>
+      <Center>
+        <group rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
+          <primitive
+            object={scene}
+            scale={1.25}
+            rotation={[0, 0, 0]}
+          />
+        </group>
+      </Center>
+    </Bounds>
   );
 }
+
+
 function MugDesignPatch({ imageUrl, size = 1, posX = 0, posY = 0 }) {
   const [texture, setTexture] = React.useState(null);
 
@@ -2111,38 +2110,85 @@ function MugDesignPatch({ imageUrl, size = 1, posX = 0, posY = 0 }) {
     }
 
     const loader = new THREE.TextureLoader();
+    let active = true;
+
     loader.load(
       imageUrl,
       (loadedTexture) => {
+        if (!active) return;
+
         loadedTexture.colorSpace = THREE.SRGBColorSpace;
         loadedTexture.anisotropy = 16;
+        loadedTexture.wrapS = THREE.ClampToEdgeWrapping;
+        loadedTexture.wrapT = THREE.ClampToEdgeWrapping;
         loadedTexture.needsUpdate = true;
         setTexture(loadedTexture);
       },
       undefined,
-      () => setTexture(null)
+      () => {
+        if (active) setTexture(null);
+      }
     );
+
+    return () => {
+      active = false;
+    };
   }, [imageUrl]);
+
+  React.useEffect(() => {
+    if (!texture) return;
+
+    const safeSize = Math.max(0.35, Math.min(2.8, Number(size || 1)));
+
+    // Zone impression 21 x 9 cm : on garde l'image dans la zone incurvée
+    // au lieu d'agrandir le cylindre devant la caméra.
+    const repeatX = 0.52 / safeSize;
+    const repeatY = 1 / safeSize;
+
+    texture.repeat.set(repeatX, repeatY);
+    texture.offset.set(
+      0.24 + Number(posX || 0) * 0.22,
+      0.5 - repeatY / 2 + Number(posY || 0) * 0.12
+    );
+    texture.needsUpdate = true;
+  }, [texture, size, posX, posY]);
 
   if (!texture) return null;
 
   return (
     <mesh
-      position={[posX, posY, 1.05]}
-      rotation={[0, 0, 0]}
-      scale={[0.85 * size, 0.55 * size, 1]}
+      renderOrder={20}
+      rotation={[0, Math.PI / 2, 0]}
+      position={[0, Number(posY || 0) * 0.08, 0]}
     >
-      <planeGeometry args={[1, 1]} />
-      <meshBasicMaterial
+      {/*
+        Zone d'impression mug 21 x 9 cm.
+        Rayon très proche du mug + arc limité pour éviter l'effet tunnel géant.
+      */}
+      <cylinderGeometry
+        args={[
+          1.005,
+          1.005,
+          2.05,
+          96,
+          1,
+          true,
+          -Math.PI * 0.28,
+          Math.PI * 0.56,
+        ]}
+      />
+
+      <meshStandardMaterial
         map={texture}
         transparent
-        side={THREE.DoubleSide}
-        toneMapped={false}
+        side={THREE.FrontSide}
+        depthWrite={false}
+        polygonOffset
+        polygonOffsetFactor={-4}
       />
     </mesh>
   );
 }
-
 
 function MugCustomizerPreview({ designImage, designSize = 1, designX = 0, designY = 0 }) {
   return (
@@ -2185,7 +2231,7 @@ function Product3DViewer({ modelUrl, designImage, designSize = 1, designX = 0, d
     <Product3DErrorBoundary resetKey={modelUrl}>
       <div className="product-3d-viewer">
         <Canvas
-          camera={{ position: [0, 0.1, 3.2], fov: 22 }}
+          camera={{ position: [0, 0.12, 4.2], fov: 26 }}
           gl={{ antialias: true, alpha: true, preserveDrawingBuffer: true }}
         >
           <ambientLight intensity={1.4} />
@@ -2193,6 +2239,12 @@ function Product3DViewer({ modelUrl, designImage, designSize = 1, designX = 0, d
           <directionalLight position={[-4, 2, -3]} intensity={0.8} />
           <Suspense fallback={null}>
             <Product3DModel modelUrl={modelUrl} />
+            <MugDesignPatch
+              imageUrl={designImage}
+              size={Number(designSize || 1)}
+              posX={Number(designX || 0)}
+              posY={Number(designY || 0)}
+            />
             <Environment preset="city" />
           </Suspense>
           <OrbitControls
@@ -2200,15 +2252,11 @@ function Product3DViewer({ modelUrl, designImage, designSize = 1, designX = 0, d
             enableDamping
             dampingFactor={0.08}
             enablePan={false}
-            enableRotate={true}
-            rotateSpeed={0.7}
-            minPolarAngle={Math.PI / 2}
-            maxPolarAngle={Math.PI / 2}
             minDistance={0.35}
-            maxDistance={7}
+            maxDistance={5}
           />
         </Canvas>
-        <div className="product-3d-hint">Glisser gauche/droite pour faire le 360° · molette zoom</div>
+        <div className="product-3d-hint">↔ tourner · molette zoom</div>
       </div>
     </Product3DErrorBoundary>
   );
@@ -2729,7 +2777,7 @@ function Products({ data, setData, currentRole = 'Admin' }) {
           onChange={(e) => setForm({ ...form, price: e.target.value.replace(",", ".") })}
         />
         <input type="number" min="0" placeholder="Stock" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} />
-        <div className={`product-image-field ${form.model3dUrl ? "has-3d-model" : ""}`}>
+        <div className="product-image-field">
           <label className="image-upload-button">
             📷 Importer une image
             <input
