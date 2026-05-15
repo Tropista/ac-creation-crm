@@ -6134,3 +6134,72 @@ section,
     max-height: 125px !important;
   }
 }
+
+
+/* =========================================================
+   PRODUITS 3D — APERÇU GRAND ET CENTRÉ
+   À garder tout en bas du fichier CSS
+   ========================================================= */
+
+.product-image-field.has-3d-model {
+  grid-column: 1 / -1 !important;
+  width: min(100%, 980px) !important;
+  max-width: 980px !important;
+  margin: 10px auto 18px !important;
+  justify-self: center !important;
+}
+
+.product-image-field.has-3d-model .product-model-preview {
+  width: 100% !important;
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 14px !important;
+  align-items: center !important;
+  padding: 18px !important;
+  border-radius: 28px !important;
+  background: rgba(2, 6, 23, 0.34) !important;
+  border: 1px solid rgba(96, 165, 250, 0.30) !important;
+}
+
+.product-image-field.has-3d-model .product-3d-viewer,
+.product-model-preview .product-3d-viewer {
+  width: 100% !important;
+  height: 680px !important;
+  min-height: 680px !important;
+  max-height: 74vh !important;
+  margin: 0 auto !important;
+  border-radius: 30px !important;
+}
+
+.product-image-field.has-3d-model .product-visual {
+  width: 100% !important;
+  min-height: 680px !important;
+  height: auto !important;
+}
+
+.product-image-field.has-3d-model .product-model-preview > button {
+  justify-self: center !important;
+  min-width: 220px !important;
+}
+
+.product-3d-viewer canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+@media (max-width: 900px) {
+  .product-image-field.has-3d-model .product-3d-viewer,
+  .product-model-preview .product-3d-viewer {
+    height: 480px !important;
+    min-height: 480px !important;
+    max-height: none !important;
+  }
+}
+
+@media (max-width: 600px) {
+  .product-image-field.has-3d-model .product-3d-viewer,
+  .product-model-preview .product-3d-viewer {
+    height: 360px !important;
+    min-height: 360px !important;
+  }
+}

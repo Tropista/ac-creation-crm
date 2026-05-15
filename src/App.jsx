@@ -2085,15 +2085,22 @@ function Product3DModel({ modelUrl }) {
   const { scene } = useGLTF(modelUrl);
 
   return (
-    <Bounds fit clip observe margin={0.12}>
-      <Center>
-        <primitive object={scene} />
-      </Center>
-    </Bounds>
+    <Bounds fit clip observe margin={1.2}>
+  <Center>
+    <group
+      rotation={[-Math.PI / 2, 0, 0]}
+      position={[0, 0, 0]}
+    >
+      <primitive
+        object={scene}
+        scale={1.25}
+        rotation={[0, 0, 0]}
+      />
+    </group>
+  </Center>
+</Bounds>
   );
 }
-
-
 function MugDesignPatch({ imageUrl, size = 1, posX = 0, posY = 0 }) {
   const [texture, setTexture] = React.useState(null);
 
@@ -2178,7 +2185,7 @@ function Product3DViewer({ modelUrl, designImage, designSize = 1, designX = 0, d
     <Product3DErrorBoundary resetKey={modelUrl}>
       <div className="product-3d-viewer">
         <Canvas
-          camera={{ position: [0, 0.15, 4.8], fov: 28 }}
+          camera={{ position: [0, 0.1, 3.2], fov: 22 }}
           gl={{ antialias: true, alpha: true, preserveDrawingBuffer: true }}
         >
           <ambientLight intensity={1.4} />
@@ -2193,11 +2200,15 @@ function Product3DViewer({ modelUrl, designImage, designSize = 1, designX = 0, d
             enableDamping
             dampingFactor={0.08}
             enablePan={false}
+            enableRotate={true}
+            rotateSpeed={0.7}
+            minPolarAngle={Math.PI / 2}
+            maxPolarAngle={Math.PI / 2}
             minDistance={0.35}
-            maxDistance={5}
+            maxDistance={7}
           />
         </Canvas>
-        <div className="product-3d-hint">↔ tourner · molette zoom</div>
+        <div className="product-3d-hint">Glisser gauche/droite pour faire le 360° · molette zoom</div>
       </div>
     </Product3DErrorBoundary>
   );
@@ -2718,7 +2729,7 @@ function Products({ data, setData, currentRole = 'Admin' }) {
           onChange={(e) => setForm({ ...form, price: e.target.value.replace(",", ".") })}
         />
         <input type="number" min="0" placeholder="Stock" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} />
-        <div className="product-image-field">
+        <div className={`product-image-field ${form.model3dUrl ? "has-3d-model" : ""}`}>
           <label className="image-upload-button">
             📷 Importer une image
             <input
