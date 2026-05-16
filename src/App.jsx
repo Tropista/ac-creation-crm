@@ -144,7 +144,7 @@ function normalizeData(data) {
     invoices: dedupeDocuments(data?.invoices || []),
     products: dedupeItemsById(data?.products || []),
     categories: dedupeItemsById(data?.categories || []),
-    backups: data?.backups || [],
+    backups: dedupeItemsById(data?.backups || []),
   };
 }
 
@@ -198,6 +198,8 @@ function downloadJson(filename, data) {
 
 function hasLocalBusinessData(data) {
   return Boolean(
+    data.users?.length ||
+    data.backups?.length ||
     data.clients?.length ||
     data.products?.length ||
     data.categories?.length ||
@@ -211,8 +213,19 @@ function rowsToItems(rows) {
 }
 
 async function loadSupabaseData() {
-  const [settingsRes, clientsRes, productsRes, categoriesRes, quotesRes, invoicesRes] = await Promise.all([
+  const [
+    settingsRes,
+    usersRes,
+    backupsRes,
+    clientsRes,
+    productsRes,
+    categoriesRes,
+    quotesRes,
+    invoicesRes,
+  ] = await Promise.all([
     supabase.from("settings").select("id,data").eq("id", "main").maybeSingle(),
+    supabase.from("users").select("id,data").order("created_at", { ascending: true }),
+    supabase.from("backups").select("id,data").order("created_at", { ascending: false }),
     supabase.from("clients").select("id,data").order("created_at", { ascending: true }),
     supabase.from("products").select("id,data").order("created_at", { ascending: true }),
     supabase.from("categories").select("id,data").order("created_at", { ascending: true }),
@@ -220,7 +233,7 @@ async function loadSupabaseData() {
     supabase.from("invoices").select("id,data").order("created_at", { ascending: true }),
   ]);
 
-  const errors = [settingsRes, clientsRes, productsRes, categoriesRes, quotesRes, invoicesRes]
+  const errors = [settingsRes, usersRes, backupsRes, clientsRes, productsRes, categoriesRes, quotesRes, invoicesRes]
     .map((res) => res.error)
     .filter(Boolean);
 
@@ -231,6 +244,8 @@ async function loadSupabaseData() {
 
   const cloudData = normalizeData({
     settings: settingsRes.data?.data || emptyData.settings,
+    users: rowsToItems(usersRes.data),
+    backups: rowsToItems(backupsRes.data),
     clients: rowsToItems(clientsRes.data),
     products: rowsToItems(productsRes.data),
     categories: rowsToItems(categoriesRes.data),
@@ -242,6 +257,8 @@ async function loadSupabaseData() {
     data: cloudData,
     hasCloudData: Boolean(
       settingsRes.data ||
+      usersRes.data?.length ||
+      backupsRes.data?.length ||
       clientsRes.data?.length ||
       productsRes.data?.length ||
       categoriesRes.data?.length ||
@@ -291,6 +308,8 @@ async function syncSupabaseData(nextData, previousData) {
   if (settingsError) throw settingsError;
 
   await Promise.all([
+    syncTable("users", next.users, previous.users),
+    syncTable("backups", next.backups, previous.backups),
     syncTable("clients", next.clients, previous.clients),
     syncTable("products", next.products, previous.products),
     syncTable("categories", next.categories, previous.categories),
@@ -338,8 +357,14 @@ export default function App() {
       const cloud = await loadSupabaseData();
 
       if (cloud.hasCloudData) {
-        setData(cloud.data);
-        saveData(cloud.data);
+      const mergedData = normalizeData({
+  ...cloud.data,
+  users: dedupeItemsById(cloud.data.users || []),
+  backups: dedupeItemsById(cloud.data.backups || []),
+});
+
+setData(mergedData);
+saveData(mergedData);
         setSyncStatus("Synchronisé avec Supabase");
       } else if (hasLocalBusinessData(localData)) {
         await syncSupabaseData(localData, emptyData);
@@ -359,7 +384,11 @@ export default function App() {
   }
 
   async function updateData(next) {
-    const normalized = normalizeData(next);
+    const normalized = normalizeData({
+  ...next,
+  users: dedupeItemsById(next.users || []),
+  backups: dedupeItemsById(next.backups || []),
+});
     const previous = data;
     setData(normalized);
     saveData(normalized);
@@ -949,7 +978,31 @@ function UsersAdmin({ data, setData }) {
     setForm({ name: "", email: "", role: "Utilisateur", status: "Actif" });
   }
 
-  function addUser(e) {
+  async function saveUserToSupabase(user) {
+    const { error } = await supabase
+      .from("users")
+      .upsert(
+        {
+          id: user.id,
+          data: user,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "id" }
+      );
+
+    if (error) throw error;
+  }
+
+  async function deleteUserFromSupabase(id) {
+    const { error } = await supabase
+      .from("users")
+      .delete()
+      .eq("id", id);
+
+    if (error) throw error;
+  }
+
+  async function addUser(e) {
     e.preventDefault();
     const email = normalizeEmail(form.email);
 
@@ -968,20 +1021,43 @@ function UsersAdmin({ data, setData }) {
       status: form.status,
     };
 
-    setData({ ...data, users: [...users, nextUser] });
-    reset();
+    try {
+      await saveUserToSupabase(nextUser);
+      await setData({ ...data, users: [...users, nextUser] });
+      reset();
+      alert("Utilisateur sauvegardé dans Supabase.");
+    } catch (error) {
+      console.error("Erreur sauvegarde utilisateur Supabase :", error);
+      alert("Erreur : l'utilisateur n'a pas été sauvegardé dans Supabase.");
+    }
   }
 
-  function updateUser(id, changes) {
-    setData({
-      ...data,
-      users: users.map((user) => user.id === id ? { ...user, ...changes } : user),
-    });
+  async function updateUser(id, changes) {
+    const nextUsers = users.map((user) => user.id === id ? { ...user, ...changes } : user);
+    const updatedUser = nextUsers.find((user) => user.id === id);
+
+    try {
+      if (updatedUser) await saveUserToSupabase(updatedUser);
+      await setData({
+        ...data,
+        users: nextUsers,
+      });
+    } catch (error) {
+      console.error("Erreur mise à jour utilisateur Supabase :", error);
+      alert("Erreur : la modification utilisateur n'a pas été sauvegardée dans Supabase.");
+    }
   }
 
-  function removeUser(id) {
+  async function removeUser(id) {
     if (!confirm("Retirer cet accès utilisateur ?")) return;
-    setData({ ...data, users: users.filter((user) => user.id !== id) });
+
+    try {
+      await deleteUserFromSupabase(id);
+      await setData({ ...data, users: users.filter((user) => user.id !== id) });
+    } catch (error) {
+      console.error("Erreur suppression utilisateur Supabase :", error);
+      alert("Erreur : l'utilisateur n'a pas été supprimé dans Supabase.");
+    }
   }
 
   return (
@@ -1192,7 +1268,7 @@ function Clients({ data, setData, currentRole = 'Admin' }) {
     e.preventDefault();
     if (!form.name) return alert("Le nom du client est obligatoire.");
     if (editing) {
-      setData({ ...data, clients: data.paginatedClients.map((c) => (c.id === editing ? { ...c, ...form } : c)) });
+      setData({ ...data, clients: data.clients.map((c) => (c.id === editing ? { ...c, ...form } : c)) });
     } else {
       const client = { id: uid(), createdAt: today(), ...form };
       setData({ ...data, clients: [...data.clients, client] });
