@@ -1,13 +1,83 @@
-import React, { Suspense, useEffect, useMemo, useState } from "react";
+import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Bounds, Center, Environment, OrbitControls, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import "./Vue3D.css";
+import { useThree } from "@react-three/fiber";
 
 const MODEL_URL = `${import.meta.env.BASE_URL}models/scene.gltf`;
+const CANVAS_WIDTH = 1400;
+const CANVAS_HEIGHT = 600;
 
-function MugModel() {
+function uid() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2);
+}
+
+function isPrintAreaMesh(child) {
+  const name = String(child?.name || "").toLowerCase();
+  const parentName = String(child?.parent?.name || "").toLowerCase();
+
+  return (
+    name.includes("print_area") ||
+    name.includes("printarea") ||
+    name.includes("print") ||
+    parentName.includes("print_area") ||
+    parentName.includes("printarea") ||
+    parentName.includes("print")
+  );
+}
+
+function createPrintTexture(images) {
+  const canvas = document.createElement("canvas");
+  canvas.width = CANVAS_WIDTH;
+  canvas.height = CANVAS_HEIGHT;
+
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+  for (const item of images) {
+    if (!item.image) continue;
+
+    const scale = Math.max(0.05, Number(item.scale || 0.35));
+    const imgRatio = item.image.width / item.image.height;
+
+    const drawWidth = CANVAS_WIDTH * scale;
+    const drawHeight = drawWidth / imgRatio;
+
+    const centerX = Number(item.x || 0.5) * CANVAS_WIDTH;
+    const centerY = (1 - Number(item.y || 0.5)) * CANVAS_HEIGHT;
+
+    ctx.save();
+    ctx.translate(centerX, centerY);
+    ctx.rotate(Number(item.rotation || 0));
+    ctx.drawImage(item.image, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+    ctx.restore();
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.flipY = true;
+  texture.wrapS = THREE.ClampToEdgeWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.needsUpdate = true;
+
+  return texture;
+}
+
+function MugModel({
+  images,
+  selectedImageId,
+  setImages,
+  setSelectedImageId,
+  dragRef,
+  setIsEditingImage,
+  }) {
   const { scene } = useGLTF(MODEL_URL);
+  const { gl } = useThree();
+  const printTexture = useMemo(() => {
+    if (!images.length) return null;
+    return createPrintTexture(images);
+  }, [images]);
 
   useEffect(() => {
     if (!scene) return;
@@ -18,121 +88,230 @@ function MugModel() {
       child.castShadow = true;
       child.receiveShadow = true;
 
-      if (child.material) {
-        child.material = child.material.clone();
-        child.material.needsUpdate = true;
+      if (!child.userData.originalMaterial && child.material) {
+        child.userData.originalMaterial = child.material.clone();
       }
+
+      const isPrintArea = isPrintAreaMesh(child);
+      child.userData.isPrintArea = isPrintArea;
+
+      if (!isPrintArea) {
+        child.visible = true;
+
+        if (child.userData.originalMaterial) {
+          child.material = child.userData.originalMaterial.clone();
+          child.material.needsUpdate = true;
+        }
+        return;
+      }
+
+      if (!printTexture) {
+        child.visible = false;
+        return;
+      }
+
+      child.visible = true;
+      child.material = new THREE.MeshBasicMaterial({
+        map: printTexture,
+        transparent: true,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        depthTest: true,
+        polygonOffset: true,
+        polygonOffsetFactor: -6,
+      });
+
+      child.material.needsUpdate = true;
+      child.renderOrder = 20;
     });
-  }, [scene]);
+  }, [scene, printTexture]);
+
+  function pickImageAtUv(uv) {
+    if (!uv || !images.length) return null;
+
+    // On choisit l'image sélectionnée si elle existe, sinon la dernière importée.
+    const selected = images.find((img) => img.id === selectedImageId);
+    return selected || images[images.length - 1];
+  }
+
+  function handlePointerDown(event) {
+    const object = event.object;
+    if (!object?.userData?.isPrintArea || !event.uv) return;
+
+    event.stopPropagation();
+    gl.domElement.style.cursor = "grabbing";
+
+    const targetImage = pickImageAtUv(event.uv);
+    if (!targetImage) return;
+
+    setSelectedImageId(targetImage.id);
+    setIsEditingImage(true);
+
+    dragRef.current = {
+      imageId: targetImage.id,
+      startUvX: event.uv.x,
+      startUvY: event.uv.y,
+      startX: targetImage.x,
+      startY: targetImage.y,
+    };
+
+    event.target?.setPointerCapture?.(event.pointerId);
+  }
+
+  function handlePointerMove(event) {
+    const drag = dragRef.current;
+    if (!drag || !event.uv) return;
+
+    event.stopPropagation();
+
+    const deltaX = event.uv.x - drag.startUvX;
+    const deltaY = event.uv.y - drag.startUvY;
+
+    setImages((prev) =>
+      prev.map((img) =>
+        img.id === drag.imageId
+          ? {
+              ...img,
+              x: Math.min(1.5, Math.max(-0.5, drag.startX + deltaX)),
+              y: Math.min(1.5, Math.max(-0.5, drag.startY + deltaY)),
+            }
+          : img
+      )
+    );
+  }
+
+  function handlePointerUp(event) {
+    if (!dragRef.current) return;
+    event.stopPropagation();
+    gl.domElement.style.cursor = "grab";
+    dragRef.current = null;
+    setIsEditingImage(false);
+    event.target?.releasePointerCapture?.(event.pointerId);
+  }
+
+ function handleWheel(event) {
+  event.stopPropagation();
+  event.sourceEvent.preventDefault();
+
+  const object = event.object;
+
+  if (!object?.userData?.isPrintArea || !images.length) return;
+
+  const activeId = selectedImageId || images[images.length - 1]?.id;
+
+  const delta = event.deltaY;
+  const zoomSpeed = 0.0015;
+
+  setImages((prev) =>
+    prev.map((img) =>
+      img.id === activeId
+        ? {
+            ...img,
+            scale: Math.min(
+              3,
+              Math.max(
+                0.05,
+                Number(img.scale || 0.35) - delta * zoomSpeed
+              )
+            ),
+          }
+        : img
+    )
+  );
+}
 
   return (
     <Bounds fit clip observe margin={1.1}>
       <Center>
-        <primitive object={scene} scale={1.3} />
+        <primitive
+          object={scene}
+          scale={1.3}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          onWheel={handleWheel}
+        />
       </Center>
     </Bounds>
   );
 }
 
-function PrintArea({ imageUrl, size, x, y, rotation, height }) {
-  const texture = useMemo(() => {
-    if (!imageUrl) return null;
-
-    const loader = new THREE.TextureLoader();
-    const tex = loader.load(imageUrl);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    tex.wrapS = THREE.ClampToEdgeWrapping;
-    tex.wrapT = THREE.ClampToEdgeWrapping;
-    tex.anisotropy = 16;
-    return tex;
-  }, [imageUrl]);
-
-  useEffect(() => {
-    if (!texture) return;
-
-    const safeSize = Math.max(0.45, Math.min(2.5, Number(size || 1)));
-    const safeX = Number(x || 0);
-    const safeY = Number(y || 0);
-
-    texture.repeat.set(0.78 / safeSize, 0.9 / safeSize);
-    texture.offset.set(0.11 + safeX * 0.22, 0.5 - (0.9 / safeSize) / 2 + safeY * 0.22);
-    texture.needsUpdate = true;
-  }, [texture, size, x, y]);
-
-  if (!texture) return null;
-
-/*
-  Cette couche est une "zone imprimable" indépendante du modèle 3D.
-  Elle couvre seulement l'extérieur du mug.
-*/
-
-return (
-  <mesh
-    position={[0, Number(y || 0) * 0.02, 0.01]}
-    rotation={[0, Number(rotation || 0), 0]}
-    renderOrder={1}
-  >
-    <cylinderGeometry
-      args={[
-        0.73,
-        0.73,
-        Number(height || 1.18),
-        128,
-        1,
-        true,
-        -Math.PI * 0.32,
-        Math.PI * 0.64,
-      ]}
-    />
-
-    <meshBasicMaterial
-      map={texture}
-      transparent={true}
-      side={THREE.DoubleSide}
-      depthWrite={false}
-    />
-  </mesh>
-);}
-
 export default function Vue3D() {
-  const [imageUrl, setImageUrl] = useState("");
-  const [size, setSize] = useState(1);
-  const [x, setX] = useState(0);
-  const [y, setY] = useState(0);
-  const [rotation, setRotation] = useState(0);
-  const [height, setHeight] = useState(1.42);
+  const [images, setImages] = useState([]);
+  const [selectedImageId, setSelectedImageId] = useState("");
+  const [isEditingImage, setIsEditingImage] = useState(false);
+  const dragRef = useRef(null);
 
-  function handleImageUpload(event) {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const selectedImage = images.find((image) => image.id === selectedImageId);
 
-    if (!file.type.startsWith("image/")) {
-      alert("Choisis une image valide : PNG, JPG ou WEBP.");
+  function handleImagesUpload(event) {
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
+
+    const validFiles = files.filter((file) => file.type.startsWith("image/"));
+
+    if (!validFiles.length) {
+      alert("Choisis une ou plusieurs images valides : PNG, JPG ou WEBP.");
       event.target.value = "";
       return;
     }
 
-    const reader = new FileReader();
+    Promise.all(
+      validFiles.map(
+        (file) =>
+          new Promise((resolve, reject) => {
+            const reader = new FileReader();
 
-    reader.onload = (e) => {
-      setImageUrl(e.target.result);
-    };
+            reader.onload = () => {
+              const image = new Image();
+              image.onload = () =>
+                resolve({
+                  id: uid(),
+                  name: file.name,
+                  src: reader.result,
+                  image,
+                  x: 0.5,
+                  y: 0.5,
+                  scale: 0.35,
+                  rotation: 0,
+                });
+              image.onerror = reject;
+              image.src = reader.result;
+            };
 
-    reader.onerror = () => {
-      alert("Impossible de lire l'image.");
-    };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+          })
+      )
+    )
+      .then((newImages) => {
+        setImages((prev) => {
+          const next = [...prev, ...newImages];
+          setSelectedImageId(newImages[newImages.length - 1]?.id || next[0]?.id || "");
+          return next;
+        });
+      })
+      .catch(() => alert("Impossible de lire une des images."));
 
-    reader.readAsDataURL(file);
     event.target.value = "";
   }
 
-  function resetImage() {
-    setImageUrl("");
-    setSize(1);
-    setX(0);
-    setY(0);
-    setRotation(0);
-    setHeight(1.42);
+  function deleteSelectedImage() {
+    if (!selectedImageId) return;
+
+    setImages((prev) => {
+      const next = prev.filter((img) => img.id !== selectedImageId);
+      setSelectedImageId(next[next.length - 1]?.id || "");
+      return next;
+    });
+  }
+
+  function resetImages() {
+    setImages([]);
+    setSelectedImageId("");
+    dragRef.current = null;
+    setIsEditingImage(false);
   }
 
   return (
@@ -140,7 +319,7 @@ export default function Vue3D() {
       <div className="page-header">
         <div>
           <h2>Vue 3D</h2>
-          <p>Test local du mug personnalisable avec image client.</p>
+          <p>Importe plusieurs images, clique sur le mug pour déplacer, et utilise la molette pour agrandir/réduire.</p>
         </div>
       </div>
 
@@ -148,6 +327,7 @@ export default function Vue3D() {
         <div className="card vue3d-viewer-card">
           <div className="vue3d-viewer">
             <Canvas
+            onWheel={(e) => e.stopPropagation()}
               camera={{ position: [0, 0.25, 4.2], fov: 28 }}
               gl={{ antialias: true, alpha: true, preserveDrawingBuffer: true }}
             >
@@ -156,20 +336,22 @@ export default function Vue3D() {
               <directionalLight position={[-4, 2, -3]} intensity={0.8} />
 
               <Suspense fallback={null}>
-                <MugModel />
-                <PrintArea
-                  imageUrl={imageUrl}
-                  size={size}
-                  x={x}
-                  y={y}
-                  rotation={rotation}
-                  height={height}
+                <MugModel
+                  images={images}
+                  selectedImageId={selectedImageId}
+                  setImages={setImages}
+                  setSelectedImageId={setSelectedImageId}
+                  dragRef={dragRef}
+                  setIsEditingImage={setIsEditingImage}
                 />
                 <Environment preset="city" />
               </Suspense>
 
               <OrbitControls
                 makeDefault
+                enabled={!dragRef.current}
+                enableZoom={!isEditingImage}
+                rotateSpeed={0.8}
                 enableDamping
                 dampingFactor={0.08}
                 enablePan={false}
@@ -178,7 +360,9 @@ export default function Vue3D() {
               />
             </Canvas>
 
-            <div className="vue3d-hint">↔ tourner le mug · molette pour zoomer</div>
+            <div className="vue3d-hint">
+              Clique/glisse sur l’image pour la déplacer · molette sur l’image pour agrandir/réduire · clique ailleurs pour tourner le mug
+            </div>
           </div>
         </div>
 
@@ -186,83 +370,52 @@ export default function Vue3D() {
           <h3>Personnalisation</h3>
 
           <label>
-            Image à appliquer sur le mug
-            <input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleImageUpload} />
+            Images à appliquer sur le mug
+            <input type="file" accept="image/png,image/jpeg,image/webp" multiple onChange={handleImagesUpload} />
           </label>
 
-          {imageUrl && (
-            <div className="vue3d-preview">
-              <strong>Aperçu image importée</strong>
-              <img src={imageUrl} alt="Aperçu du visuel importé" />
+          {images.length > 0 && (
+            <div className="vue3d-image-list">
+              <strong>Images importées</strong>
+
+              {images.map((image, index) => (
+                <button
+                  type="button"
+                  key={image.id}
+                  className={image.id === selectedImageId ? "vue3d-image-item active" : "vue3d-image-item"}
+                  onClick={() => setSelectedImageId(image.id)}
+                >
+                  <img src={image.src} alt={image.name} />
+                  <span>
+                    Image {index + 1}
+                    <small>{image.name}</small>
+                  </span>
+                </button>
+              ))}
             </div>
           )}
 
-          <label>
-            Taille du visuel
-            <input
-              type="range"
-              min="0.45"
-              max="2.5"
-              step="0.05"
-              value={size}
-              onChange={(e) => setSize(e.target.value)}
-            />
-          </label>
+          {selectedImage && (
+            <div className="vue3d-selected-info">
+              <strong>Image sélectionnée</strong>
+              <p>{selectedImage.name}</p>
+              <p className="muted">
+                Position : {selectedImage.x.toFixed(2)} / {selectedImage.y.toFixed(2)} · Taille :{" "}
+                {selectedImage.scale.toFixed(2)}
+              </p>
+            </div>
+          )}
 
-          <label>
-            Position horizontale
-            <input
-              type="range"
-              min="-1"
-              max="1"
-              step="0.01"
-              value={x}
-              onChange={(e) => setX(e.target.value)}
-            />
-          </label>
+          <button type="button" onClick={deleteSelectedImage} disabled={!selectedImageId}>
+            Supprimer l’image sélectionnée
+          </button>
 
-          <label>
-            Position verticale
-            <input
-              type="range"
-              min="-1"
-              max="1"
-              step="0.01"
-              value={y}
-              onChange={(e) => setY(e.target.value)}
-            />
-          </label>
-
-          <label>
-            Rotation zone imprimable
-            <input
-              type="range"
-              min="-3.14"
-              max="3.14"
-              step="0.01"
-              value={rotation}
-              onChange={(e) => setRotation(e.target.value)}
-            />
-          </label>
-
-          <label>
-            Hauteur zone imprimable
-            <input
-              type="range"
-              min="0.8"
-              max="1.8"
-              step="0.01"
-              value={height}
-              onChange={(e) => setHeight(e.target.value)}
-            />
-          </label>
-
-          <button type="button" onClick={resetImage}>
-            Réinitialiser
+          <button type="button" onClick={resetImages}>
+            Réinitialiser toutes les images
           </button>
 
           <p className="muted">
-            Prototype : l'image est placée uniquement sur une bande extérieure du mug, sans toucher la poignée, l'intérieur ni le dessous.
+            Les barres de réglage ont été retirées. Le placement se fait directement à la souris sur la zone imprimable.
           </p>
         </div>
       </div>

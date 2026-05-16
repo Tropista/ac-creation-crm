@@ -47,21 +47,6 @@
   padding: 0;
 }
 
-.vue3d-preview {
-  display: grid;
-  gap: 8px;
-}
-
-.vue3d-preview img {
-  width: 100%;
-  max-height: 180px;
-  object-fit: contain;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(148, 163, 184, 0.24);
-  padding: 8px;
-}
-
 @media (max-width: 950px) {
   .vue3d-grid {
     grid-template-columns: 1fr;
@@ -70,4 +55,70 @@
   .vue3d-viewer {
     height: 430px;
   }
+}
+
+
+.vue3d-image-list {
+  display: grid;
+  gap: 10px;
+}
+
+.vue3d-image-list strong,
+.vue3d-selected-info strong {
+  color: inherit;
+}
+
+.vue3d-image-item {
+  display: grid;
+  grid-template-columns: 54px 1fr;
+  gap: 10px;
+  align-items: center;
+  text-align: left;
+  width: 100%;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.vue3d-image-item.active {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+}
+
+.vue3d-image-item img {
+  width: 54px;
+  height: 54px;
+  object-fit: cover;
+  border-radius: 10px;
+  background: white;
+}
+
+.vue3d-image-item span {
+  display: grid;
+  gap: 2px;
+  font-weight: 800;
+}
+
+.vue3d-image-item small {
+  color: #cbd5e1;
+  font-size: 12px;
+  font-weight: 500;
+  word-break: break-word;
+}
+
+.vue3d-selected-info {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+}
+
+.vue3d-selected-info p {
+  margin: 0;
+}
+
+.vue3d-controls button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
