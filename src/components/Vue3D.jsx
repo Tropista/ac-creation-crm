@@ -59,7 +59,7 @@ function createPrintTexture(items) {
   const sortedItems = [...items].sort((a, b) => Number(a.z || 0) - Number(b.z || 0));
 
   for (const item of sortedItems) {
-    if (!item.image) continue;
+    if (!item.image && item.type !== "text") continue;
 
     // Les coordonnées de l'éditeur sont relatives à toute la zone visible.
     // Ici on les convertit pour que la zone pointillée corresponde à 100% du mug.
@@ -77,18 +77,27 @@ function createPrintTexture(items) {
     ctx.translate(centerX, centerY);
     ctx.rotate(Number(item.rotation || 0));
 
-    // Découpe 2 px pour éviter les traits noirs éventuels sur les bords de l'image.
-    ctx.drawImage(
-      item.image,
-      2,
-      2,
-      Math.max(1, item.image.width - 4),
-      Math.max(1, item.image.height - 4),
-      -drawWidth / 2,
-      -drawHeight / 2,
-      drawWidth,
-      drawHeight
-    );
+    if (item.type === "text") {
+      const fontFamily = item.fontFamily || "Arial";
+      ctx.fillStyle = item.color || "#ffffff";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = `700 ${Math.max(20, drawHeight * 0.75)}px ${fontFamily}`;
+      ctx.fillText(item.text || "Texte", 0, 0, drawWidth);
+    } else {
+      // Découpe 2 px pour éviter les traits noirs éventuels sur les bords de l'image.
+      ctx.drawImage(
+        item.image,
+        2,
+        2,
+        Math.max(1, item.image.width - 4),
+        Math.max(1, item.image.height - 4),
+        -drawWidth / 2,
+        -drawHeight / 2,
+        drawWidth,
+        drawHeight
+      );
+    }
 
     ctx.restore();
   }
@@ -403,7 +412,21 @@ function DesignEditor({ items, setItems, selectedId, setSelectedId }) {
               }}
               onPointerDown={(event) => startDrag(event, item)}
             >
-              <img src={item.src} alt={item.name} draggable="false" />
+              {item.type === "text" ? (
+                <div
+                  className="vue3d-text-item"
+                  style={{
+                    color: item.color || "#ffffff",
+                    fontFamily: item.fontFamily || "Arial",
+                    fontSize: "100%",
+                    fontWeight: 700,
+                  }}
+                >
+                  {item.text || "Texte"}
+                </div>
+              ) : (
+                <img src={item.src} alt={item.name} draggable="false" />
+              )}
 
               {isSelected && (
                 <>
@@ -591,6 +614,31 @@ export default function Vue3D() {
               <input type="file" accept="image/png,image/jpeg,image/webp" multiple onChange={handleImagesUpload} />
             </label>
 
+            <button
+              type="button"
+              onClick={() => {
+                const id = uid();
+                const newText = {
+                  id,
+                  type: "text",
+                  text: "Mon texte",
+                  color: "#ffffff",
+                  fontFamily: "Arial",
+                  x: 0.5,
+                  y: 0.5,
+                  widthScale: 0.25,
+                  heightScale: 0.12,
+                  rotation: 0,
+                  z: Date.now(),
+                };
+
+                setItems((prev) => [...prev, newText]);
+                setSelectedId(id);
+              }}
+            >
+              + Ajouter texte
+            </button>
+
             <button type="button" onClick={deleteSelectedItem} disabled={!selectedId}>
               Supprimer
             </button>
@@ -604,10 +652,67 @@ export default function Vue3D() {
 
           {selectedItem && (
             <div className="vue3d-selected-info">
-              <strong>Image sélectionnée</strong>
-              <p>{selectedItem.name}</p>
+              <strong>{selectedItem.type === "text" ? "Texte sélectionné" : "Image sélectionnée"}</strong>
+
+              {selectedItem.type === "text" ? (
+                <>
+                  <input
+                    type="text"
+                    value={selectedItem.text || ""}
+                    onChange={(event) =>
+                      setItems((prev) =>
+                        prev.map((item) =>
+                          item.id === selectedItem.id
+                            ? { ...item, text: event.target.value }
+                            : item
+                        )
+                      )
+                    }
+                    placeholder="Votre texte"
+                  />
+
+                  <input
+                    type="color"
+                    value={selectedItem.color || "#ffffff"}
+                    onChange={(event) =>
+                      setItems((prev) =>
+                        prev.map((item) =>
+                          item.id === selectedItem.id
+                            ? { ...item, color: event.target.value }
+                            : item
+                        )
+                      )
+                    }
+                  />
+
+                  <select
+                    value={selectedItem.fontFamily || "Arial"}
+                    onChange={(event) =>
+                      setItems((prev) =>
+                        prev.map((item) =>
+                          item.id === selectedItem.id
+                            ? { ...item, fontFamily: event.target.value }
+                            : item
+                        )
+                      )
+                    }
+                  >
+                    <option value="Arial">Arial</option>
+                    <option value="Verdana">Verdana</option>
+                    <option value="Georgia">Georgia</option>
+                    <option value="Times New Roman">Times New Roman</option>
+                    <option value="Courier New">Courier New</option>
+                    <option value="Trebuchet MS">Trebuchet MS</option>
+                    <option value="Impact">Impact</option>
+                    <option value="Comic Sans MS">Comic Sans MS</option>
+                  </select>
+                </>
+              ) : (
+                <p>{selectedItem.name}</p>
+              )}
+
               <p className="muted">
-                Déplace avec la souris · poignées haut/bas/gauche/droite pour étirer · poignée ↻ pour tourner.
+                Déplace avec la souris · poignées pour redimensionner · poignée ↻ pour tourner.
               </p>
             </div>
           )}

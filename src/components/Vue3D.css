@@ -280,3 +280,49 @@
   transform: translateY(-50%);
   cursor: ew-resize;
 }
+
+
+.vue3d-text-item {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+  line-height: 1;
+  transform: scaleX(1);
+}
+
+.vue3d-selected-info input[type="text"] {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(148,163,184,0.35);
+  background: rgba(15,23,42,0.45);
+  color: white;
+}
+
+.vue3d-selected-info input[type="color"] {
+  width: 80px;
+  height: 42px;
+  border: none;
+  background: transparent;
+}
+
+
+.vue3d-selected-info select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(148,163,184,0.35);
+  background: rgba(15,23,42,0.45);
+  color: white;
+}
+
+.vue3d-selected-info select option {
+  color: #111827;
+}
