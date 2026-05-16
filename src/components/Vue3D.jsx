@@ -3,14 +3,29 @@ import { Canvas } from "@react-three/fiber";
 import { Bounds, Center, Environment, OrbitControls, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import "./Vue3D.css";
-import { useThree } from "@react-three/fiber";
 
 const MODEL_URL = `${import.meta.env.BASE_URL}models/scene.gltf`;
 const CANVAS_WIDTH = 1400;
 const CANVAS_HEIGHT = 600;
 
+// Zone pointillée de droite = vraie zone imprimable envoyée sur le mug.
+// Les images sont bloquées dans cette zone, et le rendu 3D utilise cette même zone.
+const SAFE_ZONE = {
+  left: 0.065,
+  top: 0.055,
+  right: 0.935,
+  bottom: 0.945,
+};
+
+const SAFE_ZONE_WIDTH = SAFE_ZONE.right - SAFE_ZONE.left;
+const SAFE_ZONE_HEIGHT = SAFE_ZONE.bottom - SAFE_ZONE.top;
+
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2);
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
 }
 
 function isPrintAreaMesh(child) {
@@ -27,7 +42,13 @@ function isPrintAreaMesh(child) {
   );
 }
 
-function createPrintTexture(images) {
+function getItemDrawSize(item) {
+  const width = CANVAS_WIDTH * Math.max(0.03, Number(item.widthScale || 0.22));
+  const height = CANVAS_HEIGHT * Math.max(0.03, Number(item.heightScale || 0.22));
+  return { width, height };
+}
+
+function createPrintTexture(items) {
   const canvas = document.createElement("canvas");
   canvas.width = CANVAS_WIDTH;
   canvas.height = CANVAS_HEIGHT;
@@ -35,22 +56,40 @@ function createPrintTexture(images) {
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-  for (const item of images) {
+  const sortedItems = [...items].sort((a, b) => Number(a.z || 0) - Number(b.z || 0));
+
+  for (const item of sortedItems) {
     if (!item.image) continue;
 
-    const scale = Math.max(0.05, Number(item.scale || 0.35));
-    const imgRatio = item.image.width / item.image.height;
+    // Les coordonnées de l'éditeur sont relatives à toute la zone visible.
+    // Ici on les convertit pour que la zone pointillée corresponde à 100% du mug.
+    const safeX = (Number(item.x || 0.5) - SAFE_ZONE.left) / SAFE_ZONE_WIDTH;
+    const safeY = (Number(item.y || 0.5) - SAFE_ZONE.top) / SAFE_ZONE_HEIGHT;
+    const safeWidth = Math.max(0.03, Number(item.widthScale || 0.22)) / SAFE_ZONE_WIDTH;
+    const safeHeight = Math.max(0.03, Number(item.heightScale || 0.22)) / SAFE_ZONE_HEIGHT;
 
-    const drawWidth = CANVAS_WIDTH * scale;
-    const drawHeight = drawWidth / imgRatio;
-
-    const centerX = Number(item.x || 0.5) * CANVAS_WIDTH;
-    const centerY = (1 - Number(item.y || 0.5)) * CANVAS_HEIGHT;
+    const drawWidth = CANVAS_WIDTH * safeWidth;
+    const drawHeight = CANVAS_HEIGHT * safeHeight;
+    const centerX = safeX * CANVAS_WIDTH;
+    const centerY = safeY * CANVAS_HEIGHT;
 
     ctx.save();
     ctx.translate(centerX, centerY);
     ctx.rotate(Number(item.rotation || 0));
-    ctx.drawImage(item.image, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+
+    // Découpe 2 px pour éviter les traits noirs éventuels sur les bords de l'image.
+    ctx.drawImage(
+      item.image,
+      2,
+      2,
+      Math.max(1, item.image.width - 4),
+      Math.max(1, item.image.height - 4),
+      -drawWidth / 2,
+      -drawHeight / 2,
+      drawWidth,
+      drawHeight
+    );
+
     ctx.restore();
   }
 
@@ -64,20 +103,13 @@ function createPrintTexture(images) {
   return texture;
 }
 
-function MugModel({
-  images,
-  selectedImageId,
-  setImages,
-  setSelectedImageId,
-  dragRef,
-  setIsEditingImage,
-  }) {
+function MugModel({ items }) {
   const { scene } = useGLTF(MODEL_URL);
-  const { gl } = useThree();
+
   const printTexture = useMemo(() => {
-    if (!images.length) return null;
-    return createPrintTexture(images);
-  }, [images]);
+    if (!items.length) return null;
+    return createPrintTexture(items);
+  }, [items]);
 
   useEffect(() => {
     if (!scene) return;
@@ -93,11 +125,9 @@ function MugModel({
       }
 
       const isPrintArea = isPrintAreaMesh(child);
-      child.userData.isPrintArea = isPrintArea;
 
       if (!isPrintArea) {
         child.visible = true;
-
         if (child.userData.originalMaterial) {
           child.material = child.userData.originalMaterial.clone();
           child.material.needsUpdate = true;
@@ -120,130 +150,342 @@ function MugModel({
         polygonOffset: true,
         polygonOffsetFactor: -6,
       });
-
       child.material.needsUpdate = true;
       child.renderOrder = 20;
     });
   }, [scene, printTexture]);
 
-  function pickImageAtUv(uv) {
-    if (!uv || !images.length) return null;
-
-    // On choisit l'image sélectionnée si elle existe, sinon la dernière importée.
-    const selected = images.find((img) => img.id === selectedImageId);
-    return selected || images[images.length - 1];
-  }
-
-  function handlePointerDown(event) {
-    const object = event.object;
-    if (!object?.userData?.isPrintArea || !event.uv) return;
-
-    event.stopPropagation();
-    gl.domElement.style.cursor = "grabbing";
-
-    const targetImage = pickImageAtUv(event.uv);
-    if (!targetImage) return;
-
-    setSelectedImageId(targetImage.id);
-    setIsEditingImage(true);
-
-    dragRef.current = {
-      imageId: targetImage.id,
-      startUvX: event.uv.x,
-      startUvY: event.uv.y,
-      startX: targetImage.x,
-      startY: targetImage.y,
-    };
-
-    event.target?.setPointerCapture?.(event.pointerId);
-  }
-
-  function handlePointerMove(event) {
-    const drag = dragRef.current;
-    if (!drag || !event.uv) return;
-
-    event.stopPropagation();
-
-    const deltaX = event.uv.x - drag.startUvX;
-    const deltaY = event.uv.y - drag.startUvY;
-
-    setImages((prev) =>
-      prev.map((img) =>
-        img.id === drag.imageId
-          ? {
-              ...img,
-              x: Math.min(1.5, Math.max(-0.5, drag.startX + deltaX)),
-              y: Math.min(1.5, Math.max(-0.5, drag.startY + deltaY)),
-            }
-          : img
-      )
-    );
-  }
-
-  function handlePointerUp(event) {
-    if (!dragRef.current) return;
-    event.stopPropagation();
-    gl.domElement.style.cursor = "grab";
-    dragRef.current = null;
-    setIsEditingImage(false);
-    event.target?.releasePointerCapture?.(event.pointerId);
-  }
-
- function handleWheel(event) {
-  event.stopPropagation();
-  event.sourceEvent.preventDefault();
-
-  const object = event.object;
-
-  if (!object?.userData?.isPrintArea || !images.length) return;
-
-  const activeId = selectedImageId || images[images.length - 1]?.id;
-
-  const delta = event.deltaY;
-  const zoomSpeed = 0.0015;
-
-  setImages((prev) =>
-    prev.map((img) =>
-      img.id === activeId
-        ? {
-            ...img,
-            scale: Math.min(
-              3,
-              Math.max(
-                0.05,
-                Number(img.scale || 0.35) - delta * zoomSpeed
-              )
-            ),
-          }
-        : img
-    )
-  );
-}
-
   return (
     <Bounds fit clip observe margin={1.1}>
       <Center>
-        <primitive
-          object={scene}
-          scale={1.3}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerUp}
-          onWheel={handleWheel}
-        />
+        <primitive object={scene} scale={1.3} />
       </Center>
     </Bounds>
   );
 }
 
-export default function Vue3D() {
-  const [images, setImages] = useState([]);
-  const [selectedImageId, setSelectedImageId] = useState("");
-  const [isEditingImage, setIsEditingImage] = useState(false);
-  const dragRef = useRef(null);
+function DesignEditor({ items, setItems, selectedId, setSelectedId }) {
+  const editorRef = useRef(null);
+  const actionRef = useRef(null);
 
-  const selectedImage = images.find((image) => image.id === selectedImageId);
+  const selectedItem = items.find((item) => item.id === selectedId);
+
+  function updateItem(id, patch) {
+    setItems((prev) => prev.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+  }
+
+  function getPointerPosition(event) {
+    const rect = editorRef.current.getBoundingClientRect();
+    return {
+      px: event.clientX - rect.left,
+      py: event.clientY - rect.top,
+      nx: (event.clientX - rect.left) / rect.width,
+      ny: (event.clientY - rect.top) / rect.height,
+      rect,
+    };
+  }
+
+  function limitItemToSafeZone(item) {
+    let widthScale = clamp(Number(item.widthScale || 0.22), 0.03, SAFE_ZONE_WIDTH);
+    let heightScale = clamp(Number(item.heightScale || 0.22), 0.03, SAFE_ZONE_HEIGHT);
+
+    const minX = SAFE_ZONE.left + widthScale / 2;
+    const maxX = SAFE_ZONE.right - widthScale / 2;
+    const minY = SAFE_ZONE.top + heightScale / 2;
+    const maxY = SAFE_ZONE.bottom - heightScale / 2;
+
+    return {
+      ...item,
+      widthScale,
+      heightScale,
+      x: clamp(Number(item.x || 0.5), minX, maxX),
+      y: clamp(Number(item.y || 0.5), minY, maxY),
+    };
+  }
+
+  function startDrag(event, item) {
+    event.preventDefault();
+    event.stopPropagation();
+    setSelectedId(item.id);
+
+    const pos = getPointerPosition(event);
+    actionRef.current = {
+      type: "move",
+      id: item.id,
+      startPx: pos.px,
+      startPy: pos.py,
+      startX: item.x,
+      startY: item.y,
+      rect: pos.rect,
+    };
+
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  }
+
+  function startResize(event, item, mode = "corner-br") {
+    event.preventDefault();
+    event.stopPropagation();
+    setSelectedId(item.id);
+
+    const pos = getPointerPosition(event);
+
+    actionRef.current = {
+      type: "resize",
+      mode,
+      id: item.id,
+      startPx: pos.px,
+      startPy: pos.py,
+      startX: Number(item.x || 0.5),
+      startY: Number(item.y || 0.5),
+      startWidth: Number(item.widthScale || 0.22),
+      startHeight: Number(item.heightScale || 0.22),
+      rect: pos.rect,
+    };
+
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  }
+
+  function startRotate(event, item) {
+    event.preventDefault();
+    event.stopPropagation();
+    setSelectedId(item.id);
+
+    const pos = getPointerPosition(event);
+    const centerPx = item.x * pos.rect.width;
+    const centerPy = item.y * pos.rect.height;
+    const startAngle = Math.atan2(pos.py - centerPy, pos.px - centerPx);
+
+    actionRef.current = {
+      type: "rotate",
+      id: item.id,
+      startRotation: item.rotation || 0,
+      startAngle,
+      centerPx,
+      centerPy,
+      rect: pos.rect,
+    };
+
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+  }
+
+  function resizeWithMode(action, pos) {
+    const dx = (pos.px - action.startPx) / action.rect.width;
+    const dy = (pos.py - action.startPy) / action.rect.height;
+
+    let nextX = action.startX;
+    let nextY = action.startY;
+    let nextWidth = action.startWidth;
+    let nextHeight = action.startHeight;
+
+    const minSize = 0.03;
+    const maxWidth = SAFE_ZONE_WIDTH;
+    const maxHeight = SAFE_ZONE_HEIGHT;
+    const mode = action.mode;
+
+    if (mode.includes("r")) {
+      const rawWidth = action.startWidth + dx;
+      nextWidth = clamp(rawWidth, minSize, maxWidth);
+      nextX = action.startX + (nextWidth - action.startWidth) / 2;
+    }
+
+    if (mode.includes("l")) {
+      const rawWidth = action.startWidth - dx;
+      nextWidth = clamp(rawWidth, minSize, maxWidth);
+      nextX = action.startX - (nextWidth - action.startWidth) / 2;
+    }
+
+    if (mode.includes("b")) {
+      const rawHeight = action.startHeight + dy;
+      nextHeight = clamp(rawHeight, minSize, maxHeight);
+      nextY = action.startY + (nextHeight - action.startHeight) / 2;
+    }
+
+    if (mode.includes("t")) {
+      const rawHeight = action.startHeight - dy;
+      nextHeight = clamp(rawHeight, minSize, maxHeight);
+      nextY = action.startY - (nextHeight - action.startHeight) / 2;
+    }
+
+    return limitItemToSafeZone({
+      x: nextX,
+      y: nextY,
+      widthScale: nextWidth,
+      heightScale: nextHeight,
+    });
+  }
+
+  function handlePointerMove(event) {
+    const action = actionRef.current;
+    if (!action) return;
+
+    event.preventDefault();
+    const pos = getPointerPosition(event);
+
+    if (action.type === "move") {
+      const dx = (pos.px - action.startPx) / action.rect.width;
+      const dy = (pos.py - action.startPy) / action.rect.height;
+      const current = items.find((item) => item.id === action.id);
+      if (!current) return;
+
+      updateItem(
+        action.id,
+        limitItemToSafeZone({
+          ...current,
+          x: action.startX + dx,
+          y: action.startY + dy,
+        })
+      );
+    }
+
+    if (action.type === "resize") {
+      updateItem(action.id, resizeWithMode(action, pos));
+    }
+
+    if (action.type === "rotate") {
+      const currentAngle = Math.atan2(pos.py - action.centerPy, pos.px - action.centerPx);
+      updateItem(action.id, {
+        rotation: action.startRotation + currentAngle - action.startAngle,
+      });
+    }
+  }
+
+  function stopAction(event) {
+    if (!actionRef.current) return;
+    actionRef.current = null;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+  }
+
+  function bringForward() {
+    if (!selectedItem) return;
+    const maxZ = Math.max(0, ...items.map((item) => Number(item.z || 0)));
+    updateItem(selectedItem.id, { z: maxZ + 1 });
+  }
+
+  function sendBackward() {
+    if (!selectedItem) return;
+    const minZ = Math.min(0, ...items.map((item) => Number(item.z || 0)));
+    updateItem(selectedItem.id, { z: minZ - 1 });
+  }
+
+  return (
+    <div className="vue3d-editor-block">
+      <div className="vue3d-editor-topline">
+        <strong>Gabarit 210 × 90 mm</strong>
+        <span>Déplace, étire et tourne les images ici.</span>
+      </div>
+
+      <div
+        ref={editorRef}
+        className="vue3d-design-editor"
+        onPointerMove={handlePointerMove}
+        onPointerUp={stopAction}
+        onPointerCancel={stopAction}
+        onPointerDown={() => setSelectedId("")}
+      >
+        <div className="vue3d-safe-zone" />
+
+        {items.map((item) => {
+          const isSelected = item.id === selectedId;
+          const widthPercent = clamp(Number(item.widthScale || 0.22) * 100, 3, 300);
+          const heightPercent = clamp(Number(item.heightScale || 0.22) * 100, 3, 300);
+
+          return (
+            <div
+              key={item.id}
+              className={isSelected ? "vue3d-design-item selected" : "vue3d-design-item"}
+              style={{
+                left: `${Number(item.x || 0.5) * 100}%`,
+                top: `${Number(item.y || 0.5) * 100}%`,
+                width: `${widthPercent}%`,
+                height: `${heightPercent}%`,
+                transform: `translate(-50%, -50%) rotate(${Number(item.rotation || 0)}rad)`,
+                zIndex: Number(item.z || 0) + 10,
+              }}
+              onPointerDown={(event) => startDrag(event, item)}
+            >
+              <img src={item.src} alt={item.name} draggable="false" />
+
+              {isSelected && (
+                <>
+                  <button
+                    type="button"
+                    className="vue3d-handle vue3d-handle-corner vue3d-handle-tl"
+                    title="Redimensionner haut gauche"
+                    onPointerDown={(event) => startResize(event, item, "corner-tl")}
+                  />
+                  <button
+                    type="button"
+                    className="vue3d-handle vue3d-handle-corner vue3d-handle-tr"
+                    title="Redimensionner haut droite"
+                    onPointerDown={(event) => startResize(event, item, "corner-tr")}
+                  />
+                  <button
+                    type="button"
+                    className="vue3d-handle vue3d-handle-corner vue3d-handle-bl"
+                    title="Redimensionner bas gauche"
+                    onPointerDown={(event) => startResize(event, item, "corner-bl")}
+                  />
+                  <button
+                    type="button"
+                    className="vue3d-handle vue3d-handle-corner vue3d-handle-br"
+                    title="Redimensionner bas droite"
+                    onPointerDown={(event) => startResize(event, item, "corner-br")}
+                  />
+                  <button
+                    type="button"
+                    className="vue3d-handle vue3d-handle-top"
+                    title="Étirer vers le haut"
+                    onPointerDown={(event) => startResize(event, item, "t")}
+                  />
+                  <button
+                    type="button"
+                    className="vue3d-handle vue3d-handle-bottom"
+                    title="Étirer vers le bas"
+                    onPointerDown={(event) => startResize(event, item, "b")}
+                  />
+                  <button
+                    type="button"
+                    className="vue3d-handle vue3d-handle-left"
+                    title="Étirer vers la gauche"
+                    onPointerDown={(event) => startResize(event, item, "l")}
+                  />
+                  <button
+                    type="button"
+                    className="vue3d-handle vue3d-handle-right"
+                    title="Étirer vers la droite"
+                    onPointerDown={(event) => startResize(event, item, "r")}
+                  />
+                  <button
+                    type="button"
+                    className="vue3d-handle vue3d-handle-rotate"
+                    title="Tourner"
+                    onPointerDown={(event) => startRotate(event, item)}
+                  >
+                    ↻
+                  </button>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="vue3d-editor-actions">
+        <button type="button" onClick={bringForward} disabled={!selectedItem}>
+          Mettre devant
+        </button>
+        <button type="button" onClick={sendBackward} disabled={!selectedItem}>
+          Mettre derrière
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default function Vue3D() {
+  const [items, setItems] = useState([]);
+  const [selectedId, setSelectedId] = useState("");
+  const selectedItem = items.find((item) => item.id === selectedId);
 
   function handleImagesUpload(event) {
     const files = Array.from(event.target.files || []);
@@ -273,8 +515,10 @@ export default function Vue3D() {
                   image,
                   x: 0.5,
                   y: 0.5,
-                  scale: 0.35,
+                  widthScale: 0.25,
+                  heightScale: 0.35,
                   rotation: 0,
+                  z: Date.now(),
                 });
               image.onerror = reject;
               image.src = reader.result;
@@ -285,10 +529,10 @@ export default function Vue3D() {
           })
       )
     )
-      .then((newImages) => {
-        setImages((prev) => {
-          const next = [...prev, ...newImages];
-          setSelectedImageId(newImages[newImages.length - 1]?.id || next[0]?.id || "");
+      .then((newItems) => {
+        setItems((prev) => {
+          const next = [...prev, ...newItems];
+          setSelectedId(newItems[newItems.length - 1]?.id || next[0]?.id || "");
           return next;
         });
       })
@@ -297,21 +541,18 @@ export default function Vue3D() {
     event.target.value = "";
   }
 
-  function deleteSelectedImage() {
-    if (!selectedImageId) return;
-
-    setImages((prev) => {
-      const next = prev.filter((img) => img.id !== selectedImageId);
-      setSelectedImageId(next[next.length - 1]?.id || "");
+  function deleteSelectedItem() {
+    if (!selectedId) return;
+    setItems((prev) => {
+      const next = prev.filter((item) => item.id !== selectedId);
+      setSelectedId(next[next.length - 1]?.id || "");
       return next;
     });
   }
 
-  function resetImages() {
-    setImages([]);
-    setSelectedImageId("");
-    dragRef.current = null;
-    setIsEditingImage(false);
+  function resetItems() {
+    setItems([]);
+    setSelectedId("");
   }
 
   return (
@@ -319,104 +560,57 @@ export default function Vue3D() {
       <div className="page-header">
         <div>
           <h2>Vue 3D</h2>
-          <p>Importe plusieurs images, clique sur le mug pour déplacer, et utilise la molette pour agrandir/réduire.</p>
+          <p>Éditeur type Zakeke : compose ton visuel sur le gabarit 210 × 90 mm et vois le rendu sur le mug.</p>
         </div>
       </div>
 
-      <div className="vue3d-grid">
-        <div className="card vue3d-viewer-card">
+      <div className="vue3d-zakeke-layout">
+        <div className="card vue3d-preview-card">
+          <h3>Aperçu 3D</h3>
           <div className="vue3d-viewer">
-            <Canvas
-            onWheel={(e) => e.stopPropagation()}
-              camera={{ position: [0, 0.25, 4.2], fov: 28 }}
-              gl={{ antialias: true, alpha: true, preserveDrawingBuffer: true }}
-            >
+            <Canvas camera={{ position: [0, 0.25, 4.2], fov: 28 }} gl={{ antialias: true, alpha: true, preserveDrawingBuffer: true }}>
               <ambientLight intensity={1.4} />
               <directionalLight position={[4, 6, 5]} intensity={2.4} />
               <directionalLight position={[-4, 2, -3]} intensity={0.8} />
 
               <Suspense fallback={null}>
-                <MugModel
-                  images={images}
-                  selectedImageId={selectedImageId}
-                  setImages={setImages}
-                  setSelectedImageId={setSelectedImageId}
-                  dragRef={dragRef}
-                  setIsEditingImage={setIsEditingImage}
-                />
+                <MugModel items={items} />
                 <Environment preset="city" />
               </Suspense>
 
-              <OrbitControls
-                makeDefault
-                enabled={!dragRef.current}
-                enableZoom={!isEditingImage}
-                rotateSpeed={0.8}
-                enableDamping
-                dampingFactor={0.08}
-                enablePan={false}
-                minDistance={0.6}
-                maxDistance={6}
-              />
+              <OrbitControls makeDefault enableDamping dampingFactor={0.08} enablePan={false} minDistance={0.6} maxDistance={6} />
             </Canvas>
-
-            <div className="vue3d-hint">
-              Clique/glisse sur l’image pour la déplacer · molette sur l’image pour agrandir/réduire · clique ailleurs pour tourner le mug
-            </div>
+            <div className="vue3d-hint">↔ tourne le mug · molette pour zoomer le mug</div>
           </div>
         </div>
 
-        <div className="card vue3d-controls">
-          <h3>Personnalisation</h3>
+        <div className="card vue3d-editor-card">
+          <div className="vue3d-toolbar">
+            <label className="vue3d-upload-button">
+              + Ajouter image
+              <input type="file" accept="image/png,image/jpeg,image/webp" multiple onChange={handleImagesUpload} />
+            </label>
 
-          <label>
-            Images à appliquer sur le mug
-            <input type="file" accept="image/png,image/jpeg,image/webp" multiple onChange={handleImagesUpload} />
-          </label>
+            <button type="button" onClick={deleteSelectedItem} disabled={!selectedId}>
+              Supprimer
+            </button>
 
-          {images.length > 0 && (
-            <div className="vue3d-image-list">
-              <strong>Images importées</strong>
+            <button type="button" onClick={resetItems} disabled={!items.length}>
+              Réinitialiser
+            </button>
+          </div>
 
-              {images.map((image, index) => (
-                <button
-                  type="button"
-                  key={image.id}
-                  className={image.id === selectedImageId ? "vue3d-image-item active" : "vue3d-image-item"}
-                  onClick={() => setSelectedImageId(image.id)}
-                >
-                  <img src={image.src} alt={image.name} />
-                  <span>
-                    Image {index + 1}
-                    <small>{image.name}</small>
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
+          <DesignEditor items={items} setItems={setItems} selectedId={selectedId} setSelectedId={setSelectedId} />
 
-          {selectedImage && (
+          {selectedItem && (
             <div className="vue3d-selected-info">
               <strong>Image sélectionnée</strong>
-              <p>{selectedImage.name}</p>
+              <p>{selectedItem.name}</p>
               <p className="muted">
-                Position : {selectedImage.x.toFixed(2)} / {selectedImage.y.toFixed(2)} · Taille :{" "}
-                {selectedImage.scale.toFixed(2)}
+                Déplace avec la souris · poignées haut/bas/gauche/droite pour étirer · poignée ↻ pour tourner.
               </p>
             </div>
           )}
-
-          <button type="button" onClick={deleteSelectedImage} disabled={!selectedImageId}>
-            Supprimer l’image sélectionnée
-          </button>
-
-          <button type="button" onClick={resetImages}>
-            Réinitialiser toutes les images
-          </button>
-
-          <p className="muted">
-            Les barres de réglage ont été retirées. Le placement se fait directement à la souris sur la zone imprimable.
-          </p>
         </div>
       </div>
     </section>

@@ -1,17 +1,23 @@
-.vue3d-grid {
+.vue3d-zakeke-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(360px, 0.95fr) minmax(480px, 1.25fr);
   gap: 20px;
   align-items: start;
 }
 
-.vue3d-viewer-card {
+.vue3d-preview-card,
+.vue3d-editor-card {
   min-height: 620px;
+}
+
+.vue3d-preview-card h3,
+.vue3d-editor-card h3 {
+  margin-top: 0;
 }
 
 .vue3d-viewer {
   position: relative;
-  height: 580px;
+  height: 560px;
   border-radius: 16px;
   overflow: hidden;
   background: radial-gradient(circle at center, #ffffff 0%, #eef2f7 100%);
@@ -28,81 +34,163 @@
   font-size: 13px;
 }
 
-.vue3d-controls {
-  display: grid;
-  gap: 16px;
-}
-
-.vue3d-controls h3 {
-  margin: 0;
-}
-
-.vue3d-controls label {
-  display: grid;
-  gap: 8px;
-  font-weight: 700;
-}
-
-.vue3d-controls input[type="range"] {
-  padding: 0;
-}
-
-@media (max-width: 950px) {
-  .vue3d-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .vue3d-viewer {
-    height: 430px;
-  }
-}
-
-
-.vue3d-image-list {
-  display: grid;
+.vue3d-toolbar {
+  display: flex;
   gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 16px;
 }
 
-.vue3d-image-list strong,
-.vue3d-selected-info strong {
+.vue3d-upload-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #2563eb, #3b82f6);
+  color: white !important;
+  border: 0;
+}
+
+.vue3d-upload-button input {
+  display: none;
+}
+
+.vue3d-editor-block {
+  display: grid;
+  gap: 12px;
+}
+
+.vue3d-editor-topline {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
   color: inherit;
 }
 
-.vue3d-image-item {
-  display: grid;
-  grid-template-columns: 54px 1fr;
-  gap: 10px;
-  align-items: center;
-  text-align: left;
-  width: 100%;
-  border: 1px solid rgba(148, 163, 184, 0.24);
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.vue3d-image-item.active {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
-}
-
-.vue3d-image-item img {
-  width: 54px;
-  height: 54px;
-  object-fit: cover;
-  border-radius: 10px;
-  background: white;
-}
-
-.vue3d-image-item span {
-  display: grid;
-  gap: 2px;
-  font-weight: 800;
-}
-
-.vue3d-image-item small {
+.vue3d-editor-topline span {
+  font-size: 13px;
   color: #cbd5e1;
-  font-size: 12px;
-  font-weight: 500;
-  word-break: break-word;
+}
+
+.vue3d-design-editor {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 210 / 90;
+  border-radius: 16px;
+  overflow: hidden;
+  background:
+    linear-gradient(90deg, rgba(59,130,246,0.18) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(59,130,246,0.18) 1px, transparent 1px),
+    rgba(255,255,255,0.94);
+  background-size: 40px 40px;
+  border: 2px solid rgba(59,130,246,0.55);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35);
+  touch-action: none;
+  user-select: none;
+  clip-path: inset(0 round 16px);
+}
+
+.vue3d-design-editor::before,
+.vue3d-design-editor::after {
+  content: "ZONE POIGNÉE";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 6.5%;
+  display: grid;
+  place-items: center;
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-size: 11px;
+  font-weight: 900;
+  color: rgba(30, 64, 175, 0.65);
+  background: rgba(219, 234, 254, 0.55);
+  border-inline: 1px dashed rgba(37, 99, 235, 0.45);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.vue3d-design-editor::before { left: 0; }
+.vue3d-design-editor::after { right: 0; }
+
+.vue3d-safe-zone {
+  position: absolute;
+  left: 6.5%;
+  right: 6.5%;
+  top: 5.5%;
+  bottom: 5.5%;
+  border: 1px dashed rgba(37, 99, 235, 0.55);
+  border-radius: 10px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.vue3d-design-item {
+  position: absolute;
+  min-width: 18px;
+  min-height: 18px;
+  cursor: grab;
+  transform-origin: center center;
+  touch-action: none;
+}
+
+.vue3d-design-item:active {
+  cursor: grabbing;
+}
+
+.vue3d-design-item img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: fill;
+  pointer-events: none;
+  user-select: none;
+}
+
+.vue3d-design-item.selected {
+  outline: 2px solid #2563eb;
+  outline-offset: 4px;
+}
+
+.vue3d-handle {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 2px solid white;
+  background: #2563eb !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  padding: 0 !important;
+  z-index: 80;
+}
+
+.vue3d-handle-scale {
+  right: -12px;
+  bottom: -12px;
+  cursor: nwse-resize;
+}
+
+.vue3d-handle-rotate {
+  left: 50%;
+  top: -42px;
+  transform: translateX(-50%);
+  width: 28px;
+  height: 28px;
+  color: white !important;
+  font-size: 15px;
+  line-height: 1;
+  cursor: grab;
+}
+
+.vue3d-editor-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .vue3d-selected-info {
@@ -112,13 +200,83 @@
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(148, 163, 184, 0.24);
+  margin-top: 16px;
 }
 
 .vue3d-selected-info p {
   margin: 0;
 }
 
-.vue3d-controls button:disabled {
+.vue3d-toolbar button:disabled,
+.vue3d-editor-actions button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+@media (max-width: 1100px) {
+  .vue3d-zakeke-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .vue3d-viewer {
+    height: 440px;
+  }
+}
+
+/* Poignées de redimensionnement libre */
+.vue3d-handle-corner {
+  width: 16px;
+  height: 16px;
+}
+
+.vue3d-handle-tl {
+  left: -10px;
+  top: -10px;
+  cursor: nwse-resize;
+}
+
+.vue3d-handle-tr {
+  right: -10px;
+  top: -10px;
+  cursor: nesw-resize;
+}
+
+.vue3d-handle-bl {
+  left: -10px;
+  bottom: -10px;
+  cursor: nesw-resize;
+}
+
+.vue3d-handle-br {
+  right: -10px;
+  bottom: -10px;
+  cursor: nwse-resize;
+}
+
+.vue3d-handle-top {
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  cursor: ns-resize;
+}
+
+.vue3d-handle-bottom {
+  bottom: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  cursor: ns-resize;
+}
+
+.vue3d-handle-left {
+  left: -10px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: ew-resize;
+}
+
+.vue3d-handle-right {
+  right: -10px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: ew-resize;
 }
