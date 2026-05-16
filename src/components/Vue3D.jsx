@@ -78,12 +78,31 @@ function createPrintTexture(items) {
     ctx.rotate(Number(item.rotation || 0));
 
     if (item.type === "text") {
+      const text = item.text || "Texte";
       const fontFamily = item.fontFamily || "Arial";
-      ctx.fillStyle = item.color || "#ffffff";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.font = `700 ${Math.max(20, drawHeight * 0.75)}px ${fontFamily}`;
-      ctx.fillText(item.text || "Texte", 0, 0, drawWidth);
+
+      // On dessine le texte dans un canvas temporaire, puis on l'étire dans la zone.
+      // Cela garantit que le rendu 2D et le rendu 3D suivent exactement les points bleus.
+      const textCanvas = document.createElement("canvas");
+      textCanvas.width = 1200;
+      textCanvas.height = 400;
+
+      const textCtx = textCanvas.getContext("2d");
+      textCtx.clearRect(0, 0, textCanvas.width, textCanvas.height);
+      textCtx.fillStyle = item.color || "#ffffff";
+      textCtx.textAlign = "center";
+      textCtx.textBaseline = "middle";
+      textCtx.font = `700 260px ${fontFamily}`;
+
+      textCtx.fillText(text, textCanvas.width / 2, textCanvas.height / 2, textCanvas.width * 0.94);
+
+      ctx.drawImage(
+        textCanvas,
+        -drawWidth / 2,
+        -drawHeight / 2,
+        drawWidth,
+        drawHeight
+      );
     } else {
       // Découpe 2 px pour éviter les traits noirs éventuels sur les bords de l'image.
       ctx.drawImage(
@@ -413,17 +432,25 @@ function DesignEditor({ items, setItems, selectedId, setSelectedId }) {
               onPointerDown={(event) => startDrag(event, item)}
             >
               {item.type === "text" ? (
-                <div
-                  className="vue3d-text-item"
-                  style={{
-                    color: item.color || "#ffffff",
-                    fontFamily: item.fontFamily || "Arial",
-                    fontSize: "100%",
-                    fontWeight: 700,
-                  }}
+                <svg
+                  className="vue3d-text-svg"
+                  viewBox="0 0 1000 260"
+                  preserveAspectRatio="none"
+                  aria-label={item.text || "Texte"}
                 >
-                  {item.text || "Texte"}
-                </div>
+                  <text
+                    x="500"
+                    y="135"
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    fill={item.color || "#ffffff"}
+                    fontFamily={item.fontFamily || "Arial"}
+                    fontWeight="700"
+                    fontSize="190"
+                  >
+                    {item.text || "Texte"}
+                  </text>
+                </svg>
               ) : (
                 <img src={item.src} alt={item.name} draggable="false" />
               )}
@@ -508,6 +535,33 @@ function DesignEditor({ items, setItems, selectedId, setSelectedId }) {
 export default function Vue3D() {
   const [items, setItems] = useState([]);
   const [selectedId, setSelectedId] = useState("");
+  const [customFonts, setCustomFonts] = useState([]);
+
+  const builtInFonts = [
+    "Arial",
+    "Arial Black",
+    "Verdana",
+    "Tahoma",
+    "Trebuchet MS",
+    "Georgia",
+    "Times New Roman",
+    "Garamond",
+    "Palatino Linotype",
+    "Courier New",
+    "Lucida Console",
+    "Impact",
+    "Comic Sans MS",
+    "Brush Script MT",
+    "Lucida Handwriting",
+    "Segoe Script",
+    "Segoe Print",
+    "Franklin Gothic Medium",
+    "Century Gothic",
+    "Candara",
+    "Calibri",
+  ];
+
+  const fontOptions = [...builtInFonts, ...customFonts.map((font) => font.family)];
   const selectedItem = items.find((item) => item.id === selectedId);
 
   function handleImagesUpload(event) {
@@ -563,6 +617,43 @@ export default function Vue3D() {
 
     event.target.value = "";
   }
+
+  async function handleFontsUpload(event) {
+    const files = Array.from(event.target.files || []);
+    if (!files.length) return;
+
+    const validFiles = files.filter((file) =>
+      /\.(ttf|otf|woff|woff2)$/i.test(file.name)
+    );
+
+    if (!validFiles.length) {
+      alert("Choisis une police valide : TTF, OTF, WOFF ou WOFF2.");
+      event.target.value = "";
+      return;
+    }
+
+    for (const file of validFiles) {
+      const cleanName = file.name.replace(/\.(ttf|otf|woff|woff2)$/i, "");
+      const family = `Custom_${cleanName.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
+      const buffer = await file.arrayBuffer();
+
+      try {
+        const fontFace = new FontFace(family, buffer);
+        await fontFace.load();
+        document.fonts.add(fontFace);
+
+        setCustomFonts((prev) => {
+          if (prev.some((font) => font.family === family)) return prev;
+          return [...prev, { family, label: cleanName }];
+        });
+      } catch (error) {
+        alert(`Impossible de charger la police : ${file.name}`);
+      }
+    }
+
+    event.target.value = "";
+  }
+
 
   function deleteSelectedItem() {
     if (!selectedId) return;
@@ -639,6 +730,11 @@ export default function Vue3D() {
               + Ajouter texte
             </button>
 
+            <label className="vue3d-font-button">
+              + Importer police
+              <input type="file" accept=".ttf,.otf,.woff,.woff2" multiple onChange={handleFontsUpload} />
+            </label>
+
             <button type="button" onClick={deleteSelectedItem} disabled={!selectedId}>
               Supprimer
             </button>
@@ -653,6 +749,12 @@ export default function Vue3D() {
           {selectedItem && (
             <div className="vue3d-selected-info">
               <strong>{selectedItem.type === "text" ? "Texte sélectionné" : "Image sélectionnée"}</strong>
+
+              {selectedItem.type === "text" && (
+                <p className="muted">
+Tu peux importer tes propres polices avec le bouton “+ Importer police” : TTF, OTF, WOFF ou WOFF2.
+                </p>
+              )}
 
               {selectedItem.type === "text" ? (
                 <>
@@ -697,14 +799,14 @@ export default function Vue3D() {
                       )
                     }
                   >
-                    <option value="Arial">Arial</option>
-                    <option value="Verdana">Verdana</option>
-                    <option value="Georgia">Georgia</option>
-                    <option value="Times New Roman">Times New Roman</option>
-                    <option value="Courier New">Courier New</option>
-                    <option value="Trebuchet MS">Trebuchet MS</option>
-                    <option value="Impact">Impact</option>
-                    <option value="Comic Sans MS">Comic Sans MS</option>
+                    {fontOptions.map((font) => {
+                      const custom = customFonts.find((item) => item.family === font);
+                      return (
+                        <option key={font} value={font}>
+                          {custom?.label || font}
+                        </option>
+                      );
+                    })}
                   </select>
                 </>
               ) : (

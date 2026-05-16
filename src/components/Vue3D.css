@@ -294,7 +294,11 @@
   pointer-events: none;
   user-select: none;
   line-height: 1;
-  transform: scaleX(1);
+  font-size: 100%;
+}
+
+.vue3d-text-item::first-line {
+  line-height: 1;
 }
 
 .vue3d-selected-info input[type="text"] {
@@ -325,4 +329,55 @@
 
 .vue3d-selected-info select option {
   color: #111827;
+}
+
+
+.vue3d-text-item span {
+  display: inline-block;
+  transform: scaleX(var(--text-stretch, 1));
+  transform-origin: center center;
+}
+
+
+/* ===== EXEMPLES POLICES PERSONNALISÉES =====
+Dépose tes fichiers .ttf ou .otf dans:
+public/fonts/
+
+Puis décommente et adapte ceci :
+
+@font-face {
+  font-family: "MaPolice";
+  src: url("/fonts/MaPolice.ttf") format("truetype");
+}
+
+Ensuite ajoute:
+<option value="MaPolice">MaPolice</option>
+dans le select des polices.
+=========================================== */
+
+
+.vue3d-font-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-weight: 800;
+  color: white !important;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.vue3d-font-button input {
+  display: none;
+}
+
+.vue3d-text-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+  pointer-events: none;
+  user-select: none;
 }
