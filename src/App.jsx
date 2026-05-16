@@ -9,6 +9,7 @@ import "./App.css";
 import { Canvas } from "@react-three/fiber";
 import * as THREE from "three";
 import { Bounds, Center, Environment, OrbitControls, useGLTF } from "@react-three/drei";
+import Vue3D from "./components/Vue3D";
 
 const STORAGE_KEY = "crm_local_data_v2";
 const SESSION_KEY = "crm_current_user_v2";
@@ -42,7 +43,7 @@ function userRole(email, users = []) {
 
 const ROLE_PERMISSIONS = {
   Admin: {
-    pages: ["dashboard", "clients", "products", "labels", "scan", "categories", "quotes", "invoices", "users", "settings", "import", "backups"],
+    pages: ["dashboard", "clients", "products", "labels", "scan", "categories", "quotes", "invoices", "users", "settings", "import", "backups", "vue3d"],
     canDelete: true,
     canEditSettings: true,
     canManageUsers: true,
@@ -459,6 +460,7 @@ export default function App() {
         {permissions.canEditSettings && <button onClick={() => setPage("settings")}>⚙️ Paramètres</button>}
         {permissions.canImport && <button onClick={() => setPage("import")}>📥 Import Excel</button>}
         {permissions.canManageUsers && <button onClick={() => setPage("backups")}>💾 Sauvegardes</button>}
+        {permissions.pages.includes("vue3d") && <button onClick={() => setPage("vue3d")}>☕ Vue 3D</button>}
         <button className="danger" onClick={logout}>Déconnexion</button>
       </aside>
 
@@ -476,6 +478,7 @@ export default function App() {
         {page === "settings" && permissions.canEditSettings && <Settings data={data} setData={updateData} />}
         {page === "import" && permissions.canImport && <ExcelImport data={data} setData={updateData} />}
         {page === "backups" && permissions.canManageUsers && <Backups data={data} setData={updateData} createCloudBackup={createCloudBackup} />}
+        {page === "vue3d" && canAccessPage(currentRole, "vue3d") && <Vue3D />}
       </main>
     </div>
   );

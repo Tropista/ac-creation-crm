@@ -1,0 +1,73 @@
+.vue3d-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 20px;
+  align-items: start;
+}
+
+.vue3d-viewer-card {
+  min-height: 620px;
+}
+
+.vue3d-viewer {
+  position: relative;
+  height: 580px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: radial-gradient(circle at center, #ffffff 0%, #eef2f7 100%);
+}
+
+.vue3d-hint {
+  position: absolute;
+  left: 16px;
+  bottom: 14px;
+  background: rgba(17, 24, 39, 0.76);
+  color: #fff;
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 13px;
+}
+
+.vue3d-controls {
+  display: grid;
+  gap: 16px;
+}
+
+.vue3d-controls h3 {
+  margin: 0;
+}
+
+.vue3d-controls label {
+  display: grid;
+  gap: 8px;
+  font-weight: 700;
+}
+
+.vue3d-controls input[type="range"] {
+  padding: 0;
+}
+
+.vue3d-preview {
+  display: grid;
+  gap: 8px;
+}
+
+.vue3d-preview img {
+  width: 100%;
+  max-height: 180px;
+  object-fit: contain;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  padding: 8px;
+}
+
+@media (max-width: 950px) {
+  .vue3d-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .vue3d-viewer {
+    height: 430px;
+  }
+}
