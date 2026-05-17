@@ -18,6 +18,18 @@ const PRINT_ZONES = {
   rightSleeve: { label: "Manche droite", x: 0.528, y: 0.765, w: 0.35, h: 0.195 },
 };
 
+// Dimensions réelles des zones imprimables utilisées pour l'export impression.
+// Modifie ces valeurs si tu veux adapter ton flux DTF / sublimation / sérigraphie.
+const PRINT_ZONE_SIZES_CM = {
+  front: { width: 30, height: 40 },
+  back: { width: 30, height: 40 },
+  leftSleeve: { width: 12, height: 12 },
+  rightSleeve: { width: 12, height: 12 },
+};
+
+const EXPORT_DPI = 300;
+const CM_TO_INCH = 1 / 2.54;
+
 const DEFAULT_TEXT_ITEM = {
   type: "text",
   area: "front",
@@ -38,6 +50,210 @@ function uid() {
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+function cmToPixels(cm) {
+  return Math.max(1, Math.round(Number(cm || 0) * CM_TO_INCH * EXPORT_DPI));
+}
+
+function sanitizeFilename(value) {
+  return String(value || "element")
+    .trim()
+    .replace(/\.[^/.]+$/, "")
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 55) || "element";
+}
+
+
+function sanitizeFontFilename(value, fallbackExtension = ".ttf") {
+  const raw = String(value || "police").trim();
+  const hasExtension = /\.(ttf|otf|woff|woff2)$/i.test(raw);
+  const extension = hasExtension
+    ? raw.match(/\.(ttf|otf|woff|woff2)$/i)?.[0]?.toLowerCase() || fallbackExtension
+    : fallbackExtension;
+  const base = raw
+    .replace(/\.(ttf|otf|woff|woff2)$/i, "")
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 55) || "police";
+  return `${base}${extension}`;
+}
+
+function getFontExtension(file) {
+  const name = String(file?.name || "");
+  const extFromName = name.match(/\.(ttf|otf|woff|woff2)$/i)?.[0];
+  if (extFromName) return extFromName.toLowerCase();
+
+  const type = String(file?.type || "").toLowerCase();
+  if (type.includes("opentype") || type.includes("otf")) return ".otf";
+  if (type.includes("woff2")) return ".woff2";
+  if (type.includes("woff")) return ".woff";
+
+  // Windows peut fournir une police sans extension via C:\Windows\Fonts.
+  // Dans ce cas on ajoute .ttf pour que le fichier soit ouvrable/installable.
+  return ".ttf";
+}
+
+function canvasToBlob(canvas) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error("Export PNG impossible."));
+    }, "image/png");
+  });
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function makeCrc32Table() {
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i += 1) {
+    let c = i;
+    for (let k = 0; k < 8; k += 1) {
+      c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    }
+    table[i] = c >>> 0;
+  }
+  return table;
+}
+
+const CRC32_TABLE = makeCrc32Table();
+
+function crc32(bytes) {
+  let crc = 0xffffffff;
+  for (let i = 0; i < bytes.length; i += 1) {
+    crc = CRC32_TABLE[(crc ^ bytes[i]) & 0xff] ^ (crc >>> 8);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function writeString(view, offset, value) {
+  for (let i = 0; i < value.length; i += 1) {
+    view.setUint8(offset + i, value.charCodeAt(i));
+  }
+}
+
+function dateToDosTime(date = new Date()) {
+  const time = ((date.getHours() & 0x1f) << 11) | ((date.getMinutes() & 0x3f) << 5) | Math.floor(date.getSeconds() / 2);
+  const dosDate = (((date.getFullYear() - 1980) & 0x7f) << 9) | (((date.getMonth() + 1) & 0x0f) << 5) | (date.getDate() & 0x1f);
+  return { time, date: dosDate };
+}
+
+async function createZipBlob(files) {
+  const encoder = new TextEncoder();
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+  const now = dateToDosTime();
+
+  for (const file of files) {
+    const nameBytes = encoder.encode(file.name);
+    const dataBytes = new Uint8Array(await file.blob.arrayBuffer());
+    const crc = crc32(dataBytes);
+
+    const localHeader = new ArrayBuffer(30 + nameBytes.length);
+    const localView = new DataView(localHeader);
+    localView.setUint32(0, 0x04034b50, true);
+    localView.setUint16(4, 20, true);
+    localView.setUint16(6, 0x0800, true);
+    localView.setUint16(8, 0, true);
+    localView.setUint16(10, now.time, true);
+    localView.setUint16(12, now.date, true);
+    localView.setUint32(14, crc, true);
+    localView.setUint32(18, dataBytes.length, true);
+    localView.setUint32(22, dataBytes.length, true);
+    localView.setUint16(26, nameBytes.length, true);
+    localView.setUint16(28, 0, true);
+    new Uint8Array(localHeader, 30).set(nameBytes);
+    localParts.push(localHeader, dataBytes);
+
+    const centralHeader = new ArrayBuffer(46 + nameBytes.length);
+    const centralView = new DataView(centralHeader);
+    centralView.setUint32(0, 0x02014b50, true);
+    centralView.setUint16(4, 20, true);
+    centralView.setUint16(6, 20, true);
+    centralView.setUint16(8, 0x0800, true);
+    centralView.setUint16(10, 0, true);
+    centralView.setUint16(12, now.time, true);
+    centralView.setUint16(14, now.date, true);
+    centralView.setUint32(16, crc, true);
+    centralView.setUint32(20, dataBytes.length, true);
+    centralView.setUint32(24, dataBytes.length, true);
+    centralView.setUint16(28, nameBytes.length, true);
+    centralView.setUint16(30, 0, true);
+    centralView.setUint16(32, 0, true);
+    centralView.setUint16(34, 0, true);
+    centralView.setUint16(36, 0, true);
+    centralView.setUint32(38, 0, true);
+    centralView.setUint32(42, offset, true);
+    new Uint8Array(centralHeader, 46).set(nameBytes);
+    centralParts.push(centralHeader);
+
+    offset += localHeader.byteLength + dataBytes.length;
+  }
+
+  const centralSize = centralParts.reduce((sum, part) => sum + part.byteLength, 0);
+  const endHeader = new ArrayBuffer(22);
+  const endView = new DataView(endHeader);
+  endView.setUint32(0, 0x06054b50, true);
+  endView.setUint16(8, files.length, true);
+  endView.setUint16(10, files.length, true);
+  endView.setUint32(12, centralSize, true);
+  endView.setUint32(16, offset, true);
+  endView.setUint16(20, 0, true);
+
+  return new Blob([...localParts, ...centralParts, endHeader], { type: "application/zip" });
+}
+
+function getItemPrintSizeCm(item) {
+  const areaSize = PRINT_ZONE_SIZES_CM[item.area] || PRINT_ZONE_SIZES_CM.front;
+  return {
+    width: Math.max(0.1, Number(item.width || 0.22) * areaSize.width),
+    height: Math.max(0.1, Number(item.height || 0.16) * areaSize.height),
+  };
+}
+
+function drawPrintItemForExport(ctx, item, logoImage, widthPx, heightPx) {
+  ctx.clearRect(0, 0, widthPx, heightPx);
+  ctx.save();
+  ctx.translate(widthPx / 2, heightPx / 2);
+
+  if (item.rotation) {
+    ctx.rotate((Number(item.rotation || 0) * Math.PI) / 180);
+  }
+
+  if (item.type === "image" && logoImage) {
+    ctx.drawImage(logoImage, -widthPx / 2, -heightPx / 2, widthPx, heightPx);
+  }
+
+  if (item.type === "text") {
+    const text = String(item.text || "Texte");
+    ctx.fillStyle = item.textColor || "#111827";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    let fontSize = Math.floor(heightPx * 0.72);
+    ctx.font = `800 ${fontSize}px "${item.fontFamily || "Arial"}"`;
+
+    while (ctx.measureText(text).width > widthPx * 0.92 && fontSize > 8) {
+      fontSize -= 2;
+      ctx.font = `800 ${fontSize}px "${item.fontFamily || "Arial"}"`;
+    }
+
+    ctx.fillText(text, 0, 0, widthPx * 0.92);
+  }
+
+  ctx.restore();
 }
 
 function useImage(url) {
@@ -262,7 +478,7 @@ export default function Vue3DTshirt() {
       const font = new FontFace(fontName, `url(${src})`);
       await font.load();
       document.fonts.add(font);
-      setCustomFonts((current) => [...current, { name: fontName, src }]);
+      setCustomFonts((current) => [...current, { name: fontName, src, file, originalName: file.name }]);
       if (selectedItem?.type === "text") updateItem(selectedItem.id, { fontFamily: fontName });
     } catch (error) {
       alert("Police impossible à charger. Essaie un fichier .ttf, .otf, .woff ou .woff2.");
@@ -365,14 +581,69 @@ export default function Vue3DTshirt() {
     setSelectedId(copy.id);
   }
 
-  function exportMockup() {
-    const canvas = previewRef.current?.querySelector("canvas");
-    if (!canvas) return;
-    const url = canvas.toDataURL("image/png");
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "mockup-tshirt.png";
-    a.click();
+  async function buildPrintElementFiles() {
+    const files = [];
+
+    for (let index = 0; index < items.length; index += 1) {
+      const item = items[index];
+      const { width, height } = getItemPrintSizeCm(item);
+      const widthPx = cmToPixels(width);
+      const heightPx = cmToPixels(height);
+      const canvas = document.createElement("canvas");
+      canvas.width = widthPx;
+      canvas.height = heightPx;
+
+      const ctx = canvas.getContext("2d");
+      if (!ctx) continue;
+
+      drawPrintItemForExport(ctx, item, itemImages[item.id], widthPx, heightPx);
+
+      const areaLabel = PRINT_ZONES[item.area]?.label || item.area || "zone";
+      const baseName = item.type === "image" ? item.fileName || "logo" : item.text || "texte";
+      const filename = `impression/${String(index + 1).padStart(2, "0")}-${sanitizeFilename(areaLabel)}-${sanitizeFilename(baseName)}-${width.toFixed(1)}x${height.toFixed(1)}cm-300dpi.png`;
+
+      files.push({ name: filename, blob: await canvasToBlob(canvas) });
+    }
+
+    return files;
+  }
+
+  async function buildFontFiles() {
+    return customFonts
+      .filter((font) => font?.file)
+      .map((font, index) => {
+        const extension = getFontExtension(font.file);
+        const filename = sanitizeFontFilename(font.originalName || font.file?.name || font.name, extension);
+        return {
+          name: `polices/${String(index + 1).padStart(2, "0")}-${filename}`,
+          blob: font.file,
+        };
+      });
+  }
+
+  async function exportMockup() {
+    try {
+      const files = [];
+      const canvas = previewRef.current?.querySelector("canvas");
+
+      if (canvas) {
+        files.push({ name: "mockup-tshirt.png", blob: await canvasToBlob(canvas) });
+      }
+
+      files.push(...(await buildPrintElementFiles()));
+      files.push(...(await buildFontFiles()));
+
+      if (!files.length) {
+        alert("Aucun fichier à exporter.");
+        return;
+      }
+
+      const zipBlob = await createZipBlob(files);
+      downloadBlob(zipBlob, `export-tshirt-${new Date().toISOString().slice(0, 10)}.zip`);
+    } catch (error) {
+      console.error("Erreur export ZIP :", error);
+      alert("Export ZIP impossible. Vérifie la console pour plus de détails.");
+    }
   }
 
   return (
@@ -382,7 +653,7 @@ export default function Vue3DTshirt() {
           <h2>👕 T-shirt 3D</h2>
           <p>Multi logos, textes, manches et polices personnalisées.</p>
         </div>
-        <button className="primary" onClick={exportMockup}>Exporter le mockup</button>
+        <button className="primary" onClick={exportMockup}>Exporter mockup + fichiers impression</button>
       </div>
 
       <div className="tshirt3d-layout">
