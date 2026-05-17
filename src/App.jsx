@@ -107,6 +107,7 @@ const emptyData = {
   products: [],
   categories: [],
   backups: [],
+  logs: [],
 };
 
 function dedupeItemsById(items = []) {
@@ -145,6 +146,7 @@ function normalizeData(data) {
     products: dedupeItemsById(data?.products || []),
     categories: dedupeItemsById(data?.categories || []),
     backups: dedupeItemsById(data?.backups || []),
+    logs: dedupeItemsById(data?.logs || []),
   };
 }
 
@@ -211,7 +213,27 @@ function hasLocalBusinessData(data) {
 function rowsToItems(rows) {
   return (rows || []).map((row) => ({ id: row.id, ...(row.data || {}) }));
 }
+function addLog(data, updateData, currentUser, actionName, targetName, detailsText = "") {
+  const log = {
+    id: crypto.randomUUID(),
 
+    // visible directement dans Supabase
+    user_name: currentUser?.name || "Système",
+    action: actionName,
+    target: targetName,
+    details: detailsText,
+
+    // conservé pour compatibilité
+    user: currentUser?.name || "Système",
+
+    date: new Date().toISOString(),
+  };
+
+  updateData({
+    ...data,
+    logs: [log, ...(data.logs || [])].slice(0, 500),
+  });
+}
 async function loadSupabaseData() {
   const [
     settingsRes,
@@ -232,8 +254,12 @@ async function loadSupabaseData() {
     supabase.from("quotes").select("id,data").order("created_at", { ascending: true }),
     supabase.from("invoices").select("id,data").order("created_at", { ascending: true }),
   ]);
+  const logsRes = await supabase
+  .from("crm_logs")
+  .select("id,data")
+  .order("created_at", { ascending: false });
 
-  const errors = [settingsRes, usersRes, backupsRes, clientsRes, productsRes, categoriesRes, quotesRes, invoicesRes]
+  const errors = [settingsRes, usersRes, backupsRes, clientsRes, productsRes, categoriesRes, quotesRes, invoicesRes, logsRes]
     .map((res) => res.error)
     .filter(Boolean);
 
@@ -251,6 +277,7 @@ async function loadSupabaseData() {
     categories: rowsToItems(categoriesRes.data),
     quotes: rowsToItems(quotesRes.data),
     invoices: rowsToItems(invoicesRes.data),
+    logs: rowsToItems(logsRes.data),
   });
 
   return {
@@ -259,6 +286,7 @@ async function loadSupabaseData() {
       settingsRes.data ||
       usersRes.data?.length ||
       backupsRes.data?.length ||
+      logsRes.data?.length ||
       clientsRes.data?.length ||
       productsRes.data?.length ||
       categoriesRes.data?.length ||
@@ -275,10 +303,21 @@ async function syncTable(tableName, nextItems, previousItems) {
   if (next.length) {
     const payload = next
       .filter((item) => item?.id)
-      .map((item) => ({
-        id: item.id,
-        data: item,
-      }));
+.map((item) => {
+  const row = {
+    id: item.id,
+    data: item,
+  };
+
+  if (tableName === "crm_logs") {
+    row.user_name = item.user_name || item.user || "Système";
+    row.action = item.action || "";
+    row.target = item.target || "";
+    row.details = item.details || "";
+  }
+
+  return row;
+});
 
     if (payload.length) {
       const { error } = await supabase.from(tableName).upsert(payload, { onConflict: "id" });
@@ -301,6 +340,7 @@ async function syncSupabaseData(nextData, previousData) {
   const next = normalizeData(nextData);
   const previous = normalizeData(previousData);
 
+
   const { error: settingsError } = await supabase
     .from("settings")
     .upsert({ id: "main", data: next.settings, updated_at: new Date().toISOString() }, { onConflict: "id" });
@@ -315,6 +355,7 @@ async function syncSupabaseData(nextData, previousData) {
     syncTable("categories", next.categories, previous.categories),
     syncTable("quotes", next.quotes, previous.quotes),
     syncTable("invoices", next.invoices, previous.invoices),
+    syncTable("crm_logs", next.logs, previous.logs),
   ]);
 }
 
@@ -361,6 +402,7 @@ export default function App() {
   ...cloud.data,
   users: dedupeItemsById(cloud.data.users || []),
   backups: dedupeItemsById(cloud.data.backups || []),
+  logs: dedupeItemsById(cloud.data.logs || []),
 });
 
 setData(mergedData);
@@ -388,6 +430,7 @@ saveData(mergedData);
   ...next,
   users: dedupeItemsById(next.users || []),
   backups: dedupeItemsById(next.backups || []),
+  logs: dedupeItemsById(next.logs || []),
 });
     const previous = data;
     setData(normalized);
@@ -400,6 +443,40 @@ saveData(mergedData);
     } catch (error) {
       console.error(error);
       setSyncStatus("Erreur de sauvegarde Supabase");
+    }
+  }
+
+  async function logActivity(action, target = "", details = "") {
+    const log = {
+      id: uid(),
+      createdAt: new Date().toISOString(),
+      date: new Date().toISOString(),
+      user: currentUser?.name || currentUser?.email || "Système",
+      email: currentUser?.email || "",
+      role: currentRole,
+      action,
+      target,
+      details,
+    };
+
+    setData((currentData) => {
+      const normalized = normalizeData({
+        ...currentData,
+        logs: [log, ...(currentData.logs || [])].slice(0, 500),
+      });
+
+      saveData(normalized);
+      return normalized;
+    });
+
+    try {
+      const { error } = await supabase
+        .from("crm_logs")
+        .upsert({ id: log.id, data: log }, { onConflict: "id" });
+
+      if (error) throw error;
+    } catch (error) {
+      console.error("Erreur journal d'activité :", error);
     }
   }
 
@@ -417,6 +494,7 @@ saveData(mergedData);
       setSyncStatus("Création sauvegarde cloud...");
       await syncSupabaseData(next, data);
       setSyncStatus("Sauvegarde cloud créée");
+      await logActivity("Sauvegarde créée", label);
     } catch (error) {
       console.error(error);
       setSyncStatus("Erreur sauvegarde cloud");
@@ -496,17 +574,17 @@ saveData(mergedData);
       <main className="content">
         {!canAccessPage(currentRole, page) && <AccessDenied user={currentUser} logout={logout} />}
         {page === "dashboard" && canAccessPage(currentRole, "dashboard") && <Dashboard data={data} currentRole={currentRole} />}
-        {page === "clients" && canAccessPage(currentRole, "clients") && <Clients data={data} setData={updateData} currentRole={currentRole} />}
-        {page === "products" && canAccessPage(currentRole, "products") && <Products data={data} setData={updateData} currentRole={currentRole} />}
+        {page === "clients" && canAccessPage(currentRole, "clients") && <Clients data={data} setData={updateData} currentRole={currentRole} logActivity={logActivity} />}
+        {page === "products" && canAccessPage(currentRole, "products") && <Products data={data} setData={updateData} currentRole={currentRole} logActivity={logActivity} />}
         {page === "labels" && canAccessPage(currentRole, "labels") && <BarcodeLabels data={data} />}
-        {page === "scan" && canAccessPage(currentRole, "scan") && <ProductScan data={data} setData={updateData} />}
-        {page === "categories" && canAccessPage(currentRole, "categories") && <Categories data={data} setData={updateData} currentRole={currentRole} />}
-        {page === "quotes" && canAccessPage(currentRole, "quotes") && <Documents type="quote" data={data} setData={updateData} currentRole={currentRole} />}
-        {page === "invoices" && canAccessPage(currentRole, "invoices") && <Documents type="invoice" data={data} setData={updateData} currentRole={currentRole} />}
-        {page === "users" && permissions.canManageUsers && <UsersAdmin data={data} setData={updateData} />}
-        {page === "settings" && permissions.canEditSettings && <Settings data={data} setData={updateData} />}
-        {page === "import" && permissions.canImport && <ExcelImport data={data} setData={updateData} />}
-        {page === "backups" && permissions.canManageUsers && <Backups data={data} setData={updateData} createCloudBackup={createCloudBackup} />}
+        {page === "scan" && canAccessPage(currentRole, "scan") && <ProductScan data={data} setData={updateData} logActivity={logActivity} />}
+        {page === "categories" && canAccessPage(currentRole, "categories") && <Categories data={data} setData={updateData} currentRole={currentRole} logActivity={logActivity} />}
+        {page === "quotes" && canAccessPage(currentRole, "quotes") && <Documents type="quote" data={data} setData={updateData} currentRole={currentRole} logActivity={logActivity} />}
+        {page === "invoices" && canAccessPage(currentRole, "invoices") && <Documents type="invoice" data={data} setData={updateData} currentRole={currentRole} logActivity={logActivity} />}
+        {page === "users" && permissions.canManageUsers && <UsersAdmin data={data} setData={updateData} logActivity={logActivity} />}
+        {page === "settings" && permissions.canEditSettings && <Settings data={data} setData={updateData} logActivity={logActivity} />}
+        {page === "import" && permissions.canImport && <ExcelImport data={data} setData={updateData} logActivity={logActivity} />}
+        {page === "backups" && permissions.canManageUsers && <Backups data={data} setData={updateData} createCloudBackup={createCloudBackup} logActivity={logActivity} />}
         {page === "vue3d" && canAccessPage(currentRole, "vue3d") && <Vue3D />}
       </main>
     </div>
@@ -852,7 +930,7 @@ function Dashboard({ data }) {
 
 
 
-function Backups({ data, setData, createCloudBackup }) {
+function Backups({ data, setData, createCloudBackup, logActivity }) {
   const [selectedBackupId, setSelectedBackupId] = useState("");
   const backups = pruneBackups(data.backups || [], 50);
   const selectedBackup = backups.find((backup) => backup.id === selectedBackupId);
@@ -875,15 +953,18 @@ function Backups({ data, setData, createCloudBackup }) {
     });
 
     await setData(restored);
+    await logActivity?.("Sauvegarde restaurée", selectedBackup.label, selectedBackup.createdAt);
     alert("Sauvegarde restaurée.");
   }
 
   function deleteBackup(id) {
     if (!confirm("Supprimer cette sauvegarde ?")) return;
+    const backupToDelete = (data.backups || []).find((backup) => backup.id === id);
     setData({
       ...data,
       backups: (data.backups || []).filter((backup) => backup.id !== id),
     });
+    logActivity?.("Sauvegarde supprimée", backupToDelete?.label || id);
   }
 
   return (
@@ -970,7 +1051,7 @@ function Backups({ data, setData, createCloudBackup }) {
   );
 }
 
-function UsersAdmin({ data, setData }) {
+function UsersAdmin({ data, setData, logActivity }) {
   const [form, setForm] = useState({ name: "", email: "", role: "Utilisateur", status: "Actif" });
   const users = data.users || [];
 
@@ -1024,6 +1105,7 @@ function UsersAdmin({ data, setData }) {
     try {
       await saveUserToSupabase(nextUser);
       await setData({ ...data, users: [...users, nextUser] });
+      await logActivity?.("Création utilisateur", nextUser.email, nextUser.role);
       reset();
       alert("Utilisateur sauvegardé dans Supabase.");
     } catch (error) {
@@ -1042,6 +1124,7 @@ function UsersAdmin({ data, setData }) {
         ...data,
         users: nextUsers,
       });
+      await logActivity?.("Modification utilisateur", updatedUser?.email || id, JSON.stringify(changes));
     } catch (error) {
       console.error("Erreur mise à jour utilisateur Supabase :", error);
       alert("Erreur : la modification utilisateur n'a pas été sauvegardée dans Supabase.");
@@ -1052,8 +1135,10 @@ function UsersAdmin({ data, setData }) {
     if (!confirm("Retirer cet accès utilisateur ?")) return;
 
     try {
+      const removedUser = users.find((user) => user.id === id);
       await deleteUserFromSupabase(id);
       await setData({ ...data, users: users.filter((user) => user.id !== id) });
+      await logActivity?.("Suppression utilisateur", removedUser?.email || id);
     } catch (error) {
       console.error("Erreur suppression utilisateur Supabase :", error);
       alert("Erreur : l'utilisateur n'a pas été supprimé dans Supabase.");
@@ -1165,12 +1250,13 @@ function UsersAdmin({ data, setData }) {
   );
 }
 
-function Settings({ data, setData }) {
+function Settings({ data, setData, logActivity }) {
   const [form, setForm] = useState(data.settings);
 
   function submit(e) {
     e.preventDefault();
     setData({ ...data, settings: { ...form, taxRate: Number(form.taxRate || 0) } });
+    logActivity?.("Modification paramètres", "Paramètres entreprise");
     alert("Paramètres sauvegardés.");
   }
 
@@ -1229,7 +1315,7 @@ function PaginationControls({ page, totalPages, onPageChange, totalItems, perPag
   );
 }
 
-function Clients({ data, setData, currentRole = 'Admin' }) {
+function Clients({ data, setData, currentRole = 'Admin', logActivity }) {
   const [search, setSearch] = useState("");
   const [selectedClientId, setSelectedClientId] = useState(null);
   const [editing, setEditing] = useState(null);
@@ -1269,10 +1355,12 @@ function Clients({ data, setData, currentRole = 'Admin' }) {
     if (!form.name) return alert("Le nom du client est obligatoire.");
     if (editing) {
       setData({ ...data, clients: data.clients.map((c) => (c.id === editing ? { ...c, ...form } : c)) });
+      logActivity?.("Modification client", form.name);
     } else {
       const client = { id: uid(), createdAt: today(), ...form };
       setData({ ...data, clients: [...data.clients, client] });
       setSelectedClientId(client.id);
+      logActivity?.("Création client", client.name);
     }
     reset();
   }
@@ -1289,7 +1377,9 @@ function Clients({ data, setData, currentRole = 'Admin' }) {
   function remove(id) {
     if (!canDeleteData(currentRole)) return alert("Ton rôle ne permet pas de supprimer.");
     if (!confirm("Supprimer ce client ?")) return;
+    const removedClient = data.clients.find((c) => c.id === id);
     setData({ ...data, clients: data.clients.filter((c) => c.id !== id) });
+    logActivity?.("Suppression client", removedClient?.name || id);
     if (selectedClientId === id) setSelectedClientId(null);
   }
 
@@ -1398,7 +1488,7 @@ function Clients({ data, setData, currentRole = 'Admin' }) {
   );
 }
 
-function Documents({ type, data, setData, currentRole = 'Admin' }) {
+function Documents({ type, data, setData, currentRole = 'Admin', logActivity }) {
   const isQuote = type === "quote";
   const listKey = isQuote ? "quotes" : "invoices";
   const title = isQuote ? "Devis" : "Factures";
@@ -1539,6 +1629,7 @@ function Documents({ type, data, setData, currentRole = 'Admin' }) {
     const firstDescription = cleanLines.length === 1 ? cleanLines[0].description : `${cleanLines.length} lignes`;
 
     if (editingId) {
+      const existingDoc = documents.find((d) => d.id === editingId);
       setData({
         ...data,
         [listKey]: documents.map((d) =>
@@ -1547,6 +1638,7 @@ function Documents({ type, data, setData, currentRole = 'Admin' }) {
             : d
         ),
       });
+      logActivity?.(`Modification ${isQuote ? "devis" : "facture"}`, existingDoc?.number || editingId, money(totals.totalTTC));
     } else {
       const doc = {
         id: uid(),
@@ -1561,6 +1653,7 @@ function Documents({ type, data, setData, currentRole = 'Admin' }) {
         ...totals,
       };
       setData({ ...data, [listKey]: [...documents, doc] });
+      logActivity?.(`Création ${isQuote ? "devis" : "facture"}`, doc.number, money(doc.totalTTC));
     }
 
     reset();
@@ -1577,7 +1670,9 @@ function Documents({ type, data, setData, currentRole = 'Admin' }) {
 
   function remove(id) {
     if (!confirm(`Supprimer ce ${isQuote ? "devis" : "facture"} ?`)) return;
+    const removedDoc = documents.find((d) => d.id === id);
     setData({ ...data, [listKey]: documents.filter((d) => d.id !== id) });
+    logActivity?.(`Suppression ${isQuote ? "devis" : "facture"}`, removedDoc?.number || id);
   }
 
   function updateStatus(id, status) {
@@ -1585,15 +1680,18 @@ function Documents({ type, data, setData, currentRole = 'Admin' }) {
       String(d.id) === String(id) ? { ...d, status } : d
     ));
 
+    const changedDoc = nextDocuments.find((d) => String(d.id) === String(id));
     setData({
       ...data,
       [listKey]: nextDocuments,
     });
+    logActivity?.(`Changement statut ${isQuote ? "devis" : "facture"}`, changedDoc?.number || id, status);
   }
 
   function convertQuoteToInvoice(doc) {
     const invoice = { ...doc, id: uid(), number: `FAC-${String(data.invoices.length + 1).padStart(4, "0")}`, date: today(), status: "Non payée", convertedFrom: doc.number };
     setData({ ...data, invoices: [...data.invoices, invoice] });
+    logActivity?.("Conversion devis en facture", doc.number, invoice.number);
     alert("Devis converti en facture.");
   }
 
@@ -2005,7 +2103,7 @@ ${data.settings.companyEmail || ""}`;
   );
 }
 
-function Categories({ data, setData, currentRole = 'Admin' }) {
+function Categories({ data, setData, currentRole = 'Admin', logActivity }) {
   const [form, setForm] = useState({ name: "", description: "" });
   const [editing, setEditing] = useState(null);
 
@@ -2038,11 +2136,14 @@ function Categories({ data, setData, currentRole = 'Admin' }) {
           product.category === oldCategory?.name ? { ...product, category: name } : product
         ),
       });
+      logActivity?.("Modification catégorie", name, oldCategory?.name || "");
     } else {
+      const category = { id: uid(), createdAt: today(), name, description: form.description };
       setData({
         ...data,
-        categories: [...categories, { id: uid(), createdAt: today(), name, description: form.description }],
+        categories: [...categories, category],
       });
+      logActivity?.("Création catégorie", category.name);
     }
 
     reset();
@@ -2072,6 +2173,7 @@ function Categories({ data, setData, currentRole = 'Admin' }) {
         product.category === category.name ? { ...product, category: "" } : product
       ),
     });
+    logActivity?.("Suppression catégorie", category.name);
   }
 
   function productCount(categoryName) {
@@ -2342,7 +2444,7 @@ function Product3DViewer({ modelUrl, designImage, designSize = 1, designX = 0, d
 }
 
 
-function Products({ data, setData, currentRole = 'Admin' }) {
+function Products({ data, setData, currentRole = 'Admin', logActivity }) {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [stockFilter, setStockFilter] = useState("all");
@@ -2721,11 +2823,14 @@ function Products({ data, setData, currentRole = 'Admin' }) {
           p.id === editing ? { ...p, ...productData } : p
         ),
       });
+      logActivity?.("Modification produit", productData.name, productData.sku);
     } else {
+      const product = { id: uid(), createdAt: today(), ...productData };
       setData({
         ...data,
-        products: [...allProducts, { id: uid(), createdAt: today(), ...productData }],
+        products: [...allProducts, product],
       });
+      logActivity?.("Création produit", product.name, product.sku);
     }
 
     reset();
@@ -2748,7 +2853,9 @@ function Products({ data, setData, currentRole = 'Admin' }) {
   function remove(id) {
     if (!canDeleteData(currentRole)) return alert("Ton rôle ne permet pas de supprimer.");
     if (!confirm("Supprimer ce produit ?")) return;
+    const removedProduct = allProducts.find((p) => p.id === id);
     setData({ ...data, products: allProducts.filter((p) => p.id !== id) });
+    logActivity?.("Suppression produit", removedProduct?.name || id, removedProduct?.sku || "");
     setSelectedProductIds(selectedProductIds.filter((productId) => productId !== id));
   }
 
@@ -2784,6 +2891,7 @@ function Products({ data, setData, currentRole = 'Admin' }) {
       ),
     });
 
+    logActivity?.("Modification catégorie produits", bulkCategory, `${selectedProductIds.length} produit(s)`);
     setSelectedProductIds([]);
     setBulkCategory("");
     alert("Catégorie appliquée aux produits sélectionnés.");
@@ -2801,6 +2909,7 @@ function Products({ data, setData, currentRole = 'Admin' }) {
       ),
     });
 
+    logActivity?.("Modification stock produits", `${Number(bulkStock || 0)} pièce(s)`, `${selectedProductIds.length} produit(s)`);
     setSelectedProductIds([]);
     alert("Stock modifié avec succès.");
   }
@@ -2816,6 +2925,7 @@ function Products({ data, setData, currentRole = 'Admin' }) {
       })),
     });
 
+    logActivity?.("Réinitialisation stock produits", "100 pièces", `${allProducts.length} produit(s)`);
     setSelectedProductIds([]);
     alert("Tous les produits sont maintenant à 100 pièces.");
   }
@@ -3412,7 +3522,7 @@ function QrCodeImage({ value, className = "qr-code-img" }) {
   return <img className={className} src={src} alt={`QR code ${value}`} />;
 }
 
-function ProductScan({ data, setData }) {
+function ProductScan({ data, setData, logActivity }) {
   const products = data.products || [];
   const [scanValue, setScanValue] = useState("");
   const [mode, setMode] = useState("out");
@@ -3456,6 +3566,7 @@ function ProductScan({ data, setData }) {
 
     setFoundProduct({ ...product, stock: nextStock });
     setMessage(`${actionMode === "in" ? "Entrée" : "Sortie"} stock : ${qty} pièce(s) — ${product.name} (${nextStock} en stock).`);
+    logActivity?.(actionMode === "in" ? "Entrée stock" : "Sortie stock", product.name, `${qty} pièce(s), stock final ${nextStock}`);
   }
 
   function handleScan(rawValue, autoApply = false) {
@@ -3578,7 +3689,7 @@ function ProductScan({ data, setData }) {
   );
 }
 
-function ExcelImport({ data, setData }) {
+function ExcelImport({ data, setData, logActivity }) {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [preview, setPreview] = useState(null);
