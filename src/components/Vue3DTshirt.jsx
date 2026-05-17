@@ -21,11 +21,24 @@ const PRINT_ZONES = {
 // Dimensions réelles des zones imprimables utilisées pour l'export impression.
 // Modifie ces valeurs si tu veux adapter ton flux DTF / sublimation / sérigraphie.
 const PRINT_ZONE_SIZES_CM = {
-  front: { width: 30, height: 40 },
-  back: { width: 30, height: 40 },
+  front: { width: 29, height: 40 },
+  back: { width: 29, height: 40 },
   leftSleeve: { width: 12, height: 12 },
   rightSleeve: { width: 12, height: 12 },
 };
+
+// Limites de travail dans l'éditeur : le visuel reste dans la zone pointillée.
+const MAX_PRINT_WIDTH_CM = 29;
+const EDITOR_PRINT_INSET = 0.07;
+const EDITOR_PRINT_SIZE = 1 - EDITOR_PRINT_INSET * 2;
+const SNAP_THRESHOLD = 0.025;
+
+const PRINT_SIZE_PRESETS = [
+  { label: "DTF poitrine 28 × 35 cm", width: 28, height: 35 },
+  { label: "A4 portrait 21 × 29,7 cm", width: 21, height: 29.7 },
+  { label: "A3 portrait 29 × 42 cm", width: 29, height: 42 },
+  { label: "Manche 12 × 12 cm", width: 12, height: 12 },
+];
 
 const EXPORT_DPI = 300;
 const CM_TO_INCH = 1 / 2.54;
@@ -52,8 +65,150 @@ function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 
+function defaultLayerName(item) {
+  if (item?.layerName) return item.layerName;
+  if (item?.type === "text") return item.text || "Texte";
+  return item?.fileName || "Logo";
+}
+
+function makeLayerName(value, fallback = "Calque") {
+  const name = String(value || "").trim();
+  return name || fallback;
+}
+
 function cmToPixels(cm) {
   return Math.max(1, Math.round(Number(cm || 0) * CM_TO_INCH * EXPORT_DPI));
+}
+
+function formatCm(value) {
+  return Number(value || 0).toLocaleString("fr-FR", { maximumFractionDigits: 1 });
+}
+
+function getZoneSizeCm(zoneSizes, area) {
+  return zoneSizes?.[area] || PRINT_ZONE_SIZES_CM[area] || PRINT_ZONE_SIZES_CM.front;
+}
+
+function getMaxItemWidthScale(area, zoneSizes) {
+  const zoneSize = getZoneSizeCm(zoneSizes, area);
+  return Math.min(1, MAX_PRINT_WIDTH_CM / Math.max(1, Number(zoneSize.width || 1)));
+}
+
+function limitItemToPrintArea(item, zoneSizes) {
+  const maxWidth = getMaxItemWidthScale(item.area || "front", zoneSizes);
+  const width = clamp(Number(item.width || 0.22), 0.035, maxWidth);
+  const height = clamp(Number(item.height || 0.16), 0.025, 1);
+
+  return {
+    ...item,
+    width,
+    height,
+    x: clamp(Number(item.x ?? 0.5), width / 2, 1 - width / 2),
+    y: clamp(Number(item.y ?? 0.5), height / 2, 1 - height / 2),
+  };
+}
+
+
+function estimateTextWidthScale(item, zoneSizes) {
+  const text = String(item?.text || "Texte");
+  const fontSize = Math.max(24, Number(item?.textSize || 74));
+  const fontFamily = item?.fontFamily || "Arial";
+  const height = Math.max(0.025, Number(item?.height || 0.12));
+  const maxWidth = getMaxItemWidthScale(item?.area || "front", zoneSizes);
+
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return clamp(text.length * height * 0.34, 0.08, maxWidth);
+
+  ctx.font = `800 ${fontSize}px "${fontFamily}"`;
+  const measuredWidth = Math.max(1, ctx.measureText(text).width);
+  const measuredRatio = measuredWidth / fontSize;
+
+  // Le coefficient garde le cadre proche du texte affiché dans l’éditeur,
+  // sans prendre toute la largeur de la zone.
+  return clamp(height * measuredRatio * 0.58, 0.08, maxWidth);
+}
+
+function withAutoTextWidth(item, zoneSizes) {
+  if (item?.type !== "text") return item;
+  return {
+    ...item,
+    width: estimateTextWidthScale(item, zoneSizes),
+  };
+}
+
+function getRulerTicks(totalCm, maxTicks = 12) {
+  const total = Math.max(1, Number(totalCm || 1));
+  const approxStep = total / maxTicks;
+  const step = approxStep <= 1 ? 1 : approxStep <= 2 ? 2 : approxStep <= 5 ? 5 : 10;
+  const ticks = [];
+  for (let value = 0; value <= total + 0.001; value += step) {
+    ticks.push({ value: Number(value.toFixed(1)), percent: Math.min(100, (value / total) * 100) });
+  }
+  if (!ticks.some((tick) => Math.abs(tick.value - total) < 0.001)) {
+    ticks.push({ value: total, percent: 100 });
+  }
+  return ticks;
+}
+
+function getSnapGuides(area) {
+  const sleeve = area === "leftSleeve" || area === "rightSleeve";
+
+  if (sleeve) {
+    return {
+      x: [
+        { value: 0.5, label: "Centre manche" },
+      ],
+      y: [
+        { value: 0.5, label: "Milieu manche" },
+      ],
+    };
+  }
+
+  return {
+    x: [
+      { value: 0.5, label: "Centre" },
+    ],
+    y: [
+      { value: 0.18, label: "Col" },
+      { value: 0.35, label: "Poitrine" },
+      { value: 0.5, label: "Milieu" },
+    ],
+  };
+}
+
+function snapValue(value, guides, threshold = SNAP_THRESHOLD) {
+  let snapped = value;
+  let activeGuide = null;
+
+  for (const guide of guides || []) {
+    if (Math.abs(value - guide.value) <= threshold) {
+      snapped = guide.value;
+      activeGuide = guide;
+      break;
+    }
+  }
+
+  return { value: snapped, guide: activeGuide };
+}
+
+function applySnapToPosition(item, patch, enabled = true) {
+  if (!enabled) return { patch, preview: null };
+
+  const guides = getSnapGuides(item.area || "front");
+  const snappedX = snapValue(Number(patch.x ?? item.x ?? 0.5), guides.x);
+  const snappedY = snapValue(Number(patch.y ?? item.y ?? 0.5), guides.y);
+
+  return {
+    patch: {
+      ...patch,
+      x: snappedX.value,
+      y: snappedY.value,
+    },
+    preview: {
+      x: snappedX.guide,
+      y: snappedY.guide,
+    },
+  };
 }
 
 function sanitizeFilename(value) {
@@ -215,8 +370,8 @@ async function createZipBlob(files) {
   return new Blob([...localParts, ...centralParts, endHeader], { type: "application/zip" });
 }
 
-function getItemPrintSizeCm(item) {
-  const areaSize = PRINT_ZONE_SIZES_CM[item.area] || PRINT_ZONE_SIZES_CM.front;
+function getItemPrintSizeCm(item, zoneSizes = PRINT_ZONE_SIZES_CM) {
+  const areaSize = getZoneSizeCm(zoneSizes, item.area);
   return {
     width: Math.max(0.1, Number(item.width || 0.22) * areaSize.width),
     height: Math.max(0.1, Number(item.height || 0.16) * areaSize.height),
@@ -359,7 +514,11 @@ function makeUvTexture(baseImage, itemImages, items, tshirtColor) {
     ctx.globalCompositeOperation = "source-over";
   }
 
-  for (const item of items) {
+  const drawableItems = items
+    .filter((item) => !item.hidden)
+    .sort((a, b) => Number(a.z || 0) - Number(b.z || 0));
+
+  for (const item of drawableItems) {
     const zone = PRINT_ZONES[item.area] || PRINT_ZONES.front;
     drawItem(ctx, item, zone, itemImages[item.id]);
   }
@@ -416,7 +575,10 @@ export default function Vue3DTshirt() {
   const [activeArea, setActiveArea] = useState("front");
   const [tshirtColor, setTshirtColor] = useState("#ffffff");
   const [showPrintZone, setShowPrintZone] = useState(true);
+  const [snapEnabled, setSnapEnabled] = useState(true);
+  const [snapPreview, setSnapPreview] = useState(null);
   const [customFonts, setCustomFonts] = useState([]);
+  const [printZoneSizes, setPrintZoneSizes] = useState(PRINT_ZONE_SIZES_CM);
   const previewRef = useRef(null);
   const editorRef = useRef(null);
   const actionRef = useRef(null);
@@ -424,7 +586,15 @@ export default function Vue3DTshirt() {
   const baseImage = useImage(BASE_COLOR_URL);
   const itemImages = useItemImages(items);
   const selectedItem = items.find((item) => item.id === selectedId) || null;
-  const visibleItems = items.filter((item) => item.area === activeArea);
+  const visibleItems = items.filter((item) => item.area === activeArea && !item.hidden);
+  const layerItems = items
+    .filter((item) => item.area === activeArea)
+    .sort((a, b) => Number(b.z || 0) - Number(a.z || 0));
+  const activeZoneSize = getZoneSizeCm(printZoneSizes, activeArea);
+  const selectedPrintSize = selectedItem ? getItemPrintSizeCm(selectedItem, printZoneSizes) : null;
+  const rulerXTicks = getRulerTicks(activeZoneSize.width);
+  const rulerYTicks = getRulerTicks(activeZoneSize.height);
+  const snapGuides = getSnapGuides(activeArea);
 
   const printTexture = useMemo(
     () => makeUvTexture(baseImage, itemImages, items, tshirtColor),
@@ -440,11 +610,24 @@ export default function Vue3DTshirt() {
   }, []);
 
   function updateItem(id, patch) {
-    setItems((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+    setItems((current) =>
+      current.map((item) =>
+        item.id === id ? limitItemToPrintArea({ ...item, ...patch }, printZoneSizes) : item
+      )
+    );
   }
 
   function addText() {
-    const item = { id: uid(), ...DEFAULT_TEXT_ITEM, area: activeArea };
+    const rawItem = {
+      id: uid(),
+      ...DEFAULT_TEXT_ITEM,
+      area: activeArea,
+      layerName: "Texte",
+      hidden: false,
+      locked: false,
+      z: Date.now(),
+    };
+    const item = limitItemToPrintArea(withAutoTextWidth(rawItem, printZoneSizes), printZoneSizes);
     setItems((current) => [...current, item]);
     setSelectedId(item.id);
   }
@@ -452,18 +635,24 @@ export default function Vue3DTshirt() {
   function handleLogoUpload(event) {
     const files = Array.from(event.target.files || []);
     if (!files.length) return;
-    const newItems = files.map((file, index) => ({
-      id: uid(),
-      type: "image",
-      area: activeArea,
-      x: clamp(0.5 + index * 0.04, 0.05, 0.95),
-      y: clamp(0.38 + index * 0.04, 0.05, 0.95),
-      width: 0.22,
-      height: 0.16,
-      rotation: 0,
-      src: URL.createObjectURL(file),
-      fileName: file.name,
-    }));
+    const newItems = files.map((file, index) =>
+      limitItemToPrintArea({
+        id: uid(),
+        type: "image",
+        area: activeArea,
+        x: clamp(0.5 + index * 0.04, 0.05, 0.95),
+        y: clamp(0.38 + index * 0.04, 0.05, 0.95),
+        width: Math.min(0.22, getMaxItemWidthScale(activeArea, printZoneSizes)),
+        height: 0.16,
+        rotation: 0,
+        src: URL.createObjectURL(file),
+        fileName: file.name,
+        layerName: file.name,
+        hidden: false,
+        locked: false,
+        z: Date.now() + index,
+      }, printZoneSizes)
+    );
     setItems((current) => [...current, ...newItems]);
     setSelectedId(newItems[0].id);
     event.target.value = "";
@@ -490,9 +679,14 @@ export default function Vue3DTshirt() {
   function pointFromEvent(event) {
     const rect = editorRef.current?.getBoundingClientRect();
     if (!rect) return null;
+
+    // Les coordonnées de travail sont relatives à la zone pointillée, pas à tout le carré éditeur.
+    const rawX = (event.clientX - rect.left) / rect.width;
+    const rawY = (event.clientY - rect.top) / rect.height;
+
     return {
-      x: clamp((event.clientX - rect.left) / rect.width, 0.02, 0.98),
-      y: clamp((event.clientY - rect.top) / rect.height, 0.02, 0.98),
+      x: clamp((rawX - EDITOR_PRINT_INSET) / EDITOR_PRINT_SIZE, 0, 1),
+      y: clamp((rawY - EDITOR_PRINT_INSET) / EDITOR_PRINT_SIZE, 0, 1),
       rect,
     };
   }
@@ -503,7 +697,7 @@ export default function Vue3DTshirt() {
     setSelectedId(itemId);
     const point = pointFromEvent(event);
     const item = items.find((entry) => entry.id === itemId);
-    if (!point || !item) return;
+    if (!point || !item || item.locked || item.hidden) return;
     actionRef.current = {
       type: "move",
       id: itemId,
@@ -513,16 +707,16 @@ export default function Vue3DTshirt() {
     event.currentTarget.setPointerCapture?.(event.pointerId);
   }
 
-  function startResize(event, itemId, axis = "both") {
+  function startResize(event, itemId, handle = "both") {
     event.preventDefault();
     event.stopPropagation();
     setSelectedId(itemId);
     const point = pointFromEvent(event);
     const item = items.find((entry) => entry.id === itemId);
-    if (!point || !item) return;
+    if (!point || !item || item.locked || item.hidden) return;
     actionRef.current = {
       type: "resize",
-      axis,
+      handle,
       id: itemId,
       startPointer: point,
       startItem: { ...item },
@@ -539,23 +733,65 @@ export default function Vue3DTshirt() {
     if (action.type === "move") {
       const dx = point.x - action.startPointer.x;
       const dy = point.y - action.startPointer.y;
-      updateItem(action.id, {
-        x: clamp(action.startItem.x + dx, 0.02, 0.98),
-        y: clamp(action.startItem.y + dy, 0.02, 0.98),
-      });
+      const nextPatch = {
+        x: action.startItem.x + dx,
+        y: action.startItem.y + dy,
+      };
+      const snapped = applySnapToPosition(action.startItem, nextPatch, snapEnabled);
+      setSnapPreview(snapped.preview);
+      updateItem(action.id, snapped.patch);
     }
 
     if (action.type === "resize") {
+      setSnapPreview(null);
       const dx = point.x - action.startPointer.x;
       const dy = point.y - action.startPointer.y;
-      const patch = {};
+      const handle = action.handle || "both";
+      const startWidth = Number(action.startItem.width || 0.22);
+      const startHeight = Number(action.startItem.height || 0.16);
+      const startX = Number(action.startItem.x ?? 0.5);
+      const startY = Number(action.startItem.y ?? 0.5);
+      const maxWidth = getMaxItemWidthScale(action.startItem.area || activeArea, printZoneSizes);
+      const minWidth = 0.035;
+      const minHeight = 0.025;
 
-      if (action.axis === "x" || action.axis === "both") {
-        patch.width = clamp(Number(action.startItem.width || 0.22) + dx * 1.6, 0.035, 1.2);
+      let nextWidth = startWidth;
+      let nextHeight = startHeight;
+      let nextX = startX;
+      let nextY = startY;
+
+      if (handle === "right" || handle === "both") {
+        nextWidth = clamp(startWidth + dx, minWidth, maxWidth);
+        nextX = startX + (nextWidth - startWidth) / 2;
       }
 
-      if (action.axis === "y" || action.axis === "both") {
-        patch.height = clamp(Number(action.startItem.height || 0.16) + dy * 1.6, 0.025, 1.2);
+      if (handle === "left") {
+        nextWidth = clamp(startWidth - dx, minWidth, maxWidth);
+        nextX = startX - (nextWidth - startWidth) / 2;
+      }
+
+      if (handle === "bottom" || handle === "both") {
+        nextHeight = clamp(startHeight + dy, minHeight, 1);
+        nextY = startY + (nextHeight - startHeight) / 2;
+      }
+
+      if (handle === "top") {
+        nextHeight = clamp(startHeight - dy, minHeight, 1);
+        nextY = startY - (nextHeight - startHeight) / 2;
+      }
+
+      const patch = {
+        width: nextWidth,
+        height: nextHeight,
+        x: nextX,
+        y: nextY,
+      };
+
+      // Texte : on redimensionne uniquement le cadre.
+      // Le SVG du texte se met automatiquement à l’échelle du cadre,
+      // ce qui évite les agrandissements brutaux et les débordements.
+      if (action.startItem.type === "text") {
+        delete patch.textSize;
       }
 
       updateItem(action.id, patch);
@@ -564,6 +800,7 @@ export default function Vue3DTshirt() {
 
   function stopPointer() {
     actionRef.current = null;
+    setSnapPreview(null);
   }
 
   function deleteSelected() {
@@ -576,17 +813,104 @@ export default function Vue3DTshirt() {
 
   function duplicateSelected() {
     if (!selectedItem) return;
-    const copy = { ...selectedItem, id: uid(), x: clamp(selectedItem.x + 0.05, 0.02, 0.98), y: clamp(selectedItem.y + 0.05, 0.02, 0.98) };
+    const copy = limitItemToPrintArea({
+      ...selectedItem,
+      id: uid(),
+      x: selectedItem.x + 0.05,
+      y: selectedItem.y + 0.05,
+    }, printZoneSizes);
     setItems((current) => [...current, copy]);
     setSelectedId(copy.id);
+  }
+
+  function updateLayer(id, patch) {
+    setItems((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+  }
+
+  function renameLayer(id, name) {
+    updateLayer(id, { layerName: makeLayerName(name, defaultLayerName(items.find((item) => item.id === id))) });
+  }
+
+  function toggleLayerHidden(id) {
+    setItems((current) => current.map((item) => {
+      if (item.id !== id) return item;
+      const hidden = !item.hidden;
+      if (hidden && selectedId === id) setSelectedId(null);
+      return { ...item, hidden };
+    }));
+  }
+
+  function toggleLayerLocked(id) {
+    updateLayer(id, { locked: !items.find((item) => item.id === id)?.locked });
+  }
+
+  function moveLayer(id, direction) {
+    setItems((current) => {
+      const currentZ = Number(current.find((item) => item.id === id)?.z || 0);
+      const sorted = [...current].sort((a, b) => Number(a.z || 0) - Number(b.z || 0));
+      const index = sorted.findIndex((item) => item.id === id);
+      const swapIndex = direction === "up" ? index + 1 : index - 1;
+      if (index < 0 || swapIndex < 0 || swapIndex >= sorted.length) return current;
+      const other = sorted[swapIndex];
+      return current.map((item) => {
+        if (item.id === id) return { ...item, z: Number(other.z || 0) };
+        if (item.id === other.id) return { ...item, z: currentZ };
+        return item;
+      });
+    });
+  }
+
+  function updateActiveZoneSize(patch) {
+    setPrintZoneSizes((current) => {
+      const next = {
+        ...current,
+        [activeArea]: {
+          ...getZoneSizeCm(current, activeArea),
+          ...patch,
+        },
+      };
+
+      setItems((itemsCurrent) =>
+        itemsCurrent.map((item) =>
+          item.area === activeArea ? limitItemToPrintArea(item, next) : item
+        )
+      );
+
+      return next;
+    });
+  }
+
+  function applyPrintPreset(event) {
+    const preset = PRINT_SIZE_PRESETS.find((entry) => entry.label === event.target.value);
+    if (!preset) return;
+    updateActiveZoneSize({ width: preset.width, height: preset.height });
+    event.target.value = "";
+  }
+
+  function updateSelectedRealSize(patchCm) {
+    if (!selectedItem) return;
+    const areaSize = getZoneSizeCm(printZoneSizes, selectedItem.area);
+    const patch = {};
+    if (patchCm.width !== undefined) {
+      const maxWidthCm = Math.min(MAX_PRINT_WIDTH_CM, Number(areaSize.width || MAX_PRINT_WIDTH_CM));
+      patch.width = clamp(Number(patchCm.width || 0) / areaSize.width, 0.01, maxWidthCm / areaSize.width);
+    }
+    if (patchCm.height !== undefined) {
+      patch.height = clamp(Number(patchCm.height || 0) / areaSize.height, 0.01, 1);
+    }
+    updateItem(selectedItem.id, patch);
   }
 
   async function buildPrintElementFiles() {
     const files = [];
 
-    for (let index = 0; index < items.length; index += 1) {
-      const item = items[index];
-      const { width, height } = getItemPrintSizeCm(item);
+    const printableItems = items
+      .filter((item) => !item.hidden)
+      .sort((a, b) => Number(a.z || 0) - Number(b.z || 0));
+
+    for (let index = 0; index < printableItems.length; index += 1) {
+      const item = printableItems[index];
+      const { width, height } = getItemPrintSizeCm(item, printZoneSizes);
       const widthPx = cmToPixels(width);
       const heightPx = cmToPixels(height);
       const canvas = document.createElement("canvas");
@@ -690,6 +1014,38 @@ export default function Vue3DTshirt() {
                 {Object.entries(PRINT_ZONES).map(([key, zone]) => <option key={key} value={key}>{zone.label}</option>)}
               </select>
             </label>
+            <label>
+              Format zone
+              <select defaultValue="" onChange={applyPrintPreset}>
+                <option value="" disabled>Choisir A4 / A3 / DTF</option>
+                {PRINT_SIZE_PRESETS.map((preset) => <option key={preset.label} value={preset.label}>{preset.label}</option>)}
+              </select>
+            </label>
+          </div>
+
+          <div className="tshirt3d-real-size-panel">
+            <strong>Zone réelle : {PRINT_ZONES[activeArea]?.label} — {formatCm(activeZoneSize.width)} × {formatCm(activeZoneSize.height)} cm</strong>
+            <div className="tshirt3d-real-size-fields">
+              <label>
+  Largeur zone (cm)
+  <input
+    type="number"
+    value={activeZoneSize.width}
+    readOnly
+    disabled
+  />
+</label>
+
+<label>
+  Hauteur zone (cm)
+  <input
+    type="number"
+    value={activeZoneSize.height}
+    readOnly
+    disabled
+  />
+</label>
+            </div>
           </div>
 
           <div className="tshirt3d-toolbar">
@@ -703,7 +1059,57 @@ export default function Vue3DTshirt() {
               <input type="file" accept=".ttf,.otf,.woff,.woff2" onChange={handleFontUpload} />
             </label>
             <button disabled={!selectedItem} onClick={duplicateSelected}>Dupliquer</button>
-            <button className="danger" disabled={!selectedItem} onClick={deleteSelected}>Supprimer</button>
+            <button className="danger" disabled={!selectedItem || selectedItem.locked} onClick={deleteSelected}>Supprimer</button>
+          </div>
+
+          <div className="tshirt3d-align-tools">
+            <label className="tshirt3d-checkbox compact">
+              <input type="checkbox" checked={snapEnabled} onChange={(e) => setSnapEnabled(e.target.checked)} />
+              Aimants d’alignement
+            </label>
+            <span>Repères : centre, poitrine, col et centre manche.</span>
+          </div>
+
+          <div className="tshirt3d-layers-panel">
+            <div className="tshirt3d-layers-header">
+              <strong>Calques</strong>
+              <span>{layerItems.length} élément{layerItems.length > 1 ? "s" : ""} dans {PRINT_ZONES[activeArea]?.label}</span>
+            </div>
+            {layerItems.length ? (
+              <div className="tshirt3d-layers-list">
+                {layerItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className={`tshirt3d-layer-row ${item.id === selectedId ? "active" : ""} ${item.hidden ? "is-hidden" : ""} ${item.locked ? "is-locked" : ""}`}
+                  >
+                    <button
+                      type="button"
+                      className="tshirt3d-layer-select"
+                      onClick={() => { if (!item.hidden) setSelectedId(item.id); }}
+                      title="Sélectionner le calque"
+                    >
+                      <span className="tshirt3d-layer-type">{item.type === "image" ? "🖼️" : "T"}</span>
+                    </button>
+                    <input
+                      className="tshirt3d-layer-name"
+                      value={defaultLayerName(item)}
+                      onChange={(e) => renameLayer(item.id, e.target.value)}
+                      title="Renommer le calque"
+                    />
+                    <button type="button" onClick={() => toggleLayerHidden(item.id)} title={item.hidden ? "Afficher" : "Masquer"}>
+                      {item.hidden ? "🙈" : "👁"}
+                    </button>
+                    <button type="button" onClick={() => toggleLayerLocked(item.id)} title={item.locked ? "Déverrouiller" : "Verrouiller"}>
+                      {item.locked ? "🔒" : "🔓"}
+                    </button>
+                    <button type="button" onClick={() => moveLayer(item.id, "up")} title="Monter le calque">↑</button>
+                    <button type="button" onClick={() => moveLayer(item.id, "down")} title="Descendre le calque">↓</button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="muted">Aucun calque dans cette zone.</p>
+            )}
           </div>
 
           <div
@@ -715,27 +1121,74 @@ export default function Vue3DTshirt() {
             onPointerLeave={stopPointer}
             onPointerDown={() => setSelectedId(null)}
           >
+            <div className="tshirt3d-ruler tshirt3d-ruler-x">
+              {rulerXTicks.map((tick) => <span key={`x-${tick.value}`} style={{ left: `${tick.percent}%` }}>{formatCm(tick.value)}</span>)}
+            </div>
+            <div className="tshirt3d-ruler tshirt3d-ruler-y">
+              {rulerYTicks.map((tick) => <span key={`y-${tick.value}`} style={{ top: `${tick.percent}%` }}>{formatCm(tick.value)}</span>)}
+            </div>
+            <div className="tshirt3d-ruler-label">cm</div>
+            {snapEnabled && snapGuides.x.map((guide) => (
+              <div
+                key={`snap-x-${guide.label}`}
+                className={`tshirt3d-snap-line tshirt3d-snap-line-x ${snapPreview?.x?.value === guide.value ? "active" : ""}`}
+                style={{ left: `${(EDITOR_PRINT_INSET + guide.value * EDITOR_PRINT_SIZE) * 100}%` }}
+              >
+                <span>{guide.label}</span>
+              </div>
+            ))}
+            {snapEnabled && snapGuides.y.map((guide) => (
+              <div
+                key={`snap-y-${guide.label}`}
+                className={`tshirt3d-snap-line tshirt3d-snap-line-y ${snapPreview?.y?.value === guide.value ? "active" : ""}`}
+                style={{ top: `${(EDITOR_PRINT_INSET + guide.value * EDITOR_PRINT_SIZE) * 100}%` }}
+              >
+                <span>{guide.label}</span>
+              </div>
+            ))}
             {showPrintZone && <div className={`tshirt3d-zone-border area-${activeArea}`} />}
             {visibleItems.map((item) => (
               <div
                 key={item.id}
-                className={`tshirt3d-design ${item.id === selectedId ? "selected" : ""}`}
+                className={`tshirt3d-design ${item.id === selectedId ? "selected" : ""} ${item.locked ? "locked" : ""}`}
                 onPointerDown={(event) => startMove(event, item.id)}
                 style={{
-                  left: `${item.x * 100}%`,
-                  top: `${item.y * 100}%`,
-                  width: `${item.width * 100}%`,
-                  height: `${(item.height || 0.16) * 100}%`,
+                  left: `${(EDITOR_PRINT_INSET + item.x * EDITOR_PRINT_SIZE) * 100}%`,
+                  top: `${(EDITOR_PRINT_INSET + item.y * EDITOR_PRINT_SIZE) * 100}%`,
+                  width: `${item.width * EDITOR_PRINT_SIZE * 100}%`,
+                  height: `${(item.height || 0.16) * EDITOR_PRINT_SIZE * 100}%`,
                   transform: `translate(-50%, -50%) rotate(${item.rotation || 0}deg)`,
                 }}
               >
                 {item.type === "image" ? (
                   <img src={item.src} alt={item.fileName || "Logo"} />
                 ) : (
-                  <span style={{ color: item.textColor, fontFamily: item.fontFamily }}>{item.text}</span>
+                  <svg
+                    className="tshirt3d-text-svg"
+                    viewBox="0 0 1000 240"
+                    preserveAspectRatio="none"
+                    aria-label={item.text || "Texte"}
+                  >
+                    <text
+                      x="500"
+                      y="120"
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      fill={item.textColor || "#111827"}
+                      fontFamily={item.fontFamily || "Arial"}
+                      fontWeight="900"
+                      fontSize="165"
+                      textLength="900"
+                      lengthAdjust="spacingAndGlyphs"
+                    >
+                      {item.text || "Texte"}
+                    </text>
+                  </svg>
                 )}
-                <button className="tshirt3d-resize-handle x" onPointerDown={(event) => startResize(event, item.id, "x")} title="Largeur" />
-                <button className="tshirt3d-resize-handle y" onPointerDown={(event) => startResize(event, item.id, "y")} title="Hauteur" />
+                <button className="tshirt3d-resize-handle left" onPointerDown={(event) => startResize(event, item.id, "left")} title="Étirer gauche / largeur" />
+                <button className="tshirt3d-resize-handle right" onPointerDown={(event) => startResize(event, item.id, "right")} title="Étirer droite / largeur" />
+                <button className="tshirt3d-resize-handle top" onPointerDown={(event) => startResize(event, item.id, "top")} title="Étirer haut / hauteur" />
+                <button className="tshirt3d-resize-handle bottom" onPointerDown={(event) => startResize(event, item.id, "bottom")} title="Étirer bas / hauteur" />
                 <button className="tshirt3d-resize-handle both" onPointerDown={(event) => startResize(event, item.id, "both")} title="Largeur + hauteur" />
               </div>
             ))}
@@ -743,13 +1196,19 @@ export default function Vue3DTshirt() {
 
           {selectedItem ? (
             <div className="tshirt3d-selected-panel">
-              <strong>Élément sélectionné : {selectedItem.type === "image" ? selectedItem.fileName || "Logo" : "Texte"}</strong>
+              <strong>Élément sélectionné : {defaultLayerName(selectedItem)} {selectedItem.locked ? "— verrouillé" : ""}</strong>
               {selectedItem.type === "text" && (
                 <div className="tshirt3d-form-grid">
-                  <label>Texte<input value={selectedItem.text || ""} onChange={(e) => updateItem(selectedItem.id, { text: e.target.value })} /></label>
+                  <label>Texte<input value={selectedItem.text || ""} onChange={(e) => {
+                    const nextText = e.target.value;
+                    updateItem(selectedItem.id, withAutoTextWidth({ ...selectedItem, text: nextText }, printZoneSizes));
+                  }} /></label>
                   <label>Couleur<input type="color" value={selectedItem.textColor || "#111827"} onChange={(e) => updateItem(selectedItem.id, { textColor: e.target.value })} /></label>
                   <label>Police
-                    <select value={selectedItem.fontFamily || "Arial"} onChange={(e) => updateItem(selectedItem.id, { fontFamily: e.target.value })}>
+                    <select value={selectedItem.fontFamily || "Arial"} onChange={(e) => {
+                      const nextFontFamily = e.target.value;
+                      updateItem(selectedItem.id, withAutoTextWidth({ ...selectedItem, fontFamily: nextFontFamily }, printZoneSizes));
+                    }}>
                       <option value="Arial">Arial</option>
                       <option value="Impact">Impact</option>
                       <option value="Georgia">Georgia</option>
@@ -758,12 +1217,21 @@ export default function Vue3DTshirt() {
                       {customFonts.map((font) => <option key={font.name} value={font.name}>{font.name}</option>)}
                     </select>
                   </label>
-                  <label>Taille texte<input type="range" min="24" max="160" step="1" value={selectedItem.textSize || 74} onChange={(e) => updateItem(selectedItem.id, { textSize: Number(e.target.value) })} /></label>
+                </div>
+              )}
+              {selectedPrintSize && (
+                <div className="tshirt3d-selected-size-box">
+                  <strong>Taille réelle impression : {formatCm(selectedPrintSize.width)} × {formatCm(selectedPrintSize.height)} cm</strong>
+                  <p className="muted">Largeur max autorisée : {formatCm(Math.min(MAX_PRINT_WIDTH_CM, getZoneSizeCm(printZoneSizes, selectedItem.area).width))} cm. L’élément reste dans la zone pointillée.</p>
+                  <div className="tshirt3d-real-size-fields">
+                    <label>Largeur élément (cm)<input type="number" min="0.1" step="0.1" value={Number(selectedPrintSize.width.toFixed(1))} onChange={(e) => updateSelectedRealSize({ width: Number(e.target.value) })} /></label>
+                    <label>Hauteur élément (cm)<input type="number" min="0.1" step="0.1" value={Number(selectedPrintSize.height.toFixed(1))} onChange={(e) => updateSelectedRealSize({ height: Number(e.target.value) })} /></label>
+                  </div>
                 </div>
               )}
               <div className="tshirt3d-controls">
-                <label>Largeur<input type="range" min="0.035" max="1.2" step="0.005" value={selectedItem.width} onChange={(e) => updateItem(selectedItem.id, { width: Number(e.target.value) })} /></label>
-                <label>Hauteur<input type="range" min="0.025" max="1.2" step="0.005" value={selectedItem.height || 0.16} onChange={(e) => updateItem(selectedItem.id, { height: Number(e.target.value) })} /></label>
+                <label>Largeur<input type="range" min="0.035" max={getMaxItemWidthScale(selectedItem.area, printZoneSizes)} step="0.005" value={selectedItem.width} onChange={(e) => updateItem(selectedItem.id, { width: Number(e.target.value) })} /></label>
+                <label>Hauteur<input type="range" min="0.025" max="1" step="0.005" value={selectedItem.height || 0.16} onChange={(e) => updateItem(selectedItem.id, { height: Number(e.target.value) })} /></label>
                 <label>Rotation<input type="range" min="-180" max="180" step="1" value={selectedItem.rotation || 0} onChange={(e) => updateItem(selectedItem.id, { rotation: Number(e.target.value) })} /></label>
                 <label>Déplacer vers
                   <select value={selectedItem.area} onChange={(e) => { updateItem(selectedItem.id, { area: e.target.value, x: 0.5, y: 0.38 }); setActiveArea(e.target.value); }}>

@@ -206,3 +206,484 @@
     grid-template-columns: 1fr;
   }
 }
+
+
+/* ===== Point 1 : tailles réelles + règle visuelle ===== */
+.tshirt3d-real-size-panel,
+.tshirt3d-selected-size-box {
+  border: 1px solid rgba(37, 99, 235, 0.22);
+  background: rgba(37, 99, 235, 0.06);
+  border-radius: 14px;
+  padding: 12px;
+  margin: 12px 0 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.tshirt3d-real-size-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.tshirt3d-real-size-fields label {
+  display: grid;
+  gap: 6px;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.tshirt3d-ruler {
+  position: absolute;
+  z-index: 4;
+  pointer-events: none;
+  color: #1d4ed8;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.tshirt3d-ruler-x {
+  top: 4px;
+  left: 7%;
+  right: 7%;
+  height: 24px;
+  border-bottom: 1px solid rgba(37, 99, 235, 0.45);
+}
+
+.tshirt3d-ruler-x span {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+}
+
+.tshirt3d-ruler-x span::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 14px;
+  width: 1px;
+  height: 8px;
+  background: rgba(37, 99, 235, 0.55);
+}
+
+.tshirt3d-ruler-y {
+  top: 7%;
+  bottom: 7%;
+  left: 5px;
+  width: 30px;
+  border-right: 1px solid rgba(37, 99, 235, 0.45);
+}
+
+.tshirt3d-ruler-y span {
+  position: absolute;
+  left: 0;
+  transform: translateY(-50%);
+}
+
+.tshirt3d-ruler-y span::after {
+  content: "";
+  position: absolute;
+  left: 22px;
+  top: 50%;
+  width: 8px;
+  height: 1px;
+  background: rgba(37, 99, 235, 0.55);
+}
+
+.tshirt3d-ruler-label {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 5;
+  font-size: 11px;
+  font-weight: 900;
+  color: #1d4ed8;
+  pointer-events: none;
+}
+
+
+/* ===== Cadre texte ajusté + poignées haut/bas/gauche/droite ===== */
+.tshirt3d-design span {
+  padding: 0 6px;
+  overflow: visible;
+}
+
+.tshirt3d-resize-handle.left {
+  left: -10px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: ew-resize;
+}
+
+.tshirt3d-resize-handle.right,
+.tshirt3d-resize-handle.x {
+  right: -10px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: ew-resize;
+}
+
+.tshirt3d-resize-handle.top {
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  cursor: ns-resize;
+}
+
+.tshirt3d-resize-handle.bottom,
+.tshirt3d-resize-handle.y {
+  bottom: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  cursor: ns-resize;
+}
+
+/* ===== Correction texte : poignées visibles + panneau lisible ===== */
+.tshirt3d-selected-panel,
+.tshirt3d-selected-panel * {
+  color: #111827 !important;
+}
+
+.tshirt3d-selected-panel input,
+.tshirt3d-selected-panel select {
+  background: #ffffff !important;
+  color: #111827 !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+.tshirt3d-selected-panel input::placeholder {
+  color: #64748b !important;
+}
+
+.tshirt3d-selected-panel .muted {
+  color: #475569 !important;
+}
+
+.tshirt3d-design.selected {
+  border: 2px solid #2563eb !important;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.16) !important;
+}
+
+.tshirt3d-resize-handle,
+.tshirt3d-resize-handle.left,
+.tshirt3d-resize-handle.right,
+.tshirt3d-resize-handle.top,
+.tshirt3d-resize-handle.bottom,
+.tshirt3d-resize-handle.both {
+  display: block !important;
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px !important;
+  padding: 0 !important;
+  border-radius: 999px !important;
+  background: #2563eb !important;
+  border: 2px solid #ffffff !important;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.35) !important;
+  opacity: 1 !important;
+  z-index: 20 !important;
+}
+
+.tshirt3d-resize-handle.left {
+  left: -10px !important;
+  top: 50% !important;
+  right: auto !important;
+  bottom: auto !important;
+  transform: translateY(-50%) !important;
+  cursor: ew-resize !important;
+}
+
+.tshirt3d-resize-handle.right {
+  right: -10px !important;
+  top: 50% !important;
+  left: auto !important;
+  bottom: auto !important;
+  transform: translateY(-50%) !important;
+  cursor: ew-resize !important;
+}
+
+.tshirt3d-resize-handle.top {
+  top: -10px !important;
+  left: 50% !important;
+  right: auto !important;
+  bottom: auto !important;
+  transform: translateX(-50%) !important;
+  cursor: ns-resize !important;
+}
+
+.tshirt3d-resize-handle.bottom {
+  bottom: -10px !important;
+  left: 50% !important;
+  right: auto !important;
+  top: auto !important;
+  transform: translateX(-50%) !important;
+  cursor: ns-resize !important;
+}
+
+.tshirt3d-resize-handle.both {
+  right: -10px !important;
+  bottom: -10px !important;
+  left: auto !important;
+  top: auto !important;
+  transform: none !important;
+  background: #16a34a !important;
+  cursor: nwse-resize !important;
+}
+
+
+/* ===== Fix texte : cadre + texte restent synchronisés ===== */
+.tshirt3d-design {
+  overflow: visible !important;
+}
+
+.tshirt3d-text-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+  pointer-events: none;
+  user-select: none;
+}
+
+.tshirt3d-text-svg text {
+  paint-order: stroke;
+  vector-effect: non-scaling-stroke;
+}
+
+.tshirt3d-resize-handle,
+.tshirt3d-resize-handle.left,
+.tshirt3d-resize-handle.right,
+.tshirt3d-resize-handle.top,
+.tshirt3d-resize-handle.bottom,
+.tshirt3d-resize-handle.both {
+  background: #2563eb !important;
+  border: 2px solid #ffffff !important;
+  opacity: 1 !important;
+}
+
+.tshirt3d-resize-handle.both {
+  background: #16a34a !important;
+}
+
+
+/* ===== Fix logo + texte : le contenu remplit toujours le cadre bleu ===== */
+.tshirt3d-design {
+  box-sizing: border-box !important;
+  padding: 0 !important;
+  overflow: visible !important;
+  background: transparent !important;
+}
+
+.tshirt3d-design.selected {
+  border: 1px solid transparent !important;
+  outline: 2px solid #2563eb !important;
+  outline-offset: 0 !important;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.14) !important;
+}
+
+.tshirt3d-design img,
+.tshirt3d-text-svg {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  display: block !important;
+  object-fit: fill !important;
+  pointer-events: none !important;
+  user-select: none !important;
+}
+
+.tshirt3d-text-svg {
+  overflow: hidden !important;
+}
+
+.tshirt3d-text-svg text {
+  dominant-baseline: middle;
+  text-anchor: middle;
+}
+
+.tshirt3d-resize-handle,
+.tshirt3d-resize-handle.left,
+.tshirt3d-resize-handle.right,
+.tshirt3d-resize-handle.top,
+.tshirt3d-resize-handle.bottom,
+.tshirt3d-resize-handle.both {
+  position: absolute !important;
+  background: #2563eb !important;
+  border: 2px solid #ffffff !important;
+  opacity: 1 !important;
+  z-index: 50 !important;
+}
+
+.tshirt3d-resize-handle.both {
+  background: #16a34a !important;
+}
+
+/* ===== Point 2 : grille d’alignement + aimants ===== */
+.tshirt3d-align-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  margin: 10px 0 12px;
+  border-radius: 14px;
+  background: rgba(37, 99, 235, 0.08);
+  border: 1px solid rgba(37, 99, 235, 0.22);
+  color: #1e3a8a;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.tshirt3d-checkbox.compact {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.tshirt3d-snap-line {
+  position: absolute;
+  z-index: 6;
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+.tshirt3d-snap-line-x {
+  top: 7%;
+  bottom: 7%;
+  width: 0;
+  border-left: 2px dashed rgba(34, 197, 94, 0.55);
+}
+
+.tshirt3d-snap-line-y {
+  left: 7%;
+  right: 7%;
+  height: 0;
+  border-top: 2px dashed rgba(34, 197, 94, 0.55);
+}
+
+.tshirt3d-snap-line.active {
+  opacity: 1;
+  filter: drop-shadow(0 0 5px rgba(34, 197, 94, 0.8));
+}
+
+.tshirt3d-snap-line span {
+  position: absolute;
+  background: rgba(22, 163, 74, 0.95);
+  color: #fff;
+  border-radius: 999px;
+  padding: 3px 7px;
+  font-size: 10px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.tshirt3d-snap-line-x span {
+  top: 8px;
+  left: 6px;
+}
+
+.tshirt3d-snap-line-y span {
+  left: 8px;
+  top: -22px;
+}
+
+/* ===== Point 3 : calques ===== */
+.tshirt3d-layers-panel {
+  border: 1px solid rgba(37, 99, 235, 0.22);
+  background: rgba(37, 99, 235, 0.06);
+  border-radius: 14px;
+  padding: 12px;
+  margin: 12px 0 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.tshirt3d-layers-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  color: #1e3a8a;
+  font-size: 13px;
+}
+
+.tshirt3d-layers-list {
+  display: grid;
+  gap: 8px;
+  max-height: 220px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.tshirt3d-layer-row {
+  display: grid;
+  grid-template-columns: 36px minmax(110px, 1fr) 34px 34px 32px 32px;
+  align-items: center;
+  gap: 6px;
+  padding: 7px;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.tshirt3d-layer-row.active {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+}
+
+.tshirt3d-layer-row.is-hidden {
+  opacity: 0.58;
+}
+
+.tshirt3d-layer-row.is-locked .tshirt3d-layer-name {
+  font-style: italic;
+}
+
+.tshirt3d-layer-row button,
+.tshirt3d-layer-select {
+  min-width: 0;
+  height: 32px;
+  padding: 0 6px;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tshirt3d-layer-type {
+  font-weight: 900;
+  color: #2563eb;
+}
+
+.tshirt3d-layer-name {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 9px;
+  padding: 0 10px;
+  background: #fff;
+  color: #111827;
+  font-weight: 700;
+}
+
+.tshirt3d-design.locked {
+  cursor: not-allowed;
+  outline-style: dashed !important;
+}
+
+.tshirt3d-design.locked::after {
+  content: "🔒";
+  position: absolute;
+  right: -12px;
+  top: -14px;
+  z-index: 60;
+  background: #111827;
+  color: #fff;
+  border-radius: 999px;
+  font-size: 12px;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
