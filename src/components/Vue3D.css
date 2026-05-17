@@ -381,3 +381,18 @@ dans le select des polices.
   pointer-events: none;
   user-select: none;
 }
+
+
+/* Correction gabarit mug : zone imprimable complète 210 × 90 mm */
+.vue3d-design-editor::before,
+.vue3d-design-editor::after {
+  display: none !important;
+}
+
+.vue3d-safe-zone {
+  left: 0 !important;
+  right: 0 !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  border-radius: 16px;
+}

@@ -8,13 +8,13 @@ const MODEL_URL = `${import.meta.env.BASE_URL}models/scene.gltf`;
 const CANVAS_WIDTH = 1400;
 const CANVAS_HEIGHT = 600;
 
-// Zone pointillée de droite = vraie zone imprimable envoyée sur le mug.
-// Les images sont bloquées dans cette zone, et le rendu 3D utilise cette même zone.
+// Zone imprimable complète du mug : 210 × 90 mm.
+// Les éléments peuvent maintenant occuper 100% du gabarit et l'export correspond à 21 × 9 cm.
 const SAFE_ZONE = {
-  left: 0.065,
-  top: 0.055,
-  right: 0.935,
-  bottom: 0.945,
+  left: 0,
+  top: 0,
+  right: 1,
+  bottom: 1,
 };
 
 const SAFE_ZONE_WIDTH = SAFE_ZONE.right - SAFE_ZONE.left;
@@ -26,6 +26,198 @@ function uid() {
 
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
+}
+
+const EXPORT_DPI = 300;
+const CM_TO_INCH = 1 / 2.54;
+const MUG_PRINT_SIZE_CM = { width: 21, height: 9 };
+
+function cmToPixels(cm) {
+  return Math.max(1, Math.round(Number(cm || 0) * CM_TO_INCH * EXPORT_DPI));
+}
+
+function sanitizeFilename(value) {
+  return String(value || "element")
+    .trim()
+    .replace(/\.[^/.]+$/, "")
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 55) || "element";
+}
+
+function sanitizeFontFilename(value, fallbackExtension = ".ttf") {
+  const raw = String(value || "police").trim();
+  const hasExtension = /\.(ttf|otf|woff|woff2)$/i.test(raw);
+  const extension = hasExtension
+    ? raw.match(/\.(ttf|otf|woff|woff2)$/i)?.[0]?.toLowerCase() || fallbackExtension
+    : fallbackExtension;
+  const base = raw
+    .replace(/\.(ttf|otf|woff|woff2)$/i, "")
+    .replace(/[^a-zA-Z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 55) || "police";
+  return `${base}${extension}`;
+}
+
+function getFontExtension(file) {
+  const name = String(file?.name || "");
+  const extFromName = name.match(/\.(ttf|otf|woff|woff2)$/i)?.[0];
+  if (extFromName) return extFromName.toLowerCase();
+
+  const type = String(file?.type || "").toLowerCase();
+  if (type.includes("opentype") || type.includes("otf")) return ".otf";
+  if (type.includes("woff2")) return ".woff2";
+  if (type.includes("woff")) return ".woff";
+  return ".ttf";
+}
+
+function canvasToBlob(canvas) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error("Export PNG impossible."));
+    }, "image/png");
+  });
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function makeCrc32Table() {
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i += 1) {
+    let c = i;
+    for (let k = 0; k < 8; k += 1) {
+      c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    }
+    table[i] = c >>> 0;
+  }
+  return table;
+}
+
+const CRC32_TABLE = makeCrc32Table();
+
+function crc32(bytes) {
+  let crc = 0xffffffff;
+  for (let i = 0; i < bytes.length; i += 1) {
+    crc = CRC32_TABLE[(crc ^ bytes[i]) & 0xff] ^ (crc >>> 8);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function dateToDosTime(date = new Date()) {
+  const time = ((date.getHours() & 0x1f) << 11) | ((date.getMinutes() & 0x3f) << 5) | Math.floor(date.getSeconds() / 2);
+  const dosDate = (((date.getFullYear() - 1980) & 0x7f) << 9) | (((date.getMonth() + 1) & 0x0f) << 5) | (date.getDate() & 0x1f);
+  return { time, date: dosDate };
+}
+
+async function createZipBlob(files) {
+  const encoder = new TextEncoder();
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+  const now = dateToDosTime();
+
+  for (const file of files) {
+    const nameBytes = encoder.encode(file.name);
+    const dataBytes = new Uint8Array(await file.blob.arrayBuffer());
+    const crc = crc32(dataBytes);
+
+    const localHeader = new ArrayBuffer(30 + nameBytes.length);
+    const localView = new DataView(localHeader);
+    localView.setUint32(0, 0x04034b50, true);
+    localView.setUint16(4, 20, true);
+    localView.setUint16(6, 0x0800, true);
+    localView.setUint16(8, 0, true);
+    localView.setUint16(10, now.time, true);
+    localView.setUint16(12, now.date, true);
+    localView.setUint32(14, crc, true);
+    localView.setUint32(18, dataBytes.length, true);
+    localView.setUint32(22, dataBytes.length, true);
+    localView.setUint16(26, nameBytes.length, true);
+    localView.setUint16(28, 0, true);
+    new Uint8Array(localHeader, 30).set(nameBytes);
+    localParts.push(localHeader, dataBytes);
+
+    const centralHeader = new ArrayBuffer(46 + nameBytes.length);
+    const centralView = new DataView(centralHeader);
+    centralView.setUint32(0, 0x02014b50, true);
+    centralView.setUint16(4, 20, true);
+    centralView.setUint16(6, 20, true);
+    centralView.setUint16(8, 0x0800, true);
+    centralView.setUint16(10, 0, true);
+    centralView.setUint16(12, now.time, true);
+    centralView.setUint16(14, now.date, true);
+    centralView.setUint32(16, crc, true);
+    centralView.setUint32(20, dataBytes.length, true);
+    centralView.setUint32(24, dataBytes.length, true);
+    centralView.setUint16(28, nameBytes.length, true);
+    centralView.setUint16(30, 0, true);
+    centralView.setUint16(32, 0, true);
+    centralView.setUint16(34, 0, true);
+    centralView.setUint16(36, 0, true);
+    centralView.setUint32(38, 0, true);
+    centralView.setUint32(42, offset, true);
+    new Uint8Array(centralHeader, 46).set(nameBytes);
+    centralParts.push(centralHeader);
+
+    offset += localHeader.byteLength + dataBytes.length;
+  }
+
+  const centralSize = centralParts.reduce((sum, part) => sum + part.byteLength, 0);
+  const endHeader = new ArrayBuffer(22);
+  const endView = new DataView(endHeader);
+  endView.setUint32(0, 0x06054b50, true);
+  endView.setUint16(8, files.length, true);
+  endView.setUint16(10, files.length, true);
+  endView.setUint32(12, centralSize, true);
+  endView.setUint32(16, offset, true);
+  endView.setUint16(20, 0, true);
+
+  return new Blob([...localParts, ...centralParts, endHeader], { type: "application/zip" });
+}
+
+function getMugItemPrintSizeCm(item) {
+  return {
+    width: Math.max(0.1, Number(item.widthScale || 0.22) * MUG_PRINT_SIZE_CM.width),
+    height: Math.max(0.1, Number(item.heightScale || 0.22) * MUG_PRINT_SIZE_CM.height),
+  };
+}
+
+function drawMugPrintItemForExport(ctx, item, widthPx, heightPx) {
+  ctx.clearRect(0, 0, widthPx, heightPx);
+  ctx.save();
+  ctx.translate(widthPx / 2, heightPx / 2);
+  ctx.rotate(Number(item.rotation || 0));
+
+  if (item.type === "text") {
+    const text = String(item.text || "Texte");
+    ctx.fillStyle = item.color || "#ffffff";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+
+    let fontSize = Math.floor(heightPx * 0.72);
+    ctx.font = `800 ${fontSize}px "${item.fontFamily || "Arial"}"`;
+
+    while (ctx.measureText(text).width > widthPx * 0.92 && fontSize > 8) {
+      fontSize -= 2;
+      ctx.font = `800 ${fontSize}px "${item.fontFamily || "Arial"}"`;
+    }
+
+    ctx.fillText(text, 0, 0, widthPx * 0.92);
+  } else if (item.image) {
+    ctx.drawImage(item.image, -widthPx / 2, -heightPx / 2, widthPx, heightPx);
+  }
+
+  ctx.restore();
 }
 
 function isPrintAreaMesh(child) {
@@ -536,6 +728,7 @@ export default function Vue3D() {
   const [items, setItems] = useState([]);
   const [selectedId, setSelectedId] = useState("");
   const [customFonts, setCustomFonts] = useState([]);
+  const previewRef = useRef(null);
 
   const builtInFonts = [
     "Arial",
@@ -644,7 +837,7 @@ export default function Vue3D() {
 
         setCustomFonts((prev) => {
           if (prev.some((font) => font.family === family)) return prev;
-          return [...prev, { family, label: cleanName }];
+          return [...prev, { family, label: cleanName, file, originalName: file.name }];
         });
       } catch (error) {
         alert(`Impossible de charger la police : ${file.name}`);
@@ -654,6 +847,70 @@ export default function Vue3D() {
     event.target.value = "";
   }
 
+
+  async function buildMugPrintElementFiles() {
+    const files = [];
+
+    for (let index = 0; index < items.length; index += 1) {
+      const item = items[index];
+      const { width, height } = getMugItemPrintSizeCm(item);
+      const widthPx = cmToPixels(width);
+      const heightPx = cmToPixels(height);
+      const canvas = document.createElement("canvas");
+      canvas.width = widthPx;
+      canvas.height = heightPx;
+
+      const ctx = canvas.getContext("2d");
+      if (!ctx) continue;
+
+      drawMugPrintItemForExport(ctx, item, widthPx, heightPx);
+
+      const baseName = item.type === "text" ? item.text || "texte" : item.name || "image";
+      const filename = `impression/${String(index + 1).padStart(2, "0")}-${sanitizeFilename(baseName)}-${width.toFixed(1)}x${height.toFixed(1)}cm-300dpi.png`;
+
+      files.push({ name: filename, blob: await canvasToBlob(canvas) });
+    }
+
+    return files;
+  }
+
+  async function buildMugFontFiles() {
+    return customFonts
+      .filter((font) => font?.file)
+      .map((font, index) => {
+        const extension = getFontExtension(font.file);
+        const filename = sanitizeFontFilename(font.originalName || font.file?.name || font.label || font.family, extension);
+        return {
+          name: `polices/${String(index + 1).padStart(2, "0")}-${filename}`,
+          blob: font.file,
+        };
+      });
+  }
+
+  async function exportMockupZip() {
+    try {
+      const files = [];
+      const canvas = previewRef.current?.querySelector("canvas");
+
+      if (canvas) {
+        files.push({ name: "mockup-mug.png", blob: await canvasToBlob(canvas) });
+      }
+
+      files.push(...(await buildMugPrintElementFiles()));
+      files.push(...(await buildMugFontFiles()));
+
+      if (!files.length) {
+        alert("Aucun fichier à exporter.");
+        return;
+      }
+
+      const zipBlob = await createZipBlob(files);
+      downloadBlob(zipBlob, `export-mug-${new Date().toISOString().slice(0, 10)}.zip`);
+    } catch (error) {
+      console.error("Erreur export ZIP mug :", error);
+      alert("Export ZIP impossible. Vérifie la console pour plus de détails.");
+    }
+  }
 
   function deleteSelectedItem() {
     if (!selectedId) return;
@@ -676,12 +933,15 @@ export default function Vue3D() {
           <h2>Vue 3D</h2>
           <p>Éditeur type Zakeke : compose ton visuel sur le gabarit 210 × 90 mm et vois le rendu sur le mug.</p>
         </div>
+        <button className="primary" type="button" onClick={exportMockupZip}>
+          Exporter mockup + fichiers impression
+        </button>
       </div>
 
       <div className="vue3d-zakeke-layout">
         <div className="card vue3d-preview-card">
           <h3>Aperçu 3D</h3>
-          <div className="vue3d-viewer">
+          <div className="vue3d-viewer" ref={previewRef}>
             <Canvas camera={{ position: [0, 0.25, 4.2], fov: 28 }} gl={{ antialias: true, alpha: true, preserveDrawingBuffer: true }}>
               <ambientLight intensity={1.4} />
               <directionalLight position={[4, 6, 5]} intensity={2.4} />
