@@ -1,0 +1,190 @@
+.tshirt3d-layout {
+  display: grid;
+  grid-template-columns: minmax(420px, 1.1fr) minmax(380px, 0.9fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.tshirt3d-preview-card,
+.tshirt3d-editor-card {
+  min-height: 650px;
+}
+
+.tshirt3d-preview {
+  position: relative;
+  height: 620px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: radial-gradient(circle at center, #ffffff 0%, #eef2f7 100%);
+}
+
+.tshirt3d-hint {
+  position: absolute;
+  left: 16px;
+  bottom: 14px;
+  background: rgba(17, 24, 39, 0.76);
+  color: #fff;
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 13px;
+}
+
+.tshirt3d-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.tshirt3d-form-grid label,
+.tshirt3d-controls label {
+  display: grid;
+  gap: 6px;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.tshirt3d-toolbar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.tshirt3d-upload-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #2563eb, #3b82f6);
+  color: white !important;
+  border: 0;
+}
+
+.tshirt3d-upload-button.secondary {
+  background: linear-gradient(135deg, #111827, #374151);
+}
+
+.tshirt3d-upload-button input {
+  display: none;
+}
+
+.tshirt3d-zone-editor {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1.12;
+  border-radius: 18px;
+  overflow: hidden;
+  background:
+    linear-gradient(90deg, rgba(37, 99, 235, 0.13) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(37, 99, 235, 0.13) 1px, transparent 1px),
+    #f8fafc;
+  background-size: 34px 34px;
+  border: 2px solid rgba(37, 99, 235, 0.25);
+  margin: 16px 0;
+  touch-action: none;
+  user-select: none;
+}
+
+.tshirt3d-zone-border {
+  position: absolute;
+  inset: 7%;
+  border: 2px dashed #2563eb;
+  border-radius: 14px;
+  pointer-events: none;
+}
+
+.tshirt3d-zone-border.area-leftSleeve,
+.tshirt3d-zone-border.area-rightSleeve {
+  inset: 32% 8%;
+}
+
+.tshirt3d-zone-border.area-full {
+  inset: 2%;
+  border-color: #7c3aed;
+}
+
+.tshirt3d-design {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  min-height: 34px;
+  padding: 4px;
+  border: 1px dashed rgba(17, 24, 39, 0.45);
+  cursor: move;
+  user-select: none;
+  touch-action: none;
+}
+
+.tshirt3d-design.selected {
+  border: 2px solid #2563eb;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15);
+}
+
+.tshirt3d-design img {
+  width: 100%;
+  height: auto;
+  display: block;
+  pointer-events: none;
+}
+
+.tshirt3d-design span {
+  display: block;
+  width: 100%;
+  text-align: center;
+  font-weight: 900;
+  font-size: clamp(16px, 3vw, 42px);
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.tshirt3d-resize-handle {
+  position: absolute;
+  right: -9px;
+  bottom: -9px;
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  padding: 0;
+  border-radius: 999px;
+  background: #2563eb;
+  border: 2px solid white;
+  cursor: nwse-resize;
+}
+
+.tshirt3d-selected-panel {
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 14px;
+  margin: 12px 0;
+  background: #f9fafb;
+}
+
+.tshirt3d-controls {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.tshirt3d-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 0;
+  font-weight: 700;
+}
+
+.tshirt3d-checkbox input {
+  width: auto;
+}
+
+@media (max-width: 1050px) {
+  .tshirt3d-layout {
+    grid-template-columns: 1fr;
+  }
+}
