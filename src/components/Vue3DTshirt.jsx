@@ -16,7 +16,6 @@ const PRINT_ZONES = {
   back: { label: "Dos", x: 0.515, y: 0.095, w: 0.42, h: 0.50 },
   leftSleeve: { label: "Manche gauche", x: 0.112, y: 0.765, w: 0.35, h: 0.195 },
   rightSleeve: { label: "Manche droite", x: 0.528, y: 0.765, w: 0.35, h: 0.195 },
-  full: { label: "Texture complète", x: 0, y: 0, w: 1, h: 1 },
 };
 
 const DEFAULT_TEXT_ITEM = {
@@ -25,6 +24,7 @@ const DEFAULT_TEXT_ITEM = {
   x: 0.5,
   y: 0.38,
   width: 0.28,
+  height: 0.12,
   rotation: 0,
   text: "AC CREATION",
   textColor: "#111827",
@@ -90,20 +90,29 @@ function drawItem(ctx, item, zone, logoImage) {
   const zoneY = zone.y * TEXTURE_SIZE;
   const zoneW = zone.w * TEXTURE_SIZE;
   const zoneH = zone.h * TEXTURE_SIZE;
-  const cx = zoneX + Number(item.x || 0.5) * zoneW;
-  const cy = zoneY + Number(item.y || 0.5) * zoneH;
+
+  // Correction UV du modèle fourni :
+  // - L’axe X doit rester normal : droite dans l’éditeur = droite sur le t-shirt.
+  // - L’axe Y du modèle est inversé : haut dans l’éditeur = on dessine plus bas dans l’UV.
+  // - On pré-inverse verticalement le contenu pour que logo et texte apparaissent droits.
+  const itemX = clamp(Number(item.x ?? 0.5), 0, 1);
+  const itemY = clamp(Number(item.y ?? 0.5), 0, 1);
+  const cx = zoneX + itemX * zoneW;
+  const cy = zoneY + (1 - itemY) * zoneH;
+
   const drawW = Math.max(30, Number(item.width || 0.25) * zoneW);
+  const drawH = Math.max(20, Number(item.height || 0.18) * zoneH);
+  const rotation = (Number(item.rotation || 0) * Math.PI) / 180;
 
   ctx.save();
   ctx.beginPath();
   ctx.rect(zoneX, zoneY, zoneW, zoneH);
   ctx.clip();
   ctx.translate(cx, cy);
-  ctx.rotate((Number(item.rotation || 0) * Math.PI) / 180);
+  ctx.rotate(rotation);
+  ctx.scale(1, -1);
 
   if (item.type === "image" && logoImage) {
-    const ratio = logoImage.height / Math.max(1, logoImage.width);
-    const drawH = drawW * ratio;
     ctx.drawImage(logoImage, -drawW / 2, -drawH / 2, drawW, drawH);
   }
 
@@ -123,7 +132,8 @@ function makeUvTexture(baseImage, itemImages, items, tshirtColor) {
   canvas.width = TEXTURE_SIZE;
   canvas.height = TEXTURE_SIZE;
   const ctx = canvas.getContext("2d");
-
+  ctx.clearRect(0, 0, TEXTURE_SIZE, TEXTURE_SIZE);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = tshirtColor || "#ffffff";
   ctx.fillRect(0, 0, TEXTURE_SIZE, TEXTURE_SIZE);
 
@@ -141,8 +151,14 @@ function makeUvTexture(baseImage, itemImages, items, tshirtColor) {
   const texture = new THREE.CanvasTexture(canvas);
   texture.flipY = false;
   texture.colorSpace = THREE.SRGBColorSpace;
+
+  // Important : ne pas inverser la texture Three.js globalement.
+  // Sinon les zones avant/dos sont échangées et des traits noirs peuvent apparaître.
   texture.wrapS = THREE.ClampToEdgeWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.repeat.set(1, 1);
+  texture.offset.set(0, 0);
+
   texture.needsUpdate = true;
   return texture;
 }
@@ -227,6 +243,7 @@ export default function Vue3DTshirt() {
       x: clamp(0.5 + index * 0.04, 0.05, 0.95),
       y: clamp(0.38 + index * 0.04, 0.05, 0.95),
       width: 0.22,
+      height: 0.16,
       rotation: 0,
       src: URL.createObjectURL(file),
       fileName: file.name,
@@ -280,7 +297,7 @@ export default function Vue3DTshirt() {
     event.currentTarget.setPointerCapture?.(event.pointerId);
   }
 
-  function startResize(event, itemId) {
+  function startResize(event, itemId, axis = "both") {
     event.preventDefault();
     event.stopPropagation();
     setSelectedId(itemId);
@@ -289,6 +306,7 @@ export default function Vue3DTshirt() {
     if (!point || !item) return;
     actionRef.current = {
       type: "resize",
+      axis,
       id: itemId,
       startPointer: point,
       startItem: { ...item },
@@ -313,9 +331,18 @@ export default function Vue3DTshirt() {
 
     if (action.type === "resize") {
       const dx = point.x - action.startPointer.x;
-      updateItem(action.id, {
-        width: clamp(action.startItem.width + dx * 1.6, 0.035, 1.2),
-      });
+      const dy = point.y - action.startPointer.y;
+      const patch = {};
+
+      if (action.axis === "x" || action.axis === "both") {
+        patch.width = clamp(Number(action.startItem.width || 0.22) + dx * 1.6, 0.035, 1.2);
+      }
+
+      if (action.axis === "y" || action.axis === "both") {
+        patch.height = clamp(Number(action.startItem.height || 0.16) + dy * 1.6, 0.025, 1.2);
+      }
+
+      updateItem(action.id, patch);
     }
   }
 
@@ -427,6 +454,7 @@ export default function Vue3DTshirt() {
                   left: `${item.x * 100}%`,
                   top: `${item.y * 100}%`,
                   width: `${item.width * 100}%`,
+                  height: `${(item.height || 0.16) * 100}%`,
                   transform: `translate(-50%, -50%) rotate(${item.rotation || 0}deg)`,
                 }}
               >
@@ -435,7 +463,9 @@ export default function Vue3DTshirt() {
                 ) : (
                   <span style={{ color: item.textColor, fontFamily: item.fontFamily }}>{item.text}</span>
                 )}
-                <button className="tshirt3d-resize-handle" onPointerDown={(event) => startResize(event, item.id)} title="Redimensionner" />
+                <button className="tshirt3d-resize-handle x" onPointerDown={(event) => startResize(event, item.id, "x")} title="Largeur" />
+                <button className="tshirt3d-resize-handle y" onPointerDown={(event) => startResize(event, item.id, "y")} title="Hauteur" />
+                <button className="tshirt3d-resize-handle both" onPointerDown={(event) => startResize(event, item.id, "both")} title="Largeur + hauteur" />
               </div>
             ))}
           </div>
@@ -461,7 +491,8 @@ export default function Vue3DTshirt() {
                 </div>
               )}
               <div className="tshirt3d-controls">
-                <label>Taille<input type="range" min="0.035" max="1.2" step="0.005" value={selectedItem.width} onChange={(e) => updateItem(selectedItem.id, { width: Number(e.target.value) })} /></label>
+                <label>Largeur<input type="range" min="0.035" max="1.2" step="0.005" value={selectedItem.width} onChange={(e) => updateItem(selectedItem.id, { width: Number(e.target.value) })} /></label>
+                <label>Hauteur<input type="range" min="0.025" max="1.2" step="0.005" value={selectedItem.height || 0.16} onChange={(e) => updateItem(selectedItem.id, { height: Number(e.target.value) })} /></label>
                 <label>Rotation<input type="range" min="-180" max="180" step="1" value={selectedItem.rotation || 0} onChange={(e) => updateItem(selectedItem.id, { rotation: Number(e.target.value) })} /></label>
                 <label>Déplacer vers
                   <select value={selectedItem.area} onChange={(e) => { updateItem(selectedItem.id, { area: e.target.value, x: 0.5, y: 0.38 }); setActiveArea(e.target.value); }}>
