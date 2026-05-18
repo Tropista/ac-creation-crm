@@ -11,6 +11,7 @@ import * as THREE from "three";
 import { Bounds, Center, Environment, OrbitControls, useGLTF } from "@react-three/drei";
 import Vue3D from "./components/Vue3D";
 import Vue3DTshirt from "./components/Vue3DTshirt";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 
 const STORAGE_KEY = "crm_local_data_v2";
 const SESSION_KEY = "crm_current_user_v2";
@@ -377,6 +378,15 @@ function statusClass(status) {
 }
 
 export default function App() {
+  const path = window.location.pathname;
+
+  if (path === "/configurateur-tshirt") {
+    return (
+      <div style={{ minHeight:"100vh", background:"#081b4b" }}>
+        <Vue3DTshirt />
+      </div>
+    );
+  }
   const [data, setData] = useState(loadData);
   const [currentUser, setCurrentUser] = useState(() => JSON.parse(localStorage.getItem(SESSION_KEY) || "null"));
   const [page, setPage] = useState("dashboard");
