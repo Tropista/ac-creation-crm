@@ -1,5 +1,5 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { Canvas, useFrame, useLoader, useThree } from "@react-three/fiber";
+import { Canvas, useLoader } from "@react-three/fiber";
 import { Bounds, Center, Environment, OrbitControls, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import jsPDF from "jspdf";
@@ -84,24 +84,7 @@ const DEFAULT_TEXT_ITEM = {
   fontFamily: "Arial",
 };
 
-// Point 6 : vues automatiques réelles du t-shirt.
-// On garde la caméra de face et on tourne le modèle pendant l'export,
-// ce qui évite de capturer plusieurs fois la même vue si OrbitControls/Bounds conserve l'ancien angle.
-const TSHIRT_EXPORT_VIEWS = {
-  front: { rotationY: 0, filename: "mockup-face.png" },
-  back: { rotationY: Math.PI, filename: "mockup-dos.png" },
-  leftSleeve: { rotationY: Math.PI / 2, filename: "mockup-manche-gauche.png" },
-  rightSleeve: { rotationY: -Math.PI / 2, filename: "mockup-manche-droite.png" },
-};
-
-function waitForRender(ms = 260) {
-  return new Promise((resolve) => {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => setTimeout(resolve, ms));
-    });
-  });
-}
-
+const PROJECTS_STORAGE_KEY = "ac-creation-tshirt-projects-v1";
 
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2);
@@ -302,6 +285,15 @@ function canvasToBlob(canvas) {
       if (blob) resolve(blob);
       else reject(new Error("Export PNG impossible."));
     }, "image/png");
+  });
+}
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Lecture du fichier impossible."));
+    reader.readAsDataURL(file);
   });
 }
 
@@ -618,28 +610,7 @@ function makeUvTexture(baseImage, itemImages, items, tshirtColor) {
   return texture;
 }
 
-function TshirtExportCameraView({ view }) {
-  const { camera, controls } = useThree();
-
-  useFrame(() => {
-    if (!view) return;
-
-    // Pendant l'export, on force une caméra propre et stable de face.
-    // La vue face/dos/manches est obtenue en tournant le modèle lui-même.
-    camera.position.set(0, 0.35, 3.2);
-    camera.lookAt(0, 0.15, 0);
-    camera.updateProjectionMatrix();
-
-    if (controls) {
-      controls.target.set(0, 0.15, 0);
-      controls.update();
-    }
-  });
-
-  return null;
-}
-
-function TshirtModel({ texture, view }) {
+function TshirtModel({ texture }) {
   const { scene } = useGLTF(MODEL_URL);
   const normalMap = useLoader(THREE.TextureLoader, NORMAL_URL);
   const roughnessMap = useLoader(THREE.TextureLoader, ROUGHNESS_URL);
@@ -667,13 +638,7 @@ function TshirtModel({ texture, view }) {
     return clone;
   }, [scene, texture, normalMap, roughnessMap]);
 
-  const rotationY = view ? (TSHIRT_EXPORT_VIEWS[view]?.rotationY || 0) : 0;
-
-  return (
-    <group rotation={[0, rotationY, 0]}>
-      <primitive object={clonedScene} />
-    </group>
-  );
+  return <primitive object={clonedScene} />;
 }
 
 export default function Vue3DTshirt() {
@@ -687,7 +652,9 @@ export default function Vue3DTshirt() {
   const [customFonts, setCustomFonts] = useState([]);
   const [printZoneSizes, setPrintZoneSizes] = useState(PRINT_ZONE_SIZES_CM);
   const [defaultTechnique, setDefaultTechnique] = useState("dtf");
-  const [exportView, setExportView] = useState(null);
+  const [savedProjects, setSavedProjects] = useState([]);
+  const [projectName, setProjectName] = useState("");
+  const [currentProjectId, setCurrentProjectId] = useState(null);
   const previewRef = useRef(null);
   const editorRef = useRef(null);
   const actionRef = useRef(null);
@@ -720,6 +687,17 @@ export default function Vue3DTshirt() {
     };
   }, []);
 
+
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(PROJECTS_STORAGE_KEY) || "[]");
+      setSavedProjects(Array.isArray(stored) ? stored : []);
+    } catch (error) {
+      console.warn("Impossible de lire les projets T-shirt sauvegardés.", error);
+      setSavedProjects([]);
+    }
+  }, []);
+
   function updateItem(id, patch) {
     setItems((current) =>
       current.map((item) =>
@@ -744,30 +722,39 @@ export default function Vue3DTshirt() {
     setSelectedId(item.id);
   }
 
-  function handleLogoUpload(event) {
+  async function handleLogoUpload(event) {
     const files = Array.from(event.target.files || []);
     if (!files.length) return;
-    const newItems = files.map((file, index) =>
-      limitItemToPrintArea({
-        id: uid(),
-        type: "image",
-        area: activeArea,
-        technique: defaultTechnique,
-        x: clamp(0.5 + index * 0.04, 0.05, 0.95),
-        y: clamp(0.38 + index * 0.04, 0.05, 0.95),
-        width: Math.min(0.22, getMaxItemWidthScale(activeArea, printZoneSizes)),
-        height: 0.16,
-        rotation: 0,
-        src: URL.createObjectURL(file),
-        fileName: file.name,
-        layerName: file.name,
-        hidden: false,
-        locked: false,
-        z: Date.now() + index,
-      }, printZoneSizes)
-    );
-    setItems((current) => [...current, ...newItems]);
-    setSelectedId(newItems[0].id);
+
+    try {
+      const newItems = await Promise.all(files.map(async (file, index) => {
+        const src = await fileToDataUrl(file);
+        return limitItemToPrintArea({
+          id: uid(),
+          type: "image",
+          area: activeArea,
+          technique: defaultTechnique,
+          x: clamp(0.5 + index * 0.04, 0.05, 0.95),
+          y: clamp(0.38 + index * 0.04, 0.05, 0.95),
+          width: Math.min(0.22, getMaxItemWidthScale(activeArea, printZoneSizes)),
+          height: 0.16,
+          rotation: 0,
+          src,
+          fileName: file.name,
+          layerName: file.name,
+          hidden: false,
+          locked: false,
+          z: Date.now() + index,
+        }, printZoneSizes);
+      }));
+
+      setItems((current) => [...current, ...newItems]);
+      setSelectedId(newItems[0].id);
+    } catch (error) {
+      console.error("Erreur import logo :", error);
+      alert("Impossible de lire un logo importé.");
+    }
+
     event.target.value = "";
   }
 
@@ -777,10 +764,11 @@ export default function Vue3DTshirt() {
     const fontName = file.name.replace(/\.(ttf|otf|woff2?|TTF|OTF|WOFF2?)$/, "").replace(/[^a-zA-Z0-9_-]/g, "_");
     const src = URL.createObjectURL(file);
     try {
+      const dataUrl = await fileToDataUrl(file);
       const font = new FontFace(fontName, `url(${src})`);
       await font.load();
       document.fonts.add(font);
-      setCustomFonts((current) => [...current, { name: fontName, src, file, originalName: file.name }]);
+      setCustomFonts((current) => [...current, { name: fontName, src, file, dataUrl, originalName: file.name }]);
       if (selectedItem?.type === "text") updateItem(selectedItem.id, { fontFamily: fontName });
     } catch (error) {
       alert("Police impossible à charger. Essaie un fichier .ttf, .otf, .woff ou .woff2.");
@@ -1014,6 +1002,133 @@ export default function Vue3DTshirt() {
     updateItem(selectedItem.id, patch);
   }
 
+
+  function persistProjects(nextProjects) {
+    setSavedProjects(nextProjects);
+    localStorage.setItem(PROJECTS_STORAGE_KEY, JSON.stringify(nextProjects));
+  }
+
+  function buildProjectSnapshot(name) {
+    return {
+      id: uid(),
+      name: makeLayerName(name, `Projet T-shirt ${new Date().toLocaleDateString("fr-FR")}`),
+      savedAt: new Date().toISOString(),
+      activeArea,
+      tshirtColor,
+      showPrintZone,
+      snapEnabled,
+      defaultTechnique,
+      printZoneSizes,
+      items: items.map((item) => ({ ...item })),
+      customFonts: customFonts.map((font) => ({
+        name: font.name,
+        originalName: font.originalName,
+        dataUrl: font.dataUrl || font.src || null,
+      })),
+    };
+  }
+
+  async function restoreCustomFonts(fonts = []) {
+    const restored = [];
+
+    for (const fontInfo of fonts) {
+      if (!fontInfo?.name || !fontInfo?.dataUrl) continue;
+      try {
+        const font = new FontFace(fontInfo.name, `url(${fontInfo.dataUrl})`);
+        await font.load();
+        document.fonts.add(font);
+        restored.push({
+          name: fontInfo.name,
+          src: fontInfo.dataUrl,
+          dataUrl: fontInfo.dataUrl,
+          originalName: fontInfo.originalName || fontInfo.name,
+        });
+      } catch (error) {
+        console.warn(`Police impossible à restaurer : ${fontInfo.name}`, error);
+      }
+    }
+
+    setCustomFonts(restored);
+  }
+
+  function saveCurrentProject() {
+    const snapshot = {
+      ...buildProjectSnapshot(projectName),
+      id: currentProjectId || uid(),
+    };
+
+    const nextProjects = [
+      snapshot,
+      ...savedProjects.filter((project) => project.id !== snapshot.id),
+    ].slice(0, 30);
+
+    persistProjects(nextProjects);
+    setCurrentProjectId(snapshot.id);
+    setProjectName(snapshot.name);
+    alert(`Projet sauvegardé : ${snapshot.name}`);
+  }
+
+  async function loadProject(projectId) {
+    const project = savedProjects.find((entry) => entry.id === projectId);
+    if (!project) return;
+
+    setCurrentProjectId(project.id);
+    await restoreCustomFonts(project.customFonts || []);
+    setItems((project.items || []).map((item) => limitItemToPrintArea(item, project.printZoneSizes || PRINT_ZONE_SIZES_CM)));
+    setSelectedId(null);
+    setActiveArea(project.activeArea || "front");
+    setTshirtColor(project.tshirtColor || "#ffffff");
+    setShowPrintZone(project.showPrintZone ?? true);
+    setSnapEnabled(project.snapEnabled ?? true);
+    setDefaultTechnique(project.defaultTechnique || "dtf");
+    setPrintZoneSizes(project.printZoneSizes || PRINT_ZONE_SIZES_CM);
+    setProjectName(project.name || "");
+  }
+
+  function deleteProject(projectId) {
+    const project = savedProjects.find((entry) => entry.id === projectId);
+    if (!project) return;
+    if (!window.confirm(`Supprimer la sauvegarde “${project.name}” ?`)) return;
+    persistProjects(savedProjects.filter((entry) => entry.id !== projectId));
+    if (currentProjectId === projectId) setCurrentProjectId(null);
+  }
+
+  function exportProjectJson() {
+    const snapshot = buildProjectSnapshot(projectName);
+    const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: "application/json" });
+    downloadBlob(blob, `${sanitizeFilename(snapshot.name)}.tshirt-project.json`);
+  }
+
+  async function importProjectJson(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const project = JSON.parse(text);
+      const snapshot = { ...project, id: project.id || uid(), savedAt: project.savedAt || new Date().toISOString() };
+      const nextProjects = [snapshot, ...savedProjects.filter((entry) => entry.id !== snapshot.id)].slice(0, 30);
+      persistProjects(nextProjects);
+
+      await restoreCustomFonts(snapshot.customFonts || []);
+      setItems((snapshot.items || []).map((item) => limitItemToPrintArea(item, snapshot.printZoneSizes || PRINT_ZONE_SIZES_CM)));
+      setSelectedId(null);
+      setActiveArea(snapshot.activeArea || "front");
+      setTshirtColor(snapshot.tshirtColor || "#ffffff");
+      setShowPrintZone(snapshot.showPrintZone ?? true);
+      setSnapEnabled(snapshot.snapEnabled ?? true);
+      setDefaultTechnique(snapshot.defaultTechnique || "dtf");
+      setPrintZoneSizes(snapshot.printZoneSizes || PRINT_ZONE_SIZES_CM);
+      setProjectName(snapshot.name || "");
+      setCurrentProjectId(snapshot.id);
+    } catch (error) {
+      console.error("Import projet impossible :", error);
+      alert("Projet impossible à importer. Vérifie le fichier JSON.");
+    }
+
+    event.target.value = "";
+  }
+
   async function buildPrintElementFiles() {
     const files = [];
 
@@ -1047,37 +1162,141 @@ export default function Vue3DTshirt() {
   }
 
   async function buildFontFiles() {
-    return customFonts
-      .filter((font) => font?.file)
-      .map((font, index) => {
-        const extension = getFontExtension(font.file);
-        const filename = sanitizeFontFilename(font.originalName || font.file?.name || font.name, extension);
-        return {
-          name: `polices/${String(index + 1).padStart(2, "0")}-${filename}`,
-          blob: font.file,
-        };
+    const fontFiles = [];
+
+    for (let index = 0; index < customFonts.length; index += 1) {
+      const font = customFonts[index];
+      if (!font) continue;
+
+      let blob = font.file;
+      if (!blob && font.dataUrl) {
+        blob = await fetch(font.dataUrl).then((response) => response.blob());
+      }
+      if (!blob) continue;
+
+      const extension = getFontExtension(font.file || { name: font.originalName || font.name, type: blob.type });
+      const filename = sanitizeFontFilename(font.originalName || font.file?.name || font.name, extension);
+      fontFiles.push({
+        name: `polices/${String(index + 1).padStart(2, "0")}-${filename}`,
+        blob,
       });
+    }
+
+    return fontFiles;
   }
 
 
   async function buildAutoMockupFiles() {
     const files = [];
-    const canvas = previewRef.current?.querySelector("canvas");
-    if (!canvas) return files;
+    const areaExports = [
+      { area: "front", filename: "mockup-face.png", title: "Face" },
+      { area: "back", filename: "mockup-dos.png", title: "Dos" },
+      { area: "leftSleeve", filename: "mockup-manche-gauche.png", title: "Manche gauche" },
+      { area: "rightSleeve", filename: "mockup-manche-droite.png", title: "Manche droite" },
+    ];
 
-    const views = ["front", "back", "leftSleeve", "rightSleeve"];
+    for (const areaExport of areaExports) {
+      const areaItems = items
+        .filter((item) => item.area === areaExport.area && !item.hidden)
+        .sort((a, b) => Number(a.z || 0) - Number(b.z || 0));
 
-    for (const view of views) {
-      const preset = TSHIRT_EXPORT_VIEWS[view];
-      if (!preset) continue;
+      const isSleeve = areaExport.area === "leftSleeve" || areaExport.area === "rightSleeve";
+      const canvas = document.createElement("canvas");
+      canvas.width = isSleeve ? 1400 : 1600;
+      canvas.height = isSleeve ? 1400 : 2000;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) continue;
 
-      setExportView(view);
-      await waitForRender(360);
-      files.push({ name: preset.filename, blob: await canvasToBlob(canvas) });
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#f8fafc";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Fond vêtement simple pour obtenir 4 exports différents et lisibles,
+      // sans dépendre de la rotation du canvas WebGL.
+      ctx.save();
+      ctx.fillStyle = tshirtColor || "#ffffff";
+      ctx.strokeStyle = "#cbd5e1";
+      ctx.lineWidth = 6;
+
+      if (isSleeve) {
+        const sleeveX = canvas.width * 0.22;
+        const sleeveY = canvas.height * 0.18;
+        const sleeveW = canvas.width * 0.56;
+        const sleeveH = canvas.height * 0.64;
+        ctx.beginPath();
+        ctx.roundRect(sleeveX, sleeveY, sleeveW, sleeveH, 80);
+        ctx.fill();
+        ctx.stroke();
+      } else {
+        const w = canvas.width;
+        const h = canvas.height;
+        ctx.beginPath();
+        ctx.moveTo(w * 0.32, h * 0.17);
+        ctx.quadraticCurveTo(w * 0.42, h * 0.10, w * 0.50, h * 0.13);
+        ctx.quadraticCurveTo(w * 0.58, h * 0.10, w * 0.68, h * 0.17);
+        ctx.lineTo(w * 0.88, h * 0.28);
+        ctx.lineTo(w * 0.78, h * 0.43);
+        ctx.lineTo(w * 0.70, h * 0.37);
+        ctx.lineTo(w * 0.70, h * 0.88);
+        ctx.lineTo(w * 0.30, h * 0.88);
+        ctx.lineTo(w * 0.30, h * 0.37);
+        ctx.lineTo(w * 0.22, h * 0.43);
+        ctx.lineTo(w * 0.12, h * 0.28);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      const printRect = isSleeve
+        ? { x: canvas.width * 0.28, y: canvas.height * 0.28, w: canvas.width * 0.44, h: canvas.height * 0.44 }
+        : { x: canvas.width * 0.26, y: canvas.height * 0.24, w: canvas.width * 0.48, h: canvas.height * 0.56 };
+
+      ctx.save();
+      ctx.setLineDash([18, 12]);
+      ctx.strokeStyle = "rgba(37, 99, 235, 0.55)";
+      ctx.lineWidth = 4;
+      ctx.strokeRect(printRect.x, printRect.y, printRect.w, printRect.h);
+      ctx.restore();
+
+      for (const item of areaItems) {
+        const itemW = Math.max(20, Number(item.width || 0.22) * printRect.w);
+        const itemH = Math.max(20, Number(item.height || 0.16) * printRect.h);
+        const cx = printRect.x + Number(item.x ?? 0.5) * printRect.w;
+        const cy = printRect.y + Number(item.y ?? 0.5) * printRect.h;
+
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate((Number(item.rotation || 0) * Math.PI) / 180);
+
+        if (item.type === "image" && itemImages[item.id]) {
+          ctx.drawImage(itemImages[item.id], -itemW / 2, -itemH / 2, itemW, itemH);
+        }
+
+        if (item.type === "text") {
+          const text = String(item.text || "Texte");
+          ctx.fillStyle = item.textColor || "#111827";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          let fontSize = Math.floor(itemH * 0.72);
+          ctx.font = `800 ${fontSize}px "${item.fontFamily || "Arial"}"`;
+          while (ctx.measureText(text).width > itemW * 0.92 && fontSize > 8) {
+            fontSize -= 2;
+            ctx.font = `800 ${fontSize}px "${item.fontFamily || "Arial"}"`;
+          }
+          ctx.fillText(text, 0, 0, itemW * 0.92);
+        }
+
+        ctx.restore();
+      }
+
+      ctx.fillStyle = "#111827";
+      ctx.font = "700 42px Arial";
+      ctx.textAlign = "center";
+      ctx.fillText(areaExport.title, canvas.width / 2, canvas.height - 60);
+
+      files.push({ name: areaExport.filename, blob: await canvasToBlob(canvas) });
     }
-
-    setExportView(null);
-    await waitForRender(180);
 
     return files;
   }
@@ -1297,13 +1516,12 @@ export default function Vue3DTshirt() {
         <div className="card tshirt3d-preview-card">
           <div className="tshirt3d-preview" ref={previewRef}>
             <Canvas shadows camera={{ position: [0, 0.35, 3.2], fov: 42 }} gl={{ preserveDrawingBuffer: true }}>
-              <TshirtExportCameraView view={exportView} />
               <ambientLight intensity={0.9} />
               <directionalLight position={[2, 3, 4]} intensity={1.8} castShadow />
               <Suspense fallback={null}>
                 <Bounds fit clip observe margin={1.15}>
                   <Center>
-                    <TshirtModel texture={printTexture} view={exportView} />
+                    <TshirtModel texture={printTexture} />
                   </Center>
                 </Bounds>
                 <Environment preset="studio" />
@@ -1355,6 +1573,43 @@ export default function Vue3DTshirt() {
                 </div>
               ))}
             </div>
+          </div>
+
+          <div className="tshirt3d-project-panel">
+            <div className="tshirt3d-project-header">
+              <strong>Sauvegarde projet client</strong>
+              <span>{savedProjects.length} sauvegarde{savedProjects.length > 1 ? "s" : ""}</span>
+            </div>
+            <div className="tshirt3d-project-controls">
+              <input
+                type="text"
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                placeholder="Nom client / commande"
+              />
+              <button type="button" onClick={saveCurrentProject}>Sauvegarder</button>
+              <button type="button" onClick={exportProjectJson}>Exporter projet</button>
+              <label className="tshirt3d-project-import">
+                Importer projet
+                <input type="file" accept="application/json,.json" onChange={importProjectJson} />
+              </label>
+            </div>
+            {savedProjects.length ? (
+              <div className="tshirt3d-project-list">
+                {savedProjects.map((project) => (
+                  <div key={project.id} className="tshirt3d-project-row">
+                    <div>
+                      <strong>{project.name}</strong>
+                      <small>{new Date(project.savedAt).toLocaleString("fr-FR")}</small>
+                    </div>
+                    <button type="button" onClick={() => loadProject(project.id)}>Reprendre</button>
+                    <button type="button" className="danger" onClick={() => deleteProject(project.id)}>Supprimer</button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="muted">Aucun projet sauvegardé pour le moment.</p>
+            )}
           </div>
 
           <div className="tshirt3d-real-size-panel">
