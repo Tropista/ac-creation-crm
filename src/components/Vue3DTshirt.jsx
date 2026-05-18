@@ -1,7 +1,8 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { Canvas, useLoader } from "@react-three/fiber";
+import { Canvas, useLoader, useThree } from "@react-three/fiber";
 import { Bounds, Center, Environment, OrbitControls, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
+import jsPDF from "jspdf";
 import "./Vue3DTshirt.css";
 
 const MODEL_URL = `${import.meta.env.BASE_URL}models/tshirt/t-shirt.gltf`;
@@ -40,6 +41,32 @@ const PRINT_SIZE_PRESETS = [
   { label: "Manche 12 × 12 cm", width: 12, height: 12 },
 ];
 
+const TECHNIQUE_PRESETS = {
+  dtf: {
+    label: "DTF",
+    shortLabel: "DTF",
+    help: "Impression couleur avec fond transparent. Idéal pour logos, photos et textes multicolores.",
+    minWidth: 2,
+    minHeight: 2,
+    bleedCm: 0.2,
+    note: "Prévoir un fichier PNG propre, idéalement 300 DPI.",
+  },
+  flex: {
+    label: "Flex / vinyle",
+    shortLabel: "Flex",
+    help: "Découpe vinyle. Idéal pour textes simples et formes pleines.",
+    minWidth: 1.5,
+    minHeight: 1.5,
+    bleedCm: 0,
+    note: "Éviter les détails trop fins et les dégradés.",
+  },
+};
+
+const TECHNIQUE_OPTIONS = Object.entries(TECHNIQUE_PRESETS).map(([value, preset]) => ({
+  value,
+  label: preset.label,
+}));
+
 const EXPORT_DPI = 300;
 const CM_TO_INCH = 1 / 2.54;
 
@@ -56,6 +83,21 @@ const DEFAULT_TEXT_ITEM = {
   textSize: 74,
   fontFamily: "Arial",
 };
+
+const TSHIRT_CAMERA_VIEWS = {
+  front: { position: [0, 0.35, 3.2], target: [0, 0.15, 0], filename: "mockup-face.png" },
+  back: { position: [0, 0.35, -3.2], target: [0, 0.15, 0], filename: "mockup-dos.png" },
+  leftSleeve: { position: [3.0, 0.35, 0], target: [0, 0.15, 0], filename: "mockup-manche-gauche.png" },
+  rightSleeve: { position: [-3.0, 0.35, 0], target: [0, 0.15, 0], filename: "mockup-manche-droite.png" },
+};
+
+function waitForRender(ms = 220) {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => setTimeout(resolve, ms));
+    });
+  });
+}
 
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2);
@@ -378,6 +420,40 @@ function getItemPrintSizeCm(item, zoneSizes = PRINT_ZONE_SIZES_CM) {
   };
 }
 
+function getTechniquePreset(itemOrValue) {
+  const key = typeof itemOrValue === "string" ? itemOrValue : itemOrValue?.technique;
+  return TECHNIQUE_PRESETS[key] || TECHNIQUE_PRESETS.dtf;
+}
+
+function getTechniqueWarnings(item, zoneSizes = PRINT_ZONE_SIZES_CM) {
+  if (!item) return [];
+  const preset = getTechniquePreset(item);
+  const size = getItemPrintSizeCm(item, zoneSizes);
+  const warnings = [];
+
+  if (size.width < preset.minWidth || size.height < preset.minHeight) {
+    warnings.push(`Taille trop petite pour ${preset.label} : minimum conseillé ${formatCm(preset.minWidth)} × ${formatCm(preset.minHeight)} cm.`);
+  }
+
+  if (preset.maxWidth && size.width > preset.maxWidth) {
+    warnings.push(`Largeur trop grande pour ${preset.label} : maximum conseillé ${formatCm(preset.maxWidth)} cm.`);
+  }
+
+  if (preset.maxHeight && size.height > preset.maxHeight) {
+    warnings.push(`Hauteur trop grande pour ${preset.label} : maximum conseillé ${formatCm(preset.maxHeight)} cm.`);
+  }
+
+
+  return warnings;
+}
+
+function getTechniqueSummaryForArea(items, area) {
+  const techniques = Array.from(new Set((items || [])
+    .filter((item) => item.area === area && !item.hidden)
+    .map((item) => getTechniquePreset(item).shortLabel)));
+  return techniques.length ? techniques.join(" / ") : "Aucune";
+}
+
 function drawPrintItemForExport(ctx, item, logoImage, widthPx, heightPx) {
   ctx.clearRect(0, 0, widthPx, heightPx);
   ctx.save();
@@ -538,6 +614,29 @@ function makeUvTexture(baseImage, itemImages, items, tshirtColor) {
   return texture;
 }
 
+function TshirtCameraView({ view }) {
+  const { camera, controls, gl } = useThree();
+
+  useEffect(() => {
+    if (!view) return;
+    const preset = TSHIRT_CAMERA_VIEWS[view];
+    if (!preset) return;
+
+    camera.position.set(...preset.position);
+    camera.lookAt(...preset.target);
+    camera.updateProjectionMatrix();
+
+    if (controls) {
+      controls.target.set(...preset.target);
+      controls.update();
+    }
+
+    gl.renderLists?.dispose?.();
+  }, [view, camera, controls, gl]);
+
+  return null;
+}
+
 function TshirtModel({ texture }) {
   const { scene } = useGLTF(MODEL_URL);
   const normalMap = useLoader(THREE.TextureLoader, NORMAL_URL);
@@ -579,6 +678,8 @@ export default function Vue3DTshirt() {
   const [snapPreview, setSnapPreview] = useState(null);
   const [customFonts, setCustomFonts] = useState([]);
   const [printZoneSizes, setPrintZoneSizes] = useState(PRINT_ZONE_SIZES_CM);
+  const [defaultTechnique, setDefaultTechnique] = useState("dtf");
+  const [exportView, setExportView] = useState(null);
   const previewRef = useRef(null);
   const editorRef = useRef(null);
   const actionRef = useRef(null);
@@ -592,6 +693,8 @@ export default function Vue3DTshirt() {
     .sort((a, b) => Number(b.z || 0) - Number(a.z || 0));
   const activeZoneSize = getZoneSizeCm(printZoneSizes, activeArea);
   const selectedPrintSize = selectedItem ? getItemPrintSizeCm(selectedItem, printZoneSizes) : null;
+  const selectedTechnique = selectedItem ? getTechniquePreset(selectedItem) : null;
+  const selectedTechniqueWarnings = selectedItem ? getTechniqueWarnings(selectedItem, printZoneSizes) : [];
   const rulerXTicks = getRulerTicks(activeZoneSize.width);
   const rulerYTicks = getRulerTicks(activeZoneSize.height);
   const snapGuides = getSnapGuides(activeArea);
@@ -622,6 +725,7 @@ export default function Vue3DTshirt() {
       id: uid(),
       ...DEFAULT_TEXT_ITEM,
       area: activeArea,
+      technique: defaultTechnique,
       layerName: "Texte",
       hidden: false,
       locked: false,
@@ -640,6 +744,7 @@ export default function Vue3DTshirt() {
         id: uid(),
         type: "image",
         area: activeArea,
+        technique: defaultTechnique,
         x: clamp(0.5 + index * 0.04, 0.05, 0.95),
         y: clamp(0.38 + index * 0.04, 0.05, 0.95),
         width: Math.min(0.22, getMaxItemWidthScale(activeArea, printZoneSizes)),
@@ -924,7 +1029,8 @@ export default function Vue3DTshirt() {
 
       const areaLabel = PRINT_ZONES[item.area]?.label || item.area || "zone";
       const baseName = item.type === "image" ? item.fileName || "logo" : item.text || "texte";
-      const filename = `impression/${String(index + 1).padStart(2, "0")}-${sanitizeFilename(areaLabel)}-${sanitizeFilename(baseName)}-${width.toFixed(1)}x${height.toFixed(1)}cm-300dpi.png`;
+      const techniqueLabel = getTechniquePreset(item).shortLabel;
+      const filename = `impression/${String(index + 1).padStart(2, "0")}-${sanitizeFilename(areaLabel)}-${sanitizeFilename(techniqueLabel)}-${sanitizeFilename(baseName)}-${width.toFixed(1)}x${height.toFixed(1)}cm-300dpi.png`;
 
       files.push({ name: filename, blob: await canvasToBlob(canvas) });
     }
@@ -945,6 +1051,29 @@ export default function Vue3DTshirt() {
       });
   }
 
+
+  async function buildAutoMockupFiles() {
+    const files = [];
+    const canvas = previewRef.current?.querySelector("canvas");
+    if (!canvas) return files;
+
+    const views = ["front", "back", "leftSleeve", "rightSleeve"];
+
+    for (const view of views) {
+      const preset = TSHIRT_CAMERA_VIEWS[view];
+      if (!preset) continue;
+
+      setExportView(view);
+      await waitForRender(260);
+      files.push({ name: preset.filename, blob: await canvasToBlob(canvas) });
+    }
+
+    setExportView(null);
+    await waitForRender(120);
+
+    return files;
+  }
+
   async function exportMockup() {
     try {
       const files = [];
@@ -954,6 +1083,7 @@ export default function Vue3DTshirt() {
         files.push({ name: "mockup-tshirt.png", blob: await canvasToBlob(canvas) });
       }
 
+      files.push(...(await buildAutoMockupFiles()));
       files.push(...(await buildPrintElementFiles()));
       files.push(...(await buildFontFiles()));
 
@@ -970,6 +1100,178 @@ export default function Vue3DTshirt() {
     }
   }
 
+  async function exportWorkshopPdf() {
+    try {
+      const printableItems = items
+        .filter((item) => !item.hidden)
+        .sort((a, b) => Number(a.z || 0) - Number(b.z || 0));
+
+      if (!printableItems.length) {
+        alert("Ajoute au moins un logo ou un texte visible avant de générer le PDF atelier.");
+        return;
+      }
+
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const margin = 12;
+      let y = margin;
+      const todayLabel = new Date().toLocaleString("fr-FR");
+
+      const addHeader = (title = "Fiche atelier T-shirt") => {
+        pdf.setFillColor(17, 24, 39);
+        pdf.rect(0, 0, pageW, 18, "F");
+        pdf.setTextColor(255, 255, 255);
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(14);
+        pdf.text(title, margin, 12);
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(8);
+        pdf.text(todayLabel, pageW - margin, 12, { align: "right" });
+        pdf.setTextColor(17, 24, 39);
+        y = 26;
+      };
+
+      const addPageIfNeeded = (needed = 16) => {
+        if (y + needed > pageH - margin) {
+          pdf.addPage();
+          addHeader();
+        }
+      };
+
+      addHeader();
+
+      const mockupCanvas = previewRef.current?.querySelector("canvas");
+      if (mockupCanvas) {
+        const imgData = mockupCanvas.toDataURL("image/png");
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(12);
+        pdf.text("Mockup client", margin, y);
+        y += 5;
+        pdf.addImage(imgData, "PNG", margin, y, 86, 66, undefined, "FAST");
+        y += 72;
+      }
+
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(12);
+      pdf.text("Zones réelles", margin, y);
+      y += 7;
+
+      Object.entries(PRINT_ZONES).forEach(([key, zone]) => {
+        const size = getZoneSizeCm(printZoneSizes, key);
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(9);
+        pdf.text(`${zone.label} : ${formatCm(size.width)} × ${formatCm(size.height)} cm`, margin, y);
+        y += 5;
+      });
+
+      y += 4;
+      addPageIfNeeded(30);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(12);
+      pdf.text("Zones techniques", margin, y);
+      y += 7;
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(9);
+      Object.entries(PRINT_ZONES).forEach(([key, zone]) => {
+        addPageIfNeeded(6);
+        pdf.text(`${zone.label} : ${getTechniqueSummaryForArea(printableItems, key)}`, margin, y);
+        y += 5;
+      });
+
+      y += 4;
+      addPageIfNeeded(25);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(12);
+      pdf.text("Éléments à imprimer", margin, y);
+      y += 8;
+
+      const headers = ["#", "Nom", "Zone", "Type", "Technique", "Taille", "Position", "Rotation"];
+      const widths = [7, 34, 24, 16, 24, 27, 32, 16];
+      const x0 = margin;
+
+      pdf.setFontSize(8);
+      pdf.setFont("helvetica", "bold");
+      let x = x0;
+      headers.forEach((head, idx) => {
+        pdf.text(head, x, y);
+        x += widths[idx];
+      });
+      y += 4;
+      pdf.setDrawColor(203, 213, 225);
+      pdf.line(margin, y, pageW - margin, y);
+      y += 5;
+
+      printableItems.forEach((item, index) => {
+        addPageIfNeeded(12);
+        const size = getItemPrintSizeCm(item, printZoneSizes);
+        const zoneSize = getZoneSizeCm(printZoneSizes, item.area);
+        const posXcm = Number(item.x || 0) * zoneSize.width;
+        const posYcm = Number(item.y || 0) * zoneSize.height;
+        const row = [
+          String(index + 1),
+          defaultLayerName(item).slice(0, 24),
+          PRINT_ZONES[item.area]?.label || item.area || "-",
+          item.type === "text" ? "Texte" : "Logo",
+          getTechniquePreset(item).shortLabel,
+          `${formatCm(size.width)} × ${formatCm(size.height)} cm`,
+          `X ${formatCm(posXcm)} / Y ${formatCm(posYcm)} cm`,
+          `${Number(item.rotation || 0).toFixed(0)}°`,
+        ];
+
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(8);
+        x = x0;
+        row.forEach((cell, idx) => {
+          pdf.text(String(cell), x, y, { maxWidth: widths[idx] - 2 });
+          x += widths[idx];
+        });
+        y += 7;
+      });
+
+      y += 4;
+      addPageIfNeeded(30);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(12);
+      pdf.text("Polices utilisées", margin, y);
+      y += 7;
+
+      const usedFonts = Array.from(new Set(printableItems.filter((item) => item.type === "text").map((item) => item.fontFamily || "Arial")));
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(9);
+      if (usedFonts.length) {
+        usedFonts.forEach((font) => {
+          addPageIfNeeded(6);
+          const imported = customFonts.find((entry) => entry.name === font);
+          pdf.text(`• ${font}${imported ? " (fichier fourni dans le ZIP)" : ""}`, margin, y);
+          y += 5;
+        });
+      } else {
+        pdf.text("Aucun texte visible.", margin, y);
+        y += 5;
+      }
+
+      y += 4;
+      addPageIfNeeded(24);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(12);
+      pdf.text("Notes atelier", margin, y);
+      y += 7;
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(9);
+      pdf.text("• Les PNG séparés restent la source d'impression principale.", margin, y);
+      y += 5;
+      pdf.text("• Vérifier la zone, la taille réelle et la police avant production.", margin, y);
+      y += 5;
+      pdf.text("• Les calques masqués ne sont pas inclus dans l'export.", margin, y);
+
+      pdf.save(`fiche-atelier-tshirt-${new Date().toISOString().slice(0, 10)}.pdf`);
+    } catch (error) {
+      console.error("Erreur export PDF atelier :", error);
+      alert("Export PDF atelier impossible. Vérifie la console pour plus de détails.");
+    }
+  }
+
   return (
     <section>
       <div className="page-header">
@@ -977,13 +1279,17 @@ export default function Vue3DTshirt() {
           <h2>👕 T-shirt 3D</h2>
           <p>Multi logos, textes, manches et polices personnalisées.</p>
         </div>
-        <button className="primary" onClick={exportMockup}>Exporter mockup + fichiers impression</button>
+        <div className="tshirt3d-export-actions">
+          <button className="primary" onClick={exportMockup}>Exporter ZIP impression</button>
+          <button type="button" onClick={exportWorkshopPdf}>Exporter PDF atelier</button>
+        </div>
       </div>
 
       <div className="tshirt3d-layout">
         <div className="card tshirt3d-preview-card">
           <div className="tshirt3d-preview" ref={previewRef}>
             <Canvas shadows camera={{ position: [0, 0.35, 3.2], fov: 42 }} gl={{ preserveDrawingBuffer: true }}>
+              <TshirtCameraView view={exportView} />
               <ambientLight intensity={0.9} />
               <directionalLight position={[2, 3, 4]} intensity={1.8} castShadow />
               <Suspense fallback={null}>
@@ -1021,6 +1327,26 @@ export default function Vue3DTshirt() {
                 {PRINT_SIZE_PRESETS.map((preset) => <option key={preset.label} value={preset.label}>{preset.label}</option>)}
               </select>
             </label>
+            <label>
+              Technique par défaut
+              <select value={defaultTechnique} onChange={(e) => setDefaultTechnique(e.target.value)}>
+                {TECHNIQUE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              </select>
+            </label>
+          </div>
+
+          <div className="tshirt3d-tech-panel">
+            <strong>Zones techniques atelier</strong>
+            <div className="tshirt3d-tech-grid">
+              {Object.entries(TECHNIQUE_PRESETS).map(([key, preset]) => (
+                <div key={key} className={`tshirt3d-tech-card technique-${key}`}>
+                  <span className="tshirt3d-tech-badge">{preset.label}</span>
+                  <p>{preset.help}</p>
+                  <small>Minimum : {formatCm(preset.minWidth)} × {formatCm(preset.minHeight)} cm{preset.maxWidth ? ` · Max conseillé : ${formatCm(preset.maxWidth)} × ${formatCm(preset.maxHeight)} cm` : ""}</small>
+                  <em>{preset.note}</em>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div className="tshirt3d-real-size-panel">
@@ -1090,6 +1416,7 @@ export default function Vue3DTshirt() {
                     >
                       <span className="tshirt3d-layer-type">{item.type === "image" ? "🖼️" : "T"}</span>
                     </button>
+                    <span className="tshirt3d-layer-tech">{getTechniquePreset(item).shortLabel}</span>
                     <input
                       className="tshirt3d-layer-name"
                       value={defaultLayerName(item)}
@@ -1150,7 +1477,7 @@ export default function Vue3DTshirt() {
             {visibleItems.map((item) => (
               <div
                 key={item.id}
-                className={`tshirt3d-design ${item.id === selectedId ? "selected" : ""} ${item.locked ? "locked" : ""}`}
+                className={`tshirt3d-design technique-${item.technique || "dtf"} ${item.id === selectedId ? "selected" : ""} ${item.locked ? "locked" : ""}`}
                 onPointerDown={(event) => startMove(event, item.id)}
                 style={{
                   left: `${(EDITOR_PRINT_INSET + item.x * EDITOR_PRINT_SIZE) * 100}%`,
@@ -1197,6 +1524,23 @@ export default function Vue3DTshirt() {
           {selectedItem ? (
             <div className="tshirt3d-selected-panel">
               <strong>Élément sélectionné : {defaultLayerName(selectedItem)} {selectedItem.locked ? "— verrouillé" : ""}</strong>
+              {selectedTechnique && (
+                <div className="tshirt3d-tech-selected">
+                  <label>
+                    Technique atelier
+                    <select value={selectedItem.technique || "dtf"} onChange={(e) => updateItem(selectedItem.id, { technique: e.target.value })}>
+                      {TECHNIQUE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </select>
+                  </label>
+                  <p>{selectedTechnique.help}</p>
+                  <small>{selectedTechnique.note}</small>
+                  {selectedTechniqueWarnings.length > 0 && (
+                    <div className="tshirt3d-tech-warnings">
+                      {selectedTechniqueWarnings.map((warning) => <div key={warning}>⚠️ {warning}</div>)}
+                    </div>
+                  )}
+                </div>
+              )}
               {selectedItem.type === "text" && (
                 <div className="tshirt3d-form-grid">
                   <label>Texte<input value={selectedItem.text || ""} onChange={(e) => {

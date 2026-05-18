@@ -687,3 +687,148 @@
   place-items: center;
   pointer-events: none;
 }
+
+/* ===== Point 4 : export PDF atelier ===== */
+.tshirt3d-export-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.tshirt3d-export-actions button {
+  white-space: nowrap;
+}
+
+/* ===== Point 5 : zones techniques DTF / flex / broderie ===== */
+.tshirt3d-tech-panel {
+  border: 1px solid rgba(15, 118, 110, 0.22);
+  background: rgba(20, 184, 166, 0.06);
+  border-radius: 14px;
+  padding: 12px;
+  margin: 12px 0 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.tshirt3d-tech-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.tshirt3d-tech-card {
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 10px;
+  display: grid;
+  gap: 6px;
+}
+
+.tshirt3d-tech-card p,
+.tshirt3d-tech-card small,
+.tshirt3d-tech-selected p,
+.tshirt3d-tech-selected small {
+  margin: 0;
+  color: #334155;
+}
+
+.tshirt3d-tech-badge,
+.tshirt3d-layer-tech {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: max-content;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 900;
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+
+.tshirt3d-tech-card.technique-flex .tshirt3d-tech-badge {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+
+.tshirt3d-layer-tech {
+  min-width: 52px;
+  font-size: 10px;
+}
+
+.tshirt3d-tech-selected {
+  border: 1px solid rgba(15, 118, 110, 0.24);
+  background: rgba(240, 253, 250, 0.9);
+  border-radius: 14px;
+  padding: 12px;
+  margin-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.tshirt3d-tech-selected label {
+  display: grid;
+  gap: 6px;
+  font-weight: 800;
+  font-size: 13px;
+  color: #0f172a;
+}
+
+.tshirt3d-tech-warnings {
+  display: grid;
+  gap: 5px;
+  color: #991b1b;
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  padding: 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.tshirt3d-design.technique-dtf.selected {
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.15);
+}
+
+.tshirt3d-design.technique-flex.selected {
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.2);
+}
+
+
+.tshirt3d-design.technique-flex.selected {
+  border-color: #d97706;
+}
+
+
+.tshirt3d-real-size-fields input[disabled] {
+  color: #0f172a !important;
+  background: #e5e7eb !important;
+  opacity: 1;
+}
+
+
+.tshirt3d-tech-card em {
+  display: block;
+  margin-top: 6px;
+  padding: 7px 9px;
+  border-radius: 10px;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.tshirt3d-tech-selected small {
+  display: block;
+  padding: 7px 9px;
+  border-radius: 10px;
+  background: #fffbeb;
+  color: #92400e;
+  font-weight: 800;
+}
