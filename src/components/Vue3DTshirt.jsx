@@ -41,6 +41,20 @@ const PRINT_SIZE_PRESETS = [
   { label: "Manche 12 × 12 cm", width: 12, height: 12 },
 ];
 
+const GARMENT_SIZE_PRESETS = {
+  XS: { label: "XS", chest: 46, length: 64, scale: [0.88, 0.94, 0.88], note: "Aperçu plus petit : logo visuellement plus présent." },
+  S: { label: "S", chest: 49, length: 67, scale: [0.94, 0.98, 0.94], note: "Petite taille adulte." },
+  M: { label: "M", chest: 52, length: 70, scale: [1, 1, 1], note: "Taille de référence." },
+  L: { label: "L", chest: 55, length: 73, scale: [1.06, 1.03, 1.06], note: "Aperçu légèrement plus large." },
+  XL: { label: "XL", chest: 58, length: 76, scale: [1.12, 1.06, 1.12], note: "Grande taille adulte." },
+  "2XL": { label: "2XL", chest: 61, length: 79, scale: [1.18, 1.09, 1.18], note: "Visuel proportionnellement plus petit." },
+  "3XL": { label: "3XL", chest: 64, length: 82, scale: [1.24, 1.12, 1.24], note: "Très grande taille." },
+  "4XL": { label: "4XL", chest: 67, length: 85, scale: [1.30, 1.15, 1.30], note: "Aperçu très large." },
+  "5XL": { label: "5XL", chest: 70, length: 88, scale: [1.36, 1.18, 1.36], note: "Taille maximale d’aperçu." },
+};
+
+const GARMENT_SIZE_OPTIONS = Object.keys(GARMENT_SIZE_PRESETS);
+
 const TECHNIQUE_PRESETS = {
   dtf: {
     label: "DTF",
@@ -673,7 +687,7 @@ function makeUvTexture(baseImage, itemImages, items, tshirtColor) {
   return texture;
 }
 
-function TshirtModel({ texture }) {
+function TshirtModel({ texture, garmentScale = [1, 1, 1] }) {
   const { scene } = useGLTF(MODEL_URL);
   const normalMap = useLoader(THREE.TextureLoader, NORMAL_URL);
   const roughnessMap = useLoader(THREE.TextureLoader, ROUGHNESS_URL);
@@ -701,7 +715,7 @@ function TshirtModel({ texture }) {
     return clone;
   }, [scene, texture, normalMap, roughnessMap]);
 
-  return <primitive object={clonedScene} />;
+  return <primitive object={clonedScene} scale={garmentScale} />;
 }
 
 export default function Vue3DTshirt() {
@@ -715,6 +729,7 @@ export default function Vue3DTshirt() {
   const [customFonts, setCustomFonts] = useState([]);
   const [printZoneSizes, setPrintZoneSizes] = useState(PRINT_ZONE_SIZES_CM);
   const [defaultTechnique, setDefaultTechnique] = useState("dtf");
+  const [garmentSize, setGarmentSize] = useState("M");
   const [savedProjects, setSavedProjects] = useState([]);
   const [projectName, setProjectName] = useState("");
   const [currentProjectId, setCurrentProjectId] = useState(null);
@@ -736,6 +751,7 @@ export default function Vue3DTshirt() {
   const rulerXTicks = getRulerTicks(activeZoneSize.width);
   const rulerYTicks = getRulerTicks(activeZoneSize.height);
   const snapGuides = getSnapGuides(activeArea);
+  const garmentPreset = GARMENT_SIZE_PRESETS[garmentSize] || GARMENT_SIZE_PRESETS.M;
 
   const printTexture = useMemo(
     () => makeUvTexture(baseImage, itemImages, items, tshirtColor),
@@ -1081,6 +1097,7 @@ export default function Vue3DTshirt() {
       showPrintZone,
       snapEnabled,
       defaultTechnique,
+      garmentSize,
       printZoneSizes,
       items: items.map((item) => ({ ...item })),
       customFonts: customFonts.map((font) => ({
@@ -1144,6 +1161,7 @@ export default function Vue3DTshirt() {
     setShowPrintZone(project.showPrintZone ?? true);
     setSnapEnabled(project.snapEnabled ?? true);
     setDefaultTechnique(project.defaultTechnique || "dtf");
+    setGarmentSize(project.garmentSize || "M");
     setPrintZoneSizes(project.printZoneSizes || PRINT_ZONE_SIZES_CM);
     setProjectName(project.name || "");
   }
@@ -1181,6 +1199,7 @@ export default function Vue3DTshirt() {
       setShowPrintZone(snapshot.showPrintZone ?? true);
       setSnapEnabled(snapshot.snapEnabled ?? true);
       setDefaultTechnique(snapshot.defaultTechnique || "dtf");
+      setGarmentSize(snapshot.garmentSize || "M");
       setPrintZoneSizes(snapshot.printZoneSizes || PRINT_ZONE_SIZES_CM);
       setProjectName(snapshot.name || "");
       setCurrentProjectId(snapshot.id);
@@ -1736,7 +1755,7 @@ export default function Vue3DTshirt() {
               <Suspense fallback={null}>
                 <Bounds fit clip observe margin={1.15}>
                   <Center>
-                    <TshirtModel texture={printTexture} />
+                    <TshirtModel texture={printTexture} garmentScale={garmentPreset.scale} />
                   </Center>
                 </Bounds>
                 <Environment preset="studio" />
@@ -1774,6 +1793,32 @@ export default function Vue3DTshirt() {
                 {TECHNIQUE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
             </label>
+            <label>
+              Taille vêtement
+              <select value={garmentSize} onChange={(e) => setGarmentSize(e.target.value)}>
+                {GARMENT_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{GARMENT_SIZE_PRESETS[size].label}</option>)}
+              </select>
+            </label>
+          </div>
+
+          <div className="tshirt3d-size-panel">
+            <div className="tshirt3d-size-header">
+              <strong>Taille vêtement : {garmentPreset.label}</strong>
+              <span>Largeur poitrine env. {garmentPreset.chest} cm · hauteur env. {garmentPreset.length} cm</span>
+            </div>
+            <div className="tshirt3d-size-scale">
+              {GARMENT_SIZE_OPTIONS.map((size) => (
+                <button
+                  key={size}
+                  type="button"
+                  className={size === garmentSize ? "active" : ""}
+                  onClick={() => setGarmentSize(size)}
+                >
+                  {size}
+                </button>
+              ))}
+            </div>
+            <p className="muted">{garmentPreset.note} Les dimensions d’impression restent celles définies en cm : seul l’aperçu 3D change pour visualiser les proportions.</p>
           </div>
 
           <div className="tshirt3d-tech-panel">

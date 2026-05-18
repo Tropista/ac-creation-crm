@@ -956,3 +956,52 @@
   width: 16px !important;
   height: 16px !important;
 }
+
+
+/* ===== Point 10 : tailles vêtement XS à 5XL ===== */
+.tshirt3d-size-panel {
+  border: 1px solid rgba(124, 58, 237, 0.22);
+  background: rgba(124, 58, 237, 0.06);
+  border-radius: 14px;
+  padding: 12px;
+  margin: 12px 0 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.tshirt3d-size-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: #4c1d95;
+}
+
+.tshirt3d-size-header span {
+  font-size: 12px;
+  font-weight: 800;
+  color: #5b21b6;
+}
+
+.tshirt3d-size-scale {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(54px, 1fr));
+  gap: 8px;
+}
+
+.tshirt3d-size-scale button {
+  min-height: 36px;
+  border-radius: 10px;
+  font-weight: 900;
+  border: 1px solid rgba(124, 58, 237, 0.24);
+  background: #ffffff;
+  color: #4c1d95;
+}
+
+.tshirt3d-size-scale button.active {
+  background: #7c3aed;
+  border-color: #7c3aed;
+  color: #ffffff;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.18);
+}
