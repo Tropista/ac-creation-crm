@@ -82,6 +82,15 @@ const DEFAULT_TEXT_ITEM = {
   textColor: "#111827",
   textSize: 74,
   fontFamily: "Arial",
+  strokeEnabled: false,
+  strokeColor: "#000000",
+  strokeWidth: 2,
+  shadowEnabled: false,
+  shadowColor: "#000000",
+  shadowBlur: 8,
+  shadowOffsetX: 4,
+  shadowOffsetY: 4,
+  curve: 0,
 };
 
 const PROJECTS_STORAGE_KEY = "ac-creation-tshirt-projects-v1";
@@ -450,6 +459,77 @@ function getTechniqueSummaryForArea(items, area) {
   return techniques.length ? techniques.join(" / ") : "Aucune";
 }
 
+
+function drawTextWithEffects(ctx, item, text, maxWidth, maxHeight) {
+  const safeText = String(text || "Texte");
+  const curve = Number(item.curve || 0);
+  const fillColor = item.textColor || "#111827";
+  const strokeEnabled = Boolean(item.strokeEnabled);
+  const strokeColor = item.strokeColor || "#000000";
+  const strokeWidth = Math.max(0, Number(item.strokeWidth || 0));
+
+  ctx.save();
+  ctx.fillStyle = fillColor;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+
+  if (item.shadowEnabled) {
+    ctx.shadowColor = item.shadowColor || "#000000";
+    ctx.shadowBlur = Math.max(0, Number(item.shadowBlur || 0));
+    ctx.shadowOffsetX = Number(item.shadowOffsetX || 0);
+    ctx.shadowOffsetY = Number(item.shadowOffsetY || 0);
+  }
+
+  let fontSize = Math.floor(maxHeight * 0.72);
+  ctx.font = `800 ${fontSize}px "${item.fontFamily || "Arial"}"`;
+
+  while (ctx.measureText(safeText).width > maxWidth * 0.92 && fontSize > 8) {
+    fontSize -= 2;
+    ctx.font = `800 ${fontSize}px "${item.fontFamily || "Arial"}"`;
+  }
+
+  if (Math.abs(curve) > 2 && safeText.length > 1) {
+    const chars = [...safeText];
+    const totalWidth = Math.max(1, chars.reduce((sum, char) => sum + ctx.measureText(char).width, 0));
+    const arcPower = Math.min(1, Math.abs(curve) / 100);
+    const arcAngle = Math.max(0.35, arcPower * Math.PI * 0.95);
+    const radius = Math.max(maxHeight * 0.9, totalWidth / arcAngle);
+    const direction = curve > 0 ? -1 : 1;
+    let cursor = -totalWidth / 2;
+
+    chars.forEach((char) => {
+      const charWidth = ctx.measureText(char).width;
+      const center = cursor + charWidth / 2;
+      const angle = center / radius;
+      const x = Math.sin(angle) * radius;
+      const y = direction * (Math.cos(angle) * radius - radius);
+
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(direction * angle);
+      if (strokeEnabled && strokeWidth > 0) {
+        ctx.lineWidth = strokeWidth;
+        ctx.strokeStyle = strokeColor;
+        ctx.lineJoin = "round";
+        ctx.strokeText(char, 0, 0);
+      }
+      ctx.fillText(char, 0, 0);
+      ctx.restore();
+      cursor += charWidth;
+    });
+  } else {
+    if (strokeEnabled && strokeWidth > 0) {
+      ctx.lineWidth = strokeWidth;
+      ctx.strokeStyle = strokeColor;
+      ctx.lineJoin = "round";
+      ctx.strokeText(safeText, 0, 0, maxWidth * 0.92);
+    }
+    ctx.fillText(safeText, 0, 0, maxWidth * 0.92);
+  }
+
+  ctx.restore();
+}
+
 function drawPrintItemForExport(ctx, item, logoImage, widthPx, heightPx) {
   ctx.clearRect(0, 0, widthPx, heightPx);
   ctx.save();
@@ -464,20 +544,7 @@ function drawPrintItemForExport(ctx, item, logoImage, widthPx, heightPx) {
   }
 
   if (item.type === "text") {
-    const text = String(item.text || "Texte");
-    ctx.fillStyle = item.textColor || "#111827";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-
-    let fontSize = Math.floor(heightPx * 0.72);
-    ctx.font = `800 ${fontSize}px "${item.fontFamily || "Arial"}"`;
-
-    while (ctx.measureText(text).width > widthPx * 0.92 && fontSize > 8) {
-      fontSize -= 2;
-      ctx.font = `800 ${fontSize}px "${item.fontFamily || "Arial"}"`;
-    }
-
-    ctx.fillText(text, 0, 0, widthPx * 0.92);
+    drawTextWithEffects(ctx, item, item.text || "Texte", widthPx, heightPx);
   }
 
   ctx.restore();
@@ -560,11 +627,7 @@ function drawItem(ctx, item, zone, logoImage) {
   }
 
   if (item.type === "text") {
-    ctx.fillStyle = item.textColor || "#111827";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.font = `800 ${Number(item.textSize || 74)}px "${item.fontFamily || "Arial"}"`;
-    ctx.fillText(String(item.text || "Texte"), 0, 0, drawW);
+    drawTextWithEffects(ctx, item, item.text || "Texte", drawW, drawH);
   }
 
   ctx.restore();
@@ -1161,6 +1224,157 @@ export default function Vue3DTshirt() {
     return files;
   }
 
+
+  function escapeXml(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&apos;");
+  }
+
+  function buildZoneSvg(area, areaItems) {
+    const zone = PRINT_ZONES[area] || PRINT_ZONES.front;
+    const zoneSize = getZoneSizeCm(printZoneSizes, area);
+    const zoneWidth = Number(zoneSize.width || 1);
+    const zoneHeight = Number(zoneSize.height || 1);
+    const title = zone.label || area;
+
+    const parts = [
+      `<?xml version="1.0" encoding="UTF-8"?>`,
+      `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${zoneWidth}cm" height="${zoneHeight}cm" viewBox="0 0 ${zoneWidth} ${zoneHeight}">`,
+      `<title>${escapeXml(title)}</title>`,
+      `<desc>Export vectoriel généré depuis le configurateur T-shirt. Les textes restent vectoriels. Les logos/photos importés restent intégrés en image raster.</desc>`,
+      `<rect x="0" y="0" width="${zoneWidth}" height="${zoneHeight}" fill="none" stroke="#2563eb" stroke-width="0.05" stroke-dasharray="0.4 0.25"/>`,
+    ];
+
+    for (const item of areaItems) {
+      const size = getItemPrintSizeCm(item, printZoneSizes);
+      const itemW = Number(size.width || 0.1);
+      const itemH = Number(size.height || 0.1);
+      const cx = Number(item.x ?? 0.5) * zoneWidth;
+      const cy = Number(item.y ?? 0.5) * zoneHeight;
+      const x = cx - itemW / 2;
+      const y = cy - itemH / 2;
+      const rotation = Number(item.rotation || 0);
+      const transform = rotation ? ` transform="rotate(${rotation} ${cx} ${cy})"` : "";
+
+      if (item.type === "image" && item.src) {
+        parts.push(
+          `<image x="${x}" y="${y}" width="${itemW}" height="${itemH}" preserveAspectRatio="none" href="${escapeXml(item.src)}" xlink:href="${escapeXml(item.src)}"${transform}/>`
+        );
+      }
+
+      if (item.type === "text") {
+        const fontSizeCm = Math.max(0.15, itemH * 0.72);
+        const strokeAttrs = item.strokeEnabled
+          ? ` stroke="${escapeXml(item.strokeColor || "#000000")}" stroke-width="${Math.max(0.01, Number(item.strokeWidth || 1) * 0.015)}" paint-order="stroke" stroke-linejoin="round"`
+          : "";
+        const shadowStyle = item.shadowEnabled
+          ? ` style="filter: drop-shadow(${Number(item.shadowOffsetX || 0) * 0.03}cm ${Number(item.shadowOffsetY || 0) * 0.03}cm ${Number(item.shadowBlur || 0) * 0.02}cm ${escapeXml(item.shadowColor || "#000000")});"`
+          : "";
+        const curve = Number(item.curve || 0);
+
+        if (Math.abs(curve) > 2) {
+          const pathId = `curve-${escapeXml(area)}-${escapeXml(item.id || String(Math.random()).slice(2))}`;
+          const midY = cy;
+          const controlY = cy - (curve / 100) * itemH * 1.25;
+          parts.push(`<path id="${pathId}" d="M ${x} ${midY} Q ${cx} ${controlY} ${x + itemW} ${midY}" fill="none"/>`);
+          parts.push(
+            `<text font-family="${escapeXml(item.fontFamily || "Arial")}" font-size="${fontSizeCm}" font-weight="800" fill="${escapeXml(item.textColor || "#111827")}" text-anchor="middle" dominant-baseline="middle"${strokeAttrs}${shadowStyle}${transform}><textPath href="#${pathId}" startOffset="50%">${escapeXml(item.text || "Texte")}</textPath></text>`
+          );
+        } else {
+          parts.push(
+            `<text x="${cx}" y="${cy}" font-family="${escapeXml(item.fontFamily || "Arial")}" font-size="${fontSizeCm}" font-weight="800" fill="${escapeXml(item.textColor || "#111827")}" text-anchor="middle" dominant-baseline="middle"${strokeAttrs}${shadowStyle}${transform}>${escapeXml(item.text || "Texte")}</text>`
+          );
+        }
+      }
+    }
+
+    parts.push(`</svg>`);
+    return parts.join("\n");
+  }
+
+  function buildZoneEps(area, areaItems) {
+    const zone = PRINT_ZONES[area] || PRINT_ZONES.front;
+    const zoneSize = getZoneSizeCm(printZoneSizes, area);
+    const zoneWidthPt = Number(zoneSize.width || 1) * 28.3465;
+    const zoneHeightPt = Number(zoneSize.height || 1) * 28.3465;
+    const lines = [
+      "%!PS-Adobe-3.0 EPSF-3.0",
+      `%%Title: ${zone.label || area}`,
+      `%%BoundingBox: 0 0 ${Math.ceil(zoneWidthPt)} ${Math.ceil(zoneHeightPt)}`,
+      "%%Creator: AC Creation CRM - Vue3D T-shirt",
+      "%%LanguageLevel: 2",
+      "%%EndComments",
+      "/Arial-Bold findfont 24 scalefont setfont",
+      "0 0 0 setrgbcolor",
+    ];
+
+    areaItems.forEach((item) => {
+      const size = getItemPrintSizeCm(item, printZoneSizes);
+      const zoneWidthCm = Number(zoneSize.width || 1);
+      const zoneHeightCm = Number(zoneSize.height || 1);
+      const cx = Number(item.x ?? 0.5) * zoneWidthCm * 28.3465;
+      const cy = zoneHeightPt - Number(item.y ?? 0.5) * zoneHeightCm * 28.3465;
+      const w = Number(size.width || 0.1) * 28.3465;
+      const h = Number(size.height || 0.1) * 28.3465;
+
+      if (item.type === "text") {
+        const safeText = String(item.text || "Texte").replace(/[()\\]/g, "\\$&");
+        const fontSize = Math.max(6, h * 0.72);
+        lines.push("gsave");
+        lines.push(`${cx} ${cy} translate`);
+        if (Number(item.rotation || 0)) lines.push(`${Number(item.rotation || 0)} rotate`);
+        lines.push(`/Arial-Bold findfont ${fontSize.toFixed(2)} scalefont setfont`);
+        lines.push(`(${safeText}) dup stringwidth pop -2 div 0 moveto show`);
+        lines.push("grestore");
+      } else {
+        lines.push(`% Image raster intégrée dans le SVG correspondant : ${item.fileName || "logo"}`);
+        lines.push("gsave");
+        lines.push("0.2 0.45 1 setrgbcolor");
+        lines.push(`${(cx - w / 2).toFixed(2)} ${(cy - h / 2).toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)} rectstroke`);
+        lines.push("grestore");
+      }
+    });
+
+    lines.push("showpage", "%%EOF");
+    return lines.join("\n");
+  }
+
+  async function buildVectorFiles() {
+    const files = [];
+    const printableItems = items
+      .filter((item) => !item.hidden)
+      .sort((a, b) => Number(a.z || 0) - Number(b.z || 0));
+
+    const areas = Object.keys(PRINT_ZONES);
+    for (const area of areas) {
+      const areaItems = printableItems.filter((item) => item.area === area);
+      if (!areaItems.length) continue;
+
+      const areaLabel = sanitizeFilename(PRINT_ZONES[area]?.label || area);
+      const svg = buildZoneSvg(area, areaItems);
+      files.push({
+        name: `vectoriels/${areaLabel}.svg`,
+        blob: new Blob([svg], { type: "image/svg+xml;charset=utf-8" }),
+      });
+    }
+
+    const readme = [
+      "Export SVG Vue3D T-shirt",
+      "",
+      "- Les fichiers .SVG peuvent être ouverts dans Illustrator, CorelDRAW, Inkscape, etc.",
+      "- Les textes restent vectoriels dans le SVG.",
+      "- Les logos/photos importés restent des images raster intégrées dans le SVG.",
+      "- Pour obtenir un fichier .AI, ouvrir le SVG dans Illustrator puis enregistrer en .AI.",
+    ].join("\n");
+
+    files.push({ name: "vectoriels/README-SVG.txt", blob: new Blob([readme], { type: "text/plain;charset=utf-8" }) });
+    return files;
+  }
+
   async function buildFontFiles() {
     const fontFiles = [];
 
@@ -1312,6 +1526,7 @@ export default function Vue3DTshirt() {
 
       files.push(...(await buildAutoMockupFiles()));
       files.push(...(await buildPrintElementFiles()));
+      files.push(...(await buildVectorFiles()));
       files.push(...(await buildFontFiles()));
 
       if (!files.length) {
@@ -1759,20 +1974,66 @@ export default function Vue3DTshirt() {
                     preserveAspectRatio="none"
                     aria-label={item.text || "Texte"}
                   >
-                    <text
-                      x="500"
-                      y="120"
-                      textAnchor="middle"
-                      dominantBaseline="middle"
-                      fill={item.textColor || "#111827"}
-                      fontFamily={item.fontFamily || "Arial"}
-                      fontWeight="900"
-                      fontSize="165"
-                      textLength="900"
-                      lengthAdjust="spacingAndGlyphs"
-                    >
-                      {item.text || "Texte"}
-                    </text>
+                    {item.shadowEnabled && (
+                      <defs>
+                        <filter id={`text-shadow-${item.id}`} x="-30%" y="-60%" width="160%" height="220%">
+                          <feDropShadow
+                            dx={Number(item.shadowOffsetX || 0)}
+                            dy={Number(item.shadowOffsetY || 0)}
+                            stdDeviation={Math.max(0, Number(item.shadowBlur || 0)) / 3}
+                            floodColor={item.shadowColor || "#000000"}
+                            floodOpacity="0.85"
+                          />
+                        </filter>
+                      </defs>
+                    )}
+                    {Math.abs(Number(item.curve || 0)) > 2 ? (
+                      <>
+                        <defs>
+                          <path
+                            id={`text-curve-${item.id}`}
+                            d={`M 80 120 Q 500 ${120 - Number(item.curve || 0) * 1.05} 920 120`}
+                          />
+                        </defs>
+                        <text
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          fill={item.textColor || "#111827"}
+                          stroke={item.strokeEnabled ? item.strokeColor || "#000000" : "none"}
+                          strokeWidth={item.strokeEnabled ? Number(item.strokeWidth || 2) : 0}
+                          paintOrder="stroke"
+                          strokeLinejoin="round"
+                          fontFamily={item.fontFamily || "Arial"}
+                          fontWeight="900"
+                          fontSize="145"
+                          filter={item.shadowEnabled ? `url(#text-shadow-${item.id})` : undefined}
+                        >
+                          <textPath href={`#text-curve-${item.id}`} startOffset="50%">
+                            {item.text || "Texte"}
+                          </textPath>
+                        </text>
+                      </>
+                    ) : (
+                      <text
+                        x="500"
+                        y="120"
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        fill={item.textColor || "#111827"}
+                        stroke={item.strokeEnabled ? item.strokeColor || "#000000" : "none"}
+                        strokeWidth={item.strokeEnabled ? Number(item.strokeWidth || 2) : 0}
+                        paintOrder="stroke"
+                        strokeLinejoin="round"
+                        fontFamily={item.fontFamily || "Arial"}
+                        fontWeight="900"
+                        fontSize="165"
+                        textLength="900"
+                        lengthAdjust="spacingAndGlyphs"
+                        filter={item.shadowEnabled ? `url(#text-shadow-${item.id})` : undefined}
+                      >
+                        {item.text || "Texte"}
+                      </text>
+                    )}
                   </svg>
                 )}
                 <button className="tshirt3d-resize-handle left" onPointerDown={(event) => startResize(event, item.id, "left")} title="Étirer gauche / largeur" />
@@ -1824,6 +2085,31 @@ export default function Vue3DTshirt() {
                       {customFonts.map((font) => <option key={font.name} value={font.name}>{font.name}</option>)}
                     </select>
                   </label>
+                  <label>Courbure
+                    <input type="range" min="-100" max="100" step="1" value={selectedItem.curve || 0} onChange={(e) => updateItem(selectedItem.id, { curve: Number(e.target.value) })} />
+                  </label>
+                  <label className="tshirt3d-checkbox compact">
+                    <input type="checkbox" checked={selectedItem.strokeEnabled || false} onChange={(e) => updateItem(selectedItem.id, { strokeEnabled: e.target.checked })} />
+                    Contour texte
+                  </label>
+                  {selectedItem.strokeEnabled && (
+                    <>
+                      <label>Couleur contour<input type="color" value={selectedItem.strokeColor || "#000000"} onChange={(e) => updateItem(selectedItem.id, { strokeColor: e.target.value })} /></label>
+                      <label>Épaisseur contour<input type="range" min="1" max="20" step="1" value={selectedItem.strokeWidth || 2} onChange={(e) => updateItem(selectedItem.id, { strokeWidth: Number(e.target.value) })} /></label>
+                    </>
+                  )}
+                  <label className="tshirt3d-checkbox compact">
+                    <input type="checkbox" checked={selectedItem.shadowEnabled || false} onChange={(e) => updateItem(selectedItem.id, { shadowEnabled: e.target.checked })} />
+                    Ombre texte
+                  </label>
+                  {selectedItem.shadowEnabled && (
+                    <>
+                      <label>Couleur ombre<input type="color" value={selectedItem.shadowColor || "#000000"} onChange={(e) => updateItem(selectedItem.id, { shadowColor: e.target.value })} /></label>
+                      <label>Flou ombre<input type="range" min="0" max="30" step="1" value={selectedItem.shadowBlur || 8} onChange={(e) => updateItem(selectedItem.id, { shadowBlur: Number(e.target.value) })} /></label>
+                      <label>Décalage X<input type="range" min="-30" max="30" step="1" value={selectedItem.shadowOffsetX || 4} onChange={(e) => updateItem(selectedItem.id, { shadowOffsetX: Number(e.target.value) })} /></label>
+                      <label>Décalage Y<input type="range" min="-30" max="30" step="1" value={selectedItem.shadowOffsetY || 4} onChange={(e) => updateItem(selectedItem.id, { shadowOffsetY: Number(e.target.value) })} /></label>
+                    </>
+                  )}
                 </div>
               )}
               {selectedPrintSize && (
