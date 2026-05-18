@@ -1,5 +1,5 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { Canvas, useLoader, useThree } from "@react-three/fiber";
+import { Canvas, useFrame, useLoader, useThree } from "@react-three/fiber";
 import { Bounds, Center, Environment, OrbitControls, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import jsPDF from "jspdf";
@@ -84,20 +84,24 @@ const DEFAULT_TEXT_ITEM = {
   fontFamily: "Arial",
 };
 
-const TSHIRT_CAMERA_VIEWS = {
-  front: { position: [0, 0.35, 3.2], target: [0, 0.15, 0], filename: "mockup-face.png" },
-  back: { position: [0, 0.35, -3.2], target: [0, 0.15, 0], filename: "mockup-dos.png" },
-  leftSleeve: { position: [3.0, 0.35, 0], target: [0, 0.15, 0], filename: "mockup-manche-gauche.png" },
-  rightSleeve: { position: [-3.0, 0.35, 0], target: [0, 0.15, 0], filename: "mockup-manche-droite.png" },
+// Point 6 : vues automatiques réelles du t-shirt.
+// On garde la caméra de face et on tourne le modèle pendant l'export,
+// ce qui évite de capturer plusieurs fois la même vue si OrbitControls/Bounds conserve l'ancien angle.
+const TSHIRT_EXPORT_VIEWS = {
+  front: { rotationY: 0, filename: "mockup-face.png" },
+  back: { rotationY: Math.PI, filename: "mockup-dos.png" },
+  leftSleeve: { rotationY: Math.PI / 2, filename: "mockup-manche-gauche.png" },
+  rightSleeve: { rotationY: -Math.PI / 2, filename: "mockup-manche-droite.png" },
 };
 
-function waitForRender(ms = 220) {
+function waitForRender(ms = 260) {
   return new Promise((resolve) => {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => setTimeout(resolve, ms));
     });
   });
 }
+
 
 function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2);
@@ -614,30 +618,28 @@ function makeUvTexture(baseImage, itemImages, items, tshirtColor) {
   return texture;
 }
 
-function TshirtCameraView({ view }) {
-  const { camera, controls, gl } = useThree();
+function TshirtExportCameraView({ view }) {
+  const { camera, controls } = useThree();
 
-  useEffect(() => {
+  useFrame(() => {
     if (!view) return;
-    const preset = TSHIRT_CAMERA_VIEWS[view];
-    if (!preset) return;
 
-    camera.position.set(...preset.position);
-    camera.lookAt(...preset.target);
+    // Pendant l'export, on force une caméra propre et stable de face.
+    // La vue face/dos/manches est obtenue en tournant le modèle lui-même.
+    camera.position.set(0, 0.35, 3.2);
+    camera.lookAt(0, 0.15, 0);
     camera.updateProjectionMatrix();
 
     if (controls) {
-      controls.target.set(...preset.target);
+      controls.target.set(0, 0.15, 0);
       controls.update();
     }
-
-    gl.renderLists?.dispose?.();
-  }, [view, camera, controls, gl]);
+  });
 
   return null;
 }
 
-function TshirtModel({ texture }) {
+function TshirtModel({ texture, view }) {
   const { scene } = useGLTF(MODEL_URL);
   const normalMap = useLoader(THREE.TextureLoader, NORMAL_URL);
   const roughnessMap = useLoader(THREE.TextureLoader, ROUGHNESS_URL);
@@ -665,7 +667,13 @@ function TshirtModel({ texture }) {
     return clone;
   }, [scene, texture, normalMap, roughnessMap]);
 
-  return <primitive object={clonedScene} />;
+  const rotationY = view ? (TSHIRT_EXPORT_VIEWS[view]?.rotationY || 0) : 0;
+
+  return (
+    <group rotation={[0, rotationY, 0]}>
+      <primitive object={clonedScene} />
+    </group>
+  );
 }
 
 export default function Vue3DTshirt() {
@@ -1060,16 +1068,16 @@ export default function Vue3DTshirt() {
     const views = ["front", "back", "leftSleeve", "rightSleeve"];
 
     for (const view of views) {
-      const preset = TSHIRT_CAMERA_VIEWS[view];
+      const preset = TSHIRT_EXPORT_VIEWS[view];
       if (!preset) continue;
 
       setExportView(view);
-      await waitForRender(260);
+      await waitForRender(360);
       files.push({ name: preset.filename, blob: await canvasToBlob(canvas) });
     }
 
     setExportView(null);
-    await waitForRender(120);
+    await waitForRender(180);
 
     return files;
   }
@@ -1289,13 +1297,13 @@ export default function Vue3DTshirt() {
         <div className="card tshirt3d-preview-card">
           <div className="tshirt3d-preview" ref={previewRef}>
             <Canvas shadows camera={{ position: [0, 0.35, 3.2], fov: 42 }} gl={{ preserveDrawingBuffer: true }}>
-              <TshirtCameraView view={exportView} />
+              <TshirtExportCameraView view={exportView} />
               <ambientLight intensity={0.9} />
               <directionalLight position={[2, 3, 4]} intensity={1.8} castShadow />
               <Suspense fallback={null}>
                 <Bounds fit clip observe margin={1.15}>
                   <Center>
-                    <TshirtModel texture={printTexture} />
+                    <TshirtModel texture={printTexture} view={exportView} />
                   </Center>
                 </Bounds>
                 <Environment preset="studio" />
