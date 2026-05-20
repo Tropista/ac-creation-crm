@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import DocumentPreview from "./DocumentPreview";
 import { money } from "../utils/money";
 import {
   clientName,
@@ -360,7 +361,14 @@ onChange={(e) =>
 </div>
       </div>
 
-      {previewDoc && <DocumentPreview doc={previewDoc} type={type} data={data} onClose={() => setPreviewDoc(null)} />}
+      {previewDoc && (
+  <DocumentPreview
+    doc={previewDoc}
+    type={type}
+    data={data}
+    onClose={() => setPreviewDoc(null)}
+  />
+)}
     </section>
   );
 }
