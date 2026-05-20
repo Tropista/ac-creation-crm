@@ -181,69 +181,6 @@ function addLog(data, updateData, currentUser, actionName, targetName, detailsTe
   });
 }
 
-async function syncTable(tableName, nextItems, previousItems) {
-  const next = dedupeItemsById(nextItems || []);
-  const previous = dedupeItemsById(previousItems || []);
-
-  if (next.length) {
-    const payload = next
-      .filter((item) => item?.id)
-.map((item) => {
-  const row = {
-    id: item.id,
-    data: item,
-  };
-
-  if (tableName === "crm_logs") {
-    row.user_name = item.user_name || item.user || "Système";
-    row.action = item.action || "";
-    row.target = item.target || "";
-    row.details = item.details || "";
-  }
-
-  return row;
-});
-
-    if (payload.length) {
-      const { error } = await supabase.from(tableName).upsert(payload, { onConflict: "id" });
-      if (error) throw error;
-    }
-  }
-
-  const nextIds = new Set(next.map((item) => item.id).filter(Boolean));
-  const deletedIds = previous
-    .map((item) => item.id)
-    .filter((id) => id && !nextIds.has(id));
-
-  if (deletedIds.length) {
-    const { error } = await supabase.from(tableName).delete().in("id", deletedIds);
-    if (error) throw error;
-  }
-}
-
-async function syncSupabaseData(nextData, previousData) {
-  const next = normalizeData(nextData);
-  const previous = normalizeData(previousData);
-
-
-  const { error: settingsError } = await supabase
-    .from("settings")
-    .upsert({ id: "main", data: next.settings, updated_at: new Date().toISOString() }, { onConflict: "id" });
-
-  if (settingsError) throw settingsError;
-
-  await Promise.all([
-    syncTable("users", next.users, previous.users),
-    syncTable("backups", next.backups, previous.backups),
-    syncTable("clients", next.clients, previous.clients),
-    syncTable("products", next.products, previous.products),
-    syncTable("categories", next.categories, previous.categories),
-    syncTable("quotes", next.quotes, previous.quotes),
-    syncTable("invoices", next.invoices, previous.invoices),
-    syncTable("crm_logs", next.logs, previous.logs),
-  ]);
-}
-
 export default function App() {
   if (window.location.pathname === "/configurateur-tshirt") {
     return <PublicTshirtConfigurator />;
@@ -285,7 +222,10 @@ function CrmApp() {
   async function initializeCloudData() {
     try {
       const localData = normalizeData(loadData());
-      const cloud = await loadSupabaseData();
+      const cloud = await loadSupabaseData({
+  normalizeData,
+  emptyData
+});
 
       if (cloud.hasCloudData) {
       const mergedData = normalizeData({

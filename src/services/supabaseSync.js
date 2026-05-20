@@ -1,12 +1,22 @@
 import { supabase } from "../supabase";
 
+function rowsToItems(rows) {
+  return (rows || []).map((row) => ({
+    id: row.id,
+    ...(row.data || {}),
+  }));
+}
+
 export async function syncSupabaseData(
   nextData,
   previousData
 ) {
 
 }
-export async function loadSupabaseData() {
+export async function loadSupabaseData({
+  normalizeData,
+  emptyData
+}) {
   const [
     settingsRes,
     usersRes,
