@@ -30,3 +30,67 @@ export function dedupeDocuments(items = []) {
 
   return Array.from(map.values());
 }
+export function createBackupSnapshot(
+  data,
+  label = "Sauvegarde automatique"
+) {
+  const safeData = normalizeData(data);
+
+  return {
+    id: uid(),
+    label,
+    createdAt: new Date().toISOString(),
+
+    clientsCount: safeData.clients.length,
+    productsCount: safeData.products.length,
+    invoicesCount: safeData.invoices.length,
+    quotesCount: safeData.quotes.length,
+
+    data: {
+      ...safeData,
+      backups: [],
+    },
+  };
+}
+export function downloadJson(filename, data) {
+  const blob = new Blob(
+    [JSON.stringify(data, null, 2)],
+    { type: "application/json" }
+  );
+
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+
+  URL.revokeObjectURL(url);
+}
+export function normalizeData(data) {
+  return {
+    ...data,
+
+    users: data.users || [],
+    clients: data.clients || [],
+    products: data.products || [],
+    categories: data.categories || [],
+
+    quotes: data.quotes || [],
+    invoices: data.invoices || [],
+
+    backups: data.backups || [],
+    logs: data.logs || [],
+
+    settings: data.settings || {},
+  };
+}
+export function pruneBackups(backups, max = 12) {
+  return [...(backups || [])]
+    .sort(
+      (a, b) =>
+        new Date(b.createdAt || 0)
+        - new Date(a.createdAt || 0)
+    )
+    .slice(0, max);
+}
