@@ -1,22 +1,13 @@
-import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "./supabase";
-import * as XLSX from "xlsx";
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
-import QRCode from "qrcode";
-import { Html5QrcodeScanner } from "html5-qrcode";
 import "./App.css";
-import { Canvas } from "@react-three/fiber";
-import * as THREE from "three";
-import { Bounds, Center, Environment, OrbitControls, useGLTF } from "@react-three/drei";
+
 import Vue3D from "./components/Vue3D";
 import Vue3DTshirt from "./components/Vue3DTshirt";
 import Banque from "./components/Banque";
-import { getPermissions } from "./utils/permissions";
-import { money } from "./utils/money";
 import Sidebar from "./components/Sidebar";
-import InvoicesPage from "./components/InvoicesPage";
 import Clients from "./components/Clients";
+import Products from "./components/Products";
 import Documents from "./components/Documents";
 import Dashboard from "./components/Dashboard";
 import Settings from "./components/Settings";
@@ -27,22 +18,21 @@ import Backups from "./components/Backups";
 import ExcelImport from "./components/ExcelImport";
 import BarcodeLabels from "./components/BarcodeLabels";
 import ProductScan from "./components/ProductScan";
-import Product3DViewer from "./components/3d/Product3DViewer";
 import AuthPage from "./components/auth/AuthPage";
 import AccessDenied from "./components/auth/AccessDenied";
-import PaginationControls from "./components/PaginationControls";
+
+import { getPermissions } from "./utils/permissions";
+import {
+  uid,
+  dedupeDocuments,
+  createBackupSnapshot,
+  pruneBackups
+} from "./utils/documents";
+
 import {
   loadSupabaseData,
   syncSupabaseData
 } from "./services/supabaseSync";
-import {
-  uid,
-  today,
-  clientName,
-  statusClass,
-  dedupeDocuments
-} from "./utils/documents";
-import Products from "./components/Products";
 
 const STORAGE_KEY = "crm_local_data_v2";
 const SESSION_KEY = "crm_current_user_v2";
