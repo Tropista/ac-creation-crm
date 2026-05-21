@@ -50,7 +50,9 @@ import {
 import {
   logActivity
 } from "./services/logService";
-
+import "./styles/sidebar.css";
+import "./styles/dashboard.css";
+import "./styles/clients.css";
 const Vue3D = lazy(() =>
   import("./components/Vue3D")
 );
@@ -312,6 +314,7 @@ function CrmApp() {
               setData={updateData}
               currentRole={currentRole}
               logActivity={handleLogActivity}
+              setPage={setPage}
             />
           )}
 

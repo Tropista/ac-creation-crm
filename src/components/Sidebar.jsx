@@ -1,3 +1,22 @@
+const menuItems = [
+  { page: "dashboard", label: "Tableau de bord", icon: "📊", type: "page" },
+  { page: "clients", label: "Clients", icon: "👥", type: "page" },
+  { page: "products", label: "Produits", icon: "📦", type: "page" },
+  { page: "labels", label: "Étiquettes", icon: "🏷️", type: "page" },
+  { page: "scan", label: "Scan produit", icon: "📷", type: "page" },
+  { page: "categories", label: "Catégories", icon: "🗂️", type: "page" },
+  { page: "quotes", label: "Devis", icon: "🧾", type: "page" },
+  { page: "invoices", label: "Factures", icon: "💶", type: "page" },
+  { page: "banque", label: "Banque", icon: "🏦", type: "page" },
+  { page: "users", label: "Utilisateurs", icon: "🔐", permission: "canManageUsers" },
+  { page: "settings", label: "Paramètres", icon: "⚙️", permission: "canEditSettings" },
+  { page: "import", label: "Import Excel", icon: "📥", permission: "canImport" },
+  { page: "backups", label: "Sauvegardes", icon: "💾", permission: "canManageUsers" },
+  { page: "logs", label: "Journal d’activité", icon: "📜", type: "page" },
+  { page: "vue3d", label: "Vue 3D", icon: "👕", type: "page" },
+  { page: "tshirt3d", label: "T-shirt 3D", icon: "🎨", type: "page" },
+];
+
 export default function Sidebar({
   data,
   currentUser,
@@ -8,85 +27,66 @@ export default function Sidebar({
   setPage,
   logout
 }) {
+  function canShow(item) {
+    if (item.type === "page") {
+      return permissions.pages.includes(item.page);
+    }
+
+    if (item.permission) {
+      return Boolean(permissions[item.permission]);
+    }
+
+    return true;
+  }
+
   return (
     <aside className="sidebar">
-      <h1>{data.settings.companyName}</h1>
+      <div className="sidebar-brand">
+        <div className="sidebar-logo">
+🎨
+</div>
+        <div>
+          <h1>{data.settings.companyName || "AC Creation"}</h1>
+          <span>Creative CRM</span>
+          <p className="brand-desc">
+Personnalisation • Laser • 3D
+</p>
+        </div>
+      </div>
 
-      <p className="user">
-        Connecté : {currentUser.name}
-        <br />
-        <span>{currentRole}</span>
-      </p>
+<div className="sidebar-user">
+  <strong>
+    {currentUser.name}
+  </strong>
 
-      <p className="cloud-status">☁️ {syncStatus}</p>
+  <span>
+    {currentRole}
+  </span>
+</div>
 
-      {permissions.pages.includes("dashboard") && (
-        <button onClick={() => setPage("dashboard")}>📊 Tableau de bord</button>
-      )}
+      <div className="sidebar-sync">
+  ☁️ {syncStatus}
+</div>
 
-      {permissions.pages.includes("clients") && (
-        <button onClick={() => setPage("clients")}>👥 Clients</button>
-      )}
+      <nav className="sidebar-nav">
+        {menuItems.filter(canShow).map((item) => (
+          <button
+            key={item.page}
+            type="button"
+            className={page === item.page ? "active" : ""}
+            onClick={() => setPage(item.page)}
+          >
+            <span>{item.icon}</span>
+            {item.label}
+          </button>
+        ))}
+      </nav>
 
-      {permissions.pages.includes("products") && (
-        <button onClick={() => setPage("products")}>📦 Produits</button>
-      )}
-
-      {permissions.pages.includes("labels") && (
-        <button onClick={() => setPage("labels")}>🏷️ Étiquettes</button>
-      )}
-
-      {permissions.pages.includes("scan") && (
-        <button onClick={() => setPage("scan")}>📷 Scan produit</button>
-      )}
-
-      {permissions.pages.includes("categories") && (
-        <button onClick={() => setPage("categories")}>🏷️ Catégories</button>
-      )}
-
-      {permissions.pages.includes("quotes") && (
-        <button onClick={() => setPage("quotes")}>🧾 Devis</button>
-      )}
-
-      {permissions.pages.includes("invoices") && (
-        <button onClick={() => setPage("invoices")}>💶 Factures</button>
-      )}
-
-      {permissions.pages.includes("banque") && (
-        <button onClick={() => setPage("banque")}>🏦 Banque</button>
-      )}
-
-      {permissions.canManageUsers && (
-        <button onClick={() => setPage("users")}>🔐 Utilisateurs</button>
-      )}
-
-      {permissions.canEditSettings && (
-        <button onClick={() => setPage("settings")}>⚙️ Paramètres</button>
-      )}
-
-      {permissions.canImport && (
-        <button onClick={() => setPage("import")}>📥 Import Excel</button>
-      )}
-
-      {permissions.canManageUsers && (
-        <button onClick={() => setPage("backups")}>💾 Sauvegardes</button>
-      )}
-
-      {permissions.pages.includes("logs") && (
-        <button onClick={() => setPage("logs")}>📜 Journal d’activité</button>
-      )}
-
-      {permissions.pages.includes("vue3d") && (
-        <button onClick={() => setPage("vue3d")}>👕 Vue 3D</button>
-      )}
-
-      {permissions.pages.includes("tshirt3d") && (
-        <button onClick={() => setPage("tshirt3d")}>👕 T-shirt 3D</button>
-      )}
-
-      <button className="danger" onClick={logout}>
-        Déconnexion
-      </button>
+      <div className="sidebar-footer">
+        <button className="danger" onClick={logout}>
+          Déconnexion
+        </button>
+      </div>
     </aside>
   );
 }

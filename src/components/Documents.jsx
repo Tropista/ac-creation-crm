@@ -20,7 +20,17 @@ function Documents({ type, data, setData, currentRole = 'Admin', logActivity }) 
   const [previewDoc, setPreviewDoc] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [sortBy, setSortBy] = useState("dateDesc");
-  const [form, setForm] = useState({ clientId: "", status: defaultStatus, globalDiscount: 0, lines: [{ ...emptyLine }] });
+  const prefilledClientId =
+  localStorage.getItem(
+    "crm_prefill_client_id"
+  ) || "";
+
+const [form, setForm] = useState({
+  clientId: prefilledClientId,
+  status: defaultStatus,
+  globalDiscount: 0,
+  lines: [{ ...emptyLine }]
+});
 
   const itemsPerPage = 25;
   const documents = data[listKey];
@@ -176,7 +186,11 @@ function Documents({ type, data, setData, currentRole = 'Admin', logActivity }) 
       logActivity?.(`Création ${isQuote ? "devis" : "facture"}`, doc.number, money(doc.totalTTC));
     }
 
-    reset();
+   localStorage.removeItem(
+  "crm_prefill_client_id"
+);
+
+reset();
   }
 
   function edit(doc) {
@@ -185,7 +199,18 @@ function Documents({ type, data, setData, currentRole = 'Admin', logActivity }) 
       : [{ productId: doc.productId || "", description: doc.description || "", quantity: doc.quantity || 1, price: doc.price || 0, discount: doc.discount || 0 }];
 
     setEditingId(doc.id);
-    setForm({ clientId: doc.clientId, status: doc.status || defaultStatus, globalDiscount: doc.globalDiscount || 0, lines });
+    setForm({
+  clientId:
+    localStorage.getItem(
+      "crm_prefill_client_id"
+    ) || "",
+
+  status: defaultStatus,
+
+  globalDiscount: 0,
+
+  lines: [{ ...emptyLine }]
+});
   }
 
   function remove(id) {
