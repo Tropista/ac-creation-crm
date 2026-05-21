@@ -1,11 +1,16 @@
 import { useState } from "react";
 import { supabase } from "../../supabase";
+
+const SESSION_KEY = "crm_current_user_v2";
+
 function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
 }
 
 function isAdminEmail(email) {
-  return ["ac.creation.officiel@gmail.com"]
+  return ["ac.creation.officiel@gmail.com",
+    "dos.santos.alves.daniel@gmail.com"
+  ]
     .map(normalizeEmail)
     .includes(normalizeEmail(email));
 }
