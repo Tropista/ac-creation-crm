@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 
 function euro(value) {
+
   return (
     Number(value || 0).toLocaleString("fr-FR", {
       minimumFractionDigits: 2,
@@ -13,7 +14,11 @@ function n(value) {
   return Number(value || 0);
 }
 
-export default function Print3DCalculator() {
+export default function Print3DCalculator({
+  data,
+  setData,
+  logActivity
+}) {
   const [form, setForm] = useState({
     projectName: "",
     material: "PLA",
@@ -130,6 +135,69 @@ Prix conseillé TTC : ${euro(calc.totalTTC)}`;
 
     navigator.clipboard.writeText(text);
     alert("Calcul copié dans le presse-papier.");
+  }
+
+
+  function createProduct() {
+    if (!form.projectName.trim()) {
+      alert("Nom du projet manquant");
+      return;
+    }
+
+    const nextNumber =
+      (data.products || []).length + 1;
+
+    const sku =
+      `3D-${String(nextNumber).padStart(4, "0")}`;
+
+    const product = {
+      id: crypto.randomUUID(),
+      sku,
+      name: form.projectName.trim(),
+      description: `Impression 3D
+
+Matière :
+${form.material}
+
+Poids total :
+${calc.totalWeight} g
+
+Temps impression :
+${calc.printTime.toFixed(2)} h
+
+Détail calcul :
+Matière : ${euro(calc.materialCost)}
+Électricité : ${euro(calc.electricityCost)}
+Amortissement machine : ${euro(calc.machineCost)}
+Maintenance : ${euro(calc.maintenanceCost)}
+Main-d'œuvre : ${euro(calc.laborCost)}
+Risque échec : ${euro(calc.failureCost)}
+Coefficient : x${form.marginCoef}
+Marge : ${euro(calc.marginAmount)}
+Total HT : ${euro(calc.totalHT)}
+TVA : ${euro(calc.vatAmount)}
+TTC conseillé : ${euro(calc.totalTTC)}`,
+      category: "Impression 3D",
+      price: Number(calc.totalHT || 0),
+      stock: 0,
+      createdAt: new Date().toISOString()
+    };
+
+    setData({
+      ...data,
+      products: [
+        ...(data.products || []),
+        product
+      ]
+    });
+
+    logActivity?.({
+      action: "Produit 3D créé",
+      target: product.name,
+      details: euro(calc.totalHT)
+    });
+
+    alert("Produit créé dans Produits.");
   }
 
   return (
@@ -475,9 +543,37 @@ Prix conseillé TTC : ${euro(calc.totalTTC)}`;
             </div>
           </div>
 
-          <button type="button" className="primary" onClick={copySummary}>
-            📋 Copier le calcul
-          </button>
+         <div
+className="
+print3d-actions
+">
+
+<button
+type="button"
+onClick={
+copySummary
+}
+>
+
+📋 Copier
+
+</button>
+
+<button
+type="button"
+className="
+primary
+"
+onClick={
+createProduct
+}
+>
+
+📦 Créer produit
+
+</button>
+
+</div>
 
           <p className="print3d-note">
             Formule pro : matière + électricité + amortissement machine + maintenance + main-d’œuvre + risque + marge + TVA.

@@ -423,8 +423,12 @@ function CrmApp() {
           )}
 
           {page === "print3dcalc" && (
-            <Print3DCalculator />
-          )}
+  <Print3DCalculator
+    data={data}
+    setData={updateData}
+    logActivity={handleLogActivity}
+  />
+)}
 
           {page === "vue3d" && <Vue3D />}
           {page === "tshirt3d" && <Vue3DTshirt />}
