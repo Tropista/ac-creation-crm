@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import DocumentPreview from "./DocumentPreview";
 import { money } from "../utils/money";
 import {
@@ -24,7 +24,6 @@ function Documents({ type, data, setData, currentRole = 'Admin', logActivity }) 
   localStorage.getItem(
     "crm_prefill_client_id"
   ) || "";
-
 const [form, setForm] = useState({
   clientId: prefilledClientId,
   status: defaultStatus,
@@ -33,7 +32,7 @@ const [form, setForm] = useState({
 });
 
   const itemsPerPage = 25;
-  const documents = data[listKey];
+  const documents = data[listKey] || [];
 
   const sortedDocuments = useMemo(() => {
     const list = [...documents];
@@ -195,24 +194,58 @@ reset();
 
   function edit(doc) {
     const lines = doc.lines?.length
-      ? doc.lines
-      : [{ productId: doc.productId || "", description: doc.description || "", quantity: doc.quantity || 1, price: doc.price || 0, discount: doc.discount || 0 }];
+      ? doc.lines.map((line) => ({
+          productId: line.productId || "",
+          category: line.category || "",
+          categoryId: line.categoryId || "",
+          description: line.description || "",
+          quantity: Number(line.quantity || 1),
+          price: Number(line.price || 0),
+          discount: Number(line.discount || 0),
+        }))
+      : [
+          {
+            productId: doc.productId || "",
+            description: doc.description || "",
+            quantity: Number(doc.quantity || 1),
+            price: Number(doc.price || 0),
+            discount: Number(doc.discount || 0),
+          },
+        ];
 
     setEditingId(doc.id);
     setForm({
-  clientId:
-    localStorage.getItem(
-      "crm_prefill_client_id"
-    ) || "",
-
-  status: defaultStatus,
-
-  globalDiscount: 0,
-
-  lines: [{ ...emptyLine }]
-});
+      clientId: doc.clientId || "",
+      status: doc.status || defaultStatus,
+      globalDiscount: Number(doc.globalDiscount || 0),
+      lines,
+    });
   }
 
+useEffect(() => {
+  const openDocumentId = localStorage.getItem("crm_open_document_id");
+  const openDocumentType = localStorage.getItem("crm_open_document_type");
+
+  if (!openDocumentId) return;
+
+  if (
+    (openDocumentType === "quote" && !isQuote) ||
+    (openDocumentType === "invoice" && isQuote)
+  ) {
+    return;
+  }
+
+  const doc = documents.find(
+    (d) => String(d.id) === String(openDocumentId)
+  );
+
+  if (!doc) return;
+
+   setPreviewDoc(doc);
+
+  localStorage.removeItem("crm_open_document_id");
+  localStorage.removeItem("crm_open_document_type");
+}, []);
   function remove(id) {
     if (!confirm(`Supprimer ce ${isQuote ? "devis" : "facture"} ?`)) return;
     const removedDoc = documents.find((d) => d.id === id);

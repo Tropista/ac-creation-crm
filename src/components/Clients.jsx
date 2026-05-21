@@ -200,6 +200,56 @@ export default function Clients({
     0
   );
 
+const clientAverageBasket =
+  selectedClientInvoices.length > 0
+    ? selectedClientInvoiceTotal /
+      selectedClientInvoices.length
+    : 0;
+
+const clientConversionRate =
+  selectedClientQuotes.length > 0
+    ? (
+        selectedClientAcceptedQuotes.length /
+        selectedClientQuotes.length
+      ) * 100
+    : 0;
+
+const clientUnpaidAmount =
+  selectedClientUnpaidInvoices.reduce(
+    (sum, invoice) =>
+      sum + docTotal(invoice),
+    0
+  );
+
+const topProducts = useMemo(() => {
+  const stats = {};
+
+  selectedClientInvoices.forEach(
+    (invoice) => {
+      (invoice.lines || []).forEach(
+        (line) => {
+          const key =
+            line.description ||
+            "Sans nom";
+
+          stats[key] =
+            (stats[key] || 0) +
+            Number(
+              line.quantity || 0
+            );
+        }
+      );
+    }
+  );
+
+  return Object.entries(stats)
+    .sort(
+      (a, b) =>
+        b[1] - a[1]
+    )
+    .slice(0, 5);
+
+}, [selectedClientInvoices]);
   function reset() {
     setEditing(null);
     setForm({
@@ -292,7 +342,25 @@ export default function Clients({
     localStorage.setItem("crm_prefill_client_id", selectedClient.id);
     setPage?.(pageName);
   }
+function openDocument(doc, type) {
+  if (!doc) return;
 
+  localStorage.setItem(
+    "crm_open_document_id",
+    doc.id
+  );
+
+  localStorage.setItem(
+    "crm_open_document_type",
+    type
+  );
+
+  setPage?.(
+    type === "quote"
+      ? "quotes"
+      : "invoices"
+  );
+}
   return (
     <section className="clients-page">
       <div className="page-header">
@@ -638,7 +706,16 @@ export default function Clients({
                     ) : (
                       <div className="client-history-list">
                         {selectedClientInvoices.slice(0, 8).map((invoice) => (
-                          <div className="client-history-item" key={invoice.id}>
+<div
+  className="client-history-item clickable"
+  key={invoice.id}
+  onClick={() =>
+    openDocument(
+      invoice,
+      "invoice"
+    )
+  }
+>
                             <div>
                               <strong>{invoice.number || invoice.reference || "Facture"}</strong>
                               <span>{formatDate(docDate(invoice))}</span>
@@ -682,7 +759,57 @@ export default function Clients({
                   <div className="client-full-history">
                     <div className="client-history-section">
                       <h4>Historique complet</h4>
+<div className="client-dashboard-grid">
 
+<div className="client-dashboard-card">
+<strong>
+{money(
+selectedClientInvoiceTotal
+)}
+</strong>
+
+<span>
+CA Client
+</span>
+</div>
+
+<div className="client-dashboard-card">
+<strong>
+{money(
+clientAverageBasket
+)}
+</strong>
+
+<span>
+Panier moyen
+</span>
+</div>
+
+<div className="client-dashboard-card">
+<strong>
+{clientConversionRate.toFixed(
+0
+)} %
+</strong>
+
+<span>
+Conversion devis
+</span>
+</div>
+
+<div className="client-dashboard-card danger">
+<strong>
+{money(
+clientUnpaidAmount
+)}
+</strong>
+
+<span>
+Impayés
+</span>
+</div>
+
+</div>
                       <div className="client-kpi-grid">
                         <div>
                           <strong>{money(selectedClientInvoiceTotal)}</strong>
@@ -747,6 +874,65 @@ export default function Clients({
                     </div>
 
                     <div className="client-history-section">
+                      <div className="client-history-section">
+
+<h4>
+Top produits achetés
+</h4>
+
+{
+topProducts.length===0
+?
+
+<p className="muted">
+Aucun achat
+</p>
+
+:
+
+<div className="top-products">
+
+{
+topProducts.map(
+(
+product,
+index
+)=>(
+
+<div
+key={index}
+className="
+top-product-item
+"
+>
+
+<strong>
+#{index+1}
+</strong>
+
+<span>
+{
+product[0]
+}
+</span>
+
+<b>
+{
+product[1]
+}
+x
+</b>
+
+</div>
+
+))
+}
+
+</div>
+
+}
+
+</div>
                       <h4>Chronologie activité</h4>
 
                       {clientHistory.length === 0 ? (
@@ -781,7 +967,16 @@ export default function Clients({
                       ) : (
                         <div className="client-history-list">
                           {selectedClientQuotes.map((quote) => (
-                            <div className="client-history-item" key={quote.id}>
+                            <div
+  className="client-history-item clickable"
+  key={quote.id}
+  onClick={() =>
+    openDocument(
+      quote,
+      "quote"
+    )
+  }
+>
                               <div>
                                 <strong>{quote.number || quote.reference || "Devis"}</strong>
                                 <span>{formatDate(docDate(quote))}</span>
@@ -807,7 +1002,16 @@ export default function Clients({
                       ) : (
                         <div className="client-history-list">
                           {selectedClientInvoices.map((invoice) => (
-                            <div className="client-history-item" key={invoice.id}>
+                            <div
+  className="client-history-item clickable"
+  key={invoice.id}
+  onClick={() =>
+    openDocument(
+      invoice,
+      "invoice"
+    )
+  }
+>
                               <div>
                                 <strong>{invoice.number || invoice.reference || "Facture"}</strong>
                                 <span>{formatDate(docDate(invoice))}</span>
