@@ -7,14 +7,16 @@ const menuItems = [
   { page: "categories", label: "Catégories", icon: "🗂️", type: "page" },
   { page: "quotes", label: "Devis", icon: "🧾", type: "page" },
   { page: "invoices", label: "Factures", icon: "💶", type: "page" },
+  { page: "print3dcalc", label: "Calculateur 3D", icon: "🧮", type: "tool" },
   { page: "banque", label: "Banque", icon: "🏦", type: "page" },
   { page: "users", label: "Utilisateurs", icon: "🔐", permission: "canManageUsers" },
   { page: "settings", label: "Paramètres", icon: "⚙️", permission: "canEditSettings" },
   { page: "import", label: "Import Excel", icon: "📥", permission: "canImport" },
   { page: "backups", label: "Sauvegardes", icon: "💾", permission: "canManageUsers" },
   { page: "logs", label: "Journal d’activité", icon: "📜", type: "page" },
-  { page: "vue3d", label: "Vue 3D", icon: "👕", type: "page" },
-  { page: "tshirt3d", label: "T-shirt 3D", icon: "🎨", type: "page" },
+ // Temporairement désactivé
+// { page: "vue3d", label: "Vue 3D", icon: "👕", type: "page" },
+// { page: "tshirt3d", label: "T-shirt 3D", icon: "🎨", type: "page" },
 ];
 
 export default function Sidebar({

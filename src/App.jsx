@@ -16,6 +16,7 @@ import Settings from "./components/Settings";
 import Categories from "./components/Categories";
 import UsersAdmin from "./components/UsersAdmin";
 import ActivityLogs from "./components/ActivityLogs";
+import Print3DCalculator from "./components/Print3DCalculator";
 import Backups from "./components/Backups";
 import AuthPage from "./components/auth/AuthPage";
 import AccessDenied from "./components/auth/AccessDenied";
@@ -53,6 +54,8 @@ import {
 import "./styles/sidebar.css";
 import "./styles/dashboard.css";
 import "./styles/clients.css";
+import "./styles/documents.css";
+import "./styles/print3d-calculator.css";
 const Vue3D = lazy(() =>
   import("./components/Vue3D")
 );
@@ -231,7 +234,7 @@ function CrmApp() {
   }, [currentUser?.email]);
 
   useEffect(() => {
-    if (currentUser && !canAccessPage(currentRole, page)) {
+    if (currentUser && page !== "print3dcalc" && !canAccessPage(currentRole, page)) {
       setPage("dashboard");
     }
   }, [currentUser, currentRole, page]);
@@ -294,7 +297,7 @@ function CrmApp() {
             </div>
           }
         >
-          {!canAccessPage(currentRole, page) && (
+          {page !== "print3dcalc" && !canAccessPage(currentRole, page) && (
             <AccessDenied
               user={currentUser}
               logout={logout}
@@ -417,6 +420,10 @@ function CrmApp() {
             <ActivityLogs
               data={data}
             />
+          )}
+
+          {page === "print3dcalc" && (
+            <Print3DCalculator />
           )}
 
           {page === "vue3d" && <Vue3D />}
