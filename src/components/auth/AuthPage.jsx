@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "../../supabase";
 
 const SESSION_KEY = "crm_current_user_v2";
@@ -8,8 +8,9 @@ function normalizeEmail(email) {
 }
 
 function isAdminEmail(email) {
-  return ["ac.creation.officiel@gmail.com",
-    "dos.santos.alves.daniel@gmail.com"
+  return [
+    "ac.creation.officiel@gmail.com",
+    "dos.santos.alves.daniel@gmail.com",
   ]
     .map(normalizeEmail)
     .includes(normalizeEmail(email));
@@ -37,18 +38,77 @@ function userRole(email, users = []) {
 
   return found?.role || "Utilisateur";
 }
+
+function hasRecoveryHash() {
+  return (
+    window.location.hash.includes("type=recovery") ||
+    window.location.hash.includes("access_token=")
+  );
+}
+
 export default function AuthPage({
   data,
   setData,
   setCurrentUser
 }) {
-
   const [form, setForm] = useState({ email: "", password: "" });
+  const [newPassword, setNewPassword] = useState("");
+  const [recoveryMode, setRecoveryMode] = useState(hasRecoveryHash());
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  useEffect(() => {
+    async function detectRecoverySession() {
+      if (!hasRecoveryHash()) return;
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (session) {
+        setRecoveryMode(true);
+      }
+    }
+
+    detectRecoverySession();
+  }, []);
+
+  async function updatePassword(e) {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+
+    if (!newPassword || newPassword.length < 6) {
+      setError("Mot de passe minimum : 6 caractères.");
+      return;
+    }
+
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+
+    if (error) {
+      setError(error.message || "Impossible de mettre à jour le mot de passe.");
+      return;
+    }
+
+    setSuccess("Mot de passe mis à jour. Tu peux maintenant te connecter.");
+    setNewPassword("");
+    setRecoveryMode(false);
+
+    await supabase.auth.signOut();
+
+    window.history.replaceState(
+      {},
+      document.title,
+      window.location.pathname
+    );
+  }
 
   async function login(e) {
     e.preventDefault();
     setError("");
+    setSuccess("");
 
     if (!form.email || !form.password) {
       setError("Indique ton email et ton mot de passe.");
@@ -125,40 +185,77 @@ export default function AuthPage({
         </div>
       </section>
 
-      <form className="modern-auth-card" onSubmit={login}>
+      <form
+        className="modern-auth-card"
+        onSubmit={recoveryMode ? updatePassword : login}
+      >
         <div className="lock-icon">🔒</div>
 
-        <h2>Bienvenue !</h2>
-        <p className="auth-subtitle">Connectez-vous à votre espace privé</p>
+        <h2>{recoveryMode ? "Nouveau mot de passe" : "Bienvenue !"}</h2>
 
-        <label className="modern-field">
-          <span>✉️</span>
-          <input
-            placeholder="Email"
-            type="email"
-            value={form.email}
-            onChange={(e) => setForm({ ...form, email: e.target.value })}
-          />
-        </label>
+        <p className="auth-subtitle">
+          {recoveryMode
+            ? "Définis ton nouveau mot de passe pour ton compte."
+            : "Connectez-vous à votre espace privé"}
+        </p>
+
+        {!recoveryMode && (
+          <label className="modern-field">
+            <span>✉️</span>
+            <input
+              placeholder="Email"
+              type="email"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+            />
+          </label>
+        )}
 
         <label className="modern-field">
           <span>🔑</span>
           <input
-            placeholder="Mot de passe"
+            placeholder={recoveryMode ? "Nouveau mot de passe" : "Mot de passe"}
             type="password"
-            value={form.password}
-            onChange={(e) => setForm({ ...form, password: e.target.value })}
+            value={recoveryMode ? newPassword : form.password}
+            onChange={(e) =>
+              recoveryMode
+                ? setNewPassword(e.target.value)
+                : setForm({ ...form, password: e.target.value })
+            }
           />
         </label>
 
         {error && <p className="modern-error">{error}</p>}
+        {success && <p className="modern-success">{success}</p>}
 
         <button className="modern-primary" type="submit">
-          Se connecter
+          {recoveryMode ? "Mettre à jour" : "Se connecter"}
           <span>→</span>
         </button>
 
-        <p className="auth-note">🛡️ Compte requis et validé par l’administrateur.</p>
+        {recoveryMode && (
+          <button
+            type="button"
+            className="modern-secondary"
+            onClick={async () => {
+              await supabase.auth.signOut();
+              setRecoveryMode(false);
+              setNewPassword("");
+              setError("");
+              window.history.replaceState(
+                {},
+                document.title,
+                window.location.pathname
+              );
+            }}
+          >
+            Annuler
+          </button>
+        )}
+
+        <p className="auth-note">
+          🛡️ Compte requis et validé par l’administrateur.
+        </p>
       </form>
     </div>
   );
