@@ -1,6 +1,6 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
-import { Bounds, Center, Environment, OrbitControls, useGLTF } from "@react-three/drei";
+import { Bounds, Center, OrbitControls, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import "./Vue3D.css";
 
@@ -949,7 +949,6 @@ export default function Vue3D() {
 
               <Suspense fallback={null}>
                 <MugModel items={items} />
-                <Environment preset="city" />
               </Suspense>
 
               <OrbitControls makeDefault enableDamping dampingFactor={0.08} enablePan={false} minDistance={0.6} maxDistance={6} />

@@ -1,6 +1,6 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useLoader } from "@react-three/fiber";
-import { Bounds, Center, Environment, OrbitControls, useGLTF } from "@react-three/drei";
+import { Bounds, Center, OrbitControls, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import jsPDF from "jspdf";
 import "./Vue3DTshirt.css";
@@ -1758,7 +1758,6 @@ export default function Vue3DTshirt() {
                     <TshirtModel texture={printTexture} garmentScale={garmentPreset.scale} />
                   </Center>
                 </Bounds>
-                <Environment preset="studio" />
               </Suspense>
               <OrbitControls makeDefault enableDamping dampingFactor={0.08} />
             </Canvas>
