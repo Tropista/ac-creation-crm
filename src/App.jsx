@@ -1,12 +1,14 @@
-import { useEffect, useState } from "react";
+import {
+  useEffect,
+  useState,
+  lazy,
+  Suspense
+} from "react";
 import { supabase } from "./supabase";
 import "./App.css";
 import {
   dedupeDocuments
 } from "./utils/documents";
-import Vue3D from "./components/Vue3D";
-import Vue3DTshirt from "./components/Vue3DTshirt";
-import Banque from "./components/Banque";
 import Sidebar from "./components/Sidebar";
 import Clients from "./components/Clients";
 import Products from "./components/Products";
@@ -17,9 +19,29 @@ import Categories from "./components/Categories";
 import UsersAdmin from "./components/UsersAdmin";
 import ActivityLogs from "./components/ActivityLogs";
 import Backups from "./components/Backups";
-import ExcelImport from "./components/ExcelImport";
-import BarcodeLabels from "./components/BarcodeLabels";
-import ProductScan from "./components/ProductScan";
+const Vue3D = lazy(() =>
+  import("./components/Vue3D")
+);
+
+const Vue3DTshirt = lazy(() =>
+  import("./components/Vue3DTshirt")
+);
+
+const Banque = lazy(() =>
+  import("./components/Banque")
+);
+
+const ExcelImport = lazy(() =>
+  import("./components/ExcelImport")
+);
+
+const BarcodeLabels = lazy(() =>
+  import("./components/BarcodeLabels")
+);
+
+const ProductScan = lazy(() =>
+  import("./components/ProductScan")
+);
 import AuthPage from "./components/auth/AuthPage";
 import AccessDenied from "./components/auth/AccessDenied";
 import {
@@ -221,6 +243,13 @@ saveData(mergedData);
 />
 
       <main className="content">
+<Suspense
+  fallback={
+    <div className="auth">
+      Chargement...
+    </div>
+  }>
+
         {!canAccessPage(currentRole, page) && <AccessDenied user={currentUser} logout={logout} />}
         {page === "dashboard" && canAccessPage(currentRole, "dashboard") && <Dashboard data={data} currentRole={currentRole} />}
         {page === "clients" && canAccessPage(currentRole, "clients") && <Clients data={data} setData={updateData} currentRole={currentRole} logActivity={logActivity} />}
@@ -255,6 +284,7 @@ saveData(mergedData);
         {page === "vue3d" && <Vue3D />}
         {page === "tshirt3d" && <Vue3DTshirt />}
         {page === "banque" && <Banque />}
+        </Suspense>
       </main>
     </div>
   );
