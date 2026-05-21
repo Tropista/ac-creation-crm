@@ -40,22 +40,15 @@ import {
   hasLocalBusinessData
 } from "./services/dataService";
 import {
-  normalizeEmail,
   isAdminEmail,
   isAllowedUser,
   userRole,
   canAccessPage,
-  canDeleteData
 } from "./services/authService";
 import {
-  addLog,
   logActivity
 } from "./services/logService";
 const SESSION_KEY = "crm_current_user_v2";
-
-function rowsToItems(rows) {
-  return (rows || []).map((row) => ({ id: row.id, ...(row.data || {}) }));
-}
 
 export default function App() {
   if (window.location.pathname === "/configurateur-tshirt") {
