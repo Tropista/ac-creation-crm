@@ -361,6 +361,74 @@ function openDocument(doc, type) {
       : "invoices"
   );
 }
+function remindClient(mode = "copy") {
+  if (!selectedClient) return;
+
+  const invoices =
+    selectedClientUnpaidInvoices;
+
+  if (invoices.length === 0) {
+    alert(
+      "Aucune facture impayée."
+    );
+    return;
+  }
+
+  const invoiceList =
+    invoices
+      .map(
+        (inv) =>
+          `${inv.number} - ${money(
+            docTotal(inv)
+          )}`
+      )
+      .join("\n");
+
+  const text = `Bonjour ${
+    selectedClient.name
+  },
+
+Nous vous rappelons que les factures suivantes restent impayées :
+
+${invoiceList}
+
+Montant total dû :
+${money(
+clientUnpaidAmount
+)}
+
+Merci.
+
+AC Creation`;
+
+  if (mode === "copy") {
+    navigator.clipboard.writeText(
+      text
+    );
+
+    alert(
+      "Relance copiée"
+    );
+
+    return;
+  }
+
+  const subject =
+    encodeURIComponent(
+      "Relance facture impayée - AC Creation"
+    );
+
+  const body =
+    encodeURIComponent(
+      text
+    );
+
+  window.open(
+`mailto:${
+selectedClient.email || ""
+}?subject=${subject}&body=${body}`
+  );
+}
   return (
     <section className="clients-page">
       <div className="page-header">
@@ -760,7 +828,81 @@ function openDocument(doc, type) {
                     <div className="client-history-section">
                       <h4>Historique complet</h4>
 <div className="client-dashboard-grid">
+{
+selectedClientUnpaidInvoices
+.length > 0 && (
 
+<div className="
+client-reminder-box
+">
+
+<div>
+
+<strong>
+Factures impayées :
+</strong>
+
+<span>
+{
+selectedClientUnpaidInvoices
+.length
+}
+</span>
+
+</div>
+
+<div>
+
+<strong>
+Montant dû :
+</strong>
+
+<span>
+{
+money(
+clientUnpaidAmount
+)
+}
+</span>
+
+</div>
+<div className="
+client-reminder-actions
+">
+
+<button
+className="
+client-reminder-btn
+"
+onClick={() =>
+remindClient(
+"copy"
+)
+}
+>
+
+📋 Copier relance
+
+</button>
+
+<button
+className="
+client-reminder-btn mail
+"
+onClick={() =>
+remindClient(
+"mail"
+)
+}
+>
+
+✉ Ouvrir email
+
+</button>
+
+</div>
+</div>
+)}
 <div className="client-dashboard-card">
 <strong>
 {money(
