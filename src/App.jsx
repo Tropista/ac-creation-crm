@@ -46,7 +46,7 @@ import AuthPage from "./components/auth/AuthPage";
 import AccessDenied from "./components/auth/AccessDenied";
 import {
   createCloudBackup
-} from "./services/backupService";
+} from "./services/backupservice";
 import { getPermissions } from "./utils/permissions";
 import {
   loadSupabaseData,
