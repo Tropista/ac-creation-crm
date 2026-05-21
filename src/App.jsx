@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { supabase } from "./supabase";
 import "./App.css";
-
+import {
+  dedupeDocuments
+} from "./utils/documents";
 import Vue3D from "./components/Vue3D";
 import Vue3DTshirt from "./components/Vue3DTshirt";
 import Banque from "./components/Banque";
@@ -20,155 +22,39 @@ import BarcodeLabels from "./components/BarcodeLabels";
 import ProductScan from "./components/ProductScan";
 import AuthPage from "./components/auth/AuthPage";
 import AccessDenied from "./components/auth/AccessDenied";
-
-import { getPermissions } from "./utils/permissions";
 import {
-  uid,
-  dedupeDocuments,
-  createBackupSnapshot,
-  pruneBackups
-} from "./utils/documents";
-
+  createCloudBackup
+} from "./services/backupService";
+import { getPermissions } from "./utils/permissions";
 import {
   loadSupabaseData,
   syncSupabaseData
 } from "./services/supabaseSync";
 
-const STORAGE_KEY = "crm_local_data_v2";
+import {
+  emptyData,
+  normalizeData,
+  loadData,
+  saveData,
+  dedupeItemsById,
+  hasLocalBusinessData
+} from "./services/dataService";
+import {
+  normalizeEmail,
+  isAdminEmail,
+  isAllowedUser,
+  userRole,
+  canAccessPage,
+  canDeleteData
+} from "./services/authService";
+import {
+  addLog,
+  logActivity
+} from "./services/logService";
 const SESSION_KEY = "crm_current_user_v2";
-
-const ADMIN_EMAILS = ["ac.creation.officiel@gmail.com"];
-
-function normalizeEmail(email) {
-  return String(email || "").trim().toLowerCase();
-}
-
-function isAdminEmail(email) {
-  return ADMIN_EMAILS.map(normalizeEmail).includes(normalizeEmail(email));
-}
-
-function isAllowedUser(email, users = []) {
-  const normalizedEmail = normalizeEmail(email);
-  return (
-    isAdminEmail(normalizedEmail) ||
-    (users || []).some((user) =>
-      normalizeEmail(user.email) === normalizedEmail &&
-      user.status !== "Désactivé"
-    )
-  );
-}
-
-function userRole(email, users = []) {
-  if (isAdminEmail(email)) return "Admin";
-  const found = (users || []).find((user) => normalizeEmail(user.email) === normalizeEmail(email));
-  return found?.role || "Utilisateur";
-}
-
-function canAccessPage(role, page) {
-  return getPermissions(role).pages.includes(page);
-}
-
-function canDeleteData(role) {
-  return getPermissions(role).canDelete;
-}
-
-const emptyData = {
-  users: [],
-  settings: {
-    companyName: "Mon Entreprise",
-    companyEmail: "contact@monentreprise.com",
-    companyPhone: "+352 00 00 00 00",
-    companyAddress: "Adresse de l'entreprise",
-    vatNumber: "LU00000000",
-    logoUrl: "",
-    paymentTerms: "Conditions de paiement : virement bancaire ou carte de crédit",
-    bankInfo: "Informations bancaires : Tout paiement au nom de votre entreprise\nNom de la banque : BCEE\nBIC : BCEELULL\nIBAN : LU00 0000 0000 0000 0000\nVeuillez indiquer le numéro de facture dans votre communication",
-    taxRate: 17,
-  },
-  clients: [],
-  quotes: [],
-  invoices: [],
-  products: [],
-  categories: [],
-  backups: [],
-  logs: [],
-};
-
-function dedupeItemsById(items = []) {
-  const map = new Map();
-
-  for (const item of items || []) {
-    if (!item) continue;
-    const key = String(item.id || item.number || JSON.stringify(item));
-    map.set(key, { ...map.get(key), ...item });
-  }
-
-  return Array.from(map.values());
-}
-
-function normalizeData(data) {
-  return {
-    ...emptyData,
-    ...data,
-    settings: { ...emptyData.settings, ...(data?.settings || {}) },
-    users: dedupeItemsById(data?.users || []),
-    clients: dedupeItemsById(data?.clients || []),
-    quotes: dedupeDocuments(data?.quotes || []),
-    invoices: dedupeDocuments(data?.invoices || []),
-    products: dedupeItemsById(data?.products || []),
-    categories: dedupeItemsById(data?.categories || []),
-    backups: dedupeItemsById(data?.backups || []),
-    logs: dedupeItemsById(data?.logs || []),
-  };
-}
-
-function loadData() {
-  try {
-    return normalizeData(JSON.parse(localStorage.getItem(STORAGE_KEY)) || emptyData);
-  } catch {
-    return emptyData;
-  }
-}
-
-function saveData(data) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-}
-
-function hasLocalBusinessData(data) {
-  return Boolean(
-    data.users?.length ||
-    data.backups?.length ||
-    data.clients?.length ||
-    data.products?.length ||
-    data.categories?.length ||
-    data.quotes?.length ||
-    data.invoices?.length
-  );
-}
 
 function rowsToItems(rows) {
   return (rows || []).map((row) => ({ id: row.id, ...(row.data || {}) }));
-}
-function addLog(data, updateData, currentUser, actionName, targetName, detailsText = "") {
-  const log = {
-    id: crypto.randomUUID(),
-
-    // visible directement dans Supabase
-    user_name: currentUser?.name || "Système",
-    action: actionName,
-    target: targetName,
-    details: detailsText,
-
-    // conservé pour compatibilité
-    user: currentUser?.name || "Système",
-
-    date: new Date().toISOString(),
-  };
-
-  updateData({
-    ...data,
-    logs: [log, ...(data.logs || [])].slice(0, 500),
-  });
 }
 
 export default function App() {
@@ -266,70 +152,6 @@ saveData(mergedData);
     }
   }
 
-  async function logActivity(action, target = "", details = "") {
-    const log = {
-      id: uid(),
-      createdAt: new Date().toISOString(),
-      date: new Date().toISOString(),
-      user_name: currentUser?.name || currentUser?.email || "Système",
-      user: currentUser?.name || currentUser?.email || "Système",
-      email: currentUser?.email || "",
-      role: currentRole,
-      action,
-      target,
-      details,
-    };
-
-    setData((currentData) => {
-      const normalized = normalizeData({
-        ...currentData,
-        logs: [log, ...(currentData.logs || [])].slice(0, 500),
-      });
-
-      saveData(normalized);
-      return normalized;
-    });
-
-    try {
-      const { error } = await supabase
-        .from("crm_logs")
-        .upsert({
-          id: log.id,
-          data: log,
-          user_name: log.user_name || log.user || "Système",
-          action: log.action || "",
-          target: log.target || "",
-          details: log.details || "",
-        }, { onConflict: "id" });
-
-      if (error) throw error;
-    } catch (error) {
-      console.error("Erreur journal d'activité :", error);
-    }
-  }
-
-  async function createCloudBackup(label = "Sauvegarde manuelle") {
-    const backup = createBackupSnapshot(data, label);
-    const next = normalizeData({
-      ...data,
-      backups: pruneBackups([backup, ...(data.backups || [])], 12),
-    });
-
-    setData(next);
-    saveData(next);
-
-    try {
-      setSyncStatus("Création sauvegarde cloud...");
-      await syncSupabaseData(next, data);
-      setSyncStatus("Sauvegarde cloud créée");
-      await logActivity("Sauvegarde créée", label);
-    } catch (error) {
-      console.error(error);
-      setSyncStatus("Erreur sauvegarde cloud");
-      alert("Erreur pendant la sauvegarde cloud.");
-    }
-  }
-
   useEffect(() => {
     if (!currentUser || !isAllowedUser(currentUser.email, data.users)) return;
 
@@ -339,7 +161,22 @@ saveData(mergedData);
 
     if (!lastBackupAt || now - Number(lastBackupAt) > twelveHours) {
       localStorage.setItem("crm_last_auto_backup_at", String(now));
-      createCloudBackup("Sauvegarde automatique");
+      createCloudBackup({
+  data,
+
+  label:
+    "Sauvegarde automatique",
+
+  setData,
+
+  setSyncStatus,
+
+  currentUser,
+
+  currentRole,
+
+  logActivity,
+});
     }
   }, [currentUser?.email]);
 
