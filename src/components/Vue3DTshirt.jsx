@@ -1,15 +1,11 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { Canvas, useLoader } from "@react-three/fiber";
-import { Bounds, Center, OrbitControls, useGLTF } from "@react-three/drei";
+import { Canvas } from "@react-three/fiber";
+import { Bounds, Center, Environment, OrbitControls, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import jsPDF from "jspdf";
 import "./Vue3DTshirt.css";
 
 const MODEL_URL = `${import.meta.env.BASE_URL}models/tshirt/t-shirt.gltf`;
-const BASE_COLOR_URL = `${import.meta.env.BASE_URL}models/tshirt/textures/Material.001_baseColor.png`;
-const NORMAL_URL = `${import.meta.env.BASE_URL}models/tshirt/textures/Material.001_normal.png`;
-const ROUGHNESS_URL = `${import.meta.env.BASE_URL}models/tshirt/textures/Material.001_metallicRoughness.png`;
-
 const TEXTURE_SIZE = 2048;
 
 const PRINT_ZONES = {
@@ -647,7 +643,7 @@ function drawItem(ctx, item, zone, logoImage) {
   ctx.restore();
 }
 
-function makeUvTexture(baseImage, itemImages, items, tshirtColor) {
+function makeUvTexture(itemImages, items, tshirtColor) {
   const canvas = document.createElement("canvas");
   canvas.width = TEXTURE_SIZE;
   canvas.height = TEXTURE_SIZE;
@@ -656,12 +652,6 @@ function makeUvTexture(baseImage, itemImages, items, tshirtColor) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = tshirtColor || "#ffffff";
   ctx.fillRect(0, 0, TEXTURE_SIZE, TEXTURE_SIZE);
-
-  if (baseImage) {
-    ctx.globalCompositeOperation = "multiply";
-    ctx.drawImage(baseImage, 0, 0, TEXTURE_SIZE, TEXTURE_SIZE);
-    ctx.globalCompositeOperation = "source-over";
-  }
 
   const drawableItems = items
     .filter((item) => !item.hidden)
@@ -689,31 +679,29 @@ function makeUvTexture(baseImage, itemImages, items, tshirtColor) {
 
 function TshirtModel({ texture, garmentScale = [1, 1, 1] }) {
   const { scene } = useGLTF(MODEL_URL);
-  const normalMap = useLoader(THREE.TextureLoader, NORMAL_URL);
-  const roughnessMap = useLoader(THREE.TextureLoader, ROUGHNESS_URL);
-
-  normalMap.flipY = false;
-  roughnessMap.flipY = false;
-  normalMap.colorSpace = THREE.NoColorSpace;
-  roughnessMap.colorSpace = THREE.NoColorSpace;
 
   const clonedScene = useMemo(() => {
     const clone = scene.clone(true);
+
     clone.traverse((child) => {
       if (!child.isMesh) return;
+
       child.castShadow = true;
       child.receiveShadow = true;
+
       child.material = new THREE.MeshStandardMaterial({
         map: texture,
-        normalMap,
-        roughnessMap,
-        roughness: 0.86,
+        color: "#ffffff",
+        roughness: 0.72,
         metalness: 0,
         side: THREE.DoubleSide,
       });
+
+      child.material.needsUpdate = true;
     });
+
     return clone;
-  }, [scene, texture, normalMap, roughnessMap]);
+  }, [scene, texture]);
 
   return <primitive object={clonedScene} scale={garmentScale} />;
 }
@@ -737,7 +725,6 @@ export default function Vue3DTshirt() {
   const editorRef = useRef(null);
   const actionRef = useRef(null);
 
-  const baseImage = useImage(BASE_COLOR_URL);
   const itemImages = useItemImages(items);
   const selectedItem = items.find((item) => item.id === selectedId) || null;
   const visibleItems = items.filter((item) => item.area === activeArea && !item.hidden);
@@ -754,8 +741,8 @@ export default function Vue3DTshirt() {
   const garmentPreset = GARMENT_SIZE_PRESETS[garmentSize] || GARMENT_SIZE_PRESETS.M;
 
   const printTexture = useMemo(
-    () => makeUvTexture(baseImage, itemImages, items, tshirtColor),
-    [baseImage, itemImages, items, tshirtColor]
+    () => makeUvTexture(itemImages, items, tshirtColor),
+    [itemImages, items, tshirtColor]
   );
 
   useEffect(() => {
@@ -1758,6 +1745,7 @@ export default function Vue3DTshirt() {
                     <TshirtModel texture={printTexture} garmentScale={garmentPreset.scale} />
                   </Center>
                 </Bounds>
+                <Environment preset="studio" />
               </Suspense>
               <OrbitControls makeDefault enableDamping dampingFactor={0.08} />
             </Canvas>
