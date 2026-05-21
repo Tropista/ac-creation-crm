@@ -1,4 +1,11 @@
 import { useState } from "react";
+function uid() {
+  return crypto.randomUUID();
+}
+
+function today() {
+  return new Date().toISOString();
+}
 
 export default function Categories({
   data,

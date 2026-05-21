@@ -6425,3 +6425,89 @@ section,
     min-height: 420px !important;
   }
 }
+.content {
+  overflow-y: auto;
+  max-height: 100vh;
+}
+
+.clients-page {
+  min-height: 100%;
+  padding-bottom: 80px;
+}
+
+.clients-layout {
+  align-items: flex-start;
+}
+.clients-table-card {
+  display: flex;
+  flex-direction: column;
+
+  height: calc(100vh - 220px);
+
+  overflow: hidden;
+}
+
+.clients-table-card table {
+  width: 100%;
+}
+
+.client-side-card {
+  position: sticky;
+  top: 20px;
+}
+.content {
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.clients-page {
+  padding-bottom: 120px;
+}
+
+.clients-layout {
+  align-items: flex-start;
+}
+
+.clients-table-card {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+.clients-table-card tbody tr {
+  height: 54px;
+}
+.clients-table-card table {
+  width: 100%;
+}
+
+.clients-table-card tbody {
+  display: block;
+
+  overflow-y: auto;
+
+  max-height: calc(100vh - 360px);
+}
+
+.clients-table-card thead,
+.clients-table-card tbody tr {
+  display: table;
+  width: 100%;
+  table-layout: fixed;
+}
+.documents-page,
+.invoices-page {
+  padding-bottom: 120px;
+}
+
+.documents-table-card,
+.invoices-table-card {
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+.documents-list,
+.invoices-list {
+  max-height: none !important;
+  overflow: visible !important;
+}

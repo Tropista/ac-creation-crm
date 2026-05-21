@@ -12,9 +12,7 @@ export default function PaginationControls({
 
   return (
     <div className="pagination-controls">
-      <span>
-        {start}-{end} sur {totalItems}
-      </span>
+      <span>{start}-{end} sur {totalItems}</span>
 
       <button
         type="button"
@@ -24,9 +22,7 @@ export default function PaginationControls({
         ← Précédent
       </button>
 
-      <strong>
-        Page {page} / {totalPages}
-      </strong>
+      <strong>Page {page} / {totalPages}</strong>
 
       <button
         type="button"

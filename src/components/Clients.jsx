@@ -1,4 +1,18 @@
 import { useState } from "react";
+import PaginationControls from "./PaginationControls";
+import {
+  canDeleteData
+} from "../services/authService";
+function statusClass(status) {
+  const value = String(status || "").toLowerCase();
+
+  if (value.includes("vip")) return "vip";
+  if (value.includes("actif")) return "client";
+  if (value.includes("prospect")) return "quote";
+  if (value.includes("inactif")) return "danger";
+
+  return "client";
+}
 
 function money(value) {
   return Number(value || 0).toLocaleString(
@@ -9,7 +23,13 @@ function money(value) {
     }
   ) + " €";
 }
+function uid() {
+  return crypto.randomUUID();
+}
 
+function today() {
+  return new Date().toISOString();
+}
 export default function Clients({
   data,
   setData,
@@ -115,6 +135,16 @@ export default function Clients({
 
       <div className="two-columns clients-layout">
         <div className="table card clients-table-card">
+                      <p className="muted">
+  {clients.length} client(s) trouvé(s)
+</p>
+<PaginationControls
+  page={clientPage}
+  totalPages={clientTotalPages}
+  onPageChange={setCurrentPage}
+  totalItems={clients.length}
+  perPage={itemsPerPage}
+/>
           <table>
             <thead><tr><th>Nom du client</th><th>Actions</th></tr></thead>
             <tbody>
@@ -133,27 +163,13 @@ export default function Clients({
               ))}
             </tbody>
           </table>
-<div className="pagination">
-  <button
-    type="button"
-    disabled={clientPage <= 1}
-    onClick={() => setCurrentPage(clientPage - 1)}
-  >
-    Précédent
-  </button>
-
-  <span>
-    Page {clientPage} / {clientTotalPages}
-  </span>
-
-  <button
-    type="button"
-    disabled={clientPage >= clientTotalPages}
-    onClick={() => setCurrentPage(clientPage + 1)}
-  >
-    Suivant
-  </button>
-</div>
+<PaginationControls
+  page={clientPage}
+  totalPages={clientTotalPages}
+  onPageChange={setCurrentPage}
+  totalItems={clients.length}
+  perPage={itemsPerPage}
+/>
         </div>
 
         <div className="card client-side-card">

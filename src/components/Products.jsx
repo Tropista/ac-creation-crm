@@ -1,4 +1,7 @@
 import { useMemo, useState } from "react";
+import {
+  canDeleteData
+} from "../services/authService";
 
 function money(value) {
   return Number(value || 0).toLocaleString(
@@ -9,7 +12,13 @@ function money(value) {
     }
   ) + " €";
 }
+function uid() {
+  return crypto.randomUUID();
+}
 
+function today() {
+  return new Date().toISOString();
+}
 export default function Products({ data, setData, currentRole = 'Admin', logActivity }) {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");

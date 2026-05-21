@@ -1,5 +1,16 @@
 import { useState } from "react";
 import { supabase } from "../supabase";
+import {
+  normalizeEmail,
+  isAdminEmail
+} from "../services/authService";
+function uid() {
+  return crypto.randomUUID();
+}
+
+function today() {
+  return new Date().toISOString();
+}
 export default function UsersAdmin({ data, setData, logActivity }) {
   const [form, setForm] = useState({ name: "", email: "", role: "Utilisateur", status: "Actif" });
   const users = data.users || [];
@@ -9,19 +20,18 @@ export default function UsersAdmin({ data, setData, logActivity }) {
   }
 
   async function saveUserToSupabase(user) {
-    const { error } = await supabase
-      .from("users")
-      .upsert(
-        {
-          id: user.id,
-          data: user,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "id" }
-      );
+  const { error } = await supabase
+    .from("users")
+    .upsert(
+      {
+        id: user.id,
+        data: user,
+      },
+      { onConflict: "id" }
+    );
 
-    if (error) throw error;
-  }
+  if (error) throw error;
+}
 
   async function deleteUserFromSupabase(id) {
     const { error } = await supabase
@@ -54,7 +64,11 @@ export default function UsersAdmin({ data, setData, logActivity }) {
     try {
       await saveUserToSupabase(nextUser);
       await setData({ ...data, users: [...users, nextUser] });
-      await logActivity?.("Création utilisateur", nextUser.email, nextUser.role);
+      await logActivity?.({
+  action: "Création utilisateur",
+  target: nextUser.email,
+  details: nextUser.role,
+});
       reset();
       alert("Utilisateur sauvegardé dans Supabase.");
     } catch (error) {
@@ -73,7 +87,11 @@ export default function UsersAdmin({ data, setData, logActivity }) {
         ...data,
         users: nextUsers,
       });
-      await logActivity?.("Modification utilisateur", updatedUser?.email || id, JSON.stringify(changes));
+      await logActivity?.({
+  action: "Modification utilisateur",
+  target: updatedUser?.email || id,
+  details: JSON.stringify(changes),
+});
     } catch (error) {
       console.error("Erreur mise à jour utilisateur Supabase :", error);
       alert("Erreur : la modification utilisateur n'a pas été sauvegardée dans Supabase.");
@@ -87,7 +105,10 @@ export default function UsersAdmin({ data, setData, logActivity }) {
       const removedUser = users.find((user) => user.id === id);
       await deleteUserFromSupabase(id);
       await setData({ ...data, users: users.filter((user) => user.id !== id) });
-      await logActivity?.("Suppression utilisateur", removedUser?.email || id);
+      await logActivity?.({
+  action: "Suppression utilisateur",
+  target: removedUser?.email || id,
+});
     } catch (error) {
       console.error("Erreur suppression utilisateur Supabase :", error);
       alert("Erreur : l'utilisateur n'a pas été supprimé dans Supabase.");
