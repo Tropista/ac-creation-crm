@@ -1,0 +1,152 @@
+/* ==========================
+   Calculateur DTF MyColor 30cm
+   ========================== */
+
+.dtf-page{display:grid;gap:20px}
+
+.dtf-layout{
+  display:grid;
+  grid-template-columns:minmax(0,1.35fr) 430px;
+  gap:22px;
+  align-items:start;
+}
+
+.dtf-form{display:grid;gap:18px}
+
+.dtf-section{
+  display:grid;
+  gap:12px;
+  padding:16px;
+  border:1px solid rgba(148,163,184,.18);
+  border-radius:22px;
+  background:rgba(255,255,255,.72);
+}
+
+.dtf-section-title{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  color:#0f172a;
+  font-size:16px;
+}
+
+.dtf-section-title span{
+  width:38px;
+  height:38px;
+  display:grid;
+  place-items:center;
+  border-radius:14px;
+  background:linear-gradient(135deg,#ecfeff,#eef2ff);
+}
+
+.dtf-grid{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(190px,1fr));
+  gap:12px;
+}
+
+.dtf-grid label{
+  display:grid;
+  gap:7px;
+  color:#64748b;
+  font-size:13px;
+  font-weight:800;
+}
+
+.dtf-hint{
+  font-size:11px;
+  font-weight:600;
+  line-height:1.35;
+  color:#94a3b8;
+}
+
+.dtf-checkbox{
+  grid-column:1 / -1;
+  display:flex !important;
+  align-items:center;
+  gap:10px;
+  flex-direction:row !important;
+  font-weight:700 !important;
+}
+
+.dtf-checkbox input{
+  width:auto;
+}
+
+.dtf-result-card{
+  position:sticky;
+  top:24px;
+  display:grid;
+  gap:16px;
+  background:linear-gradient(135deg,#ffffff,#f8fafc);
+}
+
+.dtf-price{
+  padding:22px;
+  border-radius:24px;
+  color:white;
+  background:linear-gradient(135deg,#06b6d4,#6366f1,#7c3aed);
+  box-shadow:0 18px 38px rgba(99,102,241,.22);
+  text-align:center;
+}
+
+.dtf-price span{
+  display:block;
+  opacity:.9;
+  font-weight:800;
+}
+
+.dtf-price strong{
+  display:block;
+  margin-top:8px;
+  font-size:44px;
+  line-height:1;
+}
+
+.dtf-total-ht,
+.dtf-unit-price{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  padding:14px;
+  border-radius:16px;
+  background:#f8fafc;
+  border:1px solid #e5e7eb;
+}
+
+.dtf-breakdown{
+  display:grid;
+  gap:9px;
+}
+
+.dtf-breakdown div{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  padding:11px 12px;
+  border-radius:14px;
+  background:white;
+  border:1px solid #edf2f7;
+}
+
+.dtf-breakdown span{color:#64748b}
+.dtf-breakdown strong{color:#0f172a}
+
+.dtf-actions{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+}
+
+.dtf-note{
+  margin:0;
+  padding:12px;
+  border-radius:14px;
+  color:#64748b;
+  background:#ecfeff;
+}
+
+@media(max-width:1000px){
+  .dtf-layout{grid-template-columns:1fr}
+  .dtf-result-card{position:static}
+}

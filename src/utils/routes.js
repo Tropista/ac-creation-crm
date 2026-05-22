@@ -15,6 +15,8 @@ export const PAGE_PATHS = {
   backups: "/sauvegardes",
   logs: "/journal",
   print3dcalc: "/calculateur-3d",
+  lasercalc: "/calculateur-laser",
+  dtfcalc: "/calculateur-dtf",
   vue3d: "/vue-3d",
   tshirt3d: "/t-shirt-3d",
   banque: "/banque",

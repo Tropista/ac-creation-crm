@@ -11,6 +11,8 @@ const menuItems = [
   { page: "quotes", label: "Devis", icon: "🧾", type: "page" },
   { page: "invoices", label: "Factures", icon: "💶", type: "page" },
   { page: "print3dcalc", label: "Calculateur 3D", icon: "🧮", type: "page" },
+  { page: "lasercalc", label: "Calculateur Laser", icon: "🔥", type: "page" },
+  { page: "dtfcalc", label: "Calculateur DTF", icon: "👕", type: "page" },
   { page: "banque", label: "Banque", icon: "🏦", type: "page" },
   { page: "users", label: "Utilisateurs", icon: "🔐", permission: "canManageUsers" },
   { page: "settings", label: "Paramètres", icon: "⚙️", permission: "canEditSettings" },
