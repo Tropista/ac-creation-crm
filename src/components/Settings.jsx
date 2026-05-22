@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { showToast } from "../utils/toast";
 
 export default function Settings({
   data,
@@ -29,9 +30,7 @@ export default function Settings({
       "Paramètres entreprise"
     );
 
-    alert(
-      "Paramètres sauvegardés."
-    );
+    showToast("Paramètres sauvegardés", "success");
 
   }
 

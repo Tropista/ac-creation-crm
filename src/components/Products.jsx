@@ -395,19 +395,31 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
     };
   }, [selectedProduct, data]);
 
-  const globalProductRanking = useMemo(() => {
-    return allProducts
-      .map((product) => {
-        const linked = getProductLineDocuments(data, product).filter((doc) => doc.type === "FAC" && doc.status !== "Annulée");
-        return {
-          ...product,
-          soldQty: linked.reduce((sum, doc) => sum + Number(doc.quantityForProduct || 0), 0),
-          revenue: linked.reduce((sum, doc) => sum + Number(doc.totalForProduct || 0), 0),
-        };
-      })
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 5);
+  const productSalesRanking = useMemo(() => {
+    const rankedProducts = allProducts.map((product) => {
+      const linked = getProductLineDocuments(data, product).filter(
+        (doc) => doc.type === "FAC" && doc.status !== "Annulée"
+      );
+
+      return {
+        ...product,
+        soldQty: linked.reduce((sum, doc) => sum + Number(doc.quantityForProduct || 0), 0),
+        revenue: linked.reduce((sum, doc) => sum + Number(doc.totalForProduct || 0), 0),
+      };
+    });
+
+    return {
+      byRevenue: [...rankedProducts]
+        .filter((product) => Number(product.revenue || 0) > 0)
+        .sort((a, b) => Number(b.revenue || 0) - Number(a.revenue || 0))
+        .slice(0, 5),
+      byQuantity: [...rankedProducts]
+        .filter((product) => Number(product.soldQty || 0) > 0)
+        .sort((a, b) => Number(b.soldQty || 0) - Number(a.soldQty || 0))
+        .slice(0, 5),
+    };
   }, [allProducts, data]);
+
 
   const productsStats = useMemo(() => {
     const total = allProducts.length;
@@ -823,7 +835,7 @@ function openLinkedDocument(doc) {
               setCurrentPage(1);
             }}
           >
-            <option value="all">Tous les stocks</option>
+            <option value="all">Actifs</option>
             <option value="available">Disponibles</option>
             <option value="low">Stock faible</option>
             <option value="out">Rupture</option>
@@ -1123,7 +1135,17 @@ function openLinkedDocument(doc) {
                       {selectedProductStats.history.map((doc) => (
                         <div className="product-history-row" key={`${doc.type}-${doc.id}`}>
                           <div>
-                            <b>{doc.type} — {doc.number}</b>
+                            <div className="product-doc-badge-wrapper">
+                              <span
+                                className={`product-doc-badge ${
+                                  doc.type === "DEV" ? "dev" : "fac"
+                                }`}
+                              >
+                                {doc.type}
+                              </span>
+
+                              <b>{doc.number}</b>
+                            </div>
                             <span>{formatDate(doc.date)} · {((data.clients || []).find((c) => String(c.id) === String(doc.clientId))?.name || "Client supprimé")}</span>
                             <small>Qté : {doc.quantityForProduct} · Total produit : {money(doc.totalForProduct)}</small>
                           </div>
@@ -1136,13 +1158,34 @@ function openLinkedDocument(doc) {
 
                 <div className="product-side-desc product-ranking-box">
                   <strong>Top produits</strong>
-                  {globalProductRanking.filter((p) => Number(p.revenue || 0) > 0).length === 0 ? (
-                    <p>Aucune vente facturée pour le moment.</p>
-                  ) : (
-                    globalProductRanking.filter((p) => Number(p.revenue || 0) > 0).map((p, index) => (
-                      <p key={p.id}>{index + 1}. {p.name} — {money(p.revenue)}</p>
-                    ))
-                  )}
+
+                  <div className="product-ranking-section">
+                    <span className="product-ranking-title">Top CA</span>
+                    {productSalesRanking.byRevenue.length === 0 ? (
+                      <p>Aucune vente facturée pour le moment.</p>
+                    ) : (
+                      productSalesRanking.byRevenue.map((p, index) => (
+                        <p key={`revenue-${p.id}`}>
+                          <span>#{index + 1} {p.name}</span>
+                          <strong>{money(p.revenue)}</strong>
+                        </p>
+                      ))
+                    )}
+                  </div>
+
+                  <div className="product-ranking-section">
+                    <span className="product-ranking-title">Top quantités</span>
+                    {productSalesRanking.byQuantity.length === 0 ? (
+                      <p>Aucune quantité vendue pour le moment.</p>
+                    ) : (
+                      productSalesRanking.byQuantity.map((p, index) => (
+                        <p key={`qty-${p.id}`}>
+                          <span>#{index + 1} {p.name}</span>
+                          <strong>{Number(p.soldQty || 0)} pcs</strong>
+                        </p>
+                      ))
+                    )}
+                  </div>
                 </div>
 
                 {selectedProduct.history?.length > 0 && (

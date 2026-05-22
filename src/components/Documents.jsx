@@ -3,10 +3,15 @@ import DocumentPreview from "./DocumentPreview";
 import { money } from "../utils/money";
 import {
   clientName,
-  uid,
-  today,
-  dedupeDocuments
+  dedupeDocuments,
+  nextDocumentNumber,
+  convertQuoteToInvoiceData,
 } from "../utils/documents";
+import {
+  INVOICES_FILTER_KEY,
+  isInvoiceOverdue,
+} from "../utils/invoices";
+import { showToast } from "../utils/toast";
 
 function Documents({ type, data, setData, currentRole = 'Admin', logActivity }) {
   const isQuote = type === "quote";
@@ -15,29 +20,12 @@ function Documents({ type, data, setData, currentRole = 'Admin', logActivity }) 
   const prefix = isQuote ? "DEV" : "FAC";
   const defaultStatus = isQuote ? "Brouillon" : "Non payée";
 
-  function currentYear() {
-    return new Date().getFullYear();
-  }
-
-  function nextDocumentNumber(list, docPrefix = prefix) {
-    const year = currentYear();
-
-    const numbers = (list || [])
-      .map((doc) => String(doc.number || ""))
-      .filter((number) => number.startsWith(`${docPrefix}-${year}-`))
-      .map((number) => Number(number.split("-").pop()))
-      .filter((value) => !Number.isNaN(value));
-
-    const nextNumber = numbers.length > 0 ? Math.max(...numbers) + 1 : 1;
-
-    return `${docPrefix}-${year}-${String(nextNumber).padStart(4, "0")}`;
-  }
-
   const emptyLine = { productId: "", description: "", quantity: 1, price: 0, discount: 0 };
   const [editingId, setEditingId] = useState(null);
   const [previewDoc, setPreviewDoc] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [sortBy, setSortBy] = useState("dateDesc");
+  const [overdueOnly, setOverdueOnly] = useState(false);
   const prefilledClientId =
   localStorage.getItem(
     "crm_prefill_client_id"
@@ -52,8 +40,18 @@ const [form, setForm] = useState({
   const itemsPerPage = 25;
   const documents = data[listKey] || [];
 
+  useEffect(() => {
+    if (isQuote) return;
+    if (localStorage.getItem(INVOICES_FILTER_KEY) !== "overdue") return;
+    localStorage.removeItem(INVOICES_FILTER_KEY);
+    setOverdueOnly(true);
+    setCurrentPage(1);
+  }, [isQuote]);
+
   const sortedDocuments = useMemo(() => {
-    const list = [...documents];
+    const list = [...documents].filter(
+      (doc) => !overdueOnly || isQuote || isInvoiceOverdue(doc)
+    );
 
     function numberValue(doc) {
       return Number(String(doc.number || "").replace(/[^0-9]/g, "")) || 0;
@@ -81,7 +79,7 @@ const [form, setForm] = useState({
       if (sortBy === "statusDesc") return String(b.status || "").localeCompare(String(a.status || ""));
       return 0;
     });
-  }, [documents, sortBy, data]);
+  }, [documents, sortBy, data, overdueOnly, isQuote]);
 
   const documentTotalPages = Math.max(1, Math.ceil(sortedDocuments.length / itemsPerPage));
   const documentPage = Math.min(currentPage, documentTotalPages);
@@ -246,7 +244,7 @@ const [form, setForm] = useState({
     } else {
       const doc = {
         id: uid(),
-        number: nextDocumentNumber(documents),
+        number: nextDocumentNumber(documents, prefix),
         date: today(),
         taxRate: data.settings.taxRate,
         clientId: form.clientId,
@@ -366,26 +364,16 @@ useEffect(() => {
   }
 
   function convertQuoteToInvoice(doc) {
-    const invoice = {
-      ...doc,
-      id: uid(),
-      number: nextDocumentNumber(data.invoices || [], "FAC"),
-      date: today(),
-      status: "Non payée",
-      stockAdjusted: true,
-      convertedFrom: doc.number
-    };
-
-    const nextProducts = removeStock(data.products || [], invoice.lines || []);
-
-    setData({
-      ...data,
-      products: nextProducts,
-      invoices: [...(data.invoices || []), invoice]
-    });
-
-    logActivity?.("Conversion devis en facture", doc.number, invoice.number);
-    alert("Devis converti en facture.");
+    try {
+      const nextData = convertQuoteToInvoiceData(data, doc);
+      const invoice = nextData.invoices[nextData.invoices.length - 1];
+      setData(nextData);
+      logActivity?.("Conversion devis en facture", doc.number, invoice?.number);
+      showToast(`Facture ${invoice?.number} créée depuis ${doc.number}`, "success");
+    } catch (error) {
+      console.error(error);
+      showToast("Impossible de convertir ce devis", "error");
+    }
   }
 
   return (
@@ -466,6 +454,19 @@ onChange={(e) =>
 
       <div className="table card">
         <div className="sort-row">
+          {!isQuote && (
+            <label className="filter-chip">
+              <input
+                type="checkbox"
+                checked={overdueOnly}
+                onChange={(e) => {
+                  setOverdueOnly(e.target.checked);
+                  setCurrentPage(1);
+                }}
+              />
+              En retard uniquement
+            </label>
+          )}
           <label>
             Trier par
             <select

@@ -5,8 +5,12 @@ import {
 
 import {
   normalizeData,
-  saveData
+  flushSaveData
 } from "./dataService";
+
+import { showToast } from "../utils/toast";
+
+import { isSupabaseConfigured } from "../supabase";
 
 import {
   syncSupabaseData
@@ -27,7 +31,21 @@ export async function createCloudBackup({
   currentRole,
 
   logActivity,
+
+  silent = false,
+
+  onSuccess,
 }) {
+  if (!isSupabaseConfigured) {
+    if (!silent) {
+      setSyncStatus?.("Mode local (cloud non configuré)");
+      showToast(
+        "Sauvegarde cloud indisponible — Supabase non configuré",
+        "info"
+      );
+    }
+    return false;
+  }
   const backup =
     createBackupSnapshot(
       data,
@@ -54,8 +72,6 @@ export async function createCloudBackup({
 
   setData(next);
 
-  saveData(next);
-
   try {
     setSyncStatus(
       "Création sauvegarde cloud..."
@@ -66,11 +82,13 @@ export async function createCloudBackup({
       data
     );
 
+    flushSaveData();
     setSyncStatus(
       "Sauvegarde cloud créée"
     );
+    showToast(`Sauvegarde créée : ${label}`, "success");
 
-    await logActivity({
+    await logActivity?.({
       action:
         "Sauvegarde créée",
 
@@ -84,6 +102,9 @@ export async function createCloudBackup({
       setData,
     });
 
+    onSuccess?.();
+    return true;
+
   } catch (
     error
   ) {
@@ -91,12 +112,17 @@ export async function createCloudBackup({
       error
     );
 
-    setSyncStatus(
-      "Erreur sauvegarde cloud"
-    );
+    if (!silent) {
+      setSyncStatus(
+        "Erreur sauvegarde cloud"
+      );
 
-    alert(
-      "Erreur pendant la sauvegarde cloud."
-    );
+      showToast(
+        "Erreur pendant la sauvegarde cloud",
+        "error"
+      );
+    }
+
+    return false;
   }
 }

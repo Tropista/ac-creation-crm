@@ -442,3 +442,149 @@
     grid-template-columns:1fr;
   }
 }
+/* ==========================
+   PRODUITS V5 - finition ERP
+   ========================== */
+
+.product-side-card{
+  top:0;
+  max-height:calc(100vh - 8px);
+}
+
+.product-history-sales .product-history-list{
+  max-height:220px;
+}
+
+.product-history-sales .product-history-row{
+  padding:8px 10px;
+}
+
+.product-history-sales .product-history-row b{
+  font-size:12px;
+}
+
+.product-history-sales .product-history-row span,
+.product-history-sales .product-history-row small{
+  font-size:11px;
+}
+
+.product-doc-badge{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+
+  min-width:48px;
+
+  padding:4px 8px;
+
+  border-radius:999px;
+
+  font-size:10px;
+  font-weight:900;
+}
+
+.product-doc-badge.dev{
+  background:#dbeafe;
+  color:#1d4ed8;
+}
+
+.product-doc-badge.fac{
+  background:#fce7f3;
+  color:#be185d;
+}
+
+.product-ranking-box p{
+  display:flex;
+
+  justify-content:space-between;
+
+  gap:10px;
+
+  padding:8px 10px;
+
+  margin:0;
+
+  border-radius:12px;
+
+  background:#f8fafc;
+}
+
+.product-side-actions{
+  position:sticky;
+
+  bottom:0;
+
+  background:#fff;
+
+  padding-top:10px;
+}
+
+/* ==========================
+   PRODUITS V5 FINAL - polish dashboard ERP
+   ========================== */
+
+.product-side-card{
+  padding-bottom:0;
+}
+
+.product-doc-badge-wrapper{
+  display:flex !important;
+  grid-template-columns:none !important;
+  align-items:center;
+  gap:8px;
+}
+
+.product-ranking-box{
+  display:grid;
+  gap:12px;
+}
+
+.product-ranking-section{
+  display:grid;
+  gap:6px;
+}
+
+.product-ranking-title{
+  display:inline-flex;
+  width:max-content;
+  padding:4px 8px;
+  border-radius:999px;
+  background:#f1f5f9;
+  color:#475569;
+  font-size:11px;
+  font-weight:950;
+}
+
+.product-ranking-box p strong{
+  white-space:nowrap;
+  color:#0f172a;
+}
+
+.product-ranking-box p span{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.product-side-actions{
+  margin:0 -20px;
+  padding:12px 20px 14px;
+  border-top:1px solid rgba(148,163,184,.18);
+  box-shadow:0 -12px 28px rgba(15,23,42,.06);
+  z-index:5;
+}
+
+.product-side-actions button{
+  flex:1 1 auto;
+  min-width:120px;
+}
+
+@media(max-width:700px){
+  .product-side-actions{
+    position:static;
+    margin:0;
+    padding:10px 0 0;
+    box-shadow:none;
+  }
+}

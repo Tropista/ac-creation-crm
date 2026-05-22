@@ -1,6 +1,19 @@
 import { dedupeDocuments } from "../utils/documents";
+import { debounce } from "../utils/debounce";
 
 export const STORAGE_KEY = "crm_local_data_v2";
+export const SAVE_DEBOUNCE_MS = 400;
+
+let pendingData = null;
+
+function writeDataImmediate(data) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  pendingData = null;
+}
+
+const debouncedWrite = debounce((data) => {
+  writeDataImmediate(data);
+}, SAVE_DEBOUNCE_MS);
 
 export const emptyData = {
   users: [],
@@ -99,10 +112,15 @@ export function loadData() {
 }
 
 export function saveData(data) {
-  localStorage.setItem(
-    STORAGE_KEY,
-    JSON.stringify(data)
-  );
+  pendingData = data;
+  debouncedWrite(data);
+}
+
+export function flushSaveData() {
+  debouncedWrite.cancel();
+  if (pendingData !== null) {
+    writeDataImmediate(pendingData);
+  }
 }
 
 export function hasLocalBusinessData(data) {

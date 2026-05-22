@@ -1,3 +1,6 @@
+import { NavLink } from "react-router-dom";
+import { pageToPath } from "../utils/routes";
+
 const menuItems = [
   { page: "dashboard", label: "Tableau de bord", icon: "📊", type: "page" },
   { page: "clients", label: "Clients", icon: "👥", type: "page" },
@@ -7,7 +10,7 @@ const menuItems = [
   { page: "categories", label: "Catégories", icon: "🗂️", type: "page" },
   { page: "quotes", label: "Devis", icon: "🧾", type: "page" },
   { page: "invoices", label: "Factures", icon: "💶", type: "page" },
-  { page: "print3dcalc", label: "Calculateur 3D", icon: "🧮", type: "tool" },
+  { page: "print3dcalc", label: "Calculateur 3D", icon: "🧮", type: "page" },
   { page: "banque", label: "Banque", icon: "🏦", type: "page" },
   { page: "users", label: "Utilisateurs", icon: "🔐", permission: "canManageUsers" },
   { page: "settings", label: "Paramètres", icon: "⚙️", permission: "canEditSettings" },
@@ -25,8 +28,6 @@ export default function Sidebar({
   currentRole,
   syncStatus,
   permissions,
-  page,
-  setPage,
   logout
 }) {
   function canShow(item) {
@@ -72,15 +73,14 @@ Personnalisation • Laser • 3D
 
       <nav className="sidebar-nav">
         {menuItems.filter(canShow).map((item) => (
-          <button
+          <NavLink
             key={item.page}
-            type="button"
-            className={page === item.page ? "active" : ""}
-            onClick={() => setPage(item.page)}
+            to={pageToPath(item.page)}
+            className={({ isActive }) => (isActive ? "active" : "")}
           >
             <span>{item.icon}</span>
             {item.label}
-          </button>
+          </NavLink>
         ))}
       </nav>
 

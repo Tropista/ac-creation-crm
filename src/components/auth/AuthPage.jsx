@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../../supabase";
+import { resetUrlAfterAuth } from "../../utils/routes";
 
 const SESSION_KEY = "crm_current_user_v2";
 
@@ -98,11 +99,7 @@ export default function AuthPage({
 
     await supabase.auth.signOut();
 
-    window.history.replaceState(
-      {},
-      document.title,
-      window.location.pathname
-    );
+    resetUrlAfterAuth();
   }
 
   async function login(e) {
@@ -242,11 +239,7 @@ export default function AuthPage({
               setRecoveryMode(false);
               setNewPassword("");
               setError("");
-              window.history.replaceState(
-                {},
-                document.title,
-                window.location.pathname
-              );
+              resetUrlAfterAuth();
             }}
           >
             Annuler

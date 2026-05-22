@@ -1,10 +1,23 @@
 import {
   useEffect,
+  useRef,
   useState,
   lazy,
   Suspense
 } from "react";
-import { supabase } from "./supabase";
+import {
+  Routes,
+  Route,
+  Navigate,
+  useNavigate,
+  useLocation,
+} from "react-router-dom";
+import { supabase, isSupabaseConfigured } from "./supabase";
+import {
+  PUBLIC_TSHIRT_PATH,
+  pageToPath,
+  pathToPage,
+} from "./utils/routes";
 import "./App.css";
 
 import Sidebar from "./components/Sidebar";
@@ -37,9 +50,12 @@ import {
   normalizeData,
   loadData,
   saveData,
+  flushSaveData,
   dedupeItemsById,
   hasLocalBusinessData
 } from "./services/dataService";
+
+import { showToast } from "./utils/toast";
 
 import {
   isAdminEmail,
@@ -84,11 +100,15 @@ const ProductScan = lazy(() =>
 const SESSION_KEY = "crm_current_user_v2";
 
 export default function App() {
-  if (window.location.pathname === "/configurateur-tshirt") {
-    return <PublicTshirtConfigurator />;
-  }
-
-  return <CrmApp />;
+  return (
+    <Routes>
+      <Route
+        path={PUBLIC_TSHIRT_PATH}
+        element={<PublicTshirtConfigurator />}
+      />
+      <Route path="/*" element={<CrmApp />} />
+    </Routes>
+  );
 }
 
 function PublicTshirtConfigurator() {
@@ -108,44 +128,38 @@ function PublicTshirtConfigurator() {
 }
 
 function CrmApp() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const page = pathToPage(location.pathname) ?? "dashboard";
+
+  const setPage = (pageKey) => {
+    navigate(pageToPath(pageKey));
+  };
+
   const [data, setData] = useState(loadData);
   const [currentUser, setCurrentUser] = useState(() =>
     JSON.parse(localStorage.getItem(SESSION_KEY) || "null")
   );
-  const [page, setPage] = useState("dashboard");
-  useEffect(()=>{
 
-  function handleOpenPage(
-    event
-  ){
+  useEffect(() => {
+    function handleOpenPage(event) {
+      if (event.detail === "quotes") {
+        setPage("quotes");
+      }
 
-    if(
-      event.detail==="quotes"
-    ){
-      setPage("quotes");
+      if (event.detail === "invoices") {
+        setPage("invoices");
+      }
     }
 
-    if(
-      event.detail==="invoices"
-    ){
-      setPage("invoices");
-    }
+    window.addEventListener("crm-open-page", handleOpenPage);
 
-  }
-
-  window.addEventListener(
-    "crm-open-page",
-    handleOpenPage
-  );
-
-  return ()=>window.removeEventListener(
-    "crm-open-page",
-    handleOpenPage
-  );
-
-},[]);
+    return () => window.removeEventListener("crm-open-page", handleOpenPage);
+  }, [navigate]);
   const [loading, setLoading] = useState(true);
+  const [cloudAvailable, setCloudAvailable] = useState(false);
   const [syncStatus, setSyncStatus] = useState("Connexion à Supabase...");
+  const autoBackupStarted = useRef(false);
 
   const currentRole = userRole(currentUser?.email, data.users);
   const permissions = getPermissions(currentRole);
@@ -159,6 +173,17 @@ function CrmApp() {
   }, [data]);
 
   useEffect(() => {
+    const flush = () => flushSaveData();
+    window.addEventListener("beforeunload", flush);
+    window.addEventListener("pagehide", flush);
+    return () => {
+      window.removeEventListener("beforeunload", flush);
+      window.removeEventListener("pagehide", flush);
+      flushSaveData();
+    };
+  }, []);
+
+  useEffect(() => {
     if (page === "invoices") {
       initializeCloudData();
     }
@@ -166,6 +191,11 @@ function CrmApp() {
 
   async function initializeCloudData() {
     try {
+      if (!isSupabaseConfigured) {
+        setSyncStatus("Mode local (cloud non configuré)");
+        return;
+      }
+
       const localData = normalizeData(loadData());
       const cloud = await loadSupabaseData({
         normalizeData,
@@ -181,20 +211,28 @@ function CrmApp() {
         });
 
         setData(mergedData);
-        saveData(mergedData);
+        flushSaveData();
         setSyncStatus("Synchronisé avec Supabase");
+        showToast("Données chargées depuis Supabase", "success");
       } else if (hasLocalBusinessData(localData)) {
         await syncSupabaseData(localData, emptyData);
         setData(localData);
+        flushSaveData();
         setSyncStatus("Données locales envoyées vers Supabase");
+        showToast("Données locales synchronisées vers Supabase", "success");
       } else {
         await syncSupabaseData(emptyData, emptyData);
         setData(emptyData);
+        flushSaveData();
         setSyncStatus("Supabase prêt");
       }
+
+      setCloudAvailable(true);
     } catch (error) {
       console.error(error);
+      setCloudAvailable(false);
       setSyncStatus("Erreur Supabase : vérifie les tables et les clés API");
+      showToast("Erreur de connexion Supabase", "error");
     } finally {
       setLoading(false);
     }
@@ -211,15 +249,23 @@ function CrmApp() {
     const previous = data;
 
     setData(normalized);
-    saveData(normalized);
+    flushSaveData();
+
+    if (!isSupabaseConfigured) {
+      setSyncStatus("Mode local (cloud non configuré)");
+      return;
+    }
 
     try {
       setSyncStatus("Sauvegarde Supabase...");
       await syncSupabaseData(normalized, previous);
+      flushSaveData();
       setSyncStatus("Synchronisé avec Supabase");
+      showToast("Données enregistrées et synchronisées", "success");
     } catch (error) {
       console.error(error);
       setSyncStatus("Erreur de sauvegarde Supabase");
+      showToast("Erreur de sauvegarde Supabase", "error");
     }
   }
 
@@ -244,6 +290,7 @@ function CrmApp() {
   }
 
   useEffect(() => {
+    if (loading || !cloudAvailable || autoBackupStarted.current) return;
     if (!currentUser || !isAllowedUser(currentUser.email, data.users)) return;
 
     const lastBackupAt = localStorage.getItem("crm_last_auto_backup_at");
@@ -251,7 +298,7 @@ function CrmApp() {
     const twelveHours = 12 * 60 * 60 * 1000;
 
     if (!lastBackupAt || now - Number(lastBackupAt) > twelveHours) {
-      localStorage.setItem("crm_last_auto_backup_at", String(now));
+      autoBackupStarted.current = true;
 
       createCloudBackup({
         data,
@@ -261,15 +308,18 @@ function CrmApp() {
         currentUser,
         currentRole,
         logActivity: handleLogActivity,
+        silent: true,
+        onSuccess: () =>
+          localStorage.setItem("crm_last_auto_backup_at", String(now)),
       });
     }
-  }, [currentUser?.email]);
+  }, [loading, cloudAvailable, currentUser?.email]);
 
   useEffect(() => {
-    if (currentUser && page !== "print3dcalc" && !canAccessPage(currentRole, page)) {
-      setPage("dashboard");
+    if (currentUser && !canAccessPage(currentRole, page)) {
+      navigate(pageToPath("dashboard"), { replace: true });
     }
-  }, [currentUser, currentRole, page]);
+  }, [currentUser, currentRole, page, navigate]);
 
   async function logout() {
     await supabase.auth.signOut();
@@ -316,8 +366,6 @@ function CrmApp() {
         currentRole={currentRole}
         syncStatus={syncStatus}
         permissions={permissions}
-        page={page}
-        setPage={setPage}
         logout={logout}
       />
 
@@ -329,142 +377,221 @@ function CrmApp() {
             </div>
           }
         >
-          {page !== "print3dcalc" && !canAccessPage(currentRole, page) && (
+          {!canAccessPage(currentRole, page) && (
             <AccessDenied
               user={currentUser}
               logout={logout}
             />
           )}
 
-          {page === "dashboard" && canAccessPage(currentRole, "dashboard") && (
-            <Dashboard
-              data={data}
-              currentRole={currentRole}
+          <Routes>
+            <Route
+              index
+              element={<Navigate to={pageToPath("dashboard")} replace />}
             />
-          )}
-
-          {page === "clients" && canAccessPage(currentRole, "clients") && (
-            <Clients
-              data={data}
-              setData={updateData}
-              currentRole={currentRole}
-              logActivity={handleLogActivity}
-              setPage={setPage}
-            />
-          )}
-
-          {page === "products" && canAccessPage(currentRole, "products") && (
-            <Products
-              data={data}
-              setData={updateData}
-              currentRole={currentRole}
-              logActivity={handleLogActivity}
-            />
-          )}
-
-          {page === "labels" && canAccessPage(currentRole, "labels") && (
-            <BarcodeLabels
-              data={data}
-            />
-          )}
-
-          {page === "scan" && canAccessPage(currentRole, "scan") && (
-            <ProductScan
-              data={data}
-              setData={updateData}
-              logActivity={handleLogActivity}
-            />
-          )}
-
-          {page === "categories" && canAccessPage(currentRole, "categories") && (
-            <Categories
-              data={data}
-              setData={updateData}
-              currentRole={currentRole}
-              logActivity={handleLogActivity}
-            />
-          )}
-
-          {page === "quotes" && canAccessPage(currentRole, "quotes") && (
-            <Documents
-              type="quote"
-              data={data}
-              setData={updateData}
-              currentRole={currentRole}
-              logActivity={handleLogActivity}
-            />
-          )}
-
-          {page === "invoices" && canAccessPage(currentRole, "invoices") && (
-            <Documents
-              type="invoice"
-              data={data}
-              setData={updateData}
-              currentRole={currentRole}
-              logActivity={handleLogActivity}
-            />
-          )}
-
-          {page === "users" && permissions.canManageUsers && (
-            <UsersAdmin
-              data={data}
-              setData={updateData}
-              logActivity={handleLogActivity}
-            />
-          )}
-
-          {page === "settings" && permissions.canEditSettings && (
-            <Settings
-              data={data}
-              setData={updateData}
-              logActivity={handleLogActivity}
-            />
-          )}
-
-          {page === "import" && permissions.canImport && (
-            <ExcelImport
-              data={data}
-              setData={updateData}
-              logActivity={handleLogActivity}
-            />
-          )}
-
-          {page === "backups" && permissions.canManageUsers && (
-            <Backups
-              data={data}
-              setData={updateData}
-              createCloudBackup={(label) =>
-                createCloudBackup({
-                  data,
-                  label,
-                  setData,
-                  setSyncStatus,
-                  currentUser,
-                  currentRole,
-                  logActivity: handleLogActivity,
-                })
+            <Route
+              path={pageToPath("dashboard")}
+              element={
+                canAccessPage(currentRole, "dashboard") ? (
+                  <Dashboard
+                    data={data}
+                    setData={updateData}
+                    currentRole={currentRole}
+                    logActivity={handleLogActivity}
+                  />
+                ) : null
               }
-              logActivity={handleLogActivity}
             />
-          )}
-
-          {page === "logs" && canAccessPage(currentRole, "logs") && (
-            <ActivityLogs
-              data={data}
+            <Route
+              path={pageToPath("clients")}
+              element={
+                canAccessPage(currentRole, "clients") ? (
+                  <Clients
+                    data={data}
+                    setData={updateData}
+                    currentRole={currentRole}
+                    logActivity={handleLogActivity}
+                    setPage={setPage}
+                  />
+                ) : null
+              }
             />
-          )}
-
-          {page === "print3dcalc" && (
-  <Print3DCalculator
-    data={data}
-    setData={updateData}
-    logActivity={handleLogActivity}
-  />
-)}
-
-          {page === "vue3d" && <Vue3D />}
-          {page === "tshirt3d" && <Vue3DTshirt />}
-          {page === "banque" && <Banque />}
+            <Route
+              path={pageToPath("products")}
+              element={
+                canAccessPage(currentRole, "products") ? (
+                  <Products
+                    data={data}
+                    setData={updateData}
+                    currentRole={currentRole}
+                    logActivity={handleLogActivity}
+                  />
+                ) : null
+              }
+            />
+            <Route
+              path={pageToPath("labels")}
+              element={
+                canAccessPage(currentRole, "labels") ? (
+                  <BarcodeLabels data={data} />
+                ) : null
+              }
+            />
+            <Route
+              path={pageToPath("scan")}
+              element={
+                canAccessPage(currentRole, "scan") ? (
+                  <ProductScan
+                    data={data}
+                    setData={updateData}
+                    logActivity={handleLogActivity}
+                  />
+                ) : null
+              }
+            />
+            <Route
+              path={pageToPath("categories")}
+              element={
+                canAccessPage(currentRole, "categories") ? (
+                  <Categories
+                    data={data}
+                    setData={updateData}
+                    currentRole={currentRole}
+                    logActivity={handleLogActivity}
+                  />
+                ) : null
+              }
+            />
+            <Route
+              path={pageToPath("quotes")}
+              element={
+                canAccessPage(currentRole, "quotes") ? (
+                  <Documents
+                    type="quote"
+                    data={data}
+                    setData={updateData}
+                    currentRole={currentRole}
+                    logActivity={handleLogActivity}
+                  />
+                ) : null
+              }
+            />
+            <Route
+              path={pageToPath("invoices")}
+              element={
+                canAccessPage(currentRole, "invoices") ? (
+                  <Documents
+                    type="invoice"
+                    data={data}
+                    setData={updateData}
+                    currentRole={currentRole}
+                    logActivity={handleLogActivity}
+                  />
+                ) : null
+              }
+            />
+            <Route
+              path={pageToPath("users")}
+              element={
+                permissions.canManageUsers ? (
+                  <UsersAdmin
+                    data={data}
+                    setData={updateData}
+                    logActivity={handleLogActivity}
+                  />
+                ) : null
+              }
+            />
+            <Route
+              path={pageToPath("settings")}
+              element={
+                permissions.canEditSettings ? (
+                  <Settings
+                    data={data}
+                    setData={updateData}
+                    logActivity={handleLogActivity}
+                  />
+                ) : null
+              }
+            />
+            <Route
+              path={pageToPath("import")}
+              element={
+                permissions.canImport ? (
+                  <ExcelImport
+                    data={data}
+                    setData={updateData}
+                    logActivity={handleLogActivity}
+                  />
+                ) : null
+              }
+            />
+            <Route
+              path={pageToPath("backups")}
+              element={
+                permissions.canManageUsers ? (
+                  <Backups
+                    data={data}
+                    setData={updateData}
+                    createCloudBackup={(label) =>
+                      createCloudBackup({
+                        data,
+                        label,
+                        setData,
+                        setSyncStatus,
+                        currentUser,
+                        currentRole,
+                        logActivity: handleLogActivity,
+                      })
+                    }
+                    logActivity={handleLogActivity}
+                  />
+                ) : null
+              }
+            />
+            <Route
+              path={pageToPath("logs")}
+              element={
+                canAccessPage(currentRole, "logs") ? (
+                  <ActivityLogs data={data} />
+                ) : null
+              }
+            />
+            <Route
+              path={pageToPath("print3dcalc")}
+              element={
+                canAccessPage(currentRole, "print3dcalc") ? (
+                  <Print3DCalculator
+                    data={data}
+                    setData={updateData}
+                    logActivity={handleLogActivity}
+                  />
+                ) : null
+              }
+            />
+            <Route
+              path={pageToPath("vue3d")}
+              element={
+                canAccessPage(currentRole, "vue3d") ? <Vue3D /> : null
+              }
+            />
+            <Route
+              path={pageToPath("tshirt3d")}
+              element={
+                canAccessPage(currentRole, "tshirt3d") ? <Vue3DTshirt /> : null
+              }
+            />
+            <Route
+              path={pageToPath("banque")}
+              element={
+                canAccessPage(currentRole, "banque") ? <Banque /> : null
+              }
+            />
+            <Route
+              path="*"
+              element={<Navigate to={pageToPath("dashboard")} replace />}
+            />
+          </Routes>
         </Suspense>
       </main>
     </div>

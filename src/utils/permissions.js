@@ -14,6 +14,7 @@ export const ROLE_PERMISSIONS = {
       "import",
       "backups",
       "logs",
+      "print3dcalc",
       "vue3d",
       "tshirt3d",
       "banque"
@@ -33,7 +34,8 @@ export const ROLE_PERMISSIONS = {
       "scan",
       "quotes",
       "invoices",
-      "banque"
+      "banque",
+      "print3dcalc"
     ],
     canDelete: false,
     canEditSettings: false,

@@ -90,3 +90,39 @@ opacity:.8;
 font-size:14px;
 
 }
+
+.dashboard-actions-grid{
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(340px,1fr));
+gap:24px;
+margin-top:24px;
+}
+
+.dashboard-action-card__header{
+display:flex;
+align-items:flex-start;
+justify-content:space-between;
+gap:16px;
+margin-bottom:16px;
+}
+
+.dashboard-action-card__header h3{
+margin:0 0 6px;
+}
+
+.stat--danger strong{
+color:#dc2626;
+}
+
+button.compact{
+padding:6px 12px;
+font-size:13px;
+white-space:nowrap;
+}
+
+.sort-row .filter-chip{
+display:inline-flex;
+align-items:center;
+gap:8px;
+margin-right:16px;
+}

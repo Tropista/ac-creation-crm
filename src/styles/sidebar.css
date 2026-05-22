@@ -3,7 +3,8 @@
    =============================== */
 
 .sidebar {
-  width: 300px;
+  width: var(--sidebar-width, 300px);
+  flex: 0 0 var(--sidebar-width, 300px);
   height: 100vh;
   position: sticky;
   top: 0;
@@ -26,6 +27,12 @@
 
   box-shadow: 10px 0 40px rgba(15, 23, 42, 0.18);
   overflow-y: auto;
+}
+
+.sidebar::-webkit-scrollbar { width: 8px; }
+.sidebar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
 }
 
 .sidebar-brand {
@@ -111,7 +118,9 @@
   gap: 8px;
 }
 
-.sidebar button {
+.sidebar button,
+.sidebar-nav a {
+  text-decoration: none;
   width: 100%;
   min-height: 52px;
 
@@ -137,13 +146,15 @@
     box-shadow 0.22s ease;
 }
 
-.sidebar button:hover {
+.sidebar button:hover,
+.sidebar-nav a:hover {
   transform: translateX(6px);
   background: rgba(255, 255, 255, 0.12);
   border-color: rgba(255, 255, 255, 0.18);
 }
 
-.sidebar button.active {
+.sidebar button.active,
+.sidebar-nav a.active {
   background: rgba(255, 255, 255, 0.18);
   border-color: rgba(255, 255, 255, 0.25);
   box-shadow: 0 12px 28px rgba(15, 23, 42, 0.22);

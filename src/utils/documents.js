@@ -94,3 +94,64 @@ export function pruneBackups(backups, max = 12) {
     )
     .slice(0, max);
 }
+
+export function currentDocumentYear() {
+  return new Date().getFullYear();
+}
+
+export function nextDocumentNumber(list, docPrefix, year = currentDocumentYear()) {
+  const numbers = (list || [])
+    .map((doc) => String(doc.number || ""))
+    .filter((number) => number.startsWith(`${docPrefix}-${year}-`))
+    .map((number) => Number(number.split("-").pop()))
+    .filter((value) => !Number.isNaN(value));
+
+  const nextNumber = numbers.length > 0 ? Math.max(...numbers) + 1 : 1;
+  return `${docPrefix}-${year}-${String(nextNumber).padStart(4, "0")}`;
+}
+
+function removeStock(products, lines) {
+  return (products || []).map((product) => {
+    const quantityToRemove = (lines || [])
+      .filter((line) => String(line.productId || "") === String(product.id))
+      .reduce((sum, line) => sum + Number(line.quantity || 0), 0);
+
+    if (!quantityToRemove) return product;
+    return {
+      ...product,
+      stock: Math.max(0, Number(product.stock || 0) - quantityToRemove),
+    };
+  });
+}
+
+export function quoteAlreadyConverted(data, quote) {
+  const quoteNumber = String(quote?.number || "");
+  if (!quoteNumber) return false;
+  return (data.invoices || []).some(
+    (invoice) => String(invoice.convertedFrom || "") === quoteNumber
+  );
+}
+
+export function isQuoteConvertible(data, quote) {
+  const status = String(quote?.status || "").trim();
+  if (status !== "Accepté") return false;
+  return !quoteAlreadyConverted(data, quote);
+}
+
+export function convertQuoteToInvoiceData(data, quote) {
+  const invoice = {
+    ...quote,
+    id: uid(),
+    number: nextDocumentNumber(data.invoices || [], "FAC"),
+    date: today(),
+    status: "Non payée",
+    stockAdjusted: true,
+    convertedFrom: quote.number,
+  };
+
+  return {
+    ...data,
+    products: removeStock(data.products || [], invoice.lines || []),
+    invoices: [...(data.invoices || []), invoice],
+  };
+}
