@@ -5,6 +5,7 @@ export const ROLE_PERMISSIONS = {
       "clients",
       "products",
       "suppliers",
+      "expenses",
       "labels",
       "scan",
       "categories",
@@ -35,6 +36,7 @@ export const ROLE_PERMISSIONS = {
       "clients",
       "products",
       "suppliers",
+      "expenses",
       "labels",
       "scan",
       "quotes",
@@ -52,7 +54,7 @@ export const ROLE_PERMISSIONS = {
   },
 
   Comptable: {
-    pages: ["dashboard", "invoices", "banque"],
+    pages: ["dashboard", "invoices", "expenses", "banque"],
     canDelete: false,
     canEditSettings: false,
     canManageUsers: false,

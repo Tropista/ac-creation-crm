@@ -6,6 +6,7 @@ const menuItems = [
   { page: "clients", label: "Clients", icon: "👥", type: "page" },
   { page: "products", label: "Produits", icon: "📦", type: "page" },
   { page: "suppliers", label: "Fournisseurs", icon: "🏭", type: "page" },
+  { page: "expenses", label: "Dépenses", icon: "🧾", type: "page" },
   { page: "labels", label: "Étiquettes", icon: "🏷️", type: "page" },
   { page: "scan", label: "Scan produit", icon: "📷", type: "page" },
   { page: "categories", label: "Catégories", icon: "🗂️", type: "page" },

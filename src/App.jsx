@@ -28,6 +28,7 @@ import Dashboard from "./components/Dashboard";
 import Settings from "./components/Settings";
 import Categories from "./components/Categories";
 import Suppliers from "./components/Suppliers";
+import Expenses from "./components/Expenses";
 import UsersAdmin from "./components/UsersAdmin";
 import ActivityLogs from "./components/ActivityLogs";
 import Print3DCalculator from "./components/Print3DCalculator";
@@ -81,6 +82,7 @@ import "./styles/dtf-calculator.css";
 import "./styles/uv-dtf-calculator.css";
 import "./styles/products-erp.css";
 import "./styles/suppliers.css";
+import "./styles/expenses.css";
 import "./styles/labels.css";
 const Vue3D = lazy(() =>
   import("./components/Vue3D")
@@ -442,6 +444,19 @@ function CrmApp() {
               element={
                 canAccessPage(currentRole, "suppliers") ? (
                   <Suppliers
+                    data={data}
+                    setData={updateData}
+                    currentRole={currentRole}
+                    logActivity={handleLogActivity}
+                  />
+                ) : null
+              }
+            />
+            <Route
+              path={pageToPath("expenses")}
+              element={
+                canAccessPage(currentRole, "expenses") ? (
+                  <Expenses
                     data={data}
                     setData={updateData}
                     currentRole={currentRole}

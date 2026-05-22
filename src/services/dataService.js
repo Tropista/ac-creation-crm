@@ -36,6 +36,7 @@ export const emptyData = {
   products: [],
   categories: [],
   suppliers: [],
+  expenses: [],
   backups: [],
   logs: [],
 };
@@ -94,6 +95,10 @@ export function normalizeData(data) {
       data?.suppliers || []
     ),
 
+    expenses: dedupeItemsById(
+      data?.expenses || []
+    ),
+
     backups: dedupeItemsById(
       data?.backups || []
     ),
@@ -136,6 +141,7 @@ export function hasLocalBusinessData(data) {
     data.products?.length ||
     data.categories?.length ||
     data.suppliers?.length ||
+    data.expenses?.length ||
     data.quotes?.length ||
     data.invoices?.length
   );

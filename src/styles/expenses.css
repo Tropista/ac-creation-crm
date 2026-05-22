@@ -1,0 +1,136 @@
+/* ==========================
+   DÉPENSES / FACTURES
+   ========================== */
+
+.expenses-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.expenses-stats {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.expenses-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.expenses-search {
+  min-width: 320px;
+  padding: 14px 18px;
+  border-radius: 18px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+}
+
+.expenses-toolbar-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.expenses-import-label {
+  cursor: pointer;
+}
+
+.expenses-import-label input {
+  display: none;
+}
+
+.expenses-form-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.expenses-form-panel h3 {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.expenses-form-panel textarea {
+  grid-column: 1 / -1;
+  min-height: 80px;
+}
+
+.expenses-form-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.expenses-table-card {
+  overflow: auto;
+}
+
+.expenses-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.expenses-table th {
+  text-align: left;
+  padding: 14px 12px;
+  font-size: 12px;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.expenses-table td {
+  padding: 12px;
+  border-top: 1px solid #eef2ff;
+  vertical-align: middle;
+}
+
+.expenses-table tr:hover {
+  background: #f8fafc;
+}
+
+.expense-meta {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.expense-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.expense-source-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: #eef2ff;
+  color: #4338ca;
+}
+
+.expense-source-badge.manual {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.expenses-preview-note {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 14px;
+}
+
+@media (max-width: 900px) {
+  .expenses-search {
+    min-width: 100%;
+  }
+}

@@ -20,6 +20,7 @@ La plupart des entités métier utilisent le même schéma : **`id`** (texte, cl
 | `products` | id document | Produit |
 | `categories` | id document | Catégorie |
 | `suppliers` | id document | Fournisseur |
+| `expenses` | id document | Facture de dépense (import PDF ou saisie manuelle) |
 | `quotes` | id document | Devis |
 | `invoices` | id document | Facture |
 | `backups` | id document | Snapshot backup |
@@ -48,6 +49,12 @@ CREATE TABLE IF NOT EXISTS categories (
 );
 
 CREATE TABLE IF NOT EXISTS suppliers (
+  id text PRIMARY KEY,
+  data jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS expenses (
   id text PRIMARY KEY,
   data jsonb NOT NULL DEFAULT '{}'::jsonb,
   created_at timestamptz DEFAULT now()
@@ -98,6 +105,7 @@ ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE suppliers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE quotes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE invoices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
@@ -188,7 +196,7 @@ L’app tente plusieurs variantes de statut (`rapprochée`, `ignorée`, `payée`
 
 | Symptôme | Cause probable | Action |
 |----------|----------------|--------|
-| `PGRST205` / table introuvable | Table CRM non créée (ex. `suppliers`) | Exécuter le `CREATE TABLE` correspondant ci-dessus |
+| `PGRST205` / table introuvable | Table CRM non créée (ex. `suppliers`, `expenses`) | Exécuter le `CREATE TABLE` correspondant ci-dessus |
 | `PGRST204` / colonne manquante | Migration non appliquée | `ALTER TABLE` ci-dessus |
 | `42501` / row-level security | RLS sans politique UPDATE/DELETE | Créer les policies `bank_transactions_*` |
 | `invalid input syntax for type uuid` sur `matched_invoice_id` | Colonne en UUID au lieu de text | `ALTER COLUMN matched_invoice_id TYPE text` |

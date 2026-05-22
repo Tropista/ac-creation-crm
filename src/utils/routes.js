@@ -5,6 +5,7 @@ export const PAGE_PATHS = {
   clients: "/clients",
   products: "/produits",
   suppliers: "/fournisseurs",
+  expenses: "/depenses",
   labels: "/etiquettes",
   scan: "/scan",
   categories: "/categories",

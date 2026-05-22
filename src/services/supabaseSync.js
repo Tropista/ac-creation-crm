@@ -99,6 +99,9 @@ export async function syncSupabaseData(nextData, previousData = {}) {
     safeCollectionOp("suppliers", () =>
       upsertCollection("suppliers", nextData.suppliers)
     ),
+    safeCollectionOp("expenses", () =>
+      upsertCollection("expenses", nextData.expenses)
+    ),
     upsertCollection("quotes", nextData.quotes),
     upsertCollection("invoices", nextData.invoices),
     upsertCollection("crm_logs", nextData.logs),
@@ -111,6 +114,9 @@ export async function syncSupabaseData(nextData, previousData = {}) {
     deleteRemovedItems("categories", nextData.categories, previousData.categories),
     safeCollectionOp("suppliers", () =>
       deleteRemovedItems("suppliers", nextData.suppliers, previousData.suppliers)
+    ),
+    safeCollectionOp("expenses", () =>
+      deleteRemovedItems("expenses", nextData.expenses, previousData.expenses)
     ),
     deleteRemovedItems("quotes", nextData.quotes, previousData.quotes),
     deleteRemovedItems("invoices", nextData.invoices, previousData.invoices),
@@ -127,6 +133,7 @@ export async function loadSupabaseData({ normalizeData, emptyData }) {
     productsRes,
     categoriesRes,
     suppliersRes,
+    expensesRes,
     quotesRes,
     invoicesRes,
   ] = await Promise.all([
@@ -137,6 +144,7 @@ export async function loadSupabaseData({ normalizeData, emptyData }) {
     supabase.from("products").select("id,data").order("created_at", { ascending: true }),
     supabase.from("categories").select("id,data").order("created_at", { ascending: true }),
     supabase.from("suppliers").select("id,data").order("created_at", { ascending: true }),
+    supabase.from("expenses").select("id,data").order("created_at", { ascending: true }),
     supabase.from("quotes").select("id,data").order("created_at", { ascending: true }),
     supabase.from("invoices").select("id,data").order("created_at", { ascending: true }),
   ]);
@@ -147,6 +155,7 @@ export async function loadSupabaseData({ normalizeData, emptyData }) {
     .order("created_at", { ascending: false });
 
   const resolvedSuppliersRes = resolveCollectionResult(suppliersRes, "suppliers");
+  const resolvedExpensesRes = resolveCollectionResult(expensesRes, "expenses");
 
   const errors = [
     settingsRes,
@@ -156,6 +165,7 @@ export async function loadSupabaseData({ normalizeData, emptyData }) {
     productsRes,
     categoriesRes,
     resolvedSuppliersRes,
+    resolvedExpensesRes,
     quotesRes,
     invoicesRes,
     logsRes,
@@ -176,6 +186,7 @@ export async function loadSupabaseData({ normalizeData, emptyData }) {
     products: rowsToItems(productsRes.data),
     categories: rowsToItems(categoriesRes.data),
     suppliers: rowsToItems(resolvedSuppliersRes.data),
+    expenses: rowsToItems(resolvedExpensesRes.data),
     quotes: rowsToItems(quotesRes.data),
     invoices: rowsToItems(invoicesRes.data),
     logs: rowsToItems(logsRes.data),
@@ -192,6 +203,7 @@ export async function loadSupabaseData({ normalizeData, emptyData }) {
         productsRes.data?.length ||
         categoriesRes.data?.length ||
         resolvedSuppliersRes.data?.length ||
+        resolvedExpensesRes.data?.length ||
         quotesRes.data?.length ||
         invoicesRes.data?.length
     ),
