@@ -1,16 +1,123 @@
-# React + Vite
+# AC Creation CRM
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Application CRM interne pour **AC Creation** : clients, produits, devis, factures, rapprochement bancaire, configurateurs 3D et export desktop (Electron).
 
-Currently, two official plugins are available:
+## Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+| Couche | Technologie |
+|--------|-------------|
+| Frontend | React 19, Vite 8, React Router |
+| Backend cloud | Supabase (Auth + PostgreSQL) |
+| Desktop | Electron + electron-builder (Windows NSIS) |
+| Banque (optionnel) | API Express + Tink (`backend/server.js`) |
+| 3D | Three.js, React Three Fiber |
 
-## React Compiler
+## Prérequis
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- Node.js 18+
+- Compte [Supabase](https://supabase.com) (Auth + base PostgreSQL)
+- *(Optionnel)* Client Tink pour la connexion bancaire automatisée
 
-## Expanding the ESLint configuration
+## Installation
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+```bash
+npm install
+cp .env.example .env
+# Renseigner VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY dans .env
+```
+
+Créer les tables Supabase selon [`docs/SUPABASE.md`](docs/SUPABASE.md).
+
+## Scripts npm
+
+| Commande | Description |
+|----------|-------------|
+| `npm run dev` | Serveur de développement Vite (http://localhost:5173) |
+| `npm run build` | Build de production dans `dist/` |
+| `npm run preview` | Prévisualisation du build |
+| `npm run lint` | ESLint sur le projet |
+| `npm run electron` | Lance l’app Electron (nécessite `npm run build` au préalable) |
+| `npm run dist` | Build + empaquetage Windows (sortie dans `release/`) |
+
+### API banque (optionnel)
+
+```bash
+node backend/server.js
+```
+
+Le serveur écoute sur le port `3001` par défaut. Variables : `TINK_CLIENT_ID`, `PORT` (voir `.env.example`).
+
+## Variables d’environnement
+
+Copier `.env.example` vers `.env`. Ne jamais committer le fichier `.env`.
+
+| Variable | Obligatoire | Usage |
+|----------|-------------|--------|
+| `VITE_SUPABASE_URL` | Oui | URL du projet Supabase (frontend) |
+| `VITE_SUPABASE_ANON_KEY` | Oui | Clé anon Supabase (frontend) |
+| `TINK_CLIENT_ID` | Non | Connexion bancaire Tink (backend) |
+| `PORT` | Non | Port du serveur banque (défaut : 3001) |
+
+Sans Supabase configuré, l’app fonctionne en mode local (localStorage) ; le rapprochement bancaire reste désactivé.
+
+## Electron
+
+1. `npm run build` — génère `dist/index.html` et les assets
+2. `npm run electron` — ouvre la fenêtre desktop (base `./`, compatible `file://`)
+3. `npm run dist` — installeur Windows NSIS dans `release/`
+
+Configuration : `electron.cjs`, cible `com.accreation.crm`.
+
+## Routes
+
+| Page | Chemin | Description |
+|------|--------|-------------|
+| Dashboard | `/dashboard` | Tableau de bord |
+| Clients | `/clients` | Fiches clients |
+| Produits | `/produits` | Catalogue produits |
+| Étiquettes | `/etiquettes` | Impression étiquettes |
+| Scan | `/scan` | Scan QR / codes-barres |
+| Catégories | `/categories` | Catégories produits |
+| Devis | `/devis` | Devis |
+| Factures | `/factures` | Factures |
+| Utilisateurs | `/utilisateurs` | Gestion des comptes CRM |
+| Paramètres | `/parametres` | Réglages société |
+| Import | `/import` | Import Excel |
+| Sauvegardes | `/sauvegardes` | Backups cloud |
+| Journal | `/journal` | Logs d’activité |
+| Calculateur 3D | `/calculateur-3d` | Estimation impression 3D |
+| Vue 3D | `/vue-3d` | Prévisualisation 3D |
+| T-shirt 3D | `/t-shirt-3d` | Configurateur t-shirt |
+| Banque | `/banque` | Rapprochement bancaire |
+| Configurateur public | `/configurateur-tshirt` | Route publique (sans auth CRM) |
+
+En mode Electron (`file://`), le routeur utilise le hash (`#/dashboard`, etc.).
+
+## Rôles et permissions
+
+Définis dans `src/utils/permissions.js`. L’auth passe par Supabase ; le rôle est résolu depuis la table `users` (emails admin hardcodés → rôle **Admin**).
+
+| Rôle | Pages accessibles | Droits |
+|------|-------------------|--------|
+| **Admin** | Toutes | Suppression, paramètres, utilisateurs, import |
+| **Employé** | Dashboard, clients, produits, étiquettes, scan, devis, factures, banque, calculateur 3D | Lecture/écriture métier, pas de suppression globale |
+| **Comptable** | Dashboard, factures, banque | Comptabilité et rapprochement |
+| **Utilisateur** | Dashboard uniquement | Consultation limitée |
+
+## Supabase
+
+Schéma attendu, migrations SQL et politiques RLS pour `bank_transactions` : **[docs/SUPABASE.md](docs/SUPABASE.md)**.
+
+## Structure utile
+
+```
+src/
+  supabase.js              # Client Supabase
+  services/supabaseSync.js # Sync CRM ↔ cloud
+  utils/permissions.js     # Rôles
+  utils/routes.js          # Chemins et helpers routeur
+  utils/bankTransactionSync.js  # Rapprochement + snippets SQL
+backend/
+  server.js                # API Tink (optionnel)
+electron.cjs               # Point d’entrée Electron
+```
