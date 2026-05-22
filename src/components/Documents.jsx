@@ -15,6 +15,24 @@ function Documents({ type, data, setData, currentRole = 'Admin', logActivity }) 
   const prefix = isQuote ? "DEV" : "FAC";
   const defaultStatus = isQuote ? "Brouillon" : "Non payée";
 
+  function currentYear() {
+    return new Date().getFullYear();
+  }
+
+  function nextDocumentNumber(list, docPrefix = prefix) {
+    const year = currentYear();
+
+    const numbers = (list || [])
+      .map((doc) => String(doc.number || ""))
+      .filter((number) => number.startsWith(`${docPrefix}-${year}-`))
+      .map((number) => Number(number.split("-").pop()))
+      .filter((value) => !Number.isNaN(value));
+
+    const nextNumber = numbers.length > 0 ? Math.max(...numbers) + 1 : 1;
+
+    return `${docPrefix}-${year}-${String(nextNumber).padStart(4, "0")}`;
+  }
+
   const emptyLine = { productId: "", description: "", quantity: 1, price: 0, discount: 0 };
   const [editingId, setEditingId] = useState(null);
   const [previewDoc, setPreviewDoc] = useState(null);
@@ -171,7 +189,7 @@ const [form, setForm] = useState({
     } else {
       const doc = {
         id: uid(),
-        number: `${prefix}-${String(documents.length + 1).padStart(4, "0")}`,
+        number: nextDocumentNumber(documents),
         date: today(),
         taxRate: data.settings.taxRate,
         clientId: form.clientId,
@@ -267,8 +285,20 @@ useEffect(() => {
   }
 
   function convertQuoteToInvoice(doc) {
-    const invoice = { ...doc, id: uid(), number: `FAC-${String(data.invoices.length + 1).padStart(4, "0")}`, date: today(), status: "Non payée", convertedFrom: doc.number };
-    setData({ ...data, invoices: [...data.invoices, invoice] });
+    const invoice = {
+      ...doc,
+      id: uid(),
+      number: nextDocumentNumber(data.invoices || [], "FAC"),
+      date: today(),
+      status: "Non payée",
+      convertedFrom: doc.number
+    };
+
+    setData({
+      ...data,
+      invoices: [...(data.invoices || []), invoice]
+    });
+
     logActivity?.("Conversion devis en facture", doc.number, invoice.number);
     alert("Devis converti en facture.");
   }

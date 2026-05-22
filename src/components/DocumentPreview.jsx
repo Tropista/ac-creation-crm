@@ -1,3 +1,5 @@
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 import { money } from "../utils/money";
 export default function DocumentPreview({ doc, type, data, onClose }) {
   const isQuote = type === "quote";
@@ -17,43 +19,141 @@ export default function DocumentPreview({ doc, type, data, onClose }) {
       ];
 
   async function downloadPdf() {
-    const element = document.querySelector(".invoice-pdf-area");
-    if (!element) return alert("Zone PDF introuvable.");
+    const source = document.querySelector(".invoice-pdf-area");
+    if (!source) return alert("Zone PDF introuvable.");
+
+    const fileName = `${isQuote ? "devis" : "facture"}-${String(
+      doc.number || "document"
+    ).replace(/[^\w.-]+/g, "_")}.pdf`;
+
+    const wrapper = document.createElement("div");
+    wrapper.style.position = "fixed";
+    wrapper.style.left = "-99999px";
+    wrapper.style.top = "0";
+    wrapper.style.width = "210mm";
+    wrapper.style.background = "#ffffff";
+    wrapper.style.zIndex = "-1";
+
+    const clone = source.cloneNode(true);
+    clone.style.margin = "0";
+    clone.style.boxShadow = "none";
+    clone.style.transform = "none";
+    clone.style.width = "210mm";
+    clone.style.minHeight = "auto";
+    clone.style.background = "#ffffff";
+
+    wrapper.appendChild(clone);
+    document.body.appendChild(wrapper);
 
     try {
-      const canvas = await html2canvas(element, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: "#ffffff",
-      });
+      const images = Array.from(clone.querySelectorAll("img"));
+
+      await Promise.all(
+        images.map(
+          (img) =>
+            new Promise((resolve) => {
+              img.crossOrigin = "anonymous";
+
+              if (img.complete) {
+                resolve();
+                return;
+              }
+
+              img.onload = resolve;
+              img.onerror = () => {
+                img.style.display = "none";
+                resolve();
+              };
+            })
+        )
+      );
+
+      let canvas;
+
+      try {
+        canvas = await html2canvas(clone, {
+          scale: 2,
+          useCORS: true,
+          allowTaint: false,
+          backgroundColor: "#ffffff",
+          logging: false,
+          imageTimeout: 5000,
+          windowWidth: clone.scrollWidth,
+          windowHeight: clone.scrollHeight,
+        });
+      } catch (firstError) {
+        console.warn("PDF avec images impossible, nouvelle tentative sans images.", firstError);
+
+        clone.querySelectorAll("img").forEach((img) => {
+          img.style.display = "none";
+        });
+
+        canvas = await html2canvas(clone, {
+          scale: 2,
+          useCORS: false,
+          allowTaint: false,
+          backgroundColor: "#ffffff",
+          logging: false,
+          windowWidth: clone.scrollWidth,
+          windowHeight: clone.scrollHeight,
+        });
+      }
 
       const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF("p", "mm", "a4");
 
-      const pdfWidth = 210;
-      const pdfHeight = 297;
-      const imgWidth = pdfWidth;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      const pageWidth = 210;
+      const pageHeight = 297;
+      const margin = 10;
+      const maxWidth = pageWidth - margin * 2;
+      const maxHeight = pageHeight - margin * 2;
 
-      let heightLeft = imgHeight;
-      let position = 0;
+      const lineCount = Array.isArray(lines) ? lines.length : 0;
+      const naturalHeight = (canvas.height * maxWidth) / canvas.width;
 
-      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-      heightLeft -= pdfHeight;
+      // Pour les factures/devis courts, on force tout sur 1 page A4.
+      // Pour les documents longs, on garde une vraie pagination.
+      if (lineCount <= 8) {
+        let imgWidth = maxWidth;
+        let imgHeight = naturalHeight;
 
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-        heightLeft -= pdfHeight;
+        if (imgHeight > maxHeight) {
+          imgHeight = maxHeight;
+          imgWidth = (canvas.width * imgHeight) / canvas.height;
+        }
+
+        const x = (pageWidth - imgWidth) / 2;
+        const y = margin;
+
+        pdf.addImage(imgData, "PNG", x, y, imgWidth, imgHeight);
+        pdf.save(fileName);
+        return;
       }
 
-      pdf.save(`${isQuote ? "devis" : "facture"}-${doc.number || "document"}.pdf`);
+      let imgWidth = maxWidth;
+      let imgHeight = naturalHeight;
+      let heightLeft = imgHeight;
+      let position = margin;
+
+      pdf.addImage(imgData, "PNG", margin, position, imgWidth, imgHeight);
+      heightLeft -= maxHeight;
+
+      while (heightLeft > 0) {
+        position = margin - (imgHeight - heightLeft);
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", margin, position, imgWidth, imgHeight);
+        heightLeft -= maxHeight;
+      }
+
+      pdf.save(fileName);
     } catch (error) {
-      console.error(error);
-      alert("Impossible de générer le PDF.");
+      console.error("Erreur génération PDF :", error);
+      alert("Impossible de générer le PDF. Vérifie que html2canvas et jspdf sont installés.");
+    } finally {
+      document.body.removeChild(wrapper);
     }
   }
+
 
   function sendEmail() {
     if (!client?.email) {
