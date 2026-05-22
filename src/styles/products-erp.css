@@ -1,0 +1,166 @@
+/* ==========================
+   PRODUITS - fiche ERP latérale
+   ========================== */
+
+.products-erp-layout{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 390px;
+  gap:22px;
+  align-items:start;
+}
+
+.product-premium-card{
+  cursor:pointer;
+}
+
+.product-premium-card.active-product-card{
+  border-color:rgba(236,72,153,.55);
+  box-shadow:0 0 0 4px rgba(236,72,153,.12), 0 18px 40px rgba(15,23,42,.12);
+}
+
+.product-side-card{
+  position:sticky;
+  top:24px;
+  display:grid;
+  gap:16px;
+  padding:20px;
+  border-radius:28px;
+  background:linear-gradient(135deg,#ffffff,#f8fafc);
+}
+
+.product-side-empty{
+  min-height:260px;
+  display:grid;
+  place-items:center;
+  text-align:center;
+  color:#64748b;
+}
+
+.product-side-empty strong{
+  display:block;
+  color:#0f172a;
+  font-size:20px;
+}
+
+.product-side-empty span{
+  display:block;
+  margin-top:6px;
+}
+
+.product-side-image{
+  height:260px;
+  display:grid;
+  place-items:center;
+  overflow:hidden;
+  border-radius:24px;
+  background:linear-gradient(135deg,#fdf2f8,#eef2ff);
+  color:white;
+  font-size:64px;
+  font-weight:950;
+}
+
+.product-side-image img{
+  width:100%;
+  height:100%;
+  object-fit:cover;
+}
+
+.product-side-header{
+  display:flex;
+  justify-content:space-between;
+  gap:14px;
+  align-items:flex-start;
+}
+
+.product-side-header h2{
+  margin:0;
+  color:#0f172a;
+  font-size:26px;
+  line-height:1.1;
+}
+
+.product-side-header span{
+  display:block;
+  margin-top:6px;
+  color:#64748b;
+  font-weight:800;
+}
+
+.product-side-header > strong{
+  white-space:nowrap;
+  padding:9px 12px;
+  border-radius:999px;
+  color:#be185d;
+  background:#fce7f3;
+}
+
+.product-side-kpis{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:10px;
+}
+
+.product-side-kpis div{
+  padding:12px;
+  border:1px solid rgba(148,163,184,.18);
+  border-radius:18px;
+  background:#fff;
+  text-align:center;
+}
+
+.product-side-kpis strong{
+  display:block;
+  color:#0f172a;
+  font-size:15px;
+}
+
+.product-side-kpis span{
+  display:block;
+  margin-top:4px;
+  color:#64748b;
+  font-size:12px;
+  font-weight:800;
+}
+
+.product-side-desc{
+  padding:14px;
+  border-radius:18px;
+  background:#fff;
+  border:1px solid rgba(148,163,184,.18);
+}
+
+.product-side-desc strong{
+  display:block;
+  margin-bottom:8px;
+  color:#0f172a;
+}
+
+.product-side-desc p{
+  margin:0;
+  white-space:pre-wrap;
+  color:#475569;
+  font-size:13px;
+  line-height:1.45;
+}
+
+.product-side-actions{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+}
+
+@media(max-width:1200px){
+  .products-erp-layout{
+    grid-template-columns:1fr;
+  }
+
+  .product-side-card{
+    position:static;
+  }
+}
+
+@media(max-width:700px){
+  .product-side-kpis{
+    grid-template-columns:1fr;
+  }
+}

@@ -29,6 +29,7 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
   const [editing, setEditing] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedProductIds, setSelectedProductIds] = useState([]);
+  const [selectedProduct, setSelectedProduct] = useState(null);
   const [bulkCategory, setBulkCategory] = useState("");
   const [bulkStock, setBulkStock] = useState(100);
   const [form, setForm] = useState({
@@ -38,7 +39,6 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
     price: "",
     stock: "",
     imageUrl: "",
-    model3dUrl: "",
     description: "",
   });
 
@@ -95,46 +95,6 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
   function removeProductImage() {
     setForm((current) => ({ ...current, imageUrl: "" }));
   }
-
-
-  function handleProduct3DUpload(event) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const fileName = String(file.name || "").toLowerCase();
-    const is3DFile =
-      fileName.endsWith(".glb") ||
-      fileName.endsWith(".gltf") ||
-      file.type === "model/gltf-binary" ||
-      file.type === "model/gltf+json";
-
-    if (!is3DFile) {
-      alert("Choisis un vrai fichier 3D au format .glb ou .gltf.");
-      event.target.value = "";
-      return;
-    }
-
-    const reader = new FileReader();
-
-    reader.onload = (readerEvent) => {
-      setForm((current) => ({
-        ...current,
-        model3dUrl: readerEvent.target.result,
-      }));
-    };
-
-    reader.onerror = () => {
-      alert("Impossible de lire le modèle 3D.");
-    };
-
-    reader.readAsDataURL(file);
-    event.target.value = "";
-  }
-
-  function removeProduct3D() {
-    setForm((current) => ({ ...current, model3dUrl: "" }));
-  }
-
 
 
   const categories = data.categories || [];
@@ -348,6 +308,41 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
     });
   }, [allProducts, search, categoryFilter, stockFilter, priceMin, priceMax, sortBy]);
 
+
+  const selectedProductStats = useMemo(() => {
+    if (!selectedProduct) return null;
+
+    const documents = [
+      ...(data.quotes || []).map((doc) => ({...doc, type:"DEV"})),
+      ...(data.invoices || []).map((doc) => ({...doc, type:"FAC"}))
+    ];
+
+    const linked = documents.filter((doc)=>
+      (doc.lines || []).some((line)=>
+        String(line.description || "").toLowerCase()
+        .includes(String(selectedProduct.name || "").toLowerCase())
+      )
+    );
+
+    const totalQty = linked.reduce((sum,doc)=>
+      sum + (doc.lines || [])
+        .filter((line)=>String(line.description||"").toLowerCase()
+        .includes(String(selectedProduct.name||"").toLowerCase()))
+        .reduce((s,l)=>s+Number(l.quantity||0),0)
+    ,0);
+
+    const revenue = linked.reduce((s,d)=>s+Number(d.totalHT||0),0);
+
+    return {
+      docs: linked.length,
+      quotes: linked.filter(d=>d.type==="DEV").length,
+      invoices: linked.filter(d=>d.type==="FAC").length,
+      qty: totalQty,
+      revenue,
+      last: linked[linked.length-1]
+    };
+  }, [selectedProduct, data.quotes, data.invoices]);
+
   const productsStats = useMemo(() => {
     const total = allProducts.length;
     const available = allProducts.filter((p) => Number(p.stock || 0) > 0).length;
@@ -375,7 +370,7 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
 
   function reset() {
     setEditing(null);
-    setForm({ name: "", sku: "", category: "", price: "", stock: "", imageUrl: "", model3dUrl: "", description: "" });
+    setForm({ name: "", sku: "", category: "", price: "", stock: "", imageUrl: "", description: "" });
   }
 
   function submit(e) {
@@ -420,7 +415,6 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
       price: product.price || "",
       stock: product.stock || "",
       imageUrl: product.imageUrl || "",
-      model3dUrl: product.model3dUrl || "",
       description: product.description || "",
     });
   }
@@ -432,6 +426,10 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
     setData({ ...data, products: allProducts.filter((p) => p.id !== id) });
     logActivity?.("Suppression produit", removedProduct?.name || id, removedProduct?.sku || "");
     setSelectedProductIds(selectedProductIds.filter((productId) => productId !== id));
+
+    if (selectedProduct?.id === id) {
+      setSelectedProduct(null);
+    }
   }
 
   function toggleProductSelection(id) {
@@ -560,80 +558,7 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
             </div>
           )}
 
-          <label className="image-upload-button product-3d-upload-button">
-            🧊 Importer modèle 3D
-            <input
-              type="file"
-              accept=".glb,.gltf,model/gltf-binary,model/gltf+json"
-              onChange={handleProduct3DUpload}
-            />
-          </label>
 
-          
-
-          <label className="image-upload-button">
-            🎨 Ajouter design mug
-            <input
-              type="file"
-              accept="image/*"
-              onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (!file) return;
-                const url = URL.createObjectURL(file);
-                setForm({ ...form, designImage: url, designSize: form.designSize || 1, designX: form.designX || 0, designY: form.designY || 0 });
-              }}
-            />
-          </label>
-
-
-          {form.designImage && (
-            <div className="mug-design-controls">
-              <label>
-                <span>Taille du visuel</span>
-                <input
-                  type="range"
-                  min="0.4"
-                  max="2"
-                  step="0.05"
-                  value={form.designSize || 1}
-                  onChange={(e) => setForm({ ...form, designSize: e.target.value })}
-                />
-              </label>
-
-              <label>
-                <span>Position horizontale</span>
-                <input
-                  type="range"
-                  min="-0.8"
-                  max="0.8"
-                  step="0.02"
-                  value={form.designX || 0}
-                  onChange={(e) => setForm({ ...form, designX: e.target.value })}
-                />
-              </label>
-
-              <label>
-                <span>Position verticale</span>
-                <input
-                  type="range"
-                  min="-0.8"
-                  max="0.8"
-                  step="0.02"
-                  value={form.designY || 0}
-                  onChange={(e) => setForm({ ...form, designY: e.target.value })}
-                />
-              </label>
-            </div>
-          )}
-
-          {form.model3dUrl && (
-            <div className="product-image-preview product-model-preview">
-              <Product3DViewer modelUrl={form.model3dUrl} designImage={form.designImage} designSize={Number(form.designSize || 1)} designX={Number(form.designX || 0)} designY={Number(form.designY || 0)} fallbackLetter={(form.name || "P").slice(0, 1).toUpperCase()} />
-              <button type="button" onClick={removeProduct3D}>
-                Retirer le modèle 3D
-              </button>
-            </div>
-          )}
         </div>
         <textarea placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
         <button className="primary">{editing ? "Modifier" : "Ajouter produit"}</button>
@@ -796,7 +721,8 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
           </div>
         )}
 
-        <div className="product-premium-grid">
+        <div className="products-erp-layout">
+          <div className="product-premium-grid">
           {visibleProducts.map((product) => {
             const stock = Number(product.stock || 0);
             const minStock = Number(product.stockMin || product.minStock || 0);
@@ -810,14 +736,18 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
 
             return (
               <article
-                className={`product-premium-card ${selectedProductIds.includes(product.id) ? "selected" : ""}`}
+                className={`product-premium-card ${
+                  selectedProductIds.includes(product.id) ? "selected" : ""
+                } ${selectedProduct?.id === product.id ? "active-product-card" : ""}`}
                 key={product.id}
+                onClick={() => setSelectedProduct(product)}
               >
                 <div className="product-premium-top">
                   <label className="product-select-pill">
                     <input
                       type="checkbox"
                       checked={selectedProductIds.includes(product.id)}
+                      onClick={(event) => event.stopPropagation()}
                       onChange={() => toggleProductSelection(product.id)}
                     />
                     <span>Sélection</span>
@@ -825,9 +755,7 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
                 </div>
 
                 <div className="product-visual">
-                  {product.model3dUrl ? (
-                    <Product3DViewer modelUrl={product.model3dUrl} designImage={product.designImage} designSize={Number(product.designSize || 1)} designX={Number(product.designX || 0)} designY={Number(product.designY || 0)} fallbackLetter={(product.name || "P").slice(0, 1).toUpperCase()} />
-                  ) : product.imageUrl ? (
+                  {product.imageUrl ? (
                     <img src={product.imageUrl} alt={product.name || "Produit"} />
                   ) : (
                     <span>{(product.name || "P").slice(0, 1).toUpperCase()}</span>
@@ -847,13 +775,98 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
                   )}
                 </div>
 
-                <div className="product-actions">
+                <div className="product-actions" onClick={(event) => event.stopPropagation()}>
                   <button onClick={() => edit(product)}>Modifier</button>
                   <button className="danger" onClick={() => remove(product.id)}>Supprimer</button>
                 </div>
               </article>
             );
           })}
+          </div>
+
+          <aside className="product-side-card card">
+            {!selectedProduct ? (
+              <div className="product-side-empty">
+                <strong>Sélectionne un produit</strong>
+                <span>La fiche détaillée apparaîtra ici.</span>
+              </div>
+            ) : (
+              <>
+                <div className="product-side-image">
+                  {selectedProduct.imageUrl ? (
+                    <img src={selectedProduct.imageUrl} alt={selectedProduct.name || "Produit"} />
+                  ) : (
+                    <span>{(selectedProduct.name || "P").slice(0, 1).toUpperCase()}</span>
+                  )}
+                </div>
+
+                <div className="product-side-header">
+                  <div>
+                    <h2>{selectedProduct.name}</h2>
+                    <span>{selectedProduct.category || "Sans catégorie"}</span>
+                  </div>
+
+                  <strong>{money(selectedProduct.price)}</strong>
+                </div>
+
+                <div className="product-side-kpis">
+                  <div>
+                    <strong>{selectedProduct.sku || "—"}</strong>
+                    <span>SKU</span>
+                  </div>
+
+                  <div>
+                    <strong>{Number(selectedProduct.stock || 0)}</strong>
+                    <span>Stock</span>
+                  </div>
+
+                  <div>
+                    <strong>{money(selectedProduct.price)}</strong>
+                    <span>Prix HT</span>
+                  </div>
+                </div>
+
+                {selectedProduct.description && (
+                  <div className="product-side-desc">
+                    <strong>Description</strong>
+                    <p>{selectedProduct.description}</p>
+                  </div>
+                )}
+
+                {selectedProductStats && (
+                  <div className="product-side-desc">
+                    <strong>Statistiques</strong>
+                    <p>Documents : {selectedProductStats.docs}</p>
+                    <p>Devis : {selectedProductStats.quotes}</p>
+                    <p>Factures : {selectedProductStats.invoices}</p>
+                    <p>Quantité vendue : {selectedProductStats.qty}</p>
+                    <p>CA généré : {money(selectedProductStats.revenue)}</p>
+                    {selectedProductStats.last && (
+                      <p>Dernier document : {selectedProductStats.last.number}</p>
+                    )}
+                  </div>
+                )}
+
+                <div className="product-side-actions">
+                  <button
+                    type="button"
+                    className="primary"
+                    onClick={() => edit(selectedProduct)}
+                  >
+                    Modifier
+                  </button>
+
+                  <button
+                    type="button"
+                    className="danger"
+                    onClick={() => remove(selectedProduct.id)}
+                  >
+                    Supprimer
+                  </button>
+                </div>
+              </>
+            )}
+          </aside>
         </div>
 
       </div>
