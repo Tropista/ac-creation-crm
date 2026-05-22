@@ -146,6 +146,48 @@ const [form, setForm] = useState({
     setForm({ ...form, lines: form.lines.filter((_, i) => i !== index) });
   }
 
+  function getProductById(products, productId) {
+    return (products || []).find((product) => String(product.id) === String(productId));
+  }
+
+  function addStock(products, lines) {
+    return (products || []).map((product) => {
+      const quantityToAdd = (lines || [])
+        .filter((line) => String(line.productId || "") === String(product.id))
+        .reduce((sum, line) => sum + Number(line.quantity || 0), 0);
+
+      if (!quantityToAdd) return product;
+      return { ...product, stock: Number(product.stock || 0) + quantityToAdd };
+    });
+  }
+
+  function removeStock(products, lines) {
+    return (products || []).map((product) => {
+      const quantityToRemove = (lines || [])
+        .filter((line) => String(line.productId || "") === String(product.id))
+        .reduce((sum, line) => sum + Number(line.quantity || 0), 0);
+
+      if (!quantityToRemove) return product;
+      return { ...product, stock: Math.max(0, Number(product.stock || 0) - quantityToRemove) };
+    });
+  }
+
+  function syncInvoiceStock(products, previousDoc, nextDoc) {
+    let nextProducts = [...(products || [])];
+    const previousWasStocked = Boolean(previousDoc?.stockAdjusted);
+    const nextShouldBeStocked = !isQuote && nextDoc?.status !== "Annulée";
+
+    if (previousWasStocked) {
+      nextProducts = addStock(nextProducts, previousDoc.lines || []);
+    }
+
+    if (nextShouldBeStocked) {
+      nextProducts = removeStock(nextProducts, nextDoc.lines || []);
+    }
+
+    return nextProducts;
+  }
+
   function reset() {
     setEditingId(null);
     setForm({ clientId: "", status: defaultStatus, globalDiscount: 0, lines: [{ ...emptyLine }] });
@@ -177,12 +219,27 @@ const [form, setForm] = useState({
 
     if (editingId) {
       const existingDoc = documents.find((d) => d.id === editingId);
+      const updatedDoc = {
+        ...existingDoc,
+        clientId: form.clientId,
+        status: form.status,
+        globalDiscount: Number(form.globalDiscount || 0),
+        description: firstDescription,
+        lines: cleanLines,
+        taxRate: data.settings.taxRate,
+        stockAdjusted: !isQuote && form.status !== "Annulée",
+        ...totals,
+      };
+
+      const nextProducts = isQuote
+        ? data.products || []
+        : syncInvoiceStock(data.products || [], existingDoc, updatedDoc);
+
       setData({
         ...data,
+        products: nextProducts,
         [listKey]: documents.map((d) =>
-          d.id === editingId
-            ? { ...d, clientId: form.clientId, status: form.status, globalDiscount: Number(form.globalDiscount || 0), description: firstDescription, lines: cleanLines, taxRate: data.settings.taxRate, ...totals }
-            : d
+          d.id === editingId ? updatedDoc : d
         ),
       });
       logActivity?.(`Modification ${isQuote ? "devis" : "facture"}`, existingDoc?.number || editingId, money(totals.totalTTC));
@@ -197,9 +254,15 @@ const [form, setForm] = useState({
         globalDiscount: Number(form.globalDiscount || 0),
         description: firstDescription,
         lines: cleanLines,
+        stockAdjusted: !isQuote && form.status !== "Annulée",
         ...totals,
       };
-      setData({ ...data, [listKey]: [...documents, doc] });
+
+      const nextProducts = !isQuote && doc.stockAdjusted
+        ? removeStock(data.products || [], cleanLines)
+        : data.products || [];
+
+      setData({ ...data, products: nextProducts, [listKey]: [...documents, doc] });
       logActivity?.(`Création ${isQuote ? "devis" : "facture"}`, doc.number, money(doc.totalTTC));
     }
 
@@ -267,18 +330,36 @@ useEffect(() => {
   function remove(id) {
     if (!confirm(`Supprimer ce ${isQuote ? "devis" : "facture"} ?`)) return;
     const removedDoc = documents.find((d) => d.id === id);
-    setData({ ...data, [listKey]: documents.filter((d) => d.id !== id) });
+    const nextProducts = !isQuote && removedDoc?.stockAdjusted
+      ? addStock(data.products || [], removedDoc.lines || [])
+      : data.products || [];
+
+    setData({
+      ...data,
+      products: nextProducts,
+      [listKey]: documents.filter((d) => d.id !== id),
+    });
     logActivity?.(`Suppression ${isQuote ? "devis" : "facture"}`, removedDoc?.number || id);
   }
 
   function updateStatus(id, status) {
+    const existingDoc = (data[listKey] || []).find((d) => String(d.id) === String(id));
+    const updatedDoc = existingDoc
+      ? { ...existingDoc, status, stockAdjusted: !isQuote && status !== "Annulée" }
+      : null;
+
     const nextDocuments = dedupeDocuments((data[listKey] || []).map((d) =>
-      String(d.id) === String(id) ? { ...d, status } : d
+      String(d.id) === String(id) && updatedDoc ? updatedDoc : d
     ));
+
+    const nextProducts = !isQuote && updatedDoc
+      ? syncInvoiceStock(data.products || [], existingDoc, updatedDoc)
+      : data.products || [];
 
     const changedDoc = nextDocuments.find((d) => String(d.id) === String(id));
     setData({
       ...data,
+      products: nextProducts,
       [listKey]: nextDocuments,
     });
     logActivity?.(`Changement statut ${isQuote ? "devis" : "facture"}`, changedDoc?.number || id, status);
@@ -291,11 +372,15 @@ useEffect(() => {
       number: nextDocumentNumber(data.invoices || [], "FAC"),
       date: today(),
       status: "Non payée",
+      stockAdjusted: true,
       convertedFrom: doc.number
     };
 
+    const nextProducts = removeStock(data.products || [], invoice.lines || []);
+
     setData({
       ...data,
+      products: nextProducts,
       invoices: [...(data.invoices || []), invoice]
     });
 
@@ -315,7 +400,7 @@ useEffect(() => {
           </select>
 
           <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-            {isQuote ? <><option>Brouillon</option><option>Envoyé</option><option>Accepté</option><option>Refusé</option></> : <><option>Non payée</option><option>Payée</option><option>En retard</option></>}
+            {isQuote ? <><option>Brouillon</option><option>Envoyé</option><option>Accepté</option><option>Refusé</option></> : <><option>Non payée</option><option>Payée</option><option>En retard</option><option>Annulée</option></>}
           </select>
         </div>
 
@@ -412,7 +497,7 @@ onChange={(e) =>
                 <td>{d.number}</td><td>{d.date}</td><td>{clientName(data, d.clientId)}</td><td>{d.lines?.length || 1}</td><td>{money(d.totalTTC)}</td>
                 <td>
                   <select value={d.status} onChange={(e) => updateStatus(d.id, e.target.value)}>
-                    {isQuote ? <><option>Brouillon</option><option>Envoyé</option><option>Accepté</option><option>Refusé</option></> : <><option>Non payée</option><option>Payée</option><option>En retard</option></>}
+                    {isQuote ? <><option>Brouillon</option><option>Envoyé</option><option>Accepté</option><option>Refusé</option></> : <><option>Non payée</option><option>Payée</option><option>En retard</option><option>Annulée</option></>}
                   </select>
                 </td>
                 <td className="actions">

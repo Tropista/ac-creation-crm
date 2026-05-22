@@ -19,6 +19,48 @@ function uid() {
 function today() {
   return new Date().toISOString();
 }
+
+function formatDate(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleDateString("fr-FR");
+}
+
+function cleanText(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function getProductLineDocuments(data, product) {
+  if (!product) return [];
+  const productId = String(product.id || "");
+  const productName = cleanText(product.name);
+
+  const documents = [
+    ...(data.quotes || []).map((doc) => ({ ...doc, type: "DEV", routeType: "quote" })),
+    ...(data.invoices || []).map((doc) => ({ ...doc, type: "FAC", routeType: "invoice" })),
+  ];
+
+  return documents
+    .map((doc) => {
+      const matchingLines = (doc.lines || []).filter((line) => {
+        const lineProductId = String(line.productId || "");
+        const lineDescription = cleanText(line.description);
+        return (productId && lineProductId === productId) || (productName && lineDescription.includes(productName));
+      });
+
+      if (!matchingLines.length) return null;
+
+      return {
+        ...doc,
+        matchingLines,
+        quantityForProduct: matchingLines.reduce((sum, line) => sum + Number(line.quantity || 0), 0),
+        totalForProduct: matchingLines.reduce((sum, line) => sum + Number(line.totalHT || (Number(line.quantity || 0) * Number(line.price || 0))), 0),
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+}
 export default function Products({ data, setData, currentRole = 'Admin', logActivity }) {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
@@ -32,12 +74,15 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [bulkCategory, setBulkCategory] = useState("");
   const [bulkStock, setBulkStock] = useState(100);
+  const [stockMoveQty, setStockMoveQty] = useState(1);
+  const [stockMoveReason, setStockMoveReason] = useState("Ajustement manuel");
   const [form, setForm] = useState({
     name: "",
     sku: "",
     category: "",
     price: "",
     stock: "",
+    stockMin: "",
     imageUrl: "",
     description: "",
   });
@@ -100,10 +145,12 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
   const categories = data.categories || [];
   const allProducts = (data.products || []).map((product) => ({
     ...product,
+    archived: Boolean(product.archived),
+    history: Array.isArray(product.history) ? product.history : [],
     stock:
-      Number(product.stock || 0) > 0
-        ? Number(product.stock || 0)
-        : 100,
+      product.stock === undefined || product.stock === null || product.stock === ""
+        ? 100
+        : Number(product.stock || 0),
   }));
 
   function getCategoryName(categoryName) {
@@ -260,10 +307,11 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
         !categoryFilter || product.category === categoryFilter;
 
       const matchesStock =
-        stockFilter === "all" ||
-        (stockFilter === "available" && stock > 0 && (!minStock || stock > minStock)) ||
-        (stockFilter === "low" && stock > 0 && minStock > 0 && stock <= minStock) ||
-        (stockFilter === "out" && stock <= 0);
+        (stockFilter === "all" && !product.archived) ||
+        (stockFilter === "available" && !product.archived && stock > 0 && (!minStock || stock > minStock)) ||
+        (stockFilter === "low" && !product.archived && stock > 0 && minStock > 0 && stock <= minStock) ||
+        (stockFilter === "out" && !product.archived && stock <= 0) ||
+        (stockFilter === "archived" && product.archived);
 
       const matchesPriceMin = minPrice === null || price >= minPrice;
       const matchesPriceMax = maxPrice === null || price <= maxPrice;
@@ -312,36 +360,54 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
   const selectedProductStats = useMemo(() => {
     if (!selectedProduct) return null;
 
-    const documents = [
-      ...(data.quotes || []).map((doc) => ({...doc, type:"DEV"})),
-      ...(data.invoices || []).map((doc) => ({...doc, type:"FAC"}))
-    ];
+    const linked = getProductLineDocuments(data, selectedProduct);
+    const invoices = linked.filter((doc) => doc.type === "FAC" && doc.status !== "Annulée");
+    const quotes = linked.filter((doc) => doc.type === "DEV");
+    const revenue = invoices.reduce((sum, doc) => sum + Number(doc.totalForProduct || 0), 0);
+    const totalQty = invoices.reduce((sum, doc) => sum + Number(doc.quantityForProduct || 0), 0);
+    const lastInvoice = invoices[0] || null;
+    const lastDoc = linked[0] || null;
 
-    const linked = documents.filter((doc)=>
-      (doc.lines || []).some((line)=>
-        String(line.description || "").toLowerCase()
-        .includes(String(selectedProduct.name || "").toLowerCase())
-      )
-    );
+    const clientTotals = invoices.reduce((acc, doc) => {
+      const key = doc.clientId || "unknown";
+      if (!acc[key]) {
+        acc[key] = { clientId: key, total: 0, qty: 0, docs: 0 };
+      }
+      acc[key].total += Number(doc.totalForProduct || 0);
+      acc[key].qty += Number(doc.quantityForProduct || 0);
+      acc[key].docs += 1;
+      return acc;
+    }, {});
 
-    const totalQty = linked.reduce((sum,doc)=>
-      sum + (doc.lines || [])
-        .filter((line)=>String(line.description||"").toLowerCase()
-        .includes(String(selectedProduct.name||"").toLowerCase()))
-        .reduce((s,l)=>s+Number(l.quantity||0),0)
-    ,0);
-
-    const revenue = linked.reduce((s,d)=>s+Number(d.totalHT||0),0);
+    const bestClient = Object.values(clientTotals).sort((a, b) => b.total - a.total)[0] || null;
 
     return {
       docs: linked.length,
-      quotes: linked.filter(d=>d.type==="DEV").length,
-      invoices: linked.filter(d=>d.type==="FAC").length,
+      quotes: quotes.length,
+      invoices: invoices.length,
       qty: totalQty,
       revenue,
-      last: linked[linked.length-1]
+      last: lastDoc,
+      lastClientId: lastInvoice?.clientId || lastDoc?.clientId || "",
+      lastSaleDate: lastInvoice?.date || "",
+      bestClient,
+      history: linked,
     };
-  }, [selectedProduct, data.quotes, data.invoices]);
+  }, [selectedProduct, data]);
+
+  const globalProductRanking = useMemo(() => {
+    return allProducts
+      .map((product) => {
+        const linked = getProductLineDocuments(data, product).filter((doc) => doc.type === "FAC" && doc.status !== "Annulée");
+        return {
+          ...product,
+          soldQty: linked.reduce((sum, doc) => sum + Number(doc.quantityForProduct || 0), 0),
+          revenue: linked.reduce((sum, doc) => sum + Number(doc.totalForProduct || 0), 0),
+        };
+      })
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 5);
+  }, [allProducts, data]);
 
   const productsStats = useMemo(() => {
     const total = allProducts.length;
@@ -370,7 +436,7 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
 
   function reset() {
     setEditing(null);
-    setForm({ name: "", sku: "", category: "", price: "", stock: "", imageUrl: "", description: "" });
+    setForm({ name: "", sku: "", category: "", price: "", stock: "", stockMin: "", imageUrl: "", description: "" });
   }
 
   function submit(e) {
@@ -384,18 +450,49 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
       sku: finalSku,
       price: Number(form.price || 0),
       stock: Number(form.stock || 0),
+      stockMin: Number(form.stockMin || 0),
     };
 
     if (editing) {
+      const existingProduct = allProducts.find((p) => p.id === editing);
+      const historyEntry = {
+        id: uid(),
+        date: today(),
+        action: "Modification produit",
+        user: currentRole,
+      };
+
+      const updatedProducts = allProducts.map((p) =>
+        p.id === editing
+          ? {
+              ...p,
+              ...productData,
+              updatedAt: today(),
+              history: [...(p.history || []), historyEntry],
+            }
+          : p
+      );
+
       setData({
         ...data,
-        products: (data.products || []).map((p) =>
-          p.id === editing ? { ...p, ...productData } : p
-        ),
+        products: updatedProducts,
       });
-      logActivity?.("Modification produit", productData.name, productData.sku);
+
+      if (selectedProduct?.id === editing) {
+        setSelectedProduct(updatedProducts.find((p) => p.id === editing) || null);
+      }
+
+      logActivity?.("Modification produit", productData.name || existingProduct?.name, productData.sku);
     } else {
-      const product = { id: uid(), createdAt: today(), ...productData };
+      const product = {
+        id: uid(),
+        createdAt: today(),
+        archived: false,
+        history: [
+          { id: uid(), date: today(), action: "Création produit", user: currentRole },
+        ],
+        ...productData,
+      };
       setData({
         ...data,
         products: [...allProducts, product],
@@ -414,6 +511,7 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
       category: product.category || "",
       price: product.price || "",
       stock: product.stock || "",
+      stockMin: product.stockMin || product.minStock || "",
       imageUrl: product.imageUrl || "",
       description: product.description || "",
     });
@@ -503,6 +601,118 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
     alert("Tous les produits sont maintenant à 100 pièces.");
   }
 
+function openLinkedDocument(doc) {
+  localStorage.setItem("crm_open_document_id", doc.id);
+
+  localStorage.setItem(
+    "crm_open_document_type",
+    doc.type === "DEV" ? "quote" : "invoice"
+  );
+
+  window.dispatchEvent(
+    new CustomEvent("crm-open-page", {
+      detail: doc.type === "DEV" ? "quotes" : "invoices",
+    })
+  );
+}
+
+  function duplicateProduct(product) {
+    const duplicated = {
+      ...product,
+      id: uid(),
+      createdAt: today(),
+      updatedAt: today(),
+      name: `${product.name || "Produit"} (copie)`,
+      sku: product.category ? generateSkuForCategory(product.category, null) : `${product.sku || "SKU"}-COPIE`,
+      archived: false,
+      history: [
+        { id: uid(), date: today(), action: `Duplication depuis ${product.name || "produit"}`, user: currentRole },
+      ],
+    };
+
+    const nextProducts = [...allProducts, duplicated];
+    setData({ ...data, products: nextProducts });
+    setSelectedProduct(duplicated);
+    logActivity?.("Duplication produit", duplicated.name, duplicated.sku);
+  }
+
+  function archiveProduct(product) {
+    const archived = !product.archived;
+    const nextProducts = allProducts.map((p) =>
+      p.id === product.id
+        ? {
+            ...p,
+            archived,
+            updatedAt: today(),
+            history: [
+              ...(p.history || []),
+              { id: uid(), date: today(), action: archived ? "Archivage produit" : "Réactivation produit", user: currentRole },
+            ],
+          }
+        : p
+    );
+
+    setData({ ...data, products: nextProducts });
+    setSelectedProduct(nextProducts.find((p) => p.id === product.id) || null);
+    logActivity?.(archived ? "Archivage produit" : "Réactivation produit", product.name, product.sku || "");
+  }
+
+  function adjustSelectedProductStock(mode) {
+    if (!selectedProduct) return;
+
+    const qty = Math.max(0, Number(stockMoveQty || 0));
+    if (!qty) return alert("Indique une quantité valide.");
+
+    const reason = String(stockMoveReason || "Ajustement manuel").trim() || "Ajustement manuel";
+    const actionLabel =
+      mode === "add"
+        ? "Entrée stock"
+        : mode === "remove"
+          ? "Sortie stock"
+          : "Correction inventaire";
+
+    const nextProducts = allProducts.map((product) => {
+      if (String(product.id) !== String(selectedProduct.id)) return product;
+
+      const previousStock = Number(product.stock || 0);
+      const nextStock =
+        mode === "add"
+          ? previousStock + qty
+          : mode === "remove"
+            ? Math.max(0, previousStock - qty)
+            : qty;
+
+      const movement = {
+        id: uid(),
+        date: today(),
+        action: actionLabel,
+        quantity: mode === "set" ? nextStock - previousStock : qty,
+        previousStock,
+        nextStock,
+        reason,
+        user: currentRole,
+      };
+
+      return {
+        ...product,
+        stock: nextStock,
+        updatedAt: today(),
+        stockMovements: [...(product.stockMovements || []), movement],
+        history: [
+          ...(product.history || []),
+          { id: uid(), date: today(), action: `${actionLabel} : ${previousStock} → ${nextStock}`, user: currentRole },
+        ],
+      };
+    });
+
+    const nextSelected = nextProducts.find((product) => String(product.id) === String(selectedProduct.id)) || null;
+    setData({ ...data, products: nextProducts });
+    setSelectedProduct(nextSelected);
+    setStockMoveQty(1);
+    logActivity?.(actionLabel, selectedProduct.name, `${reason} — ${qty}`);
+  }
+
+
   return (
     <section>
       <div className="page-header">
@@ -538,7 +748,8 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
           value={String(form.price).replace(".", ",")}
           onChange={(e) => setForm({ ...form, price: e.target.value.replace(",", ".") })}
         />
-        <input type="number" min="0" placeholder="Stock" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} />
+        <input type="number" min="0" placeholder="Stock actuel" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} />
+        <input type="number" min="0" placeholder="Stock minimum / alerte" value={form.stockMin} onChange={(e) => setForm({ ...form, stockMin: e.target.value })} />
         <div className="product-image-field">
           <label className="image-upload-button">
             📷 Importer une image
@@ -616,6 +827,7 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
             <option value="available">Disponibles</option>
             <option value="low">Stock faible</option>
             <option value="out">Rupture</option>
+            <option value="archived">Archivés</option>
           </select>
 
           <select
@@ -738,7 +950,7 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
               <article
                 className={`product-premium-card ${
                   selectedProductIds.includes(product.id) ? "selected" : ""
-                } ${selectedProduct?.id === product.id ? "active-product-card" : ""}`}
+                } ${selectedProduct?.id === product.id ? "active-product-card" : ""} ${product.archived ? "archived-product-card" : ""}`}
                 key={product.id}
                 onClick={() => setSelectedProduct(product)}
               >
@@ -764,6 +976,7 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
 
                 <div className="product-premium-body">
                   <h3>{product.name}</h3>
+                  {product.archived && <span className="product-archived-badge">Archivé</span>}
 
                   <div className="product-tags-row">
                     <span>SKU : {product.sku || "Sans SKU"}</span>
@@ -821,10 +1034,61 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
                   </div>
 
                   <div>
+                    <strong>{Number(selectedProduct.stockMin || selectedProduct.minStock || 0)}</strong>
+                    <span>Stock min</span>
+                  </div>
+
+                  <div>
                     <strong>{money(selectedProduct.price)}</strong>
                     <span>Prix HT</span>
                   </div>
                 </div>
+
+                {Number(selectedProduct.stockMin || selectedProduct.minStock || 0) > 0 && Number(selectedProduct.stock || 0) <= Number(selectedProduct.stockMin || selectedProduct.minStock || 0) && (
+                  <div className="product-stock-alert">
+                    ⚠️ Stock faible : réapprovisionnement conseillé.
+                  </div>
+                )}
+
+                <div className="product-side-desc product-stock-manager">
+                  <strong>Mouvements de stock</strong>
+                  <div className="stock-manager-row">
+                    <input
+                      type="number"
+                      min="0"
+                      value={stockMoveQty}
+                      onChange={(e) => setStockMoveQty(e.target.value)}
+                      placeholder="Quantité"
+                    />
+                    <input
+                      value={stockMoveReason}
+                      onChange={(e) => setStockMoveReason(e.target.value)}
+                      placeholder="Motif"
+                    />
+                  </div>
+                  <div className="stock-manager-actions">
+                    <button type="button" onClick={() => adjustSelectedProductStock("add")}>+ Entrée</button>
+                    <button type="button" onClick={() => adjustSelectedProductStock("remove")}>− Sortie</button>
+                    <button type="button" onClick={() => adjustSelectedProductStock("set")}>Correction inventaire</button>
+                  </div>
+                </div>
+
+                {selectedProduct.stockMovements?.length > 0 && (
+                  <div className="product-side-desc product-stock-history">
+                    <strong>Historique stock</strong>
+                    <div className="product-history-list">
+                      {[...(selectedProduct.stockMovements || [])].reverse().slice(0, 10).map((movement) => (
+                        <div className="product-history-row compact" key={movement.id || `${movement.date}-${movement.action}`}>
+                          <div>
+                            <b>{movement.action}</b>
+                            <span>{formatDate(movement.date)} · {movement.reason || "Sans motif"}</span>
+                            <small>{movement.previousStock} → {movement.nextStock} · {movement.user || "Utilisateur"}</small>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {selectedProduct.description && (
                   <div className="product-side-desc">
@@ -834,16 +1098,66 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
                 )}
 
                 {selectedProductStats && (
-                  <div className="product-side-desc">
-                    <strong>Statistiques</strong>
-                    <p>Documents : {selectedProductStats.docs}</p>
-                    <p>Devis : {selectedProductStats.quotes}</p>
-                    <p>Factures : {selectedProductStats.invoices}</p>
-                    <p>Quantité vendue : {selectedProductStats.qty}</p>
+                  <div className="product-side-desc product-stats-v3">
+                    <strong>Statistiques avancées</strong>
+                    <div className="product-side-mini-grid">
+                      <span><b>{selectedProductStats.docs}</b>Documents</span>
+                      <span><b>{selectedProductStats.quotes}</b>Devis</span>
+                      <span><b>{selectedProductStats.invoices}</b>Factures</span>
+                      <span><b>{selectedProductStats.qty}</b>Qté vendue</span>
+                    </div>
                     <p>CA généré : {money(selectedProductStats.revenue)}</p>
+                    <p>Dernier client : {selectedProductStats.lastClientId ? ((data.clients || []).find((c) => String(c.id) === String(selectedProductStats.lastClientId))?.name || "Client supprimé") : "—"}</p>
+                    <p>Date dernière vente : {formatDate(selectedProductStats.lastSaleDate)}</p>
+                    <p>Meilleur client : {selectedProductStats.bestClient ? ((data.clients || []).find((c) => String(c.id) === String(selectedProductStats.bestClient.clientId))?.name || "Client supprimé") : "—"}</p>
                     {selectedProductStats.last && (
                       <p>Dernier document : {selectedProductStats.last.number}</p>
                     )}
+                  </div>
+                )}
+
+                {selectedProductStats?.history?.length > 0 && (
+                  <div className="product-side-desc product-history-sales">
+                    <strong>Historique ventes / documents</strong>
+                    <div className="product-history-list">
+                      {selectedProductStats.history.map((doc) => (
+                        <div className="product-history-row" key={`${doc.type}-${doc.id}`}>
+                          <div>
+                            <b>{doc.type} — {doc.number}</b>
+                            <span>{formatDate(doc.date)} · {((data.clients || []).find((c) => String(c.id) === String(doc.clientId))?.name || "Client supprimé")}</span>
+                            <small>Qté : {doc.quantityForProduct} · Total produit : {money(doc.totalForProduct)}</small>
+                          </div>
+                          <button type="button" onClick={() => openLinkedDocument(doc)}>Ouvrir</button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="product-side-desc product-ranking-box">
+                  <strong>Top produits</strong>
+                  {globalProductRanking.filter((p) => Number(p.revenue || 0) > 0).length === 0 ? (
+                    <p>Aucune vente facturée pour le moment.</p>
+                  ) : (
+                    globalProductRanking.filter((p) => Number(p.revenue || 0) > 0).map((p, index) => (
+                      <p key={p.id}>{index + 1}. {p.name} — {money(p.revenue)}</p>
+                    ))
+                  )}
+                </div>
+
+                {selectedProduct.history?.length > 0 && (
+                  <div className="product-side-desc product-history-mods">
+                    <strong>Historique modifications</strong>
+                    <div className="product-history-list">
+                      {[...(selectedProduct.history || [])].reverse().slice(0, 8).map((entry) => (
+                        <div className="product-history-row compact" key={entry.id || `${entry.date}-${entry.action}`}>
+                          <div>
+                            <b>{entry.action}</b>
+                            <span>{formatDate(entry.date)} · {entry.user || "Utilisateur"}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 
@@ -854,6 +1168,14 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
                     onClick={() => edit(selectedProduct)}
                   >
                     Modifier
+                  </button>
+
+                  <button type="button" onClick={() => duplicateProduct(selectedProduct)}>
+                    Dupliquer
+                  </button>
+
+                  <button type="button" onClick={() => archiveProduct(selectedProduct)}>
+                    {selectedProduct.archived ? "Réactiver" : "Archiver"}
                   </button>
 
                   <button

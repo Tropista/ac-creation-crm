@@ -113,6 +113,37 @@ function CrmApp() {
     JSON.parse(localStorage.getItem(SESSION_KEY) || "null")
   );
   const [page, setPage] = useState("dashboard");
+  useEffect(()=>{
+
+  function handleOpenPage(
+    event
+  ){
+
+    if(
+      event.detail==="quotes"
+    ){
+      setPage("quotes");
+    }
+
+    if(
+      event.detail==="invoices"
+    ){
+      setPage("invoices");
+    }
+
+  }
+
+  window.addEventListener(
+    "crm-open-page",
+    handleOpenPage
+  );
+
+  return ()=>window.removeEventListener(
+    "crm-open-page",
+    handleOpenPage
+  );
+
+},[]);
   const [loading, setLoading] = useState(true);
   const [syncStatus, setSyncStatus] = useState("Connexion à Supabase...");
 

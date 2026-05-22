@@ -20,12 +20,35 @@
 
 .product-side-card{
   position:sticky;
-  top:24px;
+  top:12px;
+
+  max-height:calc(100vh - 24px);
+  overflow-y:auto;
+
   display:grid;
   gap:16px;
+
   padding:20px;
+
   border-radius:28px;
-  background:linear-gradient(135deg,#ffffff,#f8fafc);
+
+  background:
+  linear-gradient(
+    135deg,
+    #ffffff,
+    #f8fafc
+  );
+
+  scrollbar-width:thin;
+}
+
+.product-side-card::-webkit-scrollbar{
+  width:8px;
+}
+
+.product-side-card::-webkit-scrollbar-thumb{
+  background:#d4d4d8;
+  border-radius:20px;
 }
 
 .product-side-empty{
@@ -161,6 +184,261 @@
 
 @media(max-width:700px){
   .product-side-kpis{
+    grid-template-columns:1fr;
+  }
+}
+
+
+/* ==========================
+   PRODUITS - cartes compactes à gauche
+   ========================== */
+
+.products-erp-layout{
+  grid-template-columns:minmax(0,1fr) 360px;
+}
+
+.product-premium-grid{
+  grid-template-columns:repeat(auto-fill,minmax(210px,1fr));
+  gap:14px;
+}
+
+.product-premium-card{
+  border-radius:18px;
+}
+
+.product-premium-top{
+  padding:8px 10px;
+}
+
+.product-select-pill{
+  font-size:12px;
+}
+
+.product-visual{
+  height:125px;
+  margin:0 10px;
+  border-radius:16px;
+  font-size:34px;
+}
+
+.product-premium-body{
+  padding:12px;
+}
+
+.product-premium-body h3{
+  margin:0 0 8px;
+  font-size:17px;
+  line-height:1.15;
+}
+
+.product-tags-row{
+  gap:6px;
+}
+
+.product-tags-row span{
+  padding:6px 8px;
+  font-size:11px;
+}
+
+.product-description{
+  font-size:12px;
+  line-height:1.35;
+  max-height:42px;
+  overflow:hidden;
+}
+
+.product-actions{
+  padding:0 12px 12px;
+  gap:6px;
+}
+
+.product-actions button{
+  padding:8px 10px;
+  border-radius:12px;
+  font-size:12px;
+}
+
+.product-side-card{
+  max-width:360px;
+}
+
+.product-side-image{
+  height:210px;
+}
+
+@media(max-width:1200px){
+  .products-erp-layout{
+    grid-template-columns:1fr;
+  }
+
+  .product-side-card{
+    max-width:none;
+  }
+}
+
+/* ==========================
+   PRODUITS V3 - historique, archivage, stats avancées
+   ========================== */
+
+.archived-product-card{
+  opacity:.72;
+  filter:grayscale(.15);
+}
+
+.product-archived-badge{
+  display:inline-flex;
+  width:max-content;
+  margin-bottom:8px;
+  padding:5px 9px;
+  border-radius:999px;
+  background:#f1f5f9;
+  color:#64748b;
+  font-size:11px;
+  font-weight:900;
+}
+
+.product-side-mini-grid{
+  display:grid;
+  grid-template-columns:repeat(2,1fr);
+  gap:8px;
+  margin-bottom:12px;
+}
+
+.product-side-mini-grid span{
+  display:grid;
+  gap:3px;
+  padding:10px;
+  border-radius:14px;
+  background:#f8fafc;
+  color:#64748b;
+  font-size:12px;
+  font-weight:800;
+}
+
+.product-side-mini-grid b{
+  color:#0f172a;
+  font-size:18px;
+}
+
+.product-history-list{
+  display:grid;
+  gap:8px;
+  max-height:340px;
+  overflow:auto;
+  padding-right:4px;
+}
+
+.product-history-row{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:10px;
+  padding:10px;
+  border:1px solid rgba(148,163,184,.18);
+  border-radius:14px;
+  background:#f8fafc;
+}
+
+.product-history-row.compact{
+  align-items:flex-start;
+}
+
+.product-history-row div{
+  min-width:0;
+  display:grid;
+  gap:3px;
+}
+
+.product-history-row b{
+  color:#0f172a;
+  font-size:13px;
+}
+
+.product-history-row span,
+.product-history-row small{
+  color:#64748b;
+  font-size:12px;
+  font-weight:700;
+}
+
+.product-history-row button{
+  padding:7px 10px;
+  border-radius:12px;
+  white-space:nowrap;
+}
+
+.product-ranking-box p + p{
+  margin-top:6px;
+}
+
+@media(max-width:700px){
+  .product-side-mini-grid{
+    grid-template-columns:1fr;
+  }
+
+  .product-history-row{
+    align-items:flex-start;
+    flex-direction:column;
+  }
+}
+
+
+/* ==========================
+   PRODUITS V4 - Stock Pro
+   ========================== */
+
+.product-stock-alert{
+  padding:12px 14px;
+  border-radius:16px;
+  background:#fff7ed;
+  border:1px solid rgba(249,115,22,.28);
+  color:#9a3412;
+  font-size:13px;
+  font-weight:900;
+}
+
+.product-stock-manager{
+  display:grid;
+  gap:10px;
+}
+
+.stock-manager-row{
+  display:grid;
+  grid-template-columns:110px minmax(0,1fr);
+  gap:8px;
+}
+
+.stock-manager-row input{
+  width:100%;
+  padding:10px 12px;
+  border-radius:14px;
+  border:1px solid rgba(148,163,184,.35);
+  background:#fff;
+  font-weight:800;
+}
+
+.stock-manager-actions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+
+.stock-manager-actions button{
+  padding:9px 11px;
+  border-radius:13px;
+  font-size:12px;
+  font-weight:900;
+}
+
+.product-stock-history small{
+  display:block;
+  margin-top:4px;
+  color:#64748b;
+  font-size:11px;
+}
+
+@media(max-width:700px){
+  .stock-manager-row{
     grid-template-columns:1fr;
   }
 }
