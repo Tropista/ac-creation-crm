@@ -27,6 +27,7 @@ import Documents from "./components/Documents";
 import Dashboard from "./components/Dashboard";
 import Settings from "./components/Settings";
 import Categories from "./components/Categories";
+import Suppliers from "./components/Suppliers";
 import UsersAdmin from "./components/UsersAdmin";
 import ActivityLogs from "./components/ActivityLogs";
 import Print3DCalculator from "./components/Print3DCalculator";
@@ -79,6 +80,7 @@ import "./styles/laser-calculator.css";
 import "./styles/dtf-calculator.css";
 import "./styles/uv-dtf-calculator.css";
 import "./styles/products-erp.css";
+import "./styles/suppliers.css";
 import "./styles/labels.css";
 const Vue3D = lazy(() =>
   import("./components/Vue3D")
@@ -238,8 +240,8 @@ function CrmApp() {
     } catch (error) {
       console.error(error);
       setCloudAvailable(false);
-      setSyncStatus("Erreur Supabase : vérifie les tables et les clés API");
-      showToast("Erreur de connexion Supabase", "error");
+      setSyncStatus("Mode local (cloud indisponible)");
+      showToast("Sync cloud indisponible — données locales utilisées", "info");
     } finally {
       setLoading(false);
     }
@@ -427,6 +429,19 @@ function CrmApp() {
               element={
                 canAccessPage(currentRole, "products") ? (
                   <Products
+                    data={data}
+                    setData={updateData}
+                    currentRole={currentRole}
+                    logActivity={handleLogActivity}
+                  />
+                ) : null
+              }
+            />
+            <Route
+              path={pageToPath("suppliers")}
+              element={
+                canAccessPage(currentRole, "suppliers") ? (
+                  <Suppliers
                     data={data}
                     setData={updateData}
                     currentRole={currentRole}

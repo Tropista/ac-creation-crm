@@ -4,6 +4,7 @@ export const PAGE_PATHS = {
   dashboard: "/dashboard",
   clients: "/clients",
   products: "/produits",
+  suppliers: "/fournisseurs",
   labels: "/etiquettes",
   scan: "/scan",
   categories: "/categories",
