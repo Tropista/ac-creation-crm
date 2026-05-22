@@ -584,7 +584,13 @@ function CrmApp() {
             <Route
               path={pageToPath("banque")}
               element={
-                canAccessPage(currentRole, "banque") ? <Banque /> : null
+                canAccessPage(currentRole, "banque") ? (
+                  <Banque
+                    data={data}
+                    setData={updateData}
+                    logActivity={handleLogActivity}
+                  />
+                ) : null
               }
             />
             <Route

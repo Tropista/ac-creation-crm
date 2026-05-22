@@ -14,6 +14,13 @@ import { money } from "../utils/money";
 import { pageToPath } from "../utils/routes";
 import { getPermissions } from "../utils/permissions";
 import { showToast } from "../utils/toast";
+import {
+  countLowStockProducts,
+  getLowStockProducts,
+  getMinStock,
+  getStock,
+  isOutOfStock,
+} from "../utils/stock";
 
 export default function Dashboard({
   data,
@@ -25,6 +32,7 @@ export default function Dashboard({
   const permissions = getPermissions(currentRole);
   const canManageInvoices = permissions.pages.includes("invoices");
   const canManageQuotes = permissions.pages.includes("quotes");
+  const canManageProducts = permissions.pages.includes("products");
 
   const invoices = data.invoices || [];
   const quotes = data.quotes || [];
@@ -39,6 +47,10 @@ export default function Dashboard({
     (sum, inv) => sum + Number(inv.totalTTC || 0),
     0
   );
+
+  const lowStockProducts = getLowStockProducts(products, 8);
+  const lowStockCount = countLowStockProducts(products);
+  const outOfStockCount = products.filter(isOutOfStock).length;
 
   const convertibleQuotes = quotes
     .filter((quote) => isQuoteConvertible(data, quote))
@@ -158,6 +170,10 @@ export default function Dashboard({
     navigate(pageToPath("invoices"));
   }
 
+  function goToProducts() {
+    navigate(pageToPath("products"));
+  }
+
   function handleConvertQuote(quote) {
     if (!setData) return;
     try {
@@ -188,7 +204,7 @@ export default function Dashboard({
       <div className="page-header">
         <div>
           <h2>Tableau de bord</h2>
-          <p>Statistiques, factures en retard et conversion devis.</p>
+          <p>Statistiques, factures en retard, stock bas et conversion devis.</p>
         </div>
       </div>
 
@@ -217,6 +233,18 @@ export default function Dashboard({
           <span>En retard</span>
           <strong>{overdueInvoices.length}</strong>
         </div>
+        {canManageProducts && (
+          <div className={`card stat ${lowStockCount > 0 ? "stat--danger" : ""}`}>
+            <span>Stock bas</span>
+            <strong>{lowStockCount}</strong>
+          </div>
+        )}
+        {canManageProducts && outOfStockCount > 0 && (
+          <div className="card stat stat--danger">
+            <span>Rupture</span>
+            <strong>{outOfStockCount}</strong>
+          </div>
+        )}
         <div className="card stat">
           <span>Non payées</span>
           <strong>{unpaidCount}</strong>
@@ -341,6 +369,54 @@ export default function Dashboard({
                             → Facture
                           </button>
                         </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {canManageProducts && (
+          <div className="card dashboard-action-card">
+            <div className="dashboard-action-card__header">
+              <div>
+                <h3>Alertes stock</h3>
+                <p className="muted">
+                  {lowStockCount === 0
+                    ? "Aucun produit sous le seuil minimum."
+                    : `${lowStockCount} produit(s) en stock bas${outOfStockCount > 0 ? ` · ${outOfStockCount} en rupture` : ""}`}
+                </p>
+              </div>
+              {(lowStockCount > 0 || outOfStockCount > 0) && (
+                <button type="button" className="ghost" onClick={goToProducts}>
+                  Voir produits →
+                </button>
+              )}
+            </div>
+            {lowStockProducts.length === 0 ? (
+              <p className="muted">Tous les stocks sont au-dessus du seuil d'alerte.</p>
+            ) : (
+              <div className="table compact-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Produit</th>
+                      <th>SKU</th>
+                      <th>Stock</th>
+                      <th>Seuil</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lowStockProducts.map((product) => (
+                      <tr key={product.id}>
+                        <td>{product.name}</td>
+                        <td>{product.sku || "—"}</td>
+                        <td>
+                          <strong>{getStock(product)}</strong>
+                        </td>
+                        <td>{getMinStock(product)}</td>
                       </tr>
                     ))}
                   </tbody>

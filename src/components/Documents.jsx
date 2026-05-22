@@ -6,7 +6,10 @@ import {
   dedupeDocuments,
   nextDocumentNumber,
   convertQuoteToInvoiceData,
+  uid,
+  today,
 } from "../utils/documents";
+import { applyStockByLines, syncDocumentStock } from "../utils/stock";
 import {
   INVOICES_FILTER_KEY,
   isInvoiceOverdue,
@@ -148,44 +151,6 @@ const [form, setForm] = useState({
     return (products || []).find((product) => String(product.id) === String(productId));
   }
 
-  function addStock(products, lines) {
-    return (products || []).map((product) => {
-      const quantityToAdd = (lines || [])
-        .filter((line) => String(line.productId || "") === String(product.id))
-        .reduce((sum, line) => sum + Number(line.quantity || 0), 0);
-
-      if (!quantityToAdd) return product;
-      return { ...product, stock: Number(product.stock || 0) + quantityToAdd };
-    });
-  }
-
-  function removeStock(products, lines) {
-    return (products || []).map((product) => {
-      const quantityToRemove = (lines || [])
-        .filter((line) => String(line.productId || "") === String(product.id))
-        .reduce((sum, line) => sum + Number(line.quantity || 0), 0);
-
-      if (!quantityToRemove) return product;
-      return { ...product, stock: Math.max(0, Number(product.stock || 0) - quantityToRemove) };
-    });
-  }
-
-  function syncInvoiceStock(products, previousDoc, nextDoc) {
-    let nextProducts = [...(products || [])];
-    const previousWasStocked = Boolean(previousDoc?.stockAdjusted);
-    const nextShouldBeStocked = !isQuote && nextDoc?.status !== "Annulée";
-
-    if (previousWasStocked) {
-      nextProducts = addStock(nextProducts, previousDoc.lines || []);
-    }
-
-    if (nextShouldBeStocked) {
-      nextProducts = removeStock(nextProducts, nextDoc.lines || []);
-    }
-
-    return nextProducts;
-  }
-
   function reset() {
     setEditingId(null);
     setForm({ clientId: "", status: defaultStatus, globalDiscount: 0, lines: [{ ...emptyLine }] });
@@ -231,7 +196,10 @@ const [form, setForm] = useState({
 
       const nextProducts = isQuote
         ? data.products || []
-        : syncInvoiceStock(data.products || [], existingDoc, updatedDoc);
+        : syncDocumentStock(data.products || [], existingDoc, updatedDoc, {
+            isQuote,
+            user: currentRole,
+          });
 
       setData({
         ...data,
@@ -257,7 +225,12 @@ const [form, setForm] = useState({
       };
 
       const nextProducts = !isQuote && doc.stockAdjusted
-        ? removeStock(data.products || [], cleanLines)
+        ? applyStockByLines(data.products || [], cleanLines, "remove", {
+            type: "invoice",
+            reason: "Création facture",
+            reference: doc.number,
+            user: currentRole,
+          })
         : data.products || [];
 
       setData({ ...data, products: nextProducts, [listKey]: [...documents, doc] });
@@ -329,7 +302,12 @@ useEffect(() => {
     if (!confirm(`Supprimer ce ${isQuote ? "devis" : "facture"} ?`)) return;
     const removedDoc = documents.find((d) => d.id === id);
     const nextProducts = !isQuote && removedDoc?.stockAdjusted
-      ? addStock(data.products || [], removedDoc.lines || [])
+      ? applyStockByLines(data.products || [], removedDoc.lines || [], "add", {
+          type: "invoice",
+          reason: "Suppression facture",
+          reference: removedDoc?.number || "",
+          user: currentRole,
+        })
       : data.products || [];
 
     setData({
@@ -351,7 +329,10 @@ useEffect(() => {
     ));
 
     const nextProducts = !isQuote && updatedDoc
-      ? syncInvoiceStock(data.products || [], existingDoc, updatedDoc)
+      ? syncDocumentStock(data.products || [], existingDoc, updatedDoc, {
+          isQuote,
+          user: currentRole,
+        })
       : data.products || [];
 
     const changedDoc = nextDocuments.find((d) => String(d.id) === String(id));
@@ -423,8 +404,56 @@ onChange={(e) =>
                 <button type="button" className="danger" onClick={() => removeLine(index)}>✕</button>
               </div>
             );
-          })}
-        </div>
+          }        )}
+
+        {canManageProducts && (
+          <div className="card dashboard-action-card">
+            <div className="dashboard-action-card__header">
+              <div>
+                <h3>Alertes stock</h3>
+                <p className="muted">
+                  {lowStockCount === 0
+                    ? "Aucun produit sous le seuil minimum."
+                    : `${lowStockCount} produit(s) en stock bas${outOfStockCount > 0 ? ` · ${outOfStockCount} en rupture` : ""}`}
+                </p>
+              </div>
+              {(lowStockCount > 0 || outOfStockCount > 0) && (
+                <button type="button" className="ghost" onClick={goToProducts}>
+                  Voir produits →
+                </button>
+              )}
+            </div>
+            {lowStockProducts.length === 0 ? (
+              <p className="muted">Tous les stocks sont au-dessus du seuil d'alerte.</p>
+            ) : (
+              <div className="table compact-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Produit</th>
+                      <th>SKU</th>
+                      <th>Stock</th>
+                      <th>Seuil</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lowStockProducts.map((product) => (
+                      <tr key={product.id}>
+                        <td>{product.name}</td>
+                        <td>{product.sku || "—"}</td>
+                        <td>
+                          <strong>{getStock(product)}</strong>
+                        </td>
+                        <td>{getMinStock(product)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
         <div className="document-form-footer">
           <button type="button" onClick={addLine}>+ Ajouter une ligne</button>

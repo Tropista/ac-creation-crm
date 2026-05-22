@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Html5QrcodeScanner } from "html5-qrcode";
 import { BarcodeSvg, QrCodeImage } from "./BarcodeLabels";
-export default function ProductScan({ data, setData, logActivity }) {
+import { applyProductStockChange } from "../utils/stock";
+import { showToast } from "../utils/toast";
+
+export default function ProductScan({ data, setData, logActivity, currentRole = "Admin" }) {
   const products = data.products || [];
   const [scanValue, setScanValue] = useState("");
   const [mode, setMode] = useState("out");
@@ -31,19 +34,23 @@ export default function ProductScan({ data, setData, logActivity }) {
   function applyStock(product, actionMode = mode, amount = quantity) {
     if (!product) return;
     const qty = Math.max(1, Number(amount) || 1);
-    const currentStock = Number(product.stock || 0);
-    const nextStock = actionMode === "in" ? currentStock + qty : Math.max(0, currentStock - qty);
+    const delta = actionMode === "in" ? qty : -qty;
+    const updatedProduct = applyProductStockChange(product, delta, {
+      type: "scan",
+      reason: actionMode === "in" ? "Entrée scan" : "Sortie scan",
+      reference: product.sku || product.id || "",
+      user: currentRole,
+    });
+    const nextStock = Number(updatedProduct.stock || 0);
 
     setData({
       ...data,
       products: products.map((item) =>
-        item.id === product.id
-          ? { ...item, stock: nextStock, updatedAt: today() }
-          : item
+        item.id === product.id ? updatedProduct : item
       ),
     });
 
-    setFoundProduct({ ...product, stock: nextStock });
+    setFoundProduct(updatedProduct);
     setMessage(`${actionMode === "in" ? "Entrée" : "Sortie"} stock : ${qty} pièce(s) — ${product.name} (${nextStock} en stock).`);
     logActivity?.(actionMode === "in" ? "Entrée stock" : "Sortie stock", product.name, `${qty} pièce(s), stock final ${nextStock}`);
   }
@@ -54,6 +61,7 @@ export default function ProductScan({ data, setData, logActivity }) {
     if (!product) {
       setFoundProduct(null);
       setMessage("Produit introuvable. Vérifie le SKU, le code-barres ou le QR code.");
+      if (autoApply) showToast("Produit introuvable pour ce scan", "error");
       return;
     }
 

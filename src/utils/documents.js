@@ -1,3 +1,5 @@
+import { applyStockByLines } from "./stock";
+
 export const uid = () =>
   Date.now().toString(36) + Math.random().toString(36).slice(2);
 
@@ -110,20 +112,6 @@ export function nextDocumentNumber(list, docPrefix, year = currentDocumentYear()
   return `${docPrefix}-${year}-${String(nextNumber).padStart(4, "0")}`;
 }
 
-function removeStock(products, lines) {
-  return (products || []).map((product) => {
-    const quantityToRemove = (lines || [])
-      .filter((line) => String(line.productId || "") === String(product.id))
-      .reduce((sum, line) => sum + Number(line.quantity || 0), 0);
-
-    if (!quantityToRemove) return product;
-    return {
-      ...product,
-      stock: Math.max(0, Number(product.stock || 0) - quantityToRemove),
-    };
-  });
-}
-
 export function quoteAlreadyConverted(data, quote) {
   const quoteNumber = String(quote?.number || "");
   if (!quoteNumber) return false;
@@ -151,7 +139,11 @@ export function convertQuoteToInvoiceData(data, quote) {
 
   return {
     ...data,
-    products: removeStock(data.products || [], invoice.lines || []),
+    products: applyStockByLines(data.products || [], invoice.lines || [], "remove", {
+      type: "invoice",
+      reason: "Conversion devis en facture",
+      reference: invoice.number,
+    }),
     invoices: [...(data.invoices || []), invoice],
   };
 }

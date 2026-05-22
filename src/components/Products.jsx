@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import {
   canDeleteData
 } from "../services/authService";
+import { applyProductStockChange } from "../utils/stock";
 
 function money(value) {
   return Number(value || 0).toLocaleString(
@@ -587,7 +588,12 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
       ...data,
       products: allProducts.map((product) =>
         selectedProductIds.includes(product.id)
-          ? { ...product, stock: Number(bulkStock || 0) }
+          ? applyProductStockChange(product, 0, {
+              setTo: Number(bulkStock || 0),
+              type: "bulk",
+              reason: "Modification groupée",
+              user: currentRole,
+            })
           : product
       ),
     });
@@ -686,30 +692,23 @@ function openLinkedDocument(doc) {
     const nextProducts = allProducts.map((product) => {
       if (String(product.id) !== String(selectedProduct.id)) return product;
 
-      const previousStock = Number(product.stock || 0);
-      const nextStock =
-        mode === "add"
-          ? previousStock + qty
-          : mode === "remove"
-            ? Math.max(0, previousStock - qty)
-            : qty;
-
-      const movement = {
-        id: uid(),
-        date: today(),
-        action: actionLabel,
-        quantity: mode === "set" ? nextStock - previousStock : qty,
-        previousStock,
-        nextStock,
+      const stockOptions = {
+        type: mode === "set" ? "set" : "adjustment",
         reason,
         user: currentRole,
       };
 
+      if (mode === "set") {
+        return applyProductStockChange(product, 0, { ...stockOptions, setTo: qty });
+      }
+
+      const delta = mode === "add" ? qty : -qty;
+      const updated = applyProductStockChange(product, delta, stockOptions);
+      const previousStock = Number(product.stock || 0);
+      const nextStock = Number(updated.stock || 0);
+
       return {
-        ...product,
-        stock: nextStock,
-        updatedAt: today(),
-        stockMovements: [...(product.stockMovements || []), movement],
+        ...updated,
         history: [
           ...(product.history || []),
           { id: uid(), date: today(), action: `${actionLabel} : ${previousStock} → ${nextStock}`, user: currentRole },
