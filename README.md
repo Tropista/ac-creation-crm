@@ -1,5 +1,7 @@
 # AC Creation CRM
 
+[![CI](https://github.com/Tropista/ac-creation-crm/actions/workflows/ci.yml/badge.svg)](https://github.com/Tropista/ac-creation-crm/actions/workflows/ci.yml)
+
 Application CRM interne pour **AC Creation** : clients, produits, devis, factures, rapprochement bancaire, configurateurs 3D et export desktop (Electron).
 
 ## Stack
@@ -36,6 +38,7 @@ Créer les tables Supabase selon [`docs/SUPABASE.md`](docs/SUPABASE.md).
 | `npm run build` | Build de production dans `dist/` |
 | `npm run preview` | Prévisualisation du build |
 | `npm run lint` | ESLint sur le projet |
+| `npm test` | Tests unitaires Vitest (utilisés en CI) |
 | `npm run electron` | Lance l’app Electron (nécessite `npm run build` au préalable) |
 | `npm run dist` | Build + empaquetage Windows (sortie dans `release/`) |
 
