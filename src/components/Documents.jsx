@@ -404,56 +404,8 @@ onChange={(e) =>
                 <button type="button" className="danger" onClick={() => removeLine(index)}>✕</button>
               </div>
             );
-          }        )}
-
-        {canManageProducts && (
-          <div className="card dashboard-action-card">
-            <div className="dashboard-action-card__header">
-              <div>
-                <h3>Alertes stock</h3>
-                <p className="muted">
-                  {lowStockCount === 0
-                    ? "Aucun produit sous le seuil minimum."
-                    : `${lowStockCount} produit(s) en stock bas${outOfStockCount > 0 ? ` · ${outOfStockCount} en rupture` : ""}`}
-                </p>
-              </div>
-              {(lowStockCount > 0 || outOfStockCount > 0) && (
-                <button type="button" className="ghost" onClick={goToProducts}>
-                  Voir produits →
-                </button>
-              )}
-            </div>
-            {lowStockProducts.length === 0 ? (
-              <p className="muted">Tous les stocks sont au-dessus du seuil d'alerte.</p>
-            ) : (
-              <div className="table compact-table">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Produit</th>
-                      <th>SKU</th>
-                      <th>Stock</th>
-                      <th>Seuil</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lowStockProducts.map((product) => (
-                      <tr key={product.id}>
-                        <td>{product.name}</td>
-                        <td>{product.sku || "—"}</td>
-                        <td>
-                          <strong>{getStock(product)}</strong>
-                        </td>
-                        <td>{getMinStock(product)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+          })}
+        </div>
 
         <div className="document-form-footer">
           <button type="button" onClick={addLine}>+ Ajouter une ligne</button>
