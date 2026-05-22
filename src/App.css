@@ -675,13 +675,13 @@ tbody tr:hover td { background: #faf5ff; }
    ========================================================= */
 @media print {
   @page { size: A4; margin: 0; }
-  html,
-  body { width: 210mm; min-height: 297mm; background: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  body * { visibility: hidden; }
-  .modal,
-  .modal-content,
-  .print-area,
-  .print-area * { visibility: visible !important; }
+  html:not(:has(.document-preview-overlay)),
+  body:not(:has(.document-preview-overlay)) { width: 210mm; min-height: 297mm; background: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body:not(:has(.document-preview-overlay)) * { visibility: hidden; }
+  body:not(:has(.document-preview-overlay)) .modal,
+  body:not(:has(.document-preview-overlay)) .modal-content,
+  body:not(:has(.document-preview-overlay)) .print-area,
+  body:not(:has(.document-preview-overlay)) .print-area * { visibility: visible !important; }
   .sidebar,
   .content > section > *:not(.modal),
   .no-print,
@@ -690,6 +690,60 @@ tbody tr:hover td { background: #faf5ff; }
   .modal-content { max-width: none !important; width: 210mm !important; margin: 0 !important; padding: 0 !important; border-radius: 0 !important; box-shadow: none !important; border: 0 !important; }
   .invoice-template,
   .invoice-pink-template { width: 190mm !important; min-height: auto !important; margin: 0 auto !important; padding: 10mm !important; box-shadow: none !important; border-radius: 0 !important; overflow: visible !important; font-size: 11.5px !important; }
+
+  /* Document preview: collapse app shell (100vh) so only invoice prints */
+  html:has(.document-preview-overlay),
+  body:has(.document-preview-overlay),
+  #root:has(.document-preview-overlay),
+  .app:has(.document-preview-overlay),
+  .content:has(.document-preview-overlay),
+  section:has(.document-preview-overlay) {
+    width: auto !important;
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  body:has(.document-preview-overlay) .sidebar,
+  body:has(.document-preview-overlay) .content > section > *:not(.document-preview-overlay) {
+    display: none !important;
+  }
+
+  .document-preview-overlay,
+  .document-preview-overlay .modal-content {
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+  }
+
+  .document-preview-overlay .ac-invoice-v2,
+  #document-preview.ac-invoice-v2 {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    min-height: calc(297mm - 16mm) !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 5mm !important;
+    box-sizing: border-box !important;
+    box-shadow: none !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  .document-preview-overlay .ac-invoice-top {
+    flex: 0 0 auto !important;
+  }
+
+  .document-preview-overlay .ac-invoice-bottom {
+    margin-top: auto !important;
+    flex: 0 0 auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
 }
 body,
 html,
@@ -697,6 +751,15 @@ html,
   width: 100%;
   min-height: 100vh;
   margin: 0;
+}
+
+@media print {
+  html:has(.document-preview-overlay),
+  body:has(.document-preview-overlay),
+  #root:has(.document-preview-overlay) {
+    min-height: 0 !important;
+    height: auto !important;
+  }
 }
 
 .dashboard-grid,
