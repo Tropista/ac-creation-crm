@@ -46,8 +46,14 @@ export default function Sidebar({
     <aside className="sidebar">
       <div className="sidebar-brand">
         <div className="sidebar-logo">
-🎨
-</div>
+          <img
+            src="/logo.png"
+            alt="AC Creation"
+            onError={(event) => {
+              event.currentTarget.style.display = "none";
+            }}
+          />
+        </div>
         <div>
           <h1>{data.settings.companyName || "AC Creation"}</h1>
           <span>Creative CRM</span>
