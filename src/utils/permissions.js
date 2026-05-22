@@ -17,6 +17,7 @@ export const ROLE_PERMISSIONS = {
       "print3dcalc",
       "lasercalc",
       "dtfcalc",
+      "uvdtfcalc",
       "vue3d",
       "tshirt3d",
       "banque"
@@ -39,7 +40,8 @@ export const ROLE_PERMISSIONS = {
       "banque",
       "print3dcalc",
       "lasercalc",
-      "dtfcalc"
+      "dtfcalc",
+      "uvdtfcalc"
     ],
     canDelete: false,
     canEditSettings: false,

@@ -32,6 +32,7 @@ import ActivityLogs from "./components/ActivityLogs";
 import Print3DCalculator from "./components/Print3DCalculator";
 import LaserCalculator from "./components/LaserCalculator";
 import DtfCalculator from "./components/DtfCalculator";
+import UvDtfCalculator from "./components/UvDtfCalculator";
 import Backups from "./components/Backups";
 import AuthPage from "./components/auth/AuthPage";
 import AccessDenied from "./components/auth/AccessDenied";
@@ -76,6 +77,7 @@ import "./styles/documents.css";
 import "./styles/print3d-calculator.css";
 import "./styles/laser-calculator.css";
 import "./styles/dtf-calculator.css";
+import "./styles/uv-dtf-calculator.css";
 import "./styles/products-erp.css";
 import "./styles/labels.css";
 const Vue3D = lazy(() =>
@@ -590,6 +592,18 @@ function CrmApp() {
               element={
                 canAccessPage(currentRole, "dtfcalc") ? (
                   <DtfCalculator
+                    data={data}
+                    setData={updateData}
+                    logActivity={handleLogActivity}
+                  />
+                ) : null
+              }
+            />
+            <Route
+              path={pageToPath("uvdtfcalc")}
+              element={
+                canAccessPage(currentRole, "uvdtfcalc") ? (
+                  <UvDtfCalculator
                     data={data}
                     setData={updateData}
                     logActivity={handleLogActivity}

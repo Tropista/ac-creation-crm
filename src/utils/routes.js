@@ -17,6 +17,7 @@ export const PAGE_PATHS = {
   print3dcalc: "/calculateur-3d",
   lasercalc: "/calculateur-laser",
   dtfcalc: "/calculateur-dtf",
+  uvdtfcalc: "/calculateur-uv-dtf",
   vue3d: "/vue-3d",
   tshirt3d: "/t-shirt-3d",
   banque: "/banque",

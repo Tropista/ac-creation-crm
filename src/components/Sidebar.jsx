@@ -13,6 +13,7 @@ const menuItems = [
   { page: "print3dcalc", label: "Calculateur 3D", icon: "🧮", type: "page" },
   { page: "lasercalc", label: "Calculateur Laser", icon: "🔥", type: "page" },
   { page: "dtfcalc", label: "Calculateur DTF", icon: "👕", type: "page" },
+  { page: "uvdtfcalc", label: "Calculateur UV-DTF", icon: "📱", type: "page" },
   { page: "banque", label: "Banque", icon: "🏦", type: "page" },
   { page: "users", label: "Utilisateurs", icon: "🔐", permission: "canManageUsers" },
   { page: "settings", label: "Paramètres", icon: "⚙️", permission: "canEditSettings" },
