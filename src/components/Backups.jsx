@@ -5,6 +5,7 @@ import {
   normalizeData,
   createBackupSnapshot
 } from "../utils/documents";
+import { showToast } from "../utils/toast";
 export default function Backups({
   data,
   setData,
@@ -21,7 +22,7 @@ export default function Backups({
   }
 
   async function restoreBackup() {
-    if (!selectedBackup) return alert("Choisis une sauvegarde à restaurer.");
+    if (!selectedBackup) return showToast("Choisis une sauvegarde à restaurer.", "error");
     if (!confirm("Restaurer cette sauvegarde ? Les données actuelles seront remplacées.")) return;
 
     const restored = normalizeData({
@@ -34,7 +35,7 @@ export default function Backups({
 
     await setData(restored);
     await logActivity?.("Sauvegarde restaurée", selectedBackup.label, selectedBackup.createdAt);
-    alert("Sauvegarde restaurée.");
+    showToast("Sauvegarde restaurée.", "success");
   }
 
   function deleteBackup(id) {

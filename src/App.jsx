@@ -261,7 +261,6 @@ function CrmApp() {
       await syncSupabaseData(normalized, previous);
       flushSaveData();
       setSyncStatus("Synchronisé avec Supabase");
-      showToast("Données enregistrées et synchronisées", "success");
     } catch (error) {
       console.error(error);
       setSyncStatus("Erreur de sauvegarde Supabase");

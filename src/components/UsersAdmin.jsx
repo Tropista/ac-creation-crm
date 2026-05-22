@@ -4,6 +4,7 @@ import {
   normalizeEmail,
   isAdminEmail
 } from "../services/authService";
+import { showToast } from "../utils/toast";
 function uid() {
   return crypto.randomUUID();
 }
@@ -46,10 +47,10 @@ export default function UsersAdmin({ data, setData, logActivity }) {
     e.preventDefault();
     const email = normalizeEmail(form.email);
 
-    if (!email) return alert("Email obligatoire.");
-    if (isAdminEmail(email)) return alert("Cet email est déjà administrateur principal.");
+    if (!email) return showToast("Email obligatoire.", "error");
+    if (isAdminEmail(email)) return showToast("Cet email est déjà administrateur principal.", "error");
     if (users.some((user) => normalizeEmail(user.email) === email)) {
-      return alert("Cet utilisateur existe déjà.");
+      return showToast("Cet utilisateur existe déjà.", "error");
     }
 
     const nextUser = {
@@ -70,10 +71,10 @@ export default function UsersAdmin({ data, setData, logActivity }) {
   details: nextUser.role,
 });
       reset();
-      alert("Utilisateur sauvegardé dans Supabase.");
+      showToast("Utilisateur sauvegardé dans Supabase.", "success");
     } catch (error) {
       console.error("Erreur sauvegarde utilisateur Supabase :", error);
-      alert("Erreur : l'utilisateur n'a pas été sauvegardé dans Supabase.");
+      showToast("Erreur : l'utilisateur n'a pas été sauvegardé dans Supabase.", "error");
     }
   }
 
@@ -94,7 +95,7 @@ export default function UsersAdmin({ data, setData, logActivity }) {
 });
     } catch (error) {
       console.error("Erreur mise à jour utilisateur Supabase :", error);
-      alert("Erreur : la modification utilisateur n'a pas été sauvegardée dans Supabase.");
+      showToast("Erreur : la modification utilisateur n'a pas été sauvegardée dans Supabase.", "error");
     }
   }
 
@@ -111,7 +112,7 @@ export default function UsersAdmin({ data, setData, logActivity }) {
 });
     } catch (error) {
       console.error("Erreur suppression utilisateur Supabase :", error);
-      alert("Erreur : l'utilisateur n'a pas été supprimé dans Supabase.");
+      showToast("Erreur : l'utilisateur n'a pas été supprimé dans Supabase.", "error");
     }
   }
 

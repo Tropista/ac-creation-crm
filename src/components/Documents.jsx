@@ -143,7 +143,7 @@ const [form, setForm] = useState({
   }
 
   function removeLine(index) {
-    if (form.lines.length === 1) return alert("Il faut au moins une ligne.");
+    if (form.lines.length === 1) return showToast("Il faut au moins une ligne.", "error");
     setForm({ ...form, lines: form.lines.filter((_, i) => i !== index) });
   }
 
@@ -158,7 +158,7 @@ const [form, setForm] = useState({
 
   function submit(e) {
     e.preventDefault();
-    if (!form.clientId) return alert("Choisis un client.");
+    if (!form.clientId) return showToast("Choisis un client.", "error");
 
     const cleanLines = form.lines
       .map((line) => {
@@ -176,7 +176,7 @@ const [form, setForm] = useState({
       })
       .filter((line) => line.description && line.quantity > 0);
 
-    if (cleanLines.length === 0) return alert("Ajoute au moins un produit ou une prestation.");
+    if (cleanLines.length === 0) return showToast("Ajoute au moins un produit ou une prestation.", "error");
 
     const firstDescription = cleanLines.length === 1 ? cleanLines[0].description : `${cleanLines.length} lignes`;
 

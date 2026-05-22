@@ -1,6 +1,7 @@
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { money } from "../utils/money";
+import { showToast } from "../utils/toast";
 
 export default function DocumentPreview({ doc, type, data, onClose }) {
   const isQuote = type === "quote";
@@ -27,7 +28,7 @@ export default function DocumentPreview({ doc, type, data, onClose }) {
 
   async function downloadPdf() {
     const source = document.querySelector(".ac-invoice-v2");
-    if (!source) return alert("Zone PDF introuvable.");
+    if (!source) return showToast("Zone PDF introuvable.", "error");
 
     const wrapper = document.createElement("div");
     wrapper.style.position = "fixed";
@@ -118,7 +119,7 @@ export default function DocumentPreview({ doc, type, data, onClose }) {
       pdf.save(documentFileName);
     } catch (error) {
       console.error(error);
-      alert("Impossible de générer le PDF.");
+      showToast("Impossible de générer le PDF.", "error");
     } finally {
       document.body.removeChild(wrapper);
     }
@@ -127,7 +128,7 @@ export default function DocumentPreview({ doc, type, data, onClose }) {
 
   function sendEmail() {
     if (!client?.email) {
-      alert("Ce client n'a pas d'adresse email enregistrée.");
+      showToast("Ce client n'a pas d'adresse email enregistrée.", "error");
       return;
     }
 

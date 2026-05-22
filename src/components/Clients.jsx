@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import PaginationControls from "./PaginationControls";
 import { canDeleteData } from "../services/authService";
+import { showToast } from "../utils/toast";
 
 function statusClass(status) {
   const value = String(status || "").toLowerCase();
@@ -256,7 +257,7 @@ export default function Clients({
     e.preventDefault();
 
     if (!form.name) {
-      alert("Le nom du client est obligatoire.");
+      showToast("Le nom du client est obligatoire.", "error");
       return;
     }
 
@@ -312,7 +313,7 @@ export default function Clients({
 
   function remove(id) {
     if (!canDeleteData(currentRole)) {
-      alert("Ton rôle ne permet pas de supprimer.");
+      showToast("Ton rôle ne permet pas de supprimer.", "error");
       return;
     }
 
@@ -354,7 +355,7 @@ export default function Clients({
     const invoices = selectedClientUnpaidInvoices;
 
     if (invoices.length === 0) {
-      alert("Aucune facture impayée.");
+      showToast("Aucune facture impayée.", "info");
       return;
     }
 
@@ -377,7 +378,7 @@ AC Creation`;
 
     if (mode === "copy") {
       navigator.clipboard.writeText(text);
-      alert("Relance copiée");
+      showToast("Relance copiée", "success");
       return;
     }
 

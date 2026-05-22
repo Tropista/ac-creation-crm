@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { showToast } from "../utils/toast";
 
 function euro(value) {
 
@@ -134,13 +135,13 @@ TVA : ${euro(calc.vatAmount)}
 Prix conseillé TTC : ${euro(calc.totalTTC)}`;
 
     navigator.clipboard.writeText(text);
-    alert("Calcul copié dans le presse-papier.");
+    showToast("Calcul copié dans le presse-papier.", "success");
   }
 
 
   function createProduct() {
     if (!form.projectName.trim()) {
-      alert("Nom du projet manquant");
+      showToast("Nom du projet manquant", "error");
       return;
     }
 
@@ -197,7 +198,7 @@ TTC conseillé : ${euro(calc.totalTTC)}`,
       details: euro(calc.totalHT)
     });
 
-    alert("Produit créé dans Produits.");
+    showToast("Produit créé dans Produits.", "success");
   }
 
   return (

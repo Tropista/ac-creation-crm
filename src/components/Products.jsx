@@ -3,6 +3,7 @@ import {
   canDeleteData
 } from "../services/authService";
 import { applyProductStockChange } from "../utils/stock";
+import { showToast } from "../utils/toast";
 
 function money(value) {
   return Number(value || 0).toLocaleString(
@@ -132,7 +133,7 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
       const imageUrl = await compressProductImage(file);
       setForm((current) => ({ ...current, imageUrl }));
     } catch (error) {
-      alert(error.message || "Erreur pendant l'import de l'image.");
+      showToast(error.message || "Erreur pendant l'import de l'image.", "error");
     } finally {
       event.target.value = "";
     }
@@ -224,11 +225,11 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
   }
 
   function handleGenerateSku() {
-    if (!form.category) return alert("Choisis d'abord une catégorie.");
-    if (!categoryExists(form.category)) return alert("La catégorie doit venir de l'onglet Catégories.");
+    if (!form.category) return showToast("Choisis d'abord une catégorie.", "error");
+    if (!categoryExists(form.category)) return showToast("La catégorie doit venir de l'onglet Catégories.", "error");
 
     const nextSku = generateSkuForCategory(form.category);
-    if (!nextSku) return alert("Impossible de générer le SKU.");
+    if (!nextSku) return showToast("Impossible de générer le SKU.", "error");
 
     setForm((current) => ({ ...current, sku: nextSku }));
   }
@@ -237,7 +238,7 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
     const validProducts = allProducts.filter((product) => categoryExists(product.category));
 
     if (!validProducts.length) {
-      return alert("Aucun produit avec une catégorie valide trouvée.");
+      return showToast("Aucun produit avec une catégorie valide trouvée.", "error");
     }
 
     const skippedProducts = allProducts.length - validProducts.length;
@@ -277,7 +278,7 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
     });
 
     setSelectedProductIds([]);
-    alert("Tous les SKU ont été régénérés par catégorie.");
+    showToast("Tous les SKU ont été régénérés par catégorie.", "success");
   }
 
   const products = useMemo(() => {
@@ -454,7 +455,7 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
 
   function submit(e) {
     e.preventDefault();
-    if (!form.name) return alert("Nom du produit obligatoire.");
+    if (!form.name) return showToast("Nom du produit obligatoire.", "error");
 
     const finalSku = String(form.sku || generateSkuForCategory(form.category) || "").trim();
 
@@ -531,7 +532,7 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
   }
 
   function remove(id) {
-    if (!canDeleteData(currentRole)) return alert("Ton rôle ne permet pas de supprimer.");
+    if (!canDeleteData(currentRole)) return showToast("Ton rôle ne permet pas de supprimer.", "error");
     if (!confirm("Supprimer ce produit ?")) return;
     const removedProduct = allProducts.find((p) => p.id === id);
     setData({ ...data, products: allProducts.filter((p) => p.id !== id) });
@@ -563,8 +564,8 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
   }
 
   function applyBulkCategory() {
-    if (!selectedProductIds.length) return alert("Sélectionne au moins un produit.");
-    if (!bulkCategory) return alert("Choisis une catégorie.");
+    if (!selectedProductIds.length) return showToast("Sélectionne au moins un produit.", "error");
+    if (!bulkCategory) return showToast("Choisis une catégorie.", "error");
 
     setData({
       ...data,
@@ -578,11 +579,11 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
     logActivity?.("Modification catégorie produits", bulkCategory, `${selectedProductIds.length} produit(s)`);
     setSelectedProductIds([]);
     setBulkCategory("");
-    alert("Catégorie appliquée aux produits sélectionnés.");
+    showToast("Catégorie appliquée aux produits sélectionnés.", "success");
   }
 
   function applyBulkStock() {
-    if (!selectedProductIds.length) return alert("Sélectionne au moins un produit.");
+    if (!selectedProductIds.length) return showToast("Sélectionne au moins un produit.", "error");
 
     setData({
       ...data,
@@ -600,7 +601,7 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
 
     logActivity?.("Modification stock produits", `${Number(bulkStock || 0)} pièce(s)`, `${selectedProductIds.length} produit(s)`);
     setSelectedProductIds([]);
-    alert("Stock modifié avec succès.");
+    showToast("Stock modifié avec succès.", "success");
   }
 
   function setAllProductsStock100() {
@@ -616,7 +617,7 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
 
     logActivity?.("Réinitialisation stock produits", "100 pièces", `${allProducts.length} produit(s)`);
     setSelectedProductIds([]);
-    alert("Tous les produits sont maintenant à 100 pièces.");
+    showToast("Tous les produits sont maintenant à 100 pièces.", "success");
   }
 
 function openLinkedDocument(doc) {
@@ -679,7 +680,7 @@ function openLinkedDocument(doc) {
     if (!selectedProduct) return;
 
     const qty = Math.max(0, Number(stockMoveQty || 0));
-    if (!qty) return alert("Indique une quantité valide.");
+    if (!qty) return showToast("Indique une quantité valide.", "error");
 
     const reason = String(stockMoveReason || "Ajustement manuel").trim() || "Ajustement manuel";
     const actionLabel =

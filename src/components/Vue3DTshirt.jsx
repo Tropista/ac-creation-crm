@@ -4,6 +4,7 @@ import { Bounds, Center, Environment, OrbitControls, useGLTF } from "@react-thre
 import * as THREE from "three";
 import jsPDF from "jspdf";
 import "./Vue3DTshirt.css";
+import { showToast } from "../utils/toast";
 
 const MODEL_URL = `${import.meta.env.BASE_URL}models/tshirt/t-shirt.gltf`;
 const TEXTURE_SIZE = 2048;
@@ -818,7 +819,7 @@ export default function Vue3DTshirt() {
       setSelectedId(newItems[0].id);
     } catch (error) {
       console.error("Erreur import logo :", error);
-      alert("Impossible de lire un logo importé.");
+      showToast("Impossible de lire un logo importé.", "error");
     }
 
     event.target.value = "";
@@ -837,7 +838,7 @@ export default function Vue3DTshirt() {
       setCustomFonts((current) => [...current, { name: fontName, src, file, dataUrl, originalName: file.name }]);
       if (selectedItem?.type === "text") updateItem(selectedItem.id, { fontFamily: fontName });
     } catch (error) {
-      alert("Police impossible à charger. Essaie un fichier .ttf, .otf, .woff ou .woff2.");
+      showToast("Police impossible à charger. Essaie un fichier .ttf, .otf, .woff ou .woff2.", "error");
       URL.revokeObjectURL(src);
     }
     event.target.value = "";
@@ -1132,7 +1133,7 @@ export default function Vue3DTshirt() {
     persistProjects(nextProjects);
     setCurrentProjectId(snapshot.id);
     setProjectName(snapshot.name);
-    alert(`Projet sauvegardé : ${snapshot.name}`);
+    showToast(`Projet sauvegardé : ${snapshot.name}`, "success");
   }
 
   async function loadProject(projectId) {
@@ -1192,7 +1193,7 @@ export default function Vue3DTshirt() {
       setCurrentProjectId(snapshot.id);
     } catch (error) {
       console.error("Import projet impossible :", error);
-      alert("Projet impossible à importer. Vérifie le fichier JSON.");
+      showToast("Projet impossible à importer. Vérifie le fichier JSON.", "error");
     }
 
     event.target.value = "";
@@ -1536,7 +1537,7 @@ export default function Vue3DTshirt() {
       files.push(...(await buildFontFiles()));
 
       if (!files.length) {
-        alert("Aucun fichier à exporter.");
+        showToast("Aucun fichier à exporter.", "error");
         return;
       }
 
@@ -1544,7 +1545,7 @@ export default function Vue3DTshirt() {
       downloadBlob(zipBlob, `export-tshirt-${new Date().toISOString().slice(0, 10)}.zip`);
     } catch (error) {
       console.error("Erreur export ZIP :", error);
-      alert("Export ZIP impossible. Vérifie la console pour plus de détails.");
+      showToast("Export ZIP impossible. Vérifie la console pour plus de détails.", "error");
     }
   }
 
@@ -1555,7 +1556,7 @@ export default function Vue3DTshirt() {
         .sort((a, b) => Number(a.z || 0) - Number(b.z || 0));
 
       if (!printableItems.length) {
-        alert("Ajoute au moins un logo ou un texte visible avant de générer le PDF atelier.");
+        showToast("Ajoute au moins un logo ou un texte visible avant de générer le PDF atelier.", "error");
         return;
       }
 
@@ -1716,7 +1717,7 @@ export default function Vue3DTshirt() {
       pdf.save(`fiche-atelier-tshirt-${new Date().toISOString().slice(0, 10)}.pdf`);
     } catch (error) {
       console.error("Erreur export PDF atelier :", error);
-      alert("Export PDF atelier impossible. Vérifie la console pour plus de détails.");
+      showToast("Export PDF atelier impossible. Vérifie la console pour plus de détails.", "error");
     }
   }
 

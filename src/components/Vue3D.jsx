@@ -3,6 +3,7 @@ import { Canvas } from "@react-three/fiber";
 import { Bounds, Center, OrbitControls, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import "./Vue3D.css";
+import { showToast } from "../utils/toast";
 
 const MODEL_URL = `${import.meta.env.BASE_URL}models/scene.gltf`;
 const CANVAS_WIDTH = 1400;
@@ -764,7 +765,7 @@ export default function Vue3D() {
     const validFiles = files.filter((file) => file.type.startsWith("image/"));
 
     if (!validFiles.length) {
-      alert("Choisis une ou plusieurs images valides : PNG, JPG ou WEBP.");
+      showToast("Choisis une ou plusieurs images valides : PNG, JPG ou WEBP.", "error");
       event.target.value = "";
       return;
     }
@@ -806,7 +807,7 @@ export default function Vue3D() {
           return next;
         });
       })
-      .catch(() => alert("Impossible de lire une des images."));
+      .catch(() => showToast("Impossible de lire une des images.", "error"));
 
     event.target.value = "";
   }
@@ -820,7 +821,7 @@ export default function Vue3D() {
     );
 
     if (!validFiles.length) {
-      alert("Choisis une police valide : TTF, OTF, WOFF ou WOFF2.");
+      showToast("Choisis une police valide : TTF, OTF, WOFF ou WOFF2.", "error");
       event.target.value = "";
       return;
     }
@@ -840,7 +841,7 @@ export default function Vue3D() {
           return [...prev, { family, label: cleanName, file, originalName: file.name }];
         });
       } catch (error) {
-        alert(`Impossible de charger la police : ${file.name}`);
+        showToast(`Impossible de charger la police : ${file.name}`, "error");
       }
     }
 
@@ -900,7 +901,7 @@ export default function Vue3D() {
       files.push(...(await buildMugFontFiles()));
 
       if (!files.length) {
-        alert("Aucun fichier à exporter.");
+        showToast("Aucun fichier à exporter.", "error");
         return;
       }
 
@@ -908,7 +909,7 @@ export default function Vue3D() {
       downloadBlob(zipBlob, `export-mug-${new Date().toISOString().slice(0, 10)}.zip`);
     } catch (error) {
       console.error("Erreur export ZIP mug :", error);
-      alert("Export ZIP impossible. Vérifie la console pour plus de détails.");
+      showToast("Export ZIP impossible. Vérifie la console pour plus de détails.", "error");
     }
   }
 

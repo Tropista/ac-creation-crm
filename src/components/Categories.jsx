@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { showToast } from "../utils/toast";
 function uid() {
   return crypto.randomUUID();
 }
@@ -26,13 +27,13 @@ export default function Categories({
       function submit(e) {
         e.preventDefault();
         const name = form.name.trim();
-        if (!name) return alert("Nom de catégorie obligatoire.");
+        if (!name) return showToast("Nom de catégorie obligatoire.", "error");
     
         const alreadyExists = categories.some(
           (category) => category.name.toLowerCase() === name.toLowerCase() && category.id !== editing
         );
     
-        if (alreadyExists) return alert("Cette catégorie existe déjà.");
+        if (alreadyExists) return showToast("Cette catégorie existe déjà.", "error");
     
         if (editing) {
           const oldCategory = categories.find((category) => category.id === editing);
