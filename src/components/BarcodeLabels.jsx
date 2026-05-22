@@ -82,61 +82,144 @@ function BarcodeLabels({ data }) {
       <div className="page-header no-print">
         <div>
           <h2>Étiquettes & codes-barres</h2>
-          <p>Génère des étiquettes produits imprimables à partir des SKU.</p>
+          <p>Générez des étiquettes produits imprimables à partir des SKU.</p>
         </div>
-        <button className="primary" onClick={() => window.print()} disabled={!labelsToPrint.length}>
+        <button
+          type="button"
+          className="primary labels-print-btn"
+          onClick={() => window.print()}
+          disabled={!labelsToPrint.length}
+        >
           Imprimer les étiquettes
         </button>
       </div>
 
-      <div className="card labels-controls no-print">
-        <input
-          placeholder="Rechercher un produit, SKU ou catégorie..."
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-        />
-        <input
-          type="number"
-          min="1"
-          max="100"
-          value={copies}
-          onChange={(event) => setCopies(event.target.value)}
-          title="Nombre d'étiquettes par produit"
-        />
-        <label className="labels-checkbox">
-          <input type="checkbox" checked={showQr} onChange={(event) => setShowQr(event.target.checked)} />
-          Afficher QR code
-        </label>
-        <button type="button" onClick={selectVisibleProducts}>Sélectionner / désélectionner les produits visibles</button>
-        <button type="button" onClick={() => setSelectedProductIds([])}>Vider la sélection</button>
+      <div className="labels-stats no-print">
+        <div className="labels-stat-card">
+          <span>Produits sélectionnés</span>
+          <strong>{selectedProducts.length}</strong>
+        </div>
+        <div className="labels-stat-card">
+          <span>Copies par produit</span>
+          <strong>{Math.max(1, Number(copies) || 1)}</strong>
+        </div>
+        <div className="labels-stat-card labels-stat-card--accent">
+          <span>Étiquettes à imprimer</span>
+          <strong>{labelsToPrint.length}</strong>
+        </div>
+      </div>
+
+      <div className="card labels-toolbar no-print">
+        <div className="labels-toolbar-header">
+          <span className="filters-icon">🏷️</span>
+          <div>
+            <strong>Paramètres d&apos;impression</strong>
+            <span>Recherchez vos produits, réglez les copies et les options d&apos;étiquette.</span>
+          </div>
+        </div>
+
+        <div className="labels-toolbar-grid">
+          <label className="labels-field">
+            <span>Rechercher</span>
+            <input
+              placeholder="Nom, SKU ou catégorie..."
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </label>
+
+          <label className="labels-field labels-field--narrow">
+            <span>Copies</span>
+            <input
+              type="number"
+              min="1"
+              max="100"
+              value={copies}
+              onChange={(event) => setCopies(event.target.value)}
+              title="Nombre d'étiquettes par produit"
+            />
+          </label>
+
+          <label className="labels-checkbox">
+            <input type="checkbox" checked={showQr} onChange={(event) => setShowQr(event.target.checked)} />
+            Afficher le QR code
+          </label>
+        </div>
+
+        <div className="labels-toolbar-actions">
+          <button type="button" className="primary compact" onClick={selectVisibleProducts}>
+            Sélectionner / désélectionner les visibles
+          </button>
+          <button type="button" className="compact" onClick={() => setSelectedProductIds([])}>
+            Vider la sélection
+          </button>
+        </div>
       </div>
 
       <div className="labels-layout no-print">
         <div className="card labels-product-list">
-          <h3>Produits</h3>
-          {filteredProducts.length === 0 && <p className="muted">Aucun produit trouvé.</p>}
-          {filteredProducts.map((product) => (
-            <label className="label-product-row" key={product.id}>
-              <input
-                type="checkbox"
-                checked={selectedProductIds.includes(product.id)}
-                onChange={() => toggleProduct(product.id)}
-              />
-              <span>
-                <strong>{product.name || "Produit sans nom"}</strong>
-                <small>{product.sku || "Sans SKU"} {product.category ? `• ${product.category}` : ""}</small>
-              </span>
-            </label>
-          ))}
+          <div className="labels-panel-header">
+            <h3>Produits</h3>
+            <span className="labels-badge">{filteredProducts.length}</span>
+          </div>
+
+          {filteredProducts.length === 0 ? (
+            <div className="labels-empty">
+              <strong>Aucun produit trouvé</strong>
+              <span>Modifiez votre recherche ou ajoutez des produits au catalogue.</span>
+            </div>
+          ) : (
+            <div className="labels-product-scroll">
+              {filteredProducts.map((product) => (
+                <label className="label-product-row" key={product.id}>
+                  <input
+                    type="checkbox"
+                    checked={selectedProductIds.includes(product.id)}
+                    onChange={() => toggleProduct(product.id)}
+                  />
+                  <span>
+                    <strong>{product.name || "Produit sans nom"}</strong>
+                    <small>
+                      {product.sku || "Sans SKU"}
+                      {product.category ? ` • ${product.category}` : ""}
+                    </small>
+                  </span>
+                </label>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="card labels-preview-card">
-          <h3>Aperçu impression</h3>
-          <p className="muted">{labelsToPrint.length} étiquette(s) prête(s) à imprimer.</p>
-          <div className="labels-sheet labels-sheet-preview">
-            {labelsToPrint.map((product, index) => (
-              <ProductLabel key={`${product.id}-${index}`} product={product} showPrice={showPrice} showQr={showQr} />
-            ))}
+          <div className="labels-panel-header">
+            <h3>Aperçu avant impression</h3>
+            <span className="labels-badge labels-badge--accent">{labelsToPrint.length}</span>
+          </div>
+
+          <p className="labels-preview-meta">
+            {labelsToPrint.length
+              ? `${labelsToPrint.length} étiquette(s) prête(s) à imprimer.`
+              : "Sélectionnez des produits pour prévisualiser les étiquettes."}
+          </p>
+
+          <div className="labels-preview-surface">
+            {labelsToPrint.length === 0 ? (
+              <div className="labels-empty">
+                <strong>Aperçu vide</strong>
+                <span>Cochez un ou plusieurs produits dans la liste de gauche.</span>
+              </div>
+            ) : (
+              <div className="labels-sheet labels-sheet-preview">
+                {labelsToPrint.map((product, index) => (
+                  <ProductLabel
+                    key={`${product.id}-${index}`}
+                    product={product}
+                    showPrice={showPrice}
+                    showQr={showQr}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>

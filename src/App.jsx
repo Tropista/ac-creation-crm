@@ -73,6 +73,7 @@ import "./styles/clients.css";
 import "./styles/documents.css";
 import "./styles/print3d-calculator.css";
 import "./styles/products-erp.css";
+import "./styles/labels.css";
 const Vue3D = lazy(() =>
   import("./components/Vue3D")
 );
