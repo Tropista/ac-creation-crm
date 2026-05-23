@@ -110,6 +110,30 @@ const ProductScan = lazy(() =>
 
 const SESSION_KEY = "crm_current_user_v2";
 
+function LoadingScreen({ message = "Chargement...", status = "" }) {
+  return (
+    <div className="crm-loading">
+      <div className="crm-loading-card">
+        <div className="crm-loading-logo">
+          <img src="/logo.png" alt="AC Creation" />
+        </div>
+        <div className="crm-loading-spinner" aria-hidden="true" />
+        <h2>{message}</h2>
+        {status ? <p>{status}</p> : null}
+      </div>
+    </div>
+  );
+}
+
+function ContentLoading({ message = "Chargement..." }) {
+  return (
+    <div className="crm-content-loading">
+      <div className="crm-loading-spinner" aria-hidden="true" />
+      <span>{message}</span>
+    </div>
+  );
+}
+
 export default function App() {
   return (
     <Routes>
@@ -125,13 +149,7 @@ export default function App() {
 function PublicTshirtConfigurator() {
   return (
     <div style={{ minHeight: "100vh", background: "#081b4b", padding: "20px" }}>
-      <Suspense
-        fallback={
-          <div className="auth">
-            Chargement...
-          </div>
-        }
-      >
+      <Suspense fallback={<ContentLoading />}>
         <Vue3DTshirt />
       </Suspense>
     </div>
@@ -339,14 +357,7 @@ function CrmApp() {
   }
 
   if (loading) {
-    return (
-      <div className="auth">
-        <div className="card auth-card">
-          <h1>Chargement du CRM</h1>
-          <p>{syncStatus}</p>
-        </div>
-      </div>
-    );
+    return <LoadingScreen status={syncStatus} />;
   }
 
   if (!currentUser) {
@@ -380,13 +391,7 @@ function CrmApp() {
       />
 
       <main className="content">
-        <Suspense
-          fallback={
-            <div className="auth">
-              Chargement...
-            </div>
-          }
-        >
+        <Suspense fallback={<ContentLoading />}>
           {!canAccessPage(currentRole, page) && (
             <AccessDenied
               user={currentUser}
