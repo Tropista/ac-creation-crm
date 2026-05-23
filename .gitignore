@@ -2,6 +2,7 @@ node_modules/
 release/
 dist/
 .env
+backend/.tink-token.json
 .vercel
 node_modules
 dist

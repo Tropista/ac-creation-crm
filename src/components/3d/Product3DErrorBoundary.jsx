@@ -21,10 +21,14 @@ export default class Product3DErrorBoundary extends React.Component {
 
   render() {
     if (this.state.hasError) {
+      const title = this.props.title ?? "Modèle 3D non lisible";
+      const message =
+        this.props.message ?? "Réimporte un fichier .glb ou .gltf valide.";
+
       return (
         <div className="product-3d-fallback">
-          <strong>Modèle 3D non lisible</strong>
-          <span>Réimporte un fichier .glb ou .gltf valide.</span>
+          <strong>{title}</strong>
+          <span>{message}</span>
         </div>
       );
     }

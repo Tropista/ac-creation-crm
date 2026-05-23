@@ -1,12 +1,18 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Canvas } from "@react-three/fiber";
 import { Bounds, Center, Environment, OrbitControls, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import jsPDF from "jspdf";
 import "./Vue3DTshirt.css";
+import Product3DErrorBoundary from "./3d/Product3DErrorBoundary";
 import { showToast } from "../utils/toast";
+import { TSHIRT_MODEL_URL } from "../utils/assets";
+import { buildCalculatorQuoteLine, getCrmQuotesUrl, openQuoteFromCalculator, saveQuoteDraft } from "../utils/quoteDraft";
+import { estimatePrintPriceHT } from "../utils/tshirtPricing";
+import { PUBLIC_TSHIRT_PATH } from "../utils/routes";
 
-const MODEL_URL = `${import.meta.env.BASE_URL}models/tshirt/t-shirt.gltf`;
+const MODEL_URL = TSHIRT_MODEL_URL;
 const TEXTURE_SIZE = 2048;
 
 const PRINT_ZONES = {
@@ -70,6 +76,15 @@ const TECHNIQUE_PRESETS = {
     minHeight: 1.5,
     bleedCm: 0,
     note: "Éviter les détails trop fins et les dégradés.",
+  },
+  uv: {
+    label: "UV-DTF",
+    shortLabel: "UV",
+    help: "Transfert UV pour objets ou marquages vernis. Alternative au DTF textile classique.",
+    minWidth: 2,
+    minHeight: 2,
+    bleedCm: 0.1,
+    note: "Vérifier la compatibilité textile / objet avant production.",
   },
 };
 
@@ -708,6 +723,9 @@ function TshirtModel({ texture, garmentScale = [1, 1, 1] }) {
 }
 
 export default function Vue3DTshirt() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const isPublicConfigurator = location.pathname.includes(PUBLIC_TSHIRT_PATH);
   const [items, setItems] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [activeArea, setActiveArea] = useState("front");
@@ -721,7 +739,9 @@ export default function Vue3DTshirt() {
   const [garmentSize, setGarmentSize] = useState("M");
   const [savedProjects, setSavedProjects] = useState([]);
   const [projectName, setProjectName] = useState("");
+  const [orderQuantity, setOrderQuantity] = useState(1);
   const [currentProjectId, setCurrentProjectId] = useState(null);
+  const [quoteSavedModal, setQuoteSavedModal] = useState(false);
   const previewRef = useRef(null);
   const editorRef = useRef(null);
   const actionRef = useRef(null);
@@ -1721,14 +1741,122 @@ export default function Vue3DTshirt() {
     }
   }
 
+  function createQuoteFromProject() {
+    const visibleItems = items.filter((item) => !item.hidden);
+    if (!visibleItems.length) {
+      showToast("Ajoutez au moins un logo ou texte avant de créer un devis.", "error");
+      return;
+    }
+
+    const qty = Math.max(1, Number(orderQuantity) || 1);
+    const label = projectName.trim() || `T-shirt ${garmentPreset.label}`;
+    const techniqueSummary = Array.from(
+      new Set(visibleItems.map((item) => getTechniquePreset(item).label))
+    ).join(" / ");
+
+    const printDetails = visibleItems.map((item) => {
+      const zone = PRINT_ZONES[item.area]?.label || item.area;
+      const tech = getTechniquePreset(item);
+      const size = getItemPrintSizeCm(item, printZoneSizes);
+      const content =
+        item.type === "text"
+          ? `"${item.text || "Texte"}"`
+          : item.fileName || "Logo";
+      const unitPrice = estimatePrintPriceHT(
+        item,
+        item.technique || defaultTechnique,
+        size.width,
+        size.height
+      );
+      return { zone, content, tech, size, unitPrice };
+    });
+
+    const totalUnitHT = printDetails.reduce((sum, entry) => sum + entry.unitPrice, 0);
+
+    const customizationLines = printDetails.map(
+      (entry) =>
+        `• ${entry.zone} : ${entry.content} (${entry.tech.label}, ${entry.size.width.toFixed(1)}×${entry.size.height.toFixed(1)} cm — env. ${entry.unitPrice.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} € HT)`
+    );
+
+    const draft = {
+      source: "configurateur t-shirt",
+      lines: [
+        buildCalculatorQuoteLine({
+          description: `${label}
+
+Taille : ${garmentSize} (${garmentPreset.label})
+Couleur textile : ${tshirtColor}
+Techniques : ${techniqueSummary}
+Quantité : ${qty}
+Estimation marquages : ${totalUnitHT.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} € HT / pièce
+
+Personnalisations :
+${customizationLines.join("\n")}`,
+          quantity: qty,
+          priceHT: totalUnitHT,
+          sku: "TSHIRT-CFG",
+          category: "T-shirt",
+        }),
+      ],
+    };
+
+    if (isPublicConfigurator) {
+      saveQuoteDraft(draft);
+      setQuoteSavedModal(true);
+      showToast(
+        "Projet enregistré dans ce navigateur. Ouvrez le CRM → Devis pour finaliser.",
+        "info",
+        7000
+      );
+      return;
+    }
+
+    openQuoteFromCalculator(navigate, draft);
+    showToast("Devis pré-rempli depuis le configurateur.", "success");
+  }
+
   return (
     <section>
+      {isPublicConfigurator ? (
+        <div className="tshirt3d-public-banner">
+          <div>
+            <strong>Configurateur public AC Creation</strong>
+            <p>Créez votre visuel, puis cliquez sur « Créer un devis ». Le projet est enregistré dans ce navigateur.</p>
+          </div>
+          <a className="tshirt3d-public-crm-link" href={getCrmQuotesUrl()}>
+            Ouvrir le CRM → Devis
+          </a>
+        </div>
+      ) : null}
+
+      {quoteSavedModal ? (
+        <div className="tshirt3d-quote-modal" role="dialog" aria-labelledby="tshirt-quote-modal-title">
+          <div className="tshirt3d-quote-modal-card">
+            <h3 id="tshirt-quote-modal-title">Projet prêt pour le devis</h3>
+            <p>
+              Le configurateur a enregistré votre projet dans ce navigateur. Connectez-vous au CRM
+              sur la page <strong>Devis</strong> pour retrouver les lignes pré-remplies.
+            </p>
+            <p className="muted">Utilisez le même navigateur (Chrome, Edge, etc.) que celui-ci.</p>
+            <div className="tshirt3d-quote-modal-actions">
+              <a className="primary" href={getCrmQuotesUrl()}>
+                Ouvrir AC Creation CRM → Devis
+              </a>
+              <button type="button" onClick={() => setQuoteSavedModal(false)}>
+                Continuer le design
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="page-header">
         <div>
           <h2>👕 T-shirt 3D</h2>
           <p>Multi logos, textes, manches et polices personnalisées.</p>
         </div>
         <div className="tshirt3d-export-actions">
+          <button type="button" onClick={createQuoteFromProject}>Créer un devis</button>
           <button className="primary" onClick={exportMockup}>Exporter ZIP impression</button>
           <button type="button" onClick={exportWorkshopPdf}>Exporter PDF atelier</button>
         </div>
@@ -1737,19 +1865,25 @@ export default function Vue3DTshirt() {
       <div className="tshirt3d-layout">
         <div className="card tshirt3d-preview-card">
           <div className="tshirt3d-preview" ref={previewRef}>
-            <Canvas shadows camera={{ position: [0, 0.35, 3.2], fov: 42 }} gl={{ preserveDrawingBuffer: true }}>
-              <ambientLight intensity={0.9} />
-              <directionalLight position={[2, 3, 4]} intensity={1.8} castShadow />
-              <Suspense fallback={null}>
-                <Bounds fit clip observe margin={1.15}>
-                  <Center>
-                    <TshirtModel texture={printTexture} garmentScale={garmentPreset.scale} />
-                  </Center>
-                </Bounds>
-                <Environment preset="studio" />
-              </Suspense>
-              <OrbitControls makeDefault enableDamping dampingFactor={0.08} />
-            </Canvas>
+            <Product3DErrorBoundary
+              resetKey={MODEL_URL}
+              title="Aperçu 3D indisponible"
+              message="Impossible de charger le modèle du t-shirt. Rechargez la page (Ctrl+F5) ou relancez l'application après un rebuild."
+            >
+              <Canvas shadows camera={{ position: [0, 0.35, 3.2], fov: 42 }} gl={{ preserveDrawingBuffer: true }}>
+                <ambientLight intensity={0.9} />
+                <directionalLight position={[2, 3, 4]} intensity={1.8} castShadow />
+                <Suspense fallback={null}>
+                  <Bounds fit clip observe margin={1.15}>
+                    <Center>
+                      <TshirtModel texture={printTexture} garmentScale={garmentPreset.scale} />
+                    </Center>
+                  </Bounds>
+                  <Environment preset="studio" />
+                </Suspense>
+                <OrbitControls makeDefault enableDamping dampingFactor={0.08} />
+              </Canvas>
+            </Product3DErrorBoundary>
             <div className="tshirt3d-hint">Souris : tourner · molette : zoom</div>
           </div>
         </div>
@@ -1835,6 +1969,15 @@ export default function Vue3DTshirt() {
                 onChange={(e) => setProjectName(e.target.value)}
                 placeholder="Nom client / commande"
               />
+              <label className="tshirt3d-qty-field">
+                Qté
+                <input
+                  type="number"
+                  min="1"
+                  value={orderQuantity}
+                  onChange={(e) => setOrderQuantity(e.target.value)}
+                />
+              </label>
               <button type="button" onClick={saveCurrentProject}>Sauvegarder</button>
               <button type="button" onClick={exportProjectJson}>Exporter projet</button>
               <label className="tshirt3d-project-import">

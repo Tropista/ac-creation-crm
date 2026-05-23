@@ -55,11 +55,17 @@ describe("quoteAlreadyConverted", () => {
 });
 
 describe("isQuoteConvertible", () => {
-  it("accepte uniquement un devis au statut Accepté non encore converti", () => {
+  it("accepte un devis accepté ou en production non encore converti", () => {
     const data = baseData();
 
     expect(
       isQuoteConvertible(data, { number: "DEV-2025-0020", status: "Accepté" })
+    ).toBe(true);
+    expect(
+      isQuoteConvertible(data, { number: "DEV-2025-0020", status: "En production" })
+    ).toBe(true);
+    expect(
+      isQuoteConvertible(data, { number: "DEV-2025-0020", status: "Prêt" })
     ).toBe(true);
     expect(
       isQuoteConvertible(data, { number: "DEV-2025-0010", status: "Accepté" })

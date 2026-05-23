@@ -12,10 +12,6 @@ import { showToast } from "../utils/toast";
 
 import { isSupabaseConfigured } from "../supabase";
 
-import {
-  syncSupabaseData
-} from "./supabaseSync";
-
 export async function createCloudBackup({
   data,
 
@@ -77,6 +73,7 @@ export async function createCloudBackup({
       "Création sauvegarde cloud..."
     );
 
+    const { syncSupabaseData } = await import("./supabaseSync");
     await syncSupabaseData(
       next,
       data

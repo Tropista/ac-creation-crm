@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { showToast } from "../utils/toast";
+import { buildCalculatorQuoteLine, openQuoteFromCalculator } from "../utils/quoteDraft";
 
 const GARMENT_PRESETS = {
   "T-shirt": { complexityFactor: 1, whiteMultiplier: 1.15 },
@@ -47,6 +49,7 @@ function n(value) {
 }
 
 export default function DtfCalculator({ data, setData, logActivity }) {
+  const navigate = useNavigate();
   const [form, setForm] = useState({
     projectName: "",
     garment: "T-shirt",
@@ -343,6 +346,30 @@ TTC conseillé : ${euro(calc.totalTTC)}`,
     });
 
     showToast("Produit créé dans Produits.", "success");
+  }
+
+  function createQuote() {
+    const label =
+      form.projectName.trim() ||
+      `DTF ${form.garment} ${calc.widthCm}×${calc.heightCm} cm`;
+
+    openQuoteFromCalculator(navigate, {
+      source: "calculateur DTF",
+      lines: [
+        buildCalculatorQuoteLine({
+          description: `${label}
+
+Vêtement : ${form.garment}
+Couverture : ${form.coverageType}
+Dimensions : ${calc.widthCm} × ${calc.heightCm} cm
+Machine : ${form.machineLabel}`,
+          quantity: calc.qty,
+          priceHT: calc.pricePerUnitHT,
+          sku: "DTF-CALC",
+          category: "DTF",
+        }),
+      ],
+    });
   }
 
   return (
@@ -992,6 +1019,10 @@ TTC conseillé : ${euro(calc.totalTTC)}`,
           <div className="dtf-actions">
             <button type="button" onClick={copySummary}>
               📋 Copier
+            </button>
+
+            <button type="button" onClick={createQuote}>
+              📋 Créer un devis
             </button>
 
             <button type="button" className="primary" onClick={createProduct}>

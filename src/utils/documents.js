@@ -1,4 +1,5 @@
 import { applyStockByLines } from "./stock";
+import { computeDueDate } from "./invoiceReminders";
 
 export const uid = () =>
   Date.now().toString(36) + Math.random().toString(36).slice(2);
@@ -120,9 +121,16 @@ export function quoteAlreadyConverted(data, quote) {
   );
 }
 
+const CONVERTIBLE_QUOTE_STATUSES = new Set([
+  "Accepté",
+  "En production",
+  "Prêt",
+  "Livré",
+]);
+
 export function isQuoteConvertible(data, quote) {
   const status = String(quote?.status || "").trim();
-  if (status !== "Accepté") return false;
+  if (!CONVERTIBLE_QUOTE_STATUSES.has(status)) return false;
   return !quoteAlreadyConverted(data, quote);
 }
 
@@ -133,6 +141,7 @@ export function convertQuoteToInvoiceData(data, quote) {
     number: nextDocumentNumber(data.invoices || [], "FAC"),
     date: today(),
     status: "Non payée",
+    dueDate: computeDueDate(today(), data.settings?.paymentDays || 30),
     stockAdjusted: true,
     convertedFrom: quote.number,
   };

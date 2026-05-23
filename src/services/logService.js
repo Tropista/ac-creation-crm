@@ -1,4 +1,4 @@
-import { supabase } from "../supabase";
+import { getSupabase, isSupabaseConfigured } from "../supabase";
 import { uid } from "../utils/documents";
 import {
   normalizeData,
@@ -119,7 +119,12 @@ export async function logActivity({
     }
   );
 
+  if (!isSupabaseConfigured) {
+    return;
+  }
+
   try {
+    const supabase = await getSupabase();
     const {
       error
     } =

@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { showToast } from "../utils/toast";
+import { buildCalculatorQuoteLine, openQuoteFromCalculator } from "../utils/quoteDraft";
 
 const MATERIAL_PRESETS = {
   Bois: { costPerM2: 18, cutSpeed: 600, engraveSpeed: 45000 },
@@ -24,6 +26,7 @@ function n(value) {
 }
 
 export default function LaserCalculator({ data, setData, logActivity }) {
+  const navigate = useNavigate();
   const [form, setForm] = useState({
     projectName: "",
     material: "Bois",
@@ -244,6 +247,29 @@ TTC conseillé : ${euro(calc.totalTTC)}`,
     });
 
     showToast("Produit créé dans Produits.", "success");
+  }
+
+  function createQuote() {
+    const label =
+      form.projectName.trim() ||
+      `Laser ${form.material} ${form.widthMm}×${form.heightMm} mm`;
+
+    openQuoteFromCalculator(navigate, {
+      source: "calculateur laser",
+      lines: [
+        buildCalculatorQuoteLine({
+          description: `${label}
+
+Matière : ${form.material}
+Dimensions : ${form.widthMm} × ${form.heightMm} mm
+Machine : ${form.machineLabel}`,
+          quantity: calc.qty,
+          priceHT: calc.pricePerUnitHT,
+          sku: "LASER-CALC",
+          category: "Laser CO2",
+        }),
+      ],
+    });
   }
 
   return (
@@ -621,6 +647,10 @@ TTC conseillé : ${euro(calc.totalTTC)}`,
           <div className="laser-actions">
             <button type="button" onClick={copySummary}>
               📋 Copier
+            </button>
+
+            <button type="button" onClick={createQuote}>
+              📋 Créer un devis
             </button>
 
             <button type="button" className="primary" onClick={createProduct}>

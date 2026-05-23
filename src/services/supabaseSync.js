@@ -1,4 +1,4 @@
-import { supabase } from "../supabase";
+import { getSupabase } from "../supabase";
 
 function isMissingTableError(error) {
   if (!error) return false;
@@ -45,6 +45,8 @@ function rowsToItems(rows) {
 }
 
 export async function syncSupabaseData(nextData, previousData = {}) {
+  const supabase = await getSupabase();
+
   const deleteRemovedItems = async (table, nextItems = [], previousItems = []) => {
     const nextIds = new Set((nextItems || []).map((item) => item.id));
 
@@ -125,6 +127,8 @@ export async function syncSupabaseData(nextData, previousData = {}) {
 }
 
 export async function loadSupabaseData({ normalizeData, emptyData }) {
+  const supabase = await getSupabase();
+
   const [
     settingsRes,
     usersRes,

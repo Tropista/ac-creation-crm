@@ -317,6 +317,31 @@
   font-size: 13px;
 }
 
+.documents-page .badge.en-production {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.documents-page .badge.pret {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.documents-page .badge.livre {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.documents-stat-card--production {
+  border-color: #fcd34d;
+  background: linear-gradient(180deg, #fffbeb 0%, #ffffff 100%);
+}
+
+.documents-remind-btn {
+  border-color: #f59e0b;
+  color: #b45309;
+}
+
 .documents-page .badge.brouillon {
   background: #f1f5f9;
   color: #475569;

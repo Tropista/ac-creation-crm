@@ -23,6 +23,25 @@
   background: radial-gradient(circle at center, #ffffff 0%, #eef2f7 100%);
 }
 
+.vue3d-viewer .product-3d-fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 100%;
+  padding: 24px;
+  text-align: center;
+  color: #334155;
+}
+
+.vue3d-viewer .product-3d-fallback span {
+  max-width: 420px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #64748b;
+}
+
 .vue3d-hint {
   position: absolute;
   left: 16px;
@@ -364,9 +383,9 @@ dans le select des polices.
   border-radius: 12px;
   padding: 10px 14px;
   font-weight: 800;
-  color: white !important;
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff !important;
+  border: 0;
+  background: linear-gradient(135deg, #111827, #374151);
 }
 
 .vue3d-font-button input {

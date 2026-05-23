@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "react-router-dom";
 import DocumentPreview from "./DocumentPreview";
 import { money } from "../utils/money";
 import {
@@ -17,10 +18,14 @@ import {
   INVOICES_FILTER_KEY,
   isInvoiceOverdue,
 } from "../utils/invoices";
+import { computeDueDate, openInvoiceReminderMailto } from "../utils/invoiceReminders";
+import { consumeQuoteDraft } from "../utils/quoteDraft";
+import { PRODUCTION_STATUSES, QUOTE_STATUSES } from "../utils/production";
 import { exportInvoicesCsv } from "../utils/exportCsv";
 import { showToast } from "../utils/toast";
 
 function Documents({ type, data, setData, currentRole = 'Admin', logActivity }) {
+  const location = useLocation();
   const isQuote = type === "quote";
   const listKey = isQuote ? "quotes" : "invoices";
   const title = isQuote ? "Devis" : "Factures";
@@ -46,6 +51,39 @@ const [form, setForm] = useState({
 
   const itemsPerPage = 25;
   const documents = data[listKey] || [];
+
+  useEffect(() => {
+    if (!isQuote) return;
+    const draft = location.state?.quoteDraft || consumeQuoteDraft();
+    if (!draft?.lines?.length) return;
+
+    if (location.state?.quoteDraft) {
+      window.history.replaceState({}, document.title);
+    }
+
+    setEditingId(null);
+    setForm({
+      clientId: draft.clientId || prefilledClientId || "",
+      status: "Brouillon",
+      globalDiscount: 0,
+      lines: draft.lines.map((line) => ({
+        productId: line.productId || "",
+        sku: line.sku || "",
+        category: line.category || "",
+        categoryId: line.categoryId || "",
+        description: line.description || "",
+        quantity: Number(line.quantity || 1),
+        price: Number(line.price || 0),
+        discount: Number(line.discount || 0),
+      })),
+    });
+    showToast(
+      draft.source
+        ? `Devis pré-rempli depuis ${draft.source}.`
+        : "Devis pré-rempli.",
+      "success"
+    );
+  }, [isQuote, location.key]);
 
   useEffect(() => {
     if (isQuote) return;
@@ -100,8 +138,11 @@ const [form, setForm] = useState({
         (doc) => doc.status === "Brouillon" || doc.status === "Envoyé"
       ).length;
       const accepted = documents.filter((doc) => doc.status === "Accepté").length;
+      const inProduction = documents.filter((doc) =>
+        PRODUCTION_STATUSES.includes(doc.status)
+      ).length;
       const convertible = documents.filter((doc) => isQuoteConvertible(data, doc)).length;
-      return { count: documents.length, totalTTC, pending, accepted, convertible };
+      return { count: documents.length, totalTTC, pending, accepted, inProduction, convertible };
     }
 
     const overdueDocs = documents.filter((doc) => isInvoiceOverdue(doc));
@@ -191,7 +232,9 @@ const [form, setForm] = useState({
 
   function submit(e) {
     e.preventDefault();
-    if (!form.clientId) return showToast("Choisis un client.", "error");
+    if (!form.clientId && (!isQuote || form.status !== "Brouillon")) {
+      return showToast("Choisis un client.", "error");
+    }
 
     const cleanLines = form.lines
       .map((line) => {
@@ -255,6 +298,9 @@ const [form, setForm] = useState({
         description: firstDescription,
         lines: cleanLines,
         stockAdjusted: !isQuote && form.status !== "Annulée",
+        ...(!isQuote && {
+          dueDate: computeDueDate(today(), data.settings.paymentDays || 30),
+        }),
         ...totals,
       };
 
@@ -379,6 +425,24 @@ useEffect(() => {
     logActivity?.(`Changement statut ${isQuote ? "devis" : "facture"}`, changedDoc?.number || id, status);
   }
 
+  function sendInvoiceReminder(invoice) {
+    const client = (data.clients || []).find((c) => c.id === invoice.clientId);
+    const result = openInvoiceReminderMailto(invoice, client, data.settings || {});
+    if (!result.ok) {
+      showToast("Ce client n'a pas d'adresse email enregistrée.", "error");
+      return;
+    }
+
+    const nextInvoices = documents.map((doc) =>
+      String(doc.id) === String(invoice.id)
+        ? { ...doc, lastReminderDate: today() }
+        : doc
+    );
+    setData({ ...data, invoices: nextInvoices });
+    logActivity?.("Relance facture", invoice.number, client?.name || "");
+    showToast(`Relance préparée pour ${invoice.number}.`, "success");
+  }
+
   function convertQuoteToInvoice(doc) {
     try {
       const nextData = convertQuoteToInvoiceData(data, doc);
@@ -449,6 +513,12 @@ useEffect(() => {
                 {stats.convertible > 0 ? ` · ${stats.convertible}` : ""}
               </strong>
             </div>
+            {stats.inProduction > 0 && (
+              <div className="documents-stat-card documents-stat-card--production">
+                <span>En atelier</span>
+                <strong>{stats.inProduction}</strong>
+              </div>
+            )}
           </>
         ) : (
           <>
@@ -491,12 +561,9 @@ useEffect(() => {
             <span>Statut</span>
             <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
               {isQuote ? (
-                <>
-                  <option>Brouillon</option>
-                  <option>Envoyé</option>
-                  <option>Accepté</option>
-                  <option>Refusé</option>
-                </>
+                QUOTE_STATUSES.map((status) => (
+                  <option key={status}>{status}</option>
+                ))
               ) : (
                 <>
                   <option>Non payée</option>
@@ -743,12 +810,9 @@ useEffect(() => {
                             aria-label={`Statut ${d.number}`}
                           >
                             {isQuote ? (
-                              <>
-                                <option>Brouillon</option>
-                                <option>Envoyé</option>
-                                <option>Accepté</option>
-                                <option>Refusé</option>
-                              </>
+                              QUOTE_STATUSES.map((status) => (
+                                <option key={status}>{status}</option>
+                              ))
                             ) : (
                               <>
                                 <option>Non payée</option>
@@ -784,6 +848,20 @@ useEffect(() => {
                               Convertir
                             </button>
                           )
+                        )}
+                        {!isQuote && overdue && (
+                          <button
+                            type="button"
+                            className="compact documents-remind-btn"
+                            onClick={() => sendInvoiceReminder(d)}
+                            title={
+                              d.lastReminderDate
+                                ? `Dernière relance : ${d.lastReminderDate}`
+                                : "Préparer un email de relance"
+                            }
+                          >
+                            Relancer
+                          </button>
                         )}
                         <button type="button" className="danger compact" onClick={() => remove(d.id)}>
                           Supprimer

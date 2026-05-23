@@ -1,5 +1,6 @@
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
+import { APP_LOGO_URL } from "../utils/assets";
 import { money } from "../utils/money";
 import { showToast } from "../utils/toast";
 
@@ -740,11 +741,11 @@ ${data.settings.companyEmail || ""}`;
                     src={
                       data.settings.logoUrl && data.settings.logoUrl.trim() !== ""
                         ? data.settings.logoUrl
-                        : "./logo.png"
+                        : APP_LOGO_URL
                     }
                     alt="Logo entreprise"
                     onError={(event) => {
-                      event.currentTarget.src = "./logo.png";
+                      event.currentTarget.src = APP_LOGO_URL;
                     }}
                   />
                 </div>

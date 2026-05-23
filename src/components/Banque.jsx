@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { supabase, isSupabaseConfigured } from "../supabase";
+import { getSupabase, isSupabaseConfigured } from "../supabase";
 import { clientName, statusClass } from "../utils/documents";
 import {
   buildPaidInvoiceUpdate,
@@ -22,6 +22,13 @@ import {
 import { isPaidInvoice } from "../utils/invoices";
 import { money } from "../utils/money";
 import { showToast } from "../utils/toast";
+import {
+  disconnectBank,
+  fetchBankLinkUrl,
+  fetchBankStatus,
+  fetchTinkTransactions,
+  getBankApiUrl,
+} from "../utils/bankApi";
 
 const EMPTY_MANUAL_FORM = {
   date: new Date().toISOString().split("T")[0],
@@ -37,6 +44,9 @@ export default function Banque({ data, setData, logActivity }) {
   const [showManualForm, setShowManualForm] = useState(false);
   const [manualForm, setManualForm] = useState(EMPTY_MANUAL_FORM);
   const [workingTxId, setWorkingTxId] = useState(null);
+  const [bankStatus, setBankStatus] = useState(null);
+  const [bankLoading, setBankLoading] = useState(false);
+  const [tinkSyncing, setTinkSyncing] = useState(false);
 
   const invoices = data?.invoices || [];
   const reconcilableInvoices = useMemo(
@@ -48,26 +58,154 @@ export default function Banque({ data, setData, logActivity }) {
     if (isSupabaseConfigured) {
       loadTransactions();
     }
+    loadBankStatus();
   }, []);
+
+  async function loadBankStatus() {
+    setBankLoading(true);
+    try {
+      const status = await fetchBankStatus();
+      setBankStatus(status);
+    } catch (error) {
+      console.error(error);
+      setBankStatus({
+        ok: false,
+        configured: false,
+        connected: false,
+        manualFallback: true,
+        message: `API banque indisponible (${getBankApiUrl()}). Utilisez la saisie manuelle.`,
+      });
+    } finally {
+      setBankLoading(false);
+    }
+  }
+
+  async function connectTink() {
+    try {
+      const { url } = await fetchBankLinkUrl();
+      window.open(url, "_blank", "noopener,noreferrer");
+      showToast("Fenêtre Tink ouverte — revenez ici après la connexion.", "info", 6000);
+    } catch (error) {
+      console.error(error);
+      showToast(error.message || "Connexion Tink impossible", "error");
+    }
+  }
+
+  async function handleDisconnectTink() {
+    try {
+      await disconnectBank();
+      await loadBankStatus();
+      showToast("Connexion Tink supprimée.", "success");
+    } catch (error) {
+      console.error(error);
+      showToast("Impossible de déconnecter Tink", "error");
+    }
+  }
+
+  async function syncTinkTransactions() {
+    if (!isSupabaseConfigured) {
+      showToast("Supabase requis pour enregistrer les transactions.", "error");
+      return;
+    }
+
+    setTinkSyncing(true);
+    try {
+      const incoming = await fetchTinkTransactions(100);
+      if (!incoming.length) {
+        showToast("Aucune transaction Tink à importer.", "info");
+        return;
+      }
+
+      const existingIds = new Set(
+        transactions
+          .map((tx) => tx.external_id)
+          .filter(Boolean)
+      );
+
+      const freshRows = incoming.filter(
+        (tx) => tx.external_id && !existingIds.has(tx.external_id)
+      );
+
+      if (!freshRows.length) {
+        showToast("Transactions déjà synchronisées.", "info");
+        await loadTransactions();
+        return;
+      }
+
+      const supabase = await getSupabase();
+      const { error } = await supabase.from("bank_transactions").insert(
+        freshRows.map((tx) => ({
+          transaction_date: tx.transaction_date,
+          description: tx.description,
+          amount: tx.amount,
+          currency: tx.currency || "EUR",
+          status: tx.status || "non rapprochée",
+          matched: false,
+          external_id: tx.external_id,
+          provider: tx.provider || "Tink",
+        }))
+      );
+
+      if (error) {
+        if (String(error.message || "").includes("external_id")) {
+          const { error: fallbackError } = await supabase
+            .from("bank_transactions")
+            .insert(
+              freshRows.map((tx) => ({
+                transaction_date: tx.transaction_date,
+                description: `${tx.description} [${tx.external_id}]`,
+                amount: tx.amount,
+                currency: tx.currency || "EUR",
+                status: tx.status || "non rapprochée",
+                matched: false,
+              }))
+            );
+          if (fallbackError) throw fallbackError;
+        } else {
+          throw error;
+        }
+      }
+
+      showToast(`${freshRows.length} transaction(s) Tink importée(s).`, "success");
+      await loadTransactions();
+      await logActivity?.("Sync Tink", `${freshRows.length} transaction(s)`);
+    } catch (error) {
+      console.error(error);
+      showToast(
+        error.message ||
+          "Sync Tink impossible — vérifiez la connexion ou utilisez la saisie manuelle.",
+        "error",
+        7000
+      );
+    } finally {
+      setTinkSyncing(false);
+    }
+  }
 
   async function loadTransactions() {
     if (!isSupabaseConfigured) return;
 
     setLoading(true);
 
-    const { data: rows, error } = await supabase
-      .from("bank_transactions")
-      .select("*")
-      .order("transaction_date", { ascending: false });
+    try {
+      const supabase = await getSupabase();
+      const { data: rows, error } = await supabase
+        .from("bank_transactions")
+        .select("*")
+        .order("transaction_date", { ascending: false });
 
-    if (error) {
+      if (error) {
+        console.error(error);
+        showToast("Impossible de charger les transactions bancaires", "error");
+      } else {
+        setTransactions(rows || []);
+      }
+    } catch (error) {
       console.error(error);
       showToast("Impossible de charger les transactions bancaires", "error");
-    } else {
-      setTransactions(rows || []);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   }
 
   async function addManualTransaction(event) {
@@ -83,31 +221,37 @@ export default function Banque({ data, setData, logActivity }) {
       return;
     }
 
-    const { error } = await supabase.from("bank_transactions").insert([
-      {
-        transaction_date: manualForm.date,
-        description: manualForm.description.trim(),
-        amount,
-        currency: "EUR",
-        status: "non rapprochée",
-        matched: false,
-      },
-    ]);
+    try {
+      const supabase = await getSupabase();
+      const { error } = await supabase.from("bank_transactions").insert([
+        {
+          transaction_date: manualForm.date,
+          description: manualForm.description.trim(),
+          amount,
+          currency: "EUR",
+          status: "non rapprochée",
+          matched: false,
+        },
+      ]);
 
-    if (error) {
+      if (error) {
+        console.error(error);
+        showToast("Impossible d'ajouter la transaction", "error");
+        return;
+      }
+
+      showToast("Transaction ajoutée", "success");
+      setManualForm(EMPTY_MANUAL_FORM);
+      setShowManualForm(false);
+      await loadTransactions();
+      await logActivity?.(
+        "Transaction bancaire ajoutée",
+        `${manualForm.description.trim()} — ${money(amount)}`
+      );
+    } catch (error) {
       console.error(error);
       showToast("Impossible d'ajouter la transaction", "error");
-      return;
     }
-
-    showToast("Transaction ajoutée", "success");
-    setManualForm(EMPTY_MANUAL_FORM);
-    setShowManualForm(false);
-    await loadTransactions();
-    await logActivity?.(
-      "Transaction bancaire ajoutée",
-      `${manualForm.description.trim()} — ${money(amount)}`
-    );
   }
 
   async function reconcileTransaction(transaction, invoice) {
@@ -118,6 +262,7 @@ export default function Banque({ data, setData, logActivity }) {
 
     setWorkingTxId(transaction.id);
 
+    const supabase = await getSupabase();
     const bankResult = await patchBankTransaction(
       supabase,
       transaction.id,
@@ -186,6 +331,7 @@ export default function Banque({ data, setData, logActivity }) {
 
     setWorkingTxId(transaction.id);
 
+    const supabase = await getSupabase();
     const bankResult = await patchBankTransaction(
       supabase,
       transaction.id,
@@ -239,6 +385,7 @@ export default function Banque({ data, setData, logActivity }) {
 
     setWorkingTxId(transaction.id);
 
+    const supabase = await getSupabase();
     const deleteResult = await deleteBankTransaction(supabase, transaction.id);
 
     if (!deleteResult.ok) {
@@ -372,8 +519,24 @@ export default function Banque({ data, setData, logActivity }) {
 
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
           <button onClick={loadTransactions} disabled={loading}>
-            Synchroniser
+            Actualiser
           </button>
+          <button onClick={loadBankStatus} disabled={bankLoading}>
+            Statut Tink
+          </button>
+          {bankStatus?.configured && !bankStatus?.connected && (
+            <button className="primary" onClick={connectTink}>
+              Connecter Tink
+            </button>
+          )}
+          {bankStatus?.connected && (
+            <>
+              <button className="primary" onClick={syncTinkTransactions} disabled={tinkSyncing}>
+                {tinkSyncing ? "Sync…" : "Sync Tink → Supabase"}
+              </button>
+              <button onClick={handleDisconnectTink}>Déconnecter Tink</button>
+            </>
+          )}
           <button
             className="primary"
             onClick={() => setShowManualForm((value) => !value)}
@@ -381,6 +544,25 @@ export default function Banque({ data, setData, logActivity }) {
             Ajouter une transaction
           </button>
         </div>
+      </div>
+
+      <div className="card" style={{ marginBottom: "16px" }}>
+        <h3>Connexion bancaire</h3>
+        <p className="muted">
+          {bankStatus?.message ||
+            "Chargement du statut banque…"}
+        </p>
+        <p className="muted">
+          API : <code>{getBankApiUrl()}</code>
+          {bankStatus?.connectedAt
+            ? ` · Connecté le ${new Date(bankStatus.connectedAt).toLocaleString("fr-FR")}`
+            : ""}
+        </p>
+        {bankStatus?.manualFallback && (
+          <p className="muted">
+            Mode manuel actif : ajoutez les virements reçus ci-dessous en attendant Tink.
+          </p>
+        )}
       </div>
 
       {showManualForm && (

@@ -12,7 +12,7 @@ import {
   useNavigate,
   useLocation,
 } from "react-router-dom";
-import { supabase, isSupabaseConfigured } from "./supabase";
+import { getSupabase, isSupabaseConfigured } from "./supabase";
 import {
   PUBLIC_TSHIRT_PATH,
   pageToPath,
@@ -25,6 +25,7 @@ import Clients from "./components/Clients";
 import Products from "./components/Products";
 import Documents from "./components/Documents";
 import Dashboard from "./components/Dashboard";
+import Atelier from "./components/Atelier";
 import Settings from "./components/Settings";
 import Categories from "./components/Categories";
 import Suppliers from "./components/Suppliers";
@@ -46,11 +47,6 @@ import {
 import { getPermissions } from "./utils/permissions";
 
 import {
-  loadSupabaseData,
-  syncSupabaseData
-} from "./services/supabaseSync";
-
-import {
   emptyData,
   normalizeData,
   loadData,
@@ -60,6 +56,7 @@ import {
   hasLocalBusinessData
 } from "./services/dataService";
 
+import { APP_LOGO_URL } from "./utils/assets";
 import { showToast } from "./utils/toast";
 
 import {
@@ -76,6 +73,7 @@ import "./styles/sidebar.css";
 import "./styles/dashboard.css";
 import "./styles/clients.css";
 import "./styles/documents.css";
+import "./styles/atelier.css";
 import "./styles/print3d-calculator.css";
 import "./styles/laser-calculator.css";
 import "./styles/dtf-calculator.css";
@@ -110,12 +108,16 @@ const ProductScan = lazy(() =>
 
 const SESSION_KEY = "crm_current_user_v2";
 
+async function loadSupabaseSyncModule() {
+  return import("./services/supabaseSync");
+}
+
 function LoadingScreen({ message = "Chargement...", status = "" }) {
   return (
     <div className="crm-loading">
       <div className="crm-loading-card">
         <div className="crm-loading-logo">
-          <img src="/logo.png" alt="AC Creation" />
+          <img src={APP_LOGO_URL} alt="AC Creation" />
         </div>
         <div className="crm-loading-spinner" aria-hidden="true" />
         <h2>{message}</h2>
@@ -226,6 +228,8 @@ function CrmApp() {
       }
 
       const localData = normalizeData(loadData());
+      const { loadSupabaseData, syncSupabaseData } =
+        await loadSupabaseSyncModule();
       const cloud = await loadSupabaseData({
         normalizeData,
         emptyData
@@ -287,6 +291,7 @@ function CrmApp() {
 
     try {
       setSyncStatus("Sauvegarde Supabase...");
+      const { syncSupabaseData } = await loadSupabaseSyncModule();
       await syncSupabaseData(normalized, previous);
       flushSaveData();
       setSyncStatus("Synchronisé avec Supabase");
@@ -350,7 +355,14 @@ function CrmApp() {
   }, [currentUser, currentRole, page, navigate]);
 
   async function logout() {
-    await supabase.auth.signOut();
+    if (isSupabaseConfigured) {
+      try {
+        const supabase = await getSupabase();
+        await supabase.auth.signOut();
+      } catch (error) {
+        console.error(error);
+      }
+    }
     localStorage.removeItem(SESSION_KEY);
     setCurrentUser(null);
     setPage("dashboard");
@@ -513,6 +525,18 @@ function CrmApp() {
                     data={data}
                     setData={updateData}
                     currentRole={currentRole}
+                    logActivity={handleLogActivity}
+                  />
+                ) : null
+              }
+            />
+            <Route
+              path={pageToPath("atelier")}
+              element={
+                canAccessPage(currentRole, "atelier") ? (
+                  <Atelier
+                    data={data}
+                    setData={updateData}
                     logActivity={handleLogActivity}
                   />
                 ) : null

@@ -1,11 +1,31 @@
-import { createClient } from "@supabase/supabase-js";
-
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseKey);
 
-export const supabase = createClient(
-  supabaseUrl || "",
-  supabaseKey || ""
-);
+let clientPromise = null;
+let clientInstance = null;
+
+export async function getSupabase() {
+  if (!isSupabaseConfigured) {
+    throw new Error("Supabase non configuré");
+  }
+
+  if (clientInstance) {
+    return clientInstance;
+  }
+
+  if (!clientPromise) {
+    clientPromise = import("@supabase/supabase-js")
+      .then(({ createClient }) => {
+        clientInstance = createClient(supabaseUrl, supabaseKey);
+        return clientInstance;
+      })
+      .catch((error) => {
+        clientPromise = null;
+        throw error;
+      });
+  }
+
+  return clientPromise;
+}

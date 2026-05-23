@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { showToast } from "../utils/toast";
+import { buildCalculatorQuoteLine, openQuoteFromCalculator } from "../utils/quoteDraft";
 
 /*
  * Specs Tristar 30 cm UV-DTF — source : creadhesif.com/imprimante-dtf-uv-30cm-tristar.html
@@ -64,6 +66,7 @@ function n(value) {
 }
 
 export default function UvDtfCalculator({ data, setData, logActivity }) {
+  const navigate = useNavigate();
   const [form, setForm] = useState({
     projectName: "",
     objectType: "Coque téléphone",
@@ -376,6 +379,29 @@ TTC conseillé : ${euro(calc.totalTTC)}`,
     });
 
     showToast("Produit créé dans Produits.", "success");
+  }
+
+  function createQuote() {
+    const label =
+      form.projectName.trim() ||
+      `UV-DTF ${form.objectType} ${calc.widthCm}×${calc.heightCm} cm`;
+
+    openQuoteFromCalculator(navigate, {
+      source: "calculateur UV-DTF",
+      lines: [
+        buildCalculatorQuoteLine({
+          description: `${label}
+
+Objet : ${form.objectType}
+Dimensions : ${calc.widthCm} × ${calc.heightCm} cm
+Machine : ${form.machineLabel}`,
+          quantity: calc.qty,
+          priceHT: calc.pricePerUnitHT,
+          sku: "UVDTF-CALC",
+          category: "UV-DTF",
+        }),
+      ],
+    });
   }
 
   return (
@@ -1050,6 +1076,10 @@ TTC conseillé : ${euro(calc.totalTTC)}`,
           <div className="uvdtf-actions">
             <button type="button" onClick={copySummary}>
               📋 Copier
+            </button>
+
+            <button type="button" onClick={createQuote}>
+              📋 Créer un devis
             </button>
 
             <button type="button" className="primary" onClick={createProduct}>

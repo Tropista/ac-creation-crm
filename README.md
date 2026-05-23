@@ -41,6 +41,7 @@ Créer les tables Supabase : coller [`docs/supabase-migration.sql`](docs/supabas
 | `npm test` | Tests unitaires Vitest (utilisés en CI) |
 | `npm run electron` | Lance l’app Electron (nécessite `npm run build` au préalable) |
 | `npm run dist` | Build + empaquetage Windows (sortie dans `release/`) |
+| `npm run dist:win` | Idem, cible Windows explicite |
 
 ### API banque (optionnel)
 
@@ -58,18 +59,33 @@ Copier `.env.example` vers `.env`. Ne jamais committer le fichier `.env`.
 |----------|-------------|--------|
 | `VITE_SUPABASE_URL` | Oui | URL du projet Supabase (frontend) |
 | `VITE_SUPABASE_ANON_KEY` | Oui | Clé anon Supabase (frontend) |
+| `VITE_BANK_API_URL` | Non | URL API banque (défaut : `http://localhost:3001`) |
 | `TINK_CLIENT_ID` | Non | Connexion bancaire Tink (backend) |
 | `PORT` | Non | Port du serveur banque (défaut : 3001) |
 
 Sans Supabase configuré, l’app fonctionne en mode local (localStorage) ; le rapprochement bancaire reste désactivé.
 
-## Electron
+## Electron (atelier)
 
-1. `npm run build` — génère `dist/index.html` et les assets
-2. `npm run electron` — ouvre la fenêtre desktop (base `./`, compatible `file://`)
-3. `npm run dist` — installeur Windows NSIS dans `release/`
+Les variables `VITE_*` sont **figées au build Vite** (`npm run build`). Copier `.env` **avant** `npm run dist` — l’exe ne relit pas `.env` au démarrage pour Supabase.
 
-Configuration : `electron.cjs`, cible `com.accreation.crm`.
+1. `copy .env.example .env` puis renseigner `VITE_SUPABASE_URL` et `VITE_SUPABASE_ANON_KEY`
+2. `npm run build` — génère `dist/index.html` et les assets (`base: ./`, compatible `file://`)
+3. `npm run electron` — ouvre la fenêtre desktop (HashRouter automatique en `file://`)
+4. `npm run dist` — installeur Windows NSIS dans `release/`
+
+Sans dossier `dist/`, Electron affiche une page d’erreur avec les étapes à suivre.
+
+Configuration : `electron.cjs`, cible `com.accreation.crm`, icône `public/icon.ico`.
+
+## Configurateur t-shirt → Devis
+
+| Contexte | Route | Comportement « Créer un devis » |
+|----------|-------|----------------------------------|
+| Public (web) | `/configurateur-tshirt` | Brouillon `localStorage` + lien vers `/devis` (même navigateur) |
+| CRM / Electron | `/t-shirt-3d` | Navigation directe vers Devis avec lignes pré-remplies |
+
+Le devis inclut taille, couleur, techniques (DTF / UV-DTF / Flex), quantité et estimation HT par marquage.
 
 ## Routes
 

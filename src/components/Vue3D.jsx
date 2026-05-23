@@ -3,9 +3,11 @@ import { Canvas } from "@react-three/fiber";
 import { Bounds, Center, OrbitControls, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import "./Vue3D.css";
+import Product3DErrorBoundary from "./3d/Product3DErrorBoundary";
+import { MUG_MODEL_URL } from "../utils/assets";
 import { showToast } from "../utils/toast";
 
-const MODEL_URL = `${import.meta.env.BASE_URL}models/scene.gltf`;
+const MODEL_URL = MUG_MODEL_URL;
 const CANVAS_WIDTH = 1400;
 const CANVAS_HEIGHT = 600;
 
@@ -943,17 +945,23 @@ export default function Vue3D() {
         <div className="card vue3d-preview-card">
           <h3>Aperçu 3D</h3>
           <div className="vue3d-viewer" ref={previewRef}>
-            <Canvas camera={{ position: [0, 0.25, 4.2], fov: 28 }} gl={{ antialias: true, alpha: true, preserveDrawingBuffer: true }}>
-              <ambientLight intensity={1.4} />
-              <directionalLight position={[4, 6, 5]} intensity={2.4} />
-              <directionalLight position={[-4, 2, -3]} intensity={0.8} />
+            <Product3DErrorBoundary
+              resetKey={MODEL_URL}
+              title="Aperçu 3D indisponible"
+              message="Impossible de charger le modèle du mug. Rechargez la page (Ctrl+F5) ou relancez l'application après un rebuild."
+            >
+              <Canvas camera={{ position: [0, 0.25, 4.2], fov: 28 }} gl={{ antialias: true, alpha: true, preserveDrawingBuffer: true }}>
+                <ambientLight intensity={1.4} />
+                <directionalLight position={[4, 6, 5]} intensity={2.4} />
+                <directionalLight position={[-4, 2, -3]} intensity={0.8} />
 
-              <Suspense fallback={null}>
-                <MugModel items={items} />
-              </Suspense>
+                <Suspense fallback={null}>
+                  <MugModel items={items} />
+                </Suspense>
 
-              <OrbitControls makeDefault enableDamping dampingFactor={0.08} enablePan={false} minDistance={0.6} maxDistance={6} />
-            </Canvas>
+                <OrbitControls makeDefault enableDamping dampingFactor={0.08} enablePan={false} minDistance={0.6} maxDistance={6} />
+              </Canvas>
+            </Product3DErrorBoundary>
             <div className="vue3d-hint">↔ tourne le mug · molette pour zoomer le mug</div>
           </div>
         </div>

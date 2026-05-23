@@ -4,6 +4,7 @@ import {
   statusClass,
   convertQuoteToInvoiceData,
   isQuoteConvertible,
+  today,
 } from "../utils/documents";
 import {
   INVOICES_FILTER_KEY,
@@ -11,6 +12,8 @@ import {
   parseDocumentDate,
   sortOverdueInvoices,
 } from "../utils/invoices";
+import { openInvoiceReminderMailto } from "../utils/invoiceReminders";
+import { getProductionQueue } from "../utils/production";
 import { money } from "../utils/money";
 import { pageToPath } from "../utils/routes";
 import { getPermissions } from "../utils/permissions";
@@ -97,6 +100,8 @@ export default function Dashboard({
     .slice()
     .reverse()
     .slice(0, 8);
+
+  const productionQueue = getProductionQueue(quotes);
 
   const totalInvoices = invoices.reduce(
     (sum, inv) => sum + Number(inv.totalTTC || 0),
@@ -253,6 +258,24 @@ export default function Dashboard({
     showToast(`${invoices.length} facture(s) exportée(s).`, "success");
   }
 
+  function sendInvoiceReminder(invoice) {
+    const client = clients.find((c) => c.id === invoice.clientId);
+    const result = openInvoiceReminderMailto(invoice, client, data.settings || {});
+    if (!result.ok) {
+      showToast("Ce client n'a pas d'adresse email enregistrée.", "error");
+      return;
+    }
+
+    const nextInvoices = invoices.map((doc) =>
+      String(doc.id) === String(invoice.id)
+        ? { ...doc, lastReminderDate: today() }
+        : doc
+    );
+    setData({ ...data, invoices: nextInvoices });
+    logActivity?.("Relance facture", invoice.number, client?.name || "");
+    showToast(`Relance préparée pour ${invoice.number}.`, "success");
+  }
+
   return (
     <section>
       <div className="page-header">
@@ -383,6 +406,7 @@ export default function Dashboard({
                       <th>Échéance</th>
                       <th>Total TTC</th>
                       <th>Statut</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -396,6 +420,20 @@ export default function Dashboard({
                           <span className={statusClass(invoice.status)}>
                             {invoice.status}
                           </span>
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className="compact"
+                            onClick={() => sendInvoiceReminder(invoice)}
+                            title={
+                              invoice.lastReminderDate
+                                ? `Dernière relance : ${invoice.lastReminderDate}`
+                                : "Préparer un email de relance"
+                            }
+                          >
+                            Relancer
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -461,6 +499,49 @@ export default function Dashboard({
                 </table>
               </div>
             )}
+          </div>
+        )}
+
+        {canManageQuotes && productionQueue.total > 0 && (
+          <div className="card dashboard-action-card">
+            <div className="dashboard-action-card__header">
+              <div>
+                <h3>File d&apos;attente atelier</h3>
+                <p className="muted">
+                  {productionQueue.total} commande(s) acceptée(s) ou en production.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => navigate(pageToPath("atelier"))}
+              >
+                Ouvrir l&apos;atelier →
+              </button>
+            </div>
+            <div className="dashboard-production-grid">
+              {productionQueue.byProcess.map((group) => (
+                <div key={group.key} className="dashboard-production-group">
+                  <strong>
+                    {group.label}
+                    <span>{group.items.length}</span>
+                  </strong>
+                  {group.items.length === 0 ? (
+                    <p className="muted">—</p>
+                  ) : (
+                    <ul>
+                      {group.items.slice(0, 4).map((quote) => (
+                        <li key={quote.id}>
+                          <span>{quote.number}</span>
+                          <em>{clientName(data, quote.clientId)}</em>
+                          <span className={statusClass(quote.status)}>{quote.status}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

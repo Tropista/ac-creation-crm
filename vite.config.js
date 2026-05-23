@@ -12,6 +12,9 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           const normalized = id.replace(/\\/g, "/");
+          if (normalized.includes("/node_modules/@supabase/")) {
+            return "supabase-vendor";
+          }
           if (
             normalized.includes("/node_modules/three/") ||
             normalized.includes("/node_modules/three-stdlib/")

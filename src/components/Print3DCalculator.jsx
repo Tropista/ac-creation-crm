@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { showToast } from "../utils/toast";
+import { buildCalculatorQuoteLine, openQuoteFromCalculator } from "../utils/quoteDraft";
 
 function euro(value) {
 
@@ -20,6 +22,7 @@ export default function Print3DCalculator({
   setData,
   logActivity
 }) {
+  const navigate = useNavigate();
   const [form, setForm] = useState({
     projectName: "",
     material: "PLA",
@@ -199,6 +202,27 @@ TTC conseillé : ${euro(calc.totalTTC)}`,
     });
 
     showToast("Produit créé dans Produits.", "success");
+  }
+
+  function createQuote() {
+    const label = form.projectName.trim() || `Impression 3D ${form.material}`;
+
+    openQuoteFromCalculator(navigate, {
+      source: "calculateur 3D",
+      lines: [
+        buildCalculatorQuoteLine({
+          description: `${label}
+
+Matière : ${form.material}
+Poids pièce : ${form.partWeight} g
+Temps impression : ${form.printHours}h ${form.printMinutes}min`,
+          quantity: 1,
+          priceHT: calc.totalHT,
+          sku: "3D-CALC",
+          category: "Impression 3D",
+        }),
+      ],
+    });
   }
 
   return (
@@ -544,37 +568,19 @@ TTC conseillé : ${euro(calc.totalTTC)}`,
             </div>
           </div>
 
-         <div
-className="
-print3d-actions
-">
+         <div className="print3d-actions">
+            <button type="button" onClick={copySummary}>
+              📋 Copier
+            </button>
 
-<button
-type="button"
-onClick={
-copySummary
-}
->
+            <button type="button" onClick={createQuote}>
+              📋 Créer un devis
+            </button>
 
-📋 Copier
-
-</button>
-
-<button
-type="button"
-className="
-primary
-"
-onClick={
-createProduct
-}
->
-
-📦 Créer produit
-
-</button>
-
-</div>
+            <button type="button" className="primary" onClick={createProduct}>
+              📦 Créer produit
+            </button>
+          </div>
 
           <p className="print3d-note">
             Formule pro : matière + électricité + amortissement machine + maintenance + main-d’œuvre + risque + marge + TVA.

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { supabase } from "../supabase";
+import { getSupabase } from "../supabase";
 import {
   normalizeEmail,
   isAdminEmail
@@ -21,6 +21,7 @@ export default function UsersAdmin({ data, setData, logActivity }) {
   }
 
   async function saveUserToSupabase(user) {
+  const supabase = await getSupabase();
   const { error } = await supabase
     .from("users")
     .upsert(
@@ -35,6 +36,7 @@ export default function UsersAdmin({ data, setData, logActivity }) {
 }
 
   async function deleteUserFromSupabase(id) {
+    const supabase = await getSupabase();
     const { error } = await supabase
       .from("users")
       .delete()

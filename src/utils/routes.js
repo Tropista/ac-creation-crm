@@ -10,6 +10,7 @@ export const PAGE_PATHS = {
   scan: "/scan",
   categories: "/categories",
   quotes: "/devis",
+  atelier: "/atelier",
   invoices: "/factures",
   users: "/utilisateurs",
   settings: "/parametres",

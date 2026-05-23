@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "../../supabase";
+import { getSupabase } from "../../supabase";
 import { resetUrlAfterAuth } from "../../utils/routes";
 
 const SESSION_KEY = "crm_current_user_v2";
@@ -62,6 +62,7 @@ export default function AuthPage({
     async function detectRecoverySession() {
       if (!hasRecoveryHash()) return;
 
+      const supabase = await getSupabase();
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -84,6 +85,7 @@ export default function AuthPage({
       return;
     }
 
+    const supabase = await getSupabase();
     const { error } = await supabase.auth.updateUser({
       password: newPassword,
     });
@@ -114,6 +116,7 @@ export default function AuthPage({
 
     const email = normalizeEmail(form.email);
 
+    const supabase = await getSupabase();
     const { data: authData, error } = await supabase.auth.signInWithPassword({
       email,
       password: form.password,
@@ -235,7 +238,12 @@ export default function AuthPage({
             type="button"
             className="modern-secondary"
             onClick={async () => {
-              await supabase.auth.signOut();
+              try {
+                const supabase = await getSupabase();
+                await supabase.auth.signOut();
+              } catch (error) {
+                console.error(error);
+              }
               setRecoveryMode(false);
               setNewPassword("");
               setError("");
