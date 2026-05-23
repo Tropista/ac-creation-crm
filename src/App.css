@@ -159,7 +159,8 @@ option { background: var(--input-bg); color: var(--input-text); }
   gap: 18px;
   margin-bottom: 22px;
 }
-.page-header h2 {
+.page-header h2,
+.page-header h1 {
   margin: 0;
   font-size: clamp(28px, 3vw, 40px);
   line-height: 1;

@@ -35,6 +35,18 @@ CREATE TABLE IF NOT EXISTS categories (
   created_at timestamptz DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS catalog_items (
+  id text PRIMARY KEY,
+  data jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS catalog_selections (
+  id text PRIMARY KEY,
+  data jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS suppliers (
   id text PRIMARY KEY,
   data jsonb NOT NULL DEFAULT '{}'::jsonb,
@@ -105,6 +117,8 @@ ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE catalog_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE catalog_selections ENABLE ROW LEVEL SECURITY;
 ALTER TABLE suppliers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE quotes ENABLE ROW LEVEL SECURITY;
@@ -130,6 +144,14 @@ CREATE POLICY "crm_full_access" ON products
 
 DROP POLICY IF EXISTS "crm_full_access" ON categories;
 CREATE POLICY "crm_full_access" ON categories
+  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "crm_full_access" ON catalog_items;
+CREATE POLICY "crm_full_access" ON catalog_items
+  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "crm_full_access" ON catalog_selections;
+CREATE POLICY "crm_full_access" ON catalog_selections
   FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
 DROP POLICY IF EXISTS "crm_full_access" ON suppliers;

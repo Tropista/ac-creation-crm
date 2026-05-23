@@ -1,9 +1,11 @@
 export const PUBLIC_TSHIRT_PATH = "/configurateur-tshirt";
+export const PUBLIC_CATALOG_PATH = "/catalogue";
 
 export const PAGE_PATHS = {
   dashboard: "/dashboard",
   clients: "/clients",
   products: "/produits",
+  catalogSelections: "/catalogues-client",
   suppliers: "/fournisseurs",
   expenses: "/depenses",
   labels: "/etiquettes",

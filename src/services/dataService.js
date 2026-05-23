@@ -35,6 +35,8 @@ export const emptyData = {
   invoices: [],
   products: [],
   categories: [],
+  catalogItems: [],
+  catalogSelections: [],
   suppliers: [],
   expenses: [],
   backups: [],
@@ -89,6 +91,14 @@ export function normalizeData(data) {
 
     categories: dedupeItemsById(
       data?.categories || []
+    ),
+
+    catalogItems: dedupeItemsById(
+      data?.catalogItems || []
+    ),
+
+    catalogSelections: dedupeItemsById(
+      data?.catalogSelections || []
     ),
 
     suppliers: dedupeItemsById(

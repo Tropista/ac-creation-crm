@@ -5,6 +5,7 @@ import axios from "axios";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { scrapeLmdtListing } from "./catalogScraper.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -257,8 +258,30 @@ app.get("/api/bank/transactions", async (req, res) => {
   }
 });
 
+app.get("/api/catalog/health", (req, res) => {
+  res.json({ ok: true, provider: "lamaisonduteeshirt" });
+});
+
+app.post("/api/catalog/scrape", async (req, res) => {
+  const { url, maxPages, maxProducts, importAll } = req.body || {};
+
+  if (!url) {
+    return res.status(400).json({ error: "URL requise." });
+  }
+
+  try {
+    const result = await scrapeLmdtListing(url, { maxPages, maxProducts, importAll });
+    res.json(result);
+  } catch (error) {
+    console.error(error);
+    res.status(502).json({
+      error: error.message || "Import catalogue impossible.",
+    });
+  }
+});
+
 app.listen(PORT, HOST, () => {
-  console.log(`Bank API OK sur http://${HOST}:${PORT}`);
+  console.log(`CRM API OK sur http://${HOST}:${PORT}`);
   if (!tinkConfigured()) {
     console.warn("TINK_CLIENT_ID absent — mode saisie manuelle uniquement.");
   }

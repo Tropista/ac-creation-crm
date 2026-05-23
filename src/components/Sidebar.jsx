@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Cloud,
   Coffee,
+  ShoppingBag,
   Download,
   Factory,
   FileSpreadsheet,
@@ -44,6 +45,7 @@ const pageIcons = {
   invoices: Receipt,
   atelier: Wrench,
   products: Box,
+  catalogSelections: ShoppingBag,
   categories: FolderTree,
   suppliers: Factory,
   expenses: FileSpreadsheet,
@@ -80,6 +82,7 @@ const menuGroups = [
     label: "Catalogue",
     items: [
       { page: "products", label: "Produits", type: "page" },
+      { page: "catalogSelections", label: "Catalogues client", type: "page" },
       { page: "categories", label: "Catégories", type: "page" },
       { page: "suppliers", label: "Fournisseurs", type: "page" },
       { page: "expenses", label: "Dépenses", type: "page" },

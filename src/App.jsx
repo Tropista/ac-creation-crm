@@ -15,6 +15,7 @@ import {
 import { getSupabase, isSupabaseConfigured } from "./supabase";
 import {
   PUBLIC_TSHIRT_PATH,
+  PUBLIC_CATALOG_PATH,
   pageToPath,
   pathToPage,
 } from "./utils/routes";
@@ -79,6 +80,7 @@ import "./styles/clients.css";
 import "./styles/documents.css";
 import "./styles/atelier.css";
 import "./styles/products-erp.css";
+import "./styles/client-catalog.css";
 import "./styles/suppliers.css";
 import "./styles/expenses.css";
 import "./styles/labels.css";
@@ -120,6 +122,14 @@ const DtfCalculator = lazy(() =>
 
 const UvDtfCalculator = lazy(() =>
   import("./components/UvDtfCalculator")
+);
+
+const CatalogSelections = lazy(() =>
+  import("./components/CatalogSelections")
+);
+
+const ClientCatalog = lazy(() =>
+  import("./components/ClientCatalog")
 );
 
 function getInitialAuthState() {
@@ -165,8 +175,20 @@ export default function App() {
         path={PUBLIC_TSHIRT_PATH}
         element={<PublicTshirtConfigurator />}
       />
+      <Route
+        path={`${PUBLIC_CATALOG_PATH}/:shareId`}
+        element={<PublicClientCatalog />}
+      />
       <Route path="/*" element={<CrmApp />} />
     </Routes>
+  );
+}
+
+function PublicClientCatalog() {
+  return (
+    <Suspense fallback={<ContentLoading message="Chargement du catalogue..." />}>
+      <ClientCatalog />
+    </Suspense>
   );
 }
 
@@ -550,6 +572,22 @@ function CrmApp() {
                   />
                 ) : null
               }
+            />
+            <Route
+              path={pageToPath("catalogSelections")}
+              element={
+                canAccessPage(currentRole, "catalogSelections") ? (
+                  <CatalogSelections
+                    data={data}
+                    setData={updateData}
+                    logActivity={handleLogActivity}
+                  />
+                ) : null
+              }
+            />
+            <Route
+              path="/import-catalogue"
+              element={<Navigate to={pageToPath("catalogSelections")} replace />}
             />
             <Route
               path={pageToPath("suppliers")}

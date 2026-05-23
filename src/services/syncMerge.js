@@ -6,6 +6,8 @@ export const SYNC_COLLECTIONS = [
   "invoices",
   "products",
   "categories",
+  "catalogItems",
+  "catalogSelections",
   "suppliers",
   "expenses",
   "users",

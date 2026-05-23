@@ -98,6 +98,12 @@ export async function syncSupabaseData(nextData, previousData = {}) {
     upsertCollection("clients", nextData.clients),
     upsertCollection("products", nextData.products),
     upsertCollection("categories", nextData.categories),
+    safeCollectionOp("catalog_items", () =>
+      upsertCollection("catalog_items", nextData.catalogItems)
+    ),
+    safeCollectionOp("catalog_selections", () =>
+      upsertCollection("catalog_selections", nextData.catalogSelections)
+    ),
     safeCollectionOp("suppliers", () =>
       upsertCollection("suppliers", nextData.suppliers)
     ),
@@ -114,6 +120,16 @@ export async function syncSupabaseData(nextData, previousData = {}) {
     deleteRemovedItems("clients", nextData.clients, previousData.clients),
     deleteRemovedItems("products", nextData.products, previousData.products),
     deleteRemovedItems("categories", nextData.categories, previousData.categories),
+    safeCollectionOp("catalog_items", () =>
+      deleteRemovedItems("catalog_items", nextData.catalogItems, previousData.catalogItems)
+    ),
+    safeCollectionOp("catalog_selections", () =>
+      deleteRemovedItems(
+        "catalog_selections",
+        nextData.catalogSelections,
+        previousData.catalogSelections
+      )
+    ),
     safeCollectionOp("suppliers", () =>
       deleteRemovedItems("suppliers", nextData.suppliers, previousData.suppliers)
     ),
@@ -136,6 +152,8 @@ export async function loadSupabaseData({ normalizeData, emptyData }) {
     clientsRes,
     productsRes,
     categoriesRes,
+    catalogItemsRes,
+    catalogSelectionsRes,
     suppliersRes,
     expensesRes,
     quotesRes,
@@ -147,6 +165,8 @@ export async function loadSupabaseData({ normalizeData, emptyData }) {
     supabase.from("clients").select("id,data").order("created_at", { ascending: true }),
     supabase.from("products").select("id,data").order("created_at", { ascending: true }),
     supabase.from("categories").select("id,data").order("created_at", { ascending: true }),
+    supabase.from("catalog_items").select("id,data").order("created_at", { ascending: true }),
+    supabase.from("catalog_selections").select("id,data").order("created_at", { ascending: false }),
     supabase.from("suppliers").select("id,data").order("created_at", { ascending: true }),
     supabase.from("expenses").select("id,data").order("created_at", { ascending: true }),
     supabase.from("quotes").select("id,data").order("created_at", { ascending: true }),
@@ -158,6 +178,11 @@ export async function loadSupabaseData({ normalizeData, emptyData }) {
     .select("id,data")
     .order("created_at", { ascending: false });
 
+  const resolvedCatalogItemsRes = resolveCollectionResult(catalogItemsRes, "catalog_items");
+  const resolvedCatalogSelectionsRes = resolveCollectionResult(
+    catalogSelectionsRes,
+    "catalog_selections"
+  );
   const resolvedSuppliersRes = resolveCollectionResult(suppliersRes, "suppliers");
   const resolvedExpensesRes = resolveCollectionResult(expensesRes, "expenses");
 
@@ -168,6 +193,8 @@ export async function loadSupabaseData({ normalizeData, emptyData }) {
     clientsRes,
     productsRes,
     categoriesRes,
+    resolvedCatalogItemsRes,
+    resolvedCatalogSelectionsRes,
     resolvedSuppliersRes,
     resolvedExpensesRes,
     quotesRes,
@@ -189,6 +216,8 @@ export async function loadSupabaseData({ normalizeData, emptyData }) {
     clients: rowsToItems(clientsRes.data),
     products: rowsToItems(productsRes.data),
     categories: rowsToItems(categoriesRes.data),
+    catalogItems: rowsToItems(resolvedCatalogItemsRes.data),
+    catalogSelections: rowsToItems(resolvedCatalogSelectionsRes.data),
     suppliers: rowsToItems(resolvedSuppliersRes.data),
     expenses: rowsToItems(resolvedExpensesRes.data),
     quotes: rowsToItems(quotesRes.data),
@@ -206,6 +235,8 @@ export async function loadSupabaseData({ normalizeData, emptyData }) {
         clientsRes.data?.length ||
         productsRes.data?.length ||
         categoriesRes.data?.length ||
+        resolvedCatalogItemsRes.data?.length ||
+        resolvedCatalogSelectionsRes.data?.length ||
         resolvedSuppliersRes.data?.length ||
         resolvedExpensesRes.data?.length ||
         quotesRes.data?.length ||
