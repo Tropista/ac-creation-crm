@@ -1,6 +1,7 @@
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { APP_LOGO_URL } from "../utils/assets";
+import { buildDocumentPdf, getDocumentFileName } from "../utils/documentPdf";
 import { money } from "../utils/money";
 import { showToast } from "../utils/toast";
 
@@ -31,11 +32,21 @@ export default function DocumentPreview({ doc, type, data, onClose }) {
   }
 
   const documentTitle = isQuote ? "DEVIS" : "FACTURE";
-  const documentFileName = `${isQuote ? "devis" : "facture"}-${String(
-    doc.number || "document"
-  ).replace(/[^\w.-]+/g, "_")}.pdf`;
+  const documentFileName = getDocumentFileName(doc, type);
 
-  async function downloadPdf() {
+  async function downloadPdfNative() {
+    try {
+      const pdf = buildDocumentPdf({ doc, type, data });
+      pdf.save(documentFileName);
+      showToast("PDF généré avec succès.", "success");
+    } catch (error) {
+      console.error(error);
+      showToast("Génération native échouée, bascule sur capture HTML…", "info");
+      await downloadPdfFallback();
+    }
+  }
+
+  async function downloadPdfFallback() {
     const source = document.getElementById("document-preview");
     if (!source) return showToast("Zone PDF introuvable.", "error");
 
@@ -726,7 +737,7 @@ ${data.settings.companyEmail || ""}`;
           <button onClick={onClose}>Fermer</button>
           <button onClick={sendEmail}>Envoyer par email</button>
           <button onClick={() => window.print()}>Imprimer</button>
-          <button className="primary" onClick={downloadPdf}>
+          <button className="primary" onClick={downloadPdfNative}>
             Télécharger PDF
           </button>
         </div>

@@ -133,3 +133,20 @@ export function getAtelierBoard(quotes = []) {
     items: pipeline,
   };
 }
+
+export function getAtelierStatusBoard(quotes = []) {
+  const pipeline = quotes.filter(isAtelierPipelineQuote);
+
+  const byStatus = ATELIER_PIPELINE_STATUSES.map((status) => ({
+    status,
+    items: pipeline
+      .filter((quote) => quote.status === status)
+      .sort(compareAtelierQuotes),
+  }));
+
+  return {
+    total: pipeline.length,
+    byStatus,
+    items: pipeline,
+  };
+}

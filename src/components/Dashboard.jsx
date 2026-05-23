@@ -210,6 +210,19 @@ export default function Dashboard({
     1
   );
 
+  const monthCompareMax = Math.max(monthRevenueHT, monthExpensesHT, 1);
+  const monthRevenueBarPct = (monthRevenueHT / monthCompareMax) * 100;
+  const monthExpensesBarPct = (monthExpensesHT / monthCompareMax) * 100;
+  const paidInvoiceCount = invoices.filter((i) => i.status === "Payée").length;
+  const unpaidBarPct =
+    invoices.length > 0 ? (unpaidCount / invoices.length) * 100 : 0;
+  const paidBarPct =
+    invoices.length > 0 ? (paidInvoiceCount / invoices.length) * 100 : 0;
+  const maxProductionGroup = Math.max(
+    ...productionQueue.byProcess.map((g) => g.items.length),
+    1
+  );
+
   function goToOverdueInvoices() {
     localStorage.setItem(INVOICES_FILTER_KEY, "overdue");
     navigate(pageToPath("invoices"));
@@ -277,7 +290,7 @@ export default function Dashboard({
   }
 
   return (
-    <section>
+    <section data-testid="dashboard-page">
       <div className="page-header">
         <div>
           <h2>Tableau de bord</h2>
@@ -289,6 +302,119 @@ export default function Dashboard({
           </button>
         )}
       </div>
+
+      {(canManageExpenses || canManageInvoices || canManageQuotes) && (
+        <div className="dashboard-visual-kpis">
+          {(canManageExpenses || canManageInvoices) && marginCalculable && (
+            <div className="card dashboard-visual-kpi">
+              <div className="dashboard-visual-kpi__head">
+                <h3>CA vs dépenses — {monthLabel}</h3>
+                <span className="muted">Comparaison HT du mois en cours</span>
+              </div>
+              <div className="dashboard-compare-chart">
+                <div className="dashboard-compare-row">
+                  <span>Chiffre d&apos;affaires HT</span>
+                  <strong>{money(monthRevenueHT)}</strong>
+                </div>
+                <div className="dashboard-bar-track dashboard-bar-track--revenue">
+                  <div
+                    className="dashboard-bar-fill dashboard-bar-fill--revenue"
+                    style={{ width: `${Math.max(4, monthRevenueBarPct)}%` }}
+                  />
+                </div>
+                <div className="dashboard-compare-row">
+                  <span>Dépenses HT</span>
+                  <strong>{money(monthExpensesHT)}</strong>
+                </div>
+                <div className="dashboard-bar-track dashboard-bar-track--expense">
+                  <div
+                    className="dashboard-bar-fill dashboard-bar-fill--expense"
+                    style={{ width: `${Math.max(4, monthExpensesBarPct)}%` }}
+                  />
+                </div>
+                <p className={`dashboard-margin-tag${monthMarginHT < 0 ? " is-danger" : ""}`}>
+                  Marge : {money(monthMarginHT)}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {canManageInvoices && (
+            <div className="card dashboard-visual-kpi">
+              <div className="dashboard-visual-kpi__head">
+                <h3>Factures impayées</h3>
+                <span className="muted">{unpaidCount} sur {invoices.length} facture(s)</span>
+              </div>
+              <div className="dashboard-unpaid-chart">
+                <div className="dashboard-unpaid-bars">
+                  <div
+                    className="dashboard-unpaid-segment dashboard-unpaid-segment--paid"
+                    style={{ width: `${Math.max(unpaidCount === 0 ? 100 : paidBarPct, 0)}%` }}
+                    title={`Payées : ${paidInvoiceCount}`}
+                  />
+                  <div
+                    className="dashboard-unpaid-segment dashboard-unpaid-segment--unpaid"
+                    style={{ width: `${Math.max(unpaidCount > 0 ? unpaidBarPct : 0, 0)}%` }}
+                    title={`Impayées : ${unpaidCount}`}
+                  />
+                </div>
+                <div className="dashboard-unpaid-legend">
+                  <span><i className="dot dot--paid" /> Payées ({paidInvoiceCount})</span>
+                  <span><i className="dot dot--unpaid" /> Impayées ({unpaidCount})</span>
+                </div>
+                <strong className="dashboard-unpaid-amount">{money(unpaidInvoices)}</strong>
+                <span className="muted">Montant à encaisser</span>
+                {overdueInvoices.length > 0 && (
+                  <button type="button" className="dashboard-kpi-cta" onClick={goToOverdueInvoices}>
+                    Voir les retards ({overdueInvoices.length})
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {canManageQuotes && (
+            <div className="card dashboard-visual-kpi">
+              <div className="dashboard-visual-kpi__head">
+                <h3>File atelier</h3>
+                <span className="muted">{productionQueue.total} commande(s) en cours</span>
+              </div>
+              {productionQueue.total === 0 ? (
+                <p className="muted">Aucune commande en production pour le moment.</p>
+              ) : (
+                <div className="dashboard-production-bars">
+                  {productionQueue.byProcess.map((group) => (
+                    <div key={group.key} className="dashboard-production-bar-row">
+                      <div className="dashboard-production-bar-label">
+                        <span>{group.label}</span>
+                        <strong>{group.items.length}</strong>
+                      </div>
+                      <div className="dashboard-bar-track">
+                        <div
+                          className="dashboard-bar-fill dashboard-bar-fill--production"
+                          style={{
+                            width: `${Math.max(
+                              6,
+                              (group.items.length / maxProductionGroup) * 100
+                            )}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    className="dashboard-kpi-cta"
+                    onClick={() => navigate(pageToPath("atelier"))}
+                  >
+                    Ouvrir l&apos;atelier →
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {(canManageExpenses || canManageInvoices) && (
         <div className="stats dashboard-kpis">
@@ -558,37 +684,42 @@ export default function Dashboard({
               </div>
               {(lowStockCount > 0 || outOfStockCount > 0) && (
                 <button type="button" className="ghost" onClick={goToProducts}>
-                  Voir produits →
+                  Voir stock →
                 </button>
               )}
             </div>
             {lowStockProducts.length === 0 ? (
               <p className="muted">Tous les stocks sont au-dessus du seuil d'alerte.</p>
             ) : (
-              <div className="table compact-table">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Produit</th>
-                      <th>SKU</th>
-                      <th>Stock</th>
-                      <th>Seuil</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lowStockProducts.map((product) => (
-                      <tr key={product.id}>
-                        <td>{product.name}</td>
-                        <td>{product.sku || "—"}</td>
-                        <td>
-                          <strong>{getStock(product)}</strong>
-                        </td>
-                        <td>{getMinStock(product)}</td>
+              <>
+                <div className="table compact-table">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Produit</th>
+                        <th>SKU</th>
+                        <th>Stock</th>
+                        <th>Seuil</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {lowStockProducts.map((product) => (
+                        <tr key={product.id}>
+                          <td>{product.name}</td>
+                          <td>{product.sku || "—"}</td>
+                          <td>
+                            <strong>{getStock(product)}</strong>
+                          </td>
+                          <td>{getMinStock(product)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <button type="button" className="dashboard-kpi-cta" onClick={goToProducts}>
+                  Voir stock →
+                </button>
+              </>
             )}
           </div>
         )}

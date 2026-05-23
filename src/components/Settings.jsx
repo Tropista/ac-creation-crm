@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
 import { APP_VERSION } from "../utils/appVersion";
 import { showToast } from "../utils/toast";
+import { getStoredTheme, setTheme, THEMES } from "../utils/theme";
+
+const THEME_LABELS = {
+  light: "Clair",
+  dark: "Sombre",
+  system: "Système (auto)",
+};
 
 export default function Settings({
   data,
@@ -10,6 +17,8 @@ export default function Settings({
 
   const [form, setForm] =
     useState(data.settings);
+
+  const [theme, setThemeState] = useState(getStoredTheme);
 
   const [updateInfo, setUpdateInfo] = useState(null);
   const [updateReady, setUpdateReady] = useState(null);
@@ -44,6 +53,12 @@ export default function Settings({
     } catch {
       showToast("Impossible de redémarrer pour la mise à jour", "error");
     }
+  }
+
+  function handleThemeChange(nextTheme) {
+    setThemeState(nextTheme);
+    setTheme(nextTheme);
+    showToast(`Thème : ${THEME_LABELS[nextTheme]}`, "info");
   }
 
   function submit(e) {
@@ -114,6 +129,24 @@ Version installée : <strong>{APP_VERSION}</strong>
   )}
 </div>
 ) : null}
+
+<div className="card theme-settings-card">
+  <h3>Apparence</h3>
+  <label className="theme-field">
+    <span>Thème de l&apos;interface</span>
+    <select
+      data-testid="theme-select"
+      value={theme}
+      onChange={(e) => handleThemeChange(e.target.value)}
+    >
+      {THEMES.map((value) => (
+        <option key={value} value={value}>
+          {THEME_LABELS[value]}
+        </option>
+      ))}
+    </select>
+  </label>
+</div>
 
 <form
 className="card form-grid"

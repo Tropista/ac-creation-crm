@@ -1,44 +1,11 @@
 import { useEffect, useState } from "react";
 import { getSupabase } from "../../supabase";
 import { resetUrlAfterAuth } from "../../utils/routes";
-
-const SESSION_KEY = "crm_current_user_v2";
-
-function normalizeEmail(email) {
-  return String(email || "").trim().toLowerCase();
-}
-
-function isAdminEmail(email) {
-  return [
-    "ac.creation.officiel@gmail.com",
-    "dos.santos.alves.daniel@gmail.com",
-  ]
-    .map(normalizeEmail)
-    .includes(normalizeEmail(email));
-}
-
-function isAllowedUser(email, users = []) {
-  const normalizedEmail = normalizeEmail(email);
-
-  return (
-    isAdminEmail(normalizedEmail) ||
-    (users || []).some(
-      (user) =>
-        normalizeEmail(user.email) === normalizedEmail &&
-        user.status !== "Désactivé"
-    )
-  );
-}
-
-function userRole(email, users = []) {
-  if (isAdminEmail(email)) return "Admin";
-
-  const found = (users || []).find(
-    (user) => normalizeEmail(user.email) === normalizeEmail(email)
-  );
-
-  return found?.role || "Utilisateur";
-}
+import {
+  isAllowedUser,
+  saveSession,
+  userRole,
+} from "../../services/authService";
 
 function hasRecoveryHash() {
   return (
@@ -50,13 +17,20 @@ function hasRecoveryHash() {
 export default function AuthPage({
   data,
   setData,
-  setCurrentUser
+  setCurrentUser,
+  initialNotice = "",
 }) {
   const [form, setForm] = useState({ email: "", password: "" });
   const [newPassword, setNewPassword] = useState("");
   const [recoveryMode, setRecoveryMode] = useState(hasRecoveryHash());
-  const [error, setError] = useState("");
+  const [error, setError] = useState(initialNotice);
   const [success, setSuccess] = useState("");
+
+  useEffect(() => {
+    if (initialNotice) {
+      setError(initialNotice);
+    }
+  }, [initialNotice]);
 
   useEffect(() => {
     async function detectRecoverySession() {
@@ -86,12 +60,12 @@ export default function AuthPage({
     }
 
     const supabase = await getSupabase();
-    const { error } = await supabase.auth.updateUser({
+    const { error: updateError } = await supabase.auth.updateUser({
       password: newPassword,
     });
 
-    if (error) {
-      setError(error.message || "Impossible de mettre à jour le mot de passe.");
+    if (updateError) {
+      setError(updateError.message || "Impossible de mettre à jour le mot de passe.");
       return;
     }
 
@@ -114,38 +88,35 @@ export default function AuthPage({
       return;
     }
 
-    const email = normalizeEmail(form.email);
-
     const supabase = await getSupabase();
-    const { data: authData, error } = await supabase.auth.signInWithPassword({
-      email,
+    const { data: authData, error: loginError } = await supabase.auth.signInWithPassword({
+      email: form.email.trim().toLowerCase(),
       password: form.password,
     });
 
-    if (error || !authData.user) {
+    if (loginError || !authData.user) {
       setError("Email ou mot de passe incorrect.");
       return;
     }
 
     if (!isAllowedUser(authData.user.email, data.users)) {
       await supabase.auth.signOut();
-      setError("Compte non autorisé. Demande à l’administrateur d’ajouter ton email.");
+      setError("Compte non autorisé. Demande à l'administrateur d'ajouter ton email.");
       return;
     }
 
-    const session = {
+    const session = saveSession({
       id: authData.user.id,
       name: authData.user.user_metadata?.name || authData.user.email,
       email: authData.user.email,
       role: userRole(authData.user.email, data.users),
-    };
+    });
 
-    localStorage.setItem(SESSION_KEY, JSON.stringify(session));
     setCurrentUser(session);
   }
 
   return (
-    <div className="modern-auth">
+    <div className="modern-auth" data-testid="auth-page">
       <div className="auth-orb orb-one"></div>
       <div className="auth-orb orb-two"></div>
 
@@ -155,7 +126,7 @@ export default function AuthPage({
           Mon <span>CRM</span>
         </h1>
         <p className="brand-text">
-          Accès privé réservé aux utilisateurs autorisés par l’administrateur.
+          Accès privé réservé aux utilisateurs autorisés par l'administrateur.
         </p>
 
         <div className="auth-features">
@@ -163,7 +134,7 @@ export default function AuthPage({
             <div>🔐</div>
             <span>
               <strong>Accès sécurisé</strong>
-              L’inscription publique est désactivée.
+              L'inscription publique est désactivée.
             </span>
           </div>
 
@@ -171,7 +142,7 @@ export default function AuthPage({
             <div>👑</div>
             <span>
               <strong>Mode admin</strong>
-              Seul l’admin peut autoriser de nouveaux utilisateurs.
+              Seul l'admin peut autoriser de nouveaux utilisateurs.
             </span>
           </div>
 
@@ -203,6 +174,7 @@ export default function AuthPage({
           <label className="modern-field">
             <span>✉️</span>
             <input
+              data-testid="auth-email"
               placeholder="Email"
               type="email"
               value={form.email}
@@ -214,6 +186,7 @@ export default function AuthPage({
         <label className="modern-field">
           <span>🔑</span>
           <input
+            data-testid="auth-password"
             placeholder={recoveryMode ? "Nouveau mot de passe" : "Mot de passe"}
             type="password"
             value={recoveryMode ? newPassword : form.password}
@@ -225,10 +198,14 @@ export default function AuthPage({
           />
         </label>
 
-        {error && <p className="modern-error">{error}</p>}
+        {error && (
+          <p className="modern-error" data-testid="auth-error">
+            {error}
+          </p>
+        )}
         {success && <p className="modern-success">{success}</p>}
 
-        <button className="modern-primary" type="submit">
+        <button className="modern-primary" type="submit" data-testid="auth-submit">
           {recoveryMode ? "Mettre à jour" : "Se connecter"}
           <span>→</span>
         </button>
@@ -241,8 +218,8 @@ export default function AuthPage({
               try {
                 const supabase = await getSupabase();
                 await supabase.auth.signOut();
-              } catch (error) {
-                console.error(error);
+              } catch (err) {
+                console.error(err);
               }
               setRecoveryMode(false);
               setNewPassword("");
@@ -255,7 +232,7 @@ export default function AuthPage({
         )}
 
         <p className="auth-note">
-          🛡️ Compte requis et validé par l’administrateur.
+          🛡️ Compte requis et validé par l'administrateur.
         </p>
       </form>
     </div>

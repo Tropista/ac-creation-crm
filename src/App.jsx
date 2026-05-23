@@ -56,15 +56,23 @@ import { APP_LOGO_URL } from "./utils/assets";
 import { showToast } from "./utils/toast";
 
 import {
-  isAdminEmail,
   isAllowedUser,
   userRole,
   canAccessPage,
+  loadSession,
+  clearSession,
+  touchSession,
+  SESSION_EXPIRED_MESSAGE,
 } from "./services/authService";
 
 import {
   logActivity
 } from "./services/logService";
+import {
+  mergeCloudWithLocal,
+  setLastSyncAt,
+  stampDataChanges,
+} from "./services/syncMerge";
 import "./styles/sidebar.css";
 import "./styles/dashboard.css";
 import "./styles/clients.css";
@@ -114,7 +122,13 @@ const UvDtfCalculator = lazy(() =>
   import("./components/UvDtfCalculator")
 );
 
-const SESSION_KEY = "crm_current_user_v2";
+function getInitialAuthState() {
+  const session = loadSession();
+  if (session?.expired) {
+    return { user: null, notice: SESSION_EXPIRED_MESSAGE };
+  }
+  return { user: session, notice: "" };
+}
 
 async function loadSupabaseSyncModule() {
   return import("./services/supabaseSync");
@@ -176,9 +190,9 @@ function CrmApp() {
   };
 
   const [data, setData] = useState(loadData);
-  const [currentUser, setCurrentUser] = useState(() =>
-    JSON.parse(localStorage.getItem(SESSION_KEY) || "null")
-  );
+  const initialAuth = getInitialAuthState();
+  const [currentUser, setCurrentUser] = useState(initialAuth.user);
+  const [authNotice, setAuthNotice] = useState(initialAuth.notice);
 
   useEffect(() => {
     function handleOpenPage(event) {
@@ -204,8 +218,50 @@ function CrmApp() {
   const permissions = getPermissions(currentRole);
 
   useEffect(() => {
+    if (currentUser) {
+      setAuthNotice("");
+    }
+  }, [currentUser?.email]);
+
+  useEffect(() => {
     initializeCloudData();
   }, []);
+
+  useEffect(() => {
+    if (!currentUser) return undefined;
+
+    let activityTimer;
+    const onActivity = () => {
+      clearTimeout(activityTimer);
+      activityTimer = setTimeout(() => {
+        const refreshed = touchSession();
+        if (refreshed?.expired) {
+          clearSession();
+          setCurrentUser(null);
+          setAuthNotice(SESSION_EXPIRED_MESSAGE);
+        }
+      }, 30_000);
+    };
+
+    const expiryCheck = setInterval(() => {
+      const session = loadSession();
+      if (!session || session.expired) {
+        clearSession();
+        setCurrentUser(null);
+        setAuthNotice(SESSION_EXPIRED_MESSAGE);
+      }
+    }, 60_000);
+
+    window.addEventListener("click", onActivity);
+    window.addEventListener("keydown", onActivity);
+
+    return () => {
+      clearTimeout(activityTimer);
+      clearInterval(expiryCheck);
+      window.removeEventListener("click", onActivity);
+      window.removeEventListener("keydown", onActivity);
+    };
+  }, [currentUser?.email]);
 
   useEffect(() => {
     saveData(data);
@@ -244,27 +300,54 @@ function CrmApp() {
       });
 
       if (cloud.hasCloudData) {
+        const conflictLabels = {
+          clients: "client",
+          quotes: "devis",
+          invoices: "facture",
+          settings: "paramètres",
+        };
+        let conflictCount = 0;
+
+        const mergedRaw = mergeCloudWithLocal(localData, cloud.data, {
+          onConflict: ({ entityLabel }) => {
+            conflictCount += 1;
+            const label = conflictLabels[entityLabel] || entityLabel;
+            showToast(
+              `Conflit détecté — version locale conservée (${label})`,
+              "warning"
+            );
+          },
+        });
+
         const mergedData = normalizeData({
-          ...cloud.data,
-          users: dedupeItemsById(cloud.data.users || []),
-          backups: dedupeItemsById(cloud.data.backups || []),
-          logs: dedupeItemsById(cloud.data.logs || []),
+          ...mergedRaw,
+          users: dedupeItemsById(mergedRaw.users || []),
+          backups: dedupeItemsById(mergedRaw.backups || []),
+          logs: dedupeItemsById(mergedRaw.logs || []),
         });
 
         setData(mergedData);
         flushSaveData();
+        setLastSyncAt();
         setSyncStatus("Synchronisé avec Supabase");
-        showToast("Données chargées depuis Supabase", "success");
+        showToast(
+          conflictCount
+            ? "Données fusionnées — conflits résolus localement"
+            : "Données chargées depuis Supabase",
+          conflictCount ? "info" : "success"
+        );
       } else if (hasLocalBusinessData(localData)) {
         await syncSupabaseData(localData, emptyData);
         setData(localData);
         flushSaveData();
+        setLastSyncAt();
         setSyncStatus("Données locales envoyées vers Supabase");
         showToast("Données locales synchronisées vers Supabase", "success");
       } else {
         await syncSupabaseData(emptyData, emptyData);
         setData(emptyData);
         flushSaveData();
+        setLastSyncAt();
         setSyncStatus("Supabase prêt");
       }
 
@@ -280,11 +363,12 @@ function CrmApp() {
   }
 
   async function updateData(next) {
+    const stamped = stampDataChanges(data, next);
     const normalized = normalizeData({
-      ...next,
-      users: dedupeItemsById(next.users || []),
-      backups: dedupeItemsById(next.backups || []),
-      logs: dedupeItemsById(next.logs || []),
+      ...stamped,
+      users: dedupeItemsById(stamped.users || []),
+      backups: dedupeItemsById(stamped.backups || []),
+      logs: dedupeItemsById(stamped.logs || []),
     });
 
     const previous = data;
@@ -302,6 +386,7 @@ function CrmApp() {
       const { syncSupabaseData } = await loadSupabaseSyncModule();
       await syncSupabaseData(normalized, previous);
       flushSaveData();
+      setLastSyncAt();
       setSyncStatus("Synchronisé avec Supabase");
     } catch (error) {
       console.error(error);
@@ -371,8 +456,9 @@ function CrmApp() {
         console.error(error);
       }
     }
-    localStorage.removeItem(SESSION_KEY);
+    clearSession();
     setCurrentUser(null);
+    setAuthNotice("");
     setPage("dashboard");
   }
 
@@ -386,6 +472,7 @@ function CrmApp() {
         data={data}
         setData={updateData}
         setCurrentUser={setCurrentUser}
+        initialNotice={authNotice}
       />
     );
   }

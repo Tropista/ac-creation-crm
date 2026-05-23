@@ -170,3 +170,96 @@
   font-size: 12px;
   font-weight: 800;
 }
+
+.atelier-view-toggle {
+  display: inline-flex;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+}
+
+.atelier-view-toggle button {
+  min-height: 38px;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.atelier-view-toggle button.active {
+  background: linear-gradient(135deg, var(--purple), var(--pink));
+  color: #fff;
+}
+
+.atelier-board--status {
+  grid-template-columns: repeat(4, minmax(220px, 1fr));
+}
+
+.atelier-status-column {
+  min-height: 280px;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.atelier-status-column--active {
+  border-color: rgba(124, 58, 237, 0.45);
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12);
+  transform: translateY(-2px);
+}
+
+.atelier-card {
+  cursor: grab;
+}
+
+.atelier-card--dragging {
+  opacity: 0.55;
+  cursor: grabbing;
+}
+
+.atelier-card__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.atelier-process-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #4338ca;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+@media (max-width: 1200px) {
+  .atelier-board--status {
+    grid-template-columns: repeat(2, minmax(220px, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .atelier-board--status {
+    grid-template-columns: 1fr;
+  }
+
+  .atelier-view-toggle {
+    width: 100%;
+  }
+
+  .atelier-view-toggle button {
+    flex: 1;
+  }
+}

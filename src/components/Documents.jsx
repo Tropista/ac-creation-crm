@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "react-router-dom";
 import DocumentPreview from "./DocumentPreview";
+import DocumentForm from "./documents/DocumentForm";
+import DocumentList from "./documents/DocumentList";
 import { money } from "../utils/money";
 import {
   clientName,
@@ -8,8 +10,6 @@ import {
   nextDocumentNumber,
   convertQuoteToInvoiceData,
   isQuoteConvertible,
-  quoteAlreadyConverted,
-  statusClass,
   uid,
   today,
 } from "../utils/documents";
@@ -476,7 +476,7 @@ useEffect(() => {
   }
 
   return (
-    <section className="documents-page">
+    <section className="documents-page" data-testid={isQuote ? "quotes-page" : "invoices-page"}>
       <div className="page-header">
         <div>
           <h2>{title}</h2>
@@ -537,366 +537,51 @@ useEffect(() => {
         )}
       </div>
 
-      <form className="card documents-form-card" onSubmit={submit}>
-        <div className="documents-form-head">
-          <span className="filters-icon">{isQuote ? "📋" : "🧾"}</span>
-          <div>
-            <strong>{editingId ? `Modifier le ${isQuote ? "devis" : "facture"}` : `Nouveau ${isQuote ? "devis" : "facture"}`}</strong>
-            <span>Ajoutez un client, des lignes produits ou prestations, puis validez.</span>
-          </div>
-        </div>
+      <DocumentForm
+        isQuote={isQuote}
+        editingId={editingId}
+        form={form}
+        setForm={setForm}
+        totals={totals}
+        taxRate={data.settings.taxRate}
+        products={data.products || []}
+        clients={data.clients || []}
+        onSubmit={submit}
+        onReset={reset}
+        onUpdateLine={updateLine}
+        onSelectProduct={selectProduct}
+        onAddLine={addLine}
+        onRemoveLine={removeLine}
+        lineTotal={lineTotal}
+      />
 
-        <div className="documents-form-header">
-          <label className="documents-field">
-            <span>Client</span>
-            <select value={form.clientId} onChange={(e) => setForm({ ...form, clientId: e.target.value })}>
-              <option value="">Choisir un client</option>
-              {data.clients.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </label>
-
-          <label className="documents-field">
-            <span>Statut</span>
-            <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
-              {isQuote ? (
-                QUOTE_STATUSES.map((status) => (
-                  <option key={status}>{status}</option>
-                ))
-              ) : (
-                <>
-                  <option>Non payée</option>
-                  <option>Payée</option>
-                  <option>En retard</option>
-                  <option>Annulée</option>
-                </>
-              )}
-            </select>
-          </label>
-        </div>
-
-        <div className="documents-lines-wrap">
-          <div className="document-lines">
-            <div className="document-line document-line-head">
-              <span>Produit</span>
-              <span>Description</span>
-              <span>Qté</span>
-              <span>Prix HT</span>
-              <span>Remise %</span>
-              <span>Total HT</span>
-              <span></span>
-            </div>
-
-            {(form.lines || []).map((line, index) => {
-              const total = lineTotal(line).totalHT;
-              return (
-                <div className="document-line" key={index}>
-                  <select value={line.productId || ""} onChange={(e) => selectProduct(index, e.target.value)}>
-                    <option value="">Produit libre</option>
-                    {(data.products || []).map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.category ? `${p.category} — ` : ""}{p.name} - {money(p.price)}
-                      </option>
-                    ))}
-                  </select>
-                  <input
-                    placeholder="Produit / prestation"
-                    value={line.description}
-                    onChange={(e) => updateLine(index, { description: e.target.value })}
-                  />
-                  <input
-                    type="number"
-                    min="1"
-                    value={line.quantity}
-                    onChange={(e) => updateLine(index, { quantity: e.target.value })}
-                  />
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.0001"
-                    value={line.price}
-                    onChange={(e) => updateLine(index, { price: e.target.value })}
-                  />
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={line.discount}
-                    onChange={(e) => updateLine(index, { discount: e.target.value })}
-                  />
-                  <strong className="documents-line-total">{money(total)}</strong>
-                  <button
-                    type="button"
-                    className="danger documents-line-remove"
-                    onClick={() => removeLine(index)}
-                    title="Supprimer la ligne"
-                    aria-label="Supprimer la ligne"
-                  >
-                    ✕
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="documents-form-footer">
-          <div className="documents-form-footer-left">
-            <button type="button" className="documents-add-line" onClick={addLine}>
-              + Ajouter une ligne
-            </button>
-            <label className="documents-field documents-field--inline global-discount-field">
-              <span>Remise globale %</span>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                step="0.01"
-                value={form.globalDiscount || 0}
-                onChange={(e) => setForm({ ...form, globalDiscount: e.target.value })}
-              />
-            </label>
-          </div>
-
-          <div className="documents-totals-panel total-box">
-            <div className="documents-totals-row">
-              <span>Sous-total HT</span>
-              <strong>{money(totals.subtotal)}</strong>
-            </div>
-            <div className="documents-totals-row">
-              <span>Remise lignes</span>
-              <strong>{money(totals.lineDiscountAmount)}</strong>
-            </div>
-            <div className="documents-totals-row">
-              <span>Remise globale</span>
-              <strong>{money(totals.globalDiscountAmount)}</strong>
-            </div>
-            <div className="documents-totals-row">
-              <span>Total HT</span>
-              <strong>{money(totals.totalHT)}</strong>
-            </div>
-            <div className="documents-totals-row">
-              <span>TVA ({data.settings.taxRate || 0} %)</span>
-              <strong>{money(totals.taxAmount)}</strong>
-            </div>
-            <div className="documents-totals-row documents-totals-row--final">
-              <span>Total TTC</span>
-              <strong>{money(totals.totalTTC)}</strong>
-            </div>
-          </div>
-
-          <div className="documents-form-actions">
-            <button className="primary" type="submit">
-              {editingId ? "Enregistrer les modifications" : `Créer ${isQuote ? "le devis" : "la facture"}`}
-            </button>
-            {editingId && (
-              <button type="button" onClick={reset}>
-                Annuler
-              </button>
-            )}
-          </div>
-        </div>
-      </form>
-
-      <div className="card documents-list-card">
-        <div className="documents-toolbar">
-          <div className="documents-toolbar-title">
-            <span className="filters-icon">{isQuote ? "📂" : "💼"}</span>
-            <div>
-              <strong>Liste des {isQuote ? "devis" : "factures"}</strong>
-              <span>
-                {sortedDocuments.length} document{sortedDocuments.length > 1 ? "s" : ""}
-                {overdueOnly && !isQuote ? " · filtre en retard actif" : ""}
-              </span>
-            </div>
-          </div>
-
-          <div className="documents-toolbar-controls">
-            {!isQuote && (
-              <button type="button" onClick={handleExportCsv}>
-                Exporter CSV
-              </button>
-            )}
-            {!isQuote && (
-              <button
-                type="button"
-                className={`documents-filter-btn${overdueOnly ? " is-active" : ""}`}
-                onClick={() => {
-                  setOverdueOnly((value) => !value);
-                  setCurrentPage(1);
-                }}
-              >
-                En retard uniquement
-                {stats.overdueCount > 0 && ` (${stats.overdueCount})`}
-              </button>
-            )}
-            <label className="documents-field documents-field--sort">
-              <span>Trier par</span>
-              <select
-                value={sortBy}
-                onChange={(e) => {
-                  setSortBy(e.target.value);
-                  setCurrentPage(1);
-                }}
-              >
-                <option value="dateDesc">Date : plus récent</option>
-                <option value="dateAsc">Date : plus ancien</option>
-                <option value="numberDesc">N° : décroissant</option>
-                <option value="numberAsc">N° : croissant</option>
-                <option value="clientAsc">Client : A → Z</option>
-                <option value="clientDesc">Client : Z → A</option>
-                <option value="totalDesc">Total : plus élevé</option>
-                <option value="totalAsc">Total : plus bas</option>
-                <option value="statusAsc">Statut : A → Z</option>
-                <option value="statusDesc">Statut : Z → A</option>
-              </select>
-            </label>
-          </div>
-        </div>
-
-        {paginatedDocuments.length === 0 ? (
-          <div className="documents-empty">
-            <strong>Aucun {isQuote ? "devis" : "facture"} à afficher</strong>
-            <p>
-              {overdueOnly && !isQuote
-                ? "Aucune facture en retard ne correspond à ce filtre."
-                : `Créez votre premier ${isQuote ? "devis" : "facture"} avec le formulaire ci-dessus.`}
-            </p>
-          </div>
-        ) : (
-          <div className="table documents-table-wrap">
-            <table className="documents-table compact-table">
-              <thead>
-                <tr>
-                  <th>N°</th>
-                  <th>Date</th>
-                  <th>Client</th>
-                  <th>Lignes</th>
-                  <th>Total TTC</th>
-                  <th>Statut</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paginatedDocuments.map((d) => {
-                  const overdue = !isQuote && isInvoiceOverdue(d);
-                  const convertible = isQuote && isQuoteConvertible(data, d);
-                  const converted = isQuote && quoteAlreadyConverted(data, d);
-
-                  return (
-                    <tr
-                      key={`${d.id || d.number}-${d.number || ""}`}
-                      className={overdue ? "documents-row--overdue" : ""}
-                    >
-                      <td>
-                        <strong className="documents-number">{d.number}</strong>
-                      </td>
-                      <td>{d.date}</td>
-                      <td>{clientName(data, d.clientId)}</td>
-                      <td>
-                        <span className="documents-lines-badge">{d.lines?.length || 1}</span>
-                      </td>
-                      <td>
-                        <strong>{money(d.totalTTC)}</strong>
-                      </td>
-                      <td>
-                        <div className="documents-status-cell">
-                          <span className={statusClass(d.status)}>{d.status}</span>
-                          <select
-                            className="documents-status-select"
-                            value={d.status}
-                            onChange={(e) => updateStatus(d.id, e.target.value)}
-                            aria-label={`Statut ${d.number}`}
-                          >
-                            {isQuote ? (
-                              QUOTE_STATUSES.map((status) => (
-                                <option key={status}>{status}</option>
-                              ))
-                            ) : (
-                              <>
-                                <option>Non payée</option>
-                                <option>Payée</option>
-                                <option>En retard</option>
-                                <option>Annulée</option>
-                              </>
-                            )}
-                          </select>
-                        </div>
-                      </td>
-                      <td className="actions documents-actions">
-                        <button type="button" className="compact" onClick={() => setPreviewDoc(d)}>
-                          Voir
-                        </button>
-                        <button type="button" className="compact" onClick={() => edit(d)}>
-                          Modifier
-                        </button>
-                        {isQuote && (
-                          converted ? (
-                            <span className="documents-converted-tag">Facturé</span>
-                          ) : (
-                            <button
-                              type="button"
-                              className={`compact documents-convert-btn${convertible ? " primary" : ""}`}
-                              onClick={() => convertQuoteToInvoice(d)}
-                              title={
-                                convertible
-                                  ? "Convertir ce devis accepté en facture"
-                                  : "Convertir en facture (devis non accepté)"
-                              }
-                            >
-                              Convertir
-                            </button>
-                          )
-                        )}
-                        {!isQuote && overdue && (
-                          <button
-                            type="button"
-                            className="compact documents-remind-btn"
-                            onClick={() => sendInvoiceReminder(d)}
-                            title={
-                              d.lastReminderDate
-                                ? `Dernière relance : ${d.lastReminderDate}`
-                                : "Préparer un email de relance"
-                            }
-                          >
-                            Relancer
-                          </button>
-                        )}
-                        <button type="button" className="danger compact" onClick={() => remove(d.id)}>
-                          Supprimer
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        <div className="pagination documents-pagination">
-          <button
-            type="button"
-            disabled={documentPage <= 1}
-            onClick={() => setCurrentPage(documentPage - 1)}
-          >
-            Précédent
-          </button>
-
-          <span>
-            Page {documentPage} / {documentTotalPages}
-          </span>
-
-          <button
-            type="button"
-            disabled={documentPage >= documentTotalPages}
-            onClick={() => setCurrentPage(documentPage + 1)}
-          >
-            Suivant
-          </button>
-        </div>
-      </div>
+      <DocumentList
+        isQuote={isQuote}
+        data={data}
+        sortedDocuments={sortedDocuments}
+        paginatedDocuments={paginatedDocuments}
+        stats={stats}
+        overdueOnly={overdueOnly}
+        sortBy={sortBy}
+        documentPage={documentPage}
+        documentTotalPages={documentTotalPages}
+        onExportCsv={handleExportCsv}
+        onToggleOverdueOnly={() => {
+          setOverdueOnly((value) => !value);
+          setCurrentPage(1);
+        }}
+        onSortChange={(value) => {
+          setSortBy(value);
+          setCurrentPage(1);
+        }}
+        onPageChange={setCurrentPage}
+        onPreview={setPreviewDoc}
+        onEdit={edit}
+        onRemove={remove}
+        onUpdateStatus={updateStatus}
+        onSendReminder={sendInvoiceReminder}
+        onConvertQuote={convertQuoteToInvoice}
+      />
 
       {previewDoc && (
         <DocumentPreview
