@@ -7,21 +7,41 @@ import path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.join(__dirname, "..", ".env") });
+
+function loadEnvFiles() {
+  const candidates = [
+    process.env.BANK_ENV_PATH,
+    path.join(__dirname, "..", ".env"),
+  ].filter(Boolean);
+
+  for (const envPath of candidates) {
+    if (fs.existsSync(envPath)) {
+      dotenv.config({ path: envPath });
+      return envPath;
+    }
+  }
+
+  return null;
+}
+
+loadEnvFiles();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
 const PORT = Number(process.env.PORT || 3001);
+const HOST = process.env.BANK_HOST || "127.0.0.1";
 const TINK_CLIENT_ID = process.env.TINK_CLIENT_ID || "";
 const TINK_CLIENT_SECRET = process.env.TINK_CLIENT_SECRET || "";
 const TINK_REDIRECT_URI =
-  process.env.TINK_REDIRECT_URI || `http://localhost:${PORT}/api/bank/callback`;
+  process.env.TINK_REDIRECT_URI || `http://${HOST}:${PORT}/api/bank/callback`;
 const TINK_MARKET = process.env.TINK_MARKET || "LU";
 const TINK_LOCALE = process.env.TINK_LOCALE || "fr_FR";
 
-const TOKEN_STORE_PATH = path.join(__dirname, ".tink-token.json");
+const TOKEN_STORE_PATH =
+  process.env.TINK_TOKEN_STORE_PATH ||
+  path.join(__dirname, ".tink-token.json");
 
 function readTokenStore() {
   try {
@@ -237,8 +257,8 @@ app.get("/api/bank/transactions", async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Bank API OK sur http://localhost:${PORT}`);
+app.listen(PORT, HOST, () => {
+  console.log(`Bank API OK sur http://${HOST}:${PORT}`);
   if (!tinkConfigured()) {
     console.warn("TINK_CLIENT_ID absent — mode saisie manuelle uniquement.");
   }

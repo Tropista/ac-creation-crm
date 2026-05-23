@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { showToast } from "../utils/toast";
 import { buildCalculatorQuoteLine, openQuoteFromCalculator } from "../utils/quoteDraft";
+import "../styles/uv-dtf-calculator.css";
 
 /*
  * Specs Tristar 30 cm UV-DTF — source : creadhesif.com/imprimante-dtf-uv-30cm-tristar.html

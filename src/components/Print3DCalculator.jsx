@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { showToast } from "../utils/toast";
 import { buildCalculatorQuoteLine, openQuoteFromCalculator } from "../utils/quoteDraft";
+import "../styles/print3d-calculator.css";
 
 function euro(value) {
 

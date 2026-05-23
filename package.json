@@ -24,6 +24,7 @@
     "axios": "^1.16.1",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
+    "electron-updater": "^6.8.3",
     "express": "^5.2.1",
     "html2canvas": "^1.4.1",
     "html5-qrcode": "^2.3.8",
@@ -58,7 +59,11 @@
     },
     "files": [
       "dist/**/*",
+      "backend/**/*",
       "electron.cjs",
+      "electron-bank.cjs",
+      "electron-updater.cjs",
+      "electron-preload.cjs",
       "package.json",
       "public/icon.ico"
     ],
@@ -82,6 +87,11 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "AC Creation CRM"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "Tropista",
+      "repo": "ac-creation-crm"
     }
   }
 }

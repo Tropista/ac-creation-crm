@@ -1,13 +1,20 @@
 const { app, BrowserWindow } = require("electron");
 const path = require("path");
 const fs = require("fs");
+const {
+  getBankApiUrl,
+  startBankServer,
+  stopBankServer,
+} = require("./electron-bank.cjs");
+const { setupAutoUpdater } = require("./electron-updater.cjs");
 
 const isDev = !app.isPackaged;
+const appRoot = __dirname;
 
 function resolveIconPath() {
   const candidates = [
-    path.join(__dirname, "public", "icon.ico"),
-    path.join(__dirname, "dist", "icon.ico"),
+    path.join(appRoot, "public", "icon.ico"),
+    path.join(appRoot, "dist", "icon.ico"),
   ];
   for (const iconPath of candidates) {
     if (fs.existsSync(iconPath)) return iconPath;
@@ -17,7 +24,7 @@ function resolveIconPath() {
 
 function createWindow() {
   const iconPath = resolveIconPath();
-  const win = new BrowserWindow({
+  const window = new BrowserWindow({
     width: 1700,
     height: 1000,
     minWidth: 1200,
@@ -28,10 +35,12 @@ function createWindow() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      preload: path.join(appRoot, "electron-preload.cjs"),
+      additionalArguments: [`--bank-api-url=${getBankApiUrl()}`],
     },
   });
 
-  const indexPath = path.join(__dirname, "dist", "index.html");
+  const indexPath = path.join(appRoot, "dist", "index.html");
   if (!fs.existsSync(indexPath)) {
     const message = [
       "<!DOCTYPE html><html lang=\"fr\"><head><meta charset=\"utf-8\">",
@@ -49,27 +58,42 @@ function createWindow() {
       "<p><small>Les variables <code>VITE_*</code> sont intégrées au build Vite, pas au lancement Electron.</small></p>",
       "</body></html>",
     ].join("");
-    win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(message)}`);
-    return;
+    window.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(message)}`);
+    return window;
   }
 
-  win.loadFile(indexPath);
-  win.webContents.setZoomFactor(0.85);
-  win.maximize();
+  window.loadFile(indexPath);
+  window.webContents.setZoomFactor(0.85);
+  window.maximize();
 
   if (isDev && process.env.ELECTRON_DEVTOOLS === "1") {
-    win.webContents.openDevTools({ mode: "detach" });
+    window.webContents.openDevTools({ mode: "detach" });
   }
+
+  return window;
 }
 
-app.whenReady().then(() => {
-  createWindow();
+app.whenReady().then(async () => {
+  await startBankServer({
+    appRoot,
+    userDataPath: app.getPath("userData"),
+    execPath: process.execPath,
+    isPackaged: app.isPackaged,
+  });
+
+  const mainWindow = createWindow();
+  setupAutoUpdater(mainWindow, { isPackaged: app.isPackaged });
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+      const win = createWindow();
+      setupAutoUpdater(win, { isPackaged: app.isPackaged });
     }
   });
+});
+
+app.on("before-quit", () => {
+  stopBankServer();
 });
 
 app.on("window-all-closed", () => {

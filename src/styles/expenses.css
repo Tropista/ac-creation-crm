@@ -111,6 +111,76 @@
   color: #047857;
 }
 
+.expense-source-badge.csv {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.expenses-import-input {
+  display: none;
+}
+
+.expenses-import-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.expenses-import-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.expenses-import-header h3 {
+  margin: 0 0 6px;
+}
+
+.expenses-import-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.expenses-import-format summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.expenses-import-format ul {
+  margin: 10px 0;
+  padding-left: 20px;
+}
+
+.expenses-import-table-wrap {
+  overflow: auto;
+}
+
+.expenses-import-row-error {
+  background: #fef2f2;
+}
+
+.expense-import-match {
+  color: #047857;
+  font-weight: 600;
+}
+
+.expense-import-unmatched {
+  color: #64748b;
+}
+
+.expense-import-valid {
+  color: #047857;
+  font-weight: 600;
+}
+
+.expense-import-invalid {
+  color: #b91c1c;
+  font-size: 12px;
+}
+
 .expenses-toolbar-filters {
   display: flex;
   gap: 12px;

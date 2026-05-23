@@ -32,10 +32,6 @@ import Suppliers from "./components/Suppliers";
 import Expenses from "./components/Expenses";
 import UsersAdmin from "./components/UsersAdmin";
 import ActivityLogs from "./components/ActivityLogs";
-import Print3DCalculator from "./components/Print3DCalculator";
-import LaserCalculator from "./components/LaserCalculator";
-import DtfCalculator from "./components/DtfCalculator";
-import UvDtfCalculator from "./components/UvDtfCalculator";
 import Backups from "./components/Backups";
 import AuthPage from "./components/auth/AuthPage";
 import AccessDenied from "./components/auth/AccessDenied";
@@ -74,10 +70,6 @@ import "./styles/dashboard.css";
 import "./styles/clients.css";
 import "./styles/documents.css";
 import "./styles/atelier.css";
-import "./styles/print3d-calculator.css";
-import "./styles/laser-calculator.css";
-import "./styles/dtf-calculator.css";
-import "./styles/uv-dtf-calculator.css";
 import "./styles/products-erp.css";
 import "./styles/suppliers.css";
 import "./styles/expenses.css";
@@ -104,6 +96,22 @@ const BarcodeLabels = lazy(() =>
 
 const ProductScan = lazy(() =>
   import("./components/ProductScan")
+);
+
+const Print3DCalculator = lazy(() =>
+  import("./components/Print3DCalculator")
+);
+
+const LaserCalculator = lazy(() =>
+  import("./components/LaserCalculator")
+);
+
+const DtfCalculator = lazy(() =>
+  import("./components/DtfCalculator")
+);
+
+const UvDtfCalculator = lazy(() =>
+  import("./components/UvDtfCalculator")
 );
 
 const SESSION_KEY = "crm_current_user_v2";

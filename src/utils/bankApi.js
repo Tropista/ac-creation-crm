@@ -1,6 +1,13 @@
-const DEFAULT_BANK_API_URL = "http://localhost:3001";
+const DEFAULT_BANK_API_URL = "http://127.0.0.1:3001";
+
+function isElectronRenderer() {
+  return typeof window !== "undefined" && window.electronAPI?.isElectron;
+}
 
 export function getBankApiUrl() {
+  if (isElectronRenderer() && window.electronAPI.getBankApiUrl) {
+    return window.electronAPI.getBankApiUrl();
+  }
   return import.meta.env.VITE_BANK_API_URL || DEFAULT_BANK_API_URL;
 }
 

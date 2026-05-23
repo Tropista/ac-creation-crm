@@ -1,5 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { APP_LOGO_URL } from "../utils/assets";
+import { APP_VERSION } from "../utils/appVersion";
 import { pageToPath } from "../utils/routes";
 
 const menuItems = [
@@ -97,6 +98,7 @@ Personnalisation • Laser • 3D
       </nav>
 
       <div className="sidebar-footer">
+        <p className="sidebar-version">Version {APP_VERSION}</p>
         <button className="danger" onClick={logout}>
           Déconnexion
         </button>

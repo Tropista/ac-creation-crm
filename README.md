@@ -42,6 +42,7 @@ Créer les tables Supabase : coller [`docs/supabase-migration.sql`](docs/supabas
 | `npm run electron` | Lance l’app Electron (nécessite `npm run build` au préalable) |
 | `npm run dist` | Build + empaquetage Windows (sortie dans `release/`) |
 | `npm run dist:win` | Idem, cible Windows explicite |
+| `npm run dist:win -- --publish always` | Build + publication GitHub Releases (nécessite `GH_TOKEN`) |
 
 ### API banque (optionnel)
 
@@ -77,6 +78,25 @@ Les variables `VITE_*` sont **figées au build Vite** (`npm run build`). Copier 
 Sans dossier `dist/`, Electron affiche une page d’erreur avec les étapes à suivre.
 
 Configuration : `electron.cjs`, cible `com.accreation.crm`, icône `public/icon.ico`.
+
+### Mises à jour automatiques (Electron)
+
+Les mises à jour automatiques ne fonctionnent **que dans l’installeur Windows** (`release/*.exe`), pas avec `npm run electron` en développement.
+
+Au démarrage, l’app vérifie GitHub Releases ([Tropista/ac-creation-crm](https://github.com/Tropista/ac-creation-crm)). Si une version plus récente existe, elle est téléchargée en arrière-plan. Une bannière **Mise à jour disponible** apparaît dans **Paramètres** avec un bouton **Redémarrer pour mettre à jour**.
+
+**Publier une nouvelle version :**
+
+1. Incrémenter `"version"` dans `package.json` (ex. `1.0.1`).
+2. Copier `.env` et lancer `npm run dist:win` — génère dans `release/` :
+   - `AC Creation CRM Setup x.x.x.exe`
+   - `latest.yml` (métadonnées auto-update)
+3. Créer une **GitHub Release** avec un tag `vX.Y.Z` (ex. `v1.0.1`) sur le dépôt.
+4. Joindre **`latest.yml`** et **`AC Creation CRM Setup x.x.x.exe`** aux assets de la release.
+
+Publication automatique (optionnel) : définir `GH_TOKEN` (token GitHub avec droits `repo`) puis `npm run dist:win -- --publish always`.
+
+Sans connexion Internet, sans release publiée ou sans config publish au build, la vérification est ignorée silencieusement.
 
 ## Configurateur t-shirt → Devis
 

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { showToast } from "../utils/toast";
 import { buildCalculatorQuoteLine, openQuoteFromCalculator } from "../utils/quoteDraft";
+import "../styles/dtf-calculator.css";
 
 const GARMENT_PRESETS = {
   "T-shirt": { complexityFactor: 1, whiteMultiplier: 1.15 },

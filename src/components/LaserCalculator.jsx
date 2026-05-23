@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { showToast } from "../utils/toast";
 import { buildCalculatorQuoteLine, openQuoteFromCalculator } from "../utils/quoteDraft";
+import "../styles/laser-calculator.css";
 
 const MATERIAL_PRESETS = {
   Bois: { costPerM2: 18, cutSpeed: 600, engraveSpeed: 45000 },

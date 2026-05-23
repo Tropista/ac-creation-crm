@@ -1,10 +1,14 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import PaginationControls from "./PaginationControls";
 import { canDeleteData } from "../services/authService";
 import {
   resolveSupplierForExpense,
 } from "../utils/expenseSuppliers";
 import { exportExpensesCsv } from "../utils/exportCsv";
+import {
+  buildExpensesFromImportRows,
+  parseExpensesCsv,
+} from "../utils/importExpensesCsv";
 import { getPermissions } from "../utils/permissions";
 import { showToast } from "../utils/toast";
 
@@ -65,6 +69,9 @@ export default function Expenses({
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyExpenseForm);
+  const [importPreview, setImportPreview] = useState(null);
+  const [importFileName, setImportFileName] = useState("");
+  const importInputRef = useRef(null);
 
   const itemsPerPage = 25;
   const expenses = data.expenses || [];
@@ -173,6 +180,100 @@ export default function Expenses({
       `depenses-${new Date().toISOString().slice(0, 10)}.csv`
     );
     showToast(`${filteredExpenses.length} dépense(s) exportée(s).`, "success");
+  }
+
+  function openImportDialog() {
+    importInputRef.current?.click();
+  }
+
+  function resetImportPreview() {
+    setImportPreview(null);
+    setImportFileName("");
+    if (importInputRef.current) {
+      importInputRef.current.value = "";
+    }
+  }
+
+  function handleImportFileChange(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (loadEvent) => {
+      try {
+        const text = String(loadEvent.target?.result || "");
+        const parsed = parseExpensesCsv(text, suppliers);
+
+        if (parsed.fileErrors.length > 0) {
+          showToast(parsed.fileErrors[0], "error");
+          resetImportPreview();
+          return;
+        }
+
+        if (parsed.rows.length === 0) {
+          showToast("Le fichier CSV ne contient aucune ligne de dépense.", "error");
+          resetImportPreview();
+          return;
+        }
+
+        setImportFileName(file.name);
+        setImportPreview(parsed);
+        setShowForm(false);
+      } catch (error) {
+        console.error(error);
+        showToast("Impossible de lire le fichier CSV.", "error");
+        resetImportPreview();
+      }
+    };
+
+    reader.onerror = () => {
+      showToast("Erreur lors de la lecture du fichier.", "error");
+      resetImportPreview();
+    };
+
+    reader.readAsText(file, "UTF-8");
+  }
+
+  function confirmImport() {
+    if (!importPreview) return;
+
+    const { validRows, invalidRows } = importPreview;
+    if (validRows.length === 0) {
+      showToast("Aucune ligne valide à importer.", "error");
+      return;
+    }
+
+    const importedExpenses = buildExpensesFromImportRows(validRows, {
+      uid,
+      now: today(),
+    });
+
+    setData({
+      ...data,
+      expenses: [...importedExpenses, ...expenses],
+    });
+
+    logActivity?.(
+      "Import CSV dépenses",
+      `${validRows.length} facture(s) depuis ${importFileName || "CSV"}`
+    );
+
+    if (invalidRows.length > 0) {
+      showToast(
+        `${validRows.length} dépense(s) importée(s), ${invalidRows.length} ligne(s) ignorée(s).`,
+        "success"
+      );
+    } else {
+      showToast(`${validRows.length} dépense(s) importée(s).`, "success");
+    }
+
+    resetImportPreview();
+  }
+
+  function expenseSourceLabel(source) {
+    if (source === "csv-import") return "CSV";
+    if (source === "pdf-import") return "PDF";
+    return "Manuel";
   }
 
   function openManualForm() {
@@ -322,9 +423,19 @@ export default function Expenses({
           <button type="button" className="primary" onClick={openManualForm}>
             + Saisie manuelle
           </button>
+          <button type="button" onClick={openImportDialog}>
+            Importer CSV
+          </button>
           <button type="button" onClick={handleExportCsv}>
             Exporter CSV
           </button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept=".csv,text/csv"
+            className="expenses-import-input"
+            onChange={handleImportFileChange}
+          />
         </div>
 
         <div className="expenses-toolbar-filters">
@@ -357,6 +468,126 @@ export default function Expenses({
           />
         </div>
       </div>
+
+      {importPreview && (
+        <div className="card expenses-import-panel">
+          <div className="expenses-import-header">
+            <div>
+              <h3>Import CSV — aperçu</h3>
+              <p className="muted">
+                Fichier : {importFileName || "—"} ·{" "}
+                {importPreview.validRows.length} ligne(s) valide(s),{" "}
+                {importPreview.invalidRows.length} ignorée(s)
+              </p>
+            </div>
+            <div className="expenses-import-actions">
+              <button
+                type="button"
+                className="primary"
+                onClick={confirmImport}
+                disabled={importPreview.validRows.length === 0}
+              >
+                Confirmer l&apos;import ({importPreview.validRows.length})
+              </button>
+              <button type="button" onClick={resetImportPreview}>
+                Annuler
+              </button>
+            </div>
+          </div>
+
+          <details className="expenses-import-format">
+            <summary>Format CSV attendu</summary>
+            <p>
+              Séparateur <strong>;</strong> (recommandé, comme l&apos;export) ou{" "}
+              <strong>,</strong>. Première ligne = en-têtes.
+            </p>
+            <ul>
+              <li>
+                <strong>date</strong> — JJ/MM/AAAA ou AAAA-MM-JJ (recommandé)
+              </li>
+              <li>
+                <strong>fournisseur</strong> ou <strong>supplier</strong>{" "}
+                (obligatoire)
+              </li>
+              <li>
+                <strong>description</strong>, <strong>libellé</strong>{" "}
+                (optionnel)
+              </li>
+              <li>
+                <strong>montant_ht</strong> / <strong>HT</strong> (optionnel)
+              </li>
+              <li>
+                <strong>tva</strong>, <strong>taux tva</strong> ou montant TVA
+                (optionnel)
+              </li>
+              <li>
+                <strong>montant_ttc</strong> / <strong>TTC</strong> (au moins
+                un montant)
+              </li>
+              <li>
+                <strong>n° facture</strong>, <strong>catégorie</strong>{" "}
+                (optionnels)
+              </li>
+            </ul>
+            <p className="muted">
+              Exemple :{" "}
+              <code>
+                date;fournisseur;description;montant_ht;tva;montant_ttc
+              </code>
+            </p>
+          </details>
+
+          <div className="expenses-import-table-wrap">
+            <table className="expenses-table expenses-import-table">
+              <thead>
+                <tr>
+                  <th>Ligne</th>
+                  <th>Date</th>
+                  <th>Fournisseur</th>
+                  <th>Libellé</th>
+                  <th>HT</th>
+                  <th>TVA</th>
+                  <th>TTC</th>
+                  <th>Fournisseur lié</th>
+                  <th>Statut</th>
+                </tr>
+              </thead>
+              <tbody>
+                {importPreview.rows.map((row) => (
+                  <tr
+                    key={row.rowIndex}
+                    className={row.valid ? "" : "expenses-import-row-error"}
+                  >
+                    <td>{row.rowIndex}</td>
+                    <td>{row.purchaseDate ? formatDate(row.purchaseDate) : "—"}</td>
+                    <td>{row.supplierName || "—"}</td>
+                    <td>{row.notes || row.category || "—"}</td>
+                    <td>{money(row.amountHT)}</td>
+                    <td>{money(row.vatAmount)}</td>
+                    <td>{money(row.totalTTC)}</td>
+                    <td>
+                      {row.supplierMatched ? (
+                        <span className="expense-import-match">Oui</span>
+                      ) : (
+                        <span className="expense-import-unmatched">Texte seul</span>
+                      )}
+                    </td>
+                    <td>
+                      {row.valid ? (
+                        <span className="expense-import-valid">OK</span>
+                      ) : (
+                        <span className="expense-import-invalid">
+                          {row.errors.join(", ")}
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {showForm && (
         <form className="card expenses-form-panel" onSubmit={submitExpense}>
@@ -522,10 +753,14 @@ export default function Expenses({
                 <td>
                   <span
                     className={`expense-source-badge ${
-                      expense.source === "manual" ? "manual" : ""
+                      expense.source === "manual"
+                        ? "manual"
+                        : expense.source === "csv-import"
+                          ? "csv"
+                          : ""
                     }`}
                   >
-                    {expense.source === "pdf-import" ? "PDF" : "Manuel"}
+                    {expenseSourceLabel(expense.source)}
                   </span>
                 </td>
                 <td>
