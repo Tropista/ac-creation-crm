@@ -211,6 +211,38 @@
   opacity: 0.7;
 }
 
+.supplier-expenses-section {
+  margin-top: 28px;
+  padding-top: 24px;
+  border-top: 1px solid #eef2ff;
+}
+
+.supplier-expense-totals {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.supplier-expense-totals strong {
+  color: #0f172a;
+}
+
+.supplier-expenses-table th,
+.supplier-expenses-table td {
+  padding: 10px 8px;
+  border-top: 1px solid #eef2ff;
+  text-align: left;
+}
+
+.supplier-expenses-table th {
+  font-size: 12px;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
 @media (max-width: 1100px) {
   .suppliers-layout {
     grid-template-columns: 1fr;

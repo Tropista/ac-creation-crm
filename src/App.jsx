@@ -461,6 +461,7 @@ function CrmApp() {
                     setData={updateData}
                     currentRole={currentRole}
                     logActivity={handleLogActivity}
+                    setPage={setPage}
                   />
                 ) : null
               }

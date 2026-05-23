@@ -28,7 +28,7 @@ cp .env.example .env
 # Renseigner VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY dans .env
 ```
 
-Créer les tables Supabase selon [`docs/SUPABASE.md`](docs/SUPABASE.md).
+Créer les tables Supabase : coller [`docs/supabase-migration.sql`](docs/supabase-migration.sql) dans le SQL Editor Supabase (détails dans [`docs/SUPABASE.md`](docs/SUPABASE.md)).
 
 ## Scripts npm
 
@@ -109,7 +109,7 @@ Définis dans `src/utils/permissions.js`. L’auth passe par Supabase ; le rôle
 
 ## Supabase
 
-Schéma attendu, migrations SQL et politiques RLS pour `bank_transactions` : **[docs/SUPABASE.md](docs/SUPABASE.md)**.
+Script SQL unique (tables CRM + `bank_transactions` + RLS) : **[docs/supabase-migration.sql](docs/supabase-migration.sql)**. Référence détaillée : **[docs/SUPABASE.md](docs/SUPABASE.md)**.
 
 ## Structure utile
 

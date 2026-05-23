@@ -1,6 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import PaginationControls from "./PaginationControls";
 import { canDeleteData } from "../services/authService";
+import {
+  getExpensesForSupplier,
+  sumExpenseTotals,
+} from "../utils/expenseSuppliers";
 import { showToast } from "../utils/toast";
 
 function uid() {
@@ -73,7 +77,18 @@ export default function Suppliers({
 
   const itemsPerPage = 25;
   const suppliers = data.suppliers || [];
+  const expenses = data.expenses || [];
   const products = (data.products || []).filter((product) => !product.archived);
+
+  useEffect(() => {
+    const supplierId = localStorage.getItem("crm_select_supplier_id");
+    if (!supplierId) return;
+
+    localStorage.removeItem("crm_select_supplier_id");
+    if (suppliers.some((supplier) => String(supplier.id) === supplierId)) {
+      setSelectedSupplierId(supplierId);
+    }
+  }, [suppliers]);
 
   const totalPurchasedProducts = useMemo(
     () =>
@@ -118,6 +133,20 @@ export default function Suppliers({
 
   const selectedSupplier = suppliers.find(
     (supplier) => supplier.id === selectedSupplierId
+  );
+
+  const linkedExpenses = useMemo(() => {
+    if (!selectedSupplier) return [];
+    return getExpensesForSupplier(selectedSupplier, expenses).sort((a, b) => {
+      const dateA = new Date(a.purchaseDate || a.createdAt || 0).getTime();
+      const dateB = new Date(b.purchaseDate || b.createdAt || 0).getTime();
+      return dateB - dateA;
+    });
+  }, [selectedSupplier, expenses]);
+
+  const linkedExpenseTotals = useMemo(
+    () => sumExpenseTotals(linkedExpenses),
+    [linkedExpenses]
   );
 
   function resetSupplierForm() {
@@ -660,6 +689,49 @@ export default function Suppliers({
                           </tr>
                         );
                       })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div className="supplier-expenses-section">
+                <div className="supplier-links-header">
+                  <h4>Factures de dépense liées</h4>
+                  <div className="supplier-expense-totals">
+                    <span>{linkedExpenses.length} facture(s)</span>
+                    <strong>{money(linkedExpenseTotals.ht)} HT</strong>
+                    <strong>{money(linkedExpenseTotals.ttc)} TTC</strong>
+                  </div>
+                </div>
+
+                <div className="table supplier-expenses-table">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>N° facture</th>
+                        <th>HT</th>
+                        <th>TTC</th>
+                        <th>Catégorie</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {linkedExpenses.length === 0 && (
+                        <tr>
+                          <td colSpan="5" className="muted">
+                            Aucune facture de dépense liée à ce fournisseur.
+                          </td>
+                        </tr>
+                      )}
+                      {linkedExpenses.map((expense) => (
+                        <tr key={expense.id}>
+                          <td>{formatDate(expense.purchaseDate || expense.createdAt)}</td>
+                          <td>{expense.invoiceNumber || "—"}</td>
+                          <td>{money(expense.amountHT)}</td>
+                          <td>{money(expense.totalTTC)}</td>
+                          <td>{expense.category || "—"}</td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>

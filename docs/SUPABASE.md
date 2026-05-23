@@ -2,6 +2,8 @@
 
 Configuration PostgreSQL attendue par l’application. À exécuter dans le **SQL Editor** du projet Supabase (adapter selon votre instance existante).
 
+**Migration complète (recommandé)** : copier-coller une seule fois le contenu de [`docs/supabase-migration.sql`](supabase-migration.sql) dans le SQL Editor Supabase. Ce fichier crée toutes les tables CRM, `bank_transactions`, et les politiques RLS.
+
 ## Auth
 
 Activer **Email + mot de passe** dans Authentication → Providers. Les utilisateurs CRM sont aussi enregistrés dans la table `users` (rôle, statut).
@@ -113,11 +115,33 @@ ALTER TABLE backups ENABLE ROW LEVEL SECURITY;
 ALTER TABLE crm_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
 
--- Exemple : accès complet pour anon/authenticated (à restreindre si besoin)
+-- Accès complet pour anon/authenticated (à restreindre si besoin)
+-- Répéter pour chaque table CRM :
 CREATE POLICY "crm_full_access" ON clients
   FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
--- Répéter pour chaque table CRM ou regrouper via rôles Supabase.
+CREATE POLICY "crm_full_access" ON products
+  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "crm_full_access" ON categories
+  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "crm_full_access" ON suppliers
+  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "crm_full_access" ON expenses
+  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "crm_full_access" ON quotes
+  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "crm_full_access" ON invoices
+  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "crm_full_access" ON users
+  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "crm_full_access" ON backups
+  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "crm_full_access" ON crm_logs
+  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+CREATE POLICY "crm_full_access" ON settings
+  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 ```
+
+> Pour un script idempotent prêt à coller (avec `DROP POLICY IF EXISTS`), utiliser [`supabase-migration.sql`](supabase-migration.sql).
 
 ## Table `bank_transactions`
 

@@ -17,6 +17,7 @@ import {
   INVOICES_FILTER_KEY,
   isInvoiceOverdue,
 } from "../utils/invoices";
+import { exportInvoicesCsv } from "../utils/exportCsv";
 import { showToast } from "../utils/toast";
 
 function Documents({ type, data, setData, currentRole = 'Admin', logActivity }) {
@@ -391,6 +392,25 @@ useEffect(() => {
     }
   }
 
+  function handleExportCsv() {
+    if (documents.length === 0) {
+      showToast(`Aucun${isQuote ? " devis" : "e facture"} à exporter.`, "error");
+      return;
+    }
+
+    if (isQuote) {
+      showToast("Export CSV disponible pour les factures uniquement.", "info");
+      return;
+    }
+
+    exportInvoicesCsv(
+      sortedDocuments,
+      data,
+      `factures-${new Date().toISOString().slice(0, 10)}.csv`
+    );
+    showToast(`${sortedDocuments.length} facture(s) exportée(s).`, "success");
+  }
+
   return (
     <section className="documents-page">
       <div className="page-header">
@@ -626,6 +646,11 @@ useEffect(() => {
           </div>
 
           <div className="documents-toolbar-controls">
+            {!isQuote && (
+              <button type="button" onClick={handleExportCsv}>
+                Exporter CSV
+              </button>
+            )}
             {!isQuote && (
               <button
                 type="button"

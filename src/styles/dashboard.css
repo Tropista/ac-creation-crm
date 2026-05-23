@@ -110,6 +110,22 @@ margin-bottom:16px;
 margin:0 0 6px;
 }
 
+.dashboard-kpis{
+margin-top:0;
+margin-bottom:8px;
+}
+
+.dashboard-kpi{
+display:flex;
+flex-direction:column;
+gap:6px;
+}
+
+.dashboard-kpi em{
+font-style:normal;
+font-size:13px;
+}
+
 .stat--danger strong{
 color:#dc2626;
 }

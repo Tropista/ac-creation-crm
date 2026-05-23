@@ -1,8 +1,12 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import PaginationControls from "./PaginationControls";
 import { canDeleteData } from "../services/authService";
+import {
+  resolveSupplierForExpense,
+} from "../utils/expenseSuppliers";
+import { exportExpensesCsv } from "../utils/exportCsv";
+import { getPermissions } from "../utils/permissions";
 import { showToast } from "../utils/toast";
-import { parseExpenseFromPdf } from "../utils/expensePdfExtract";
 
 function uid() {
   return crypto.randomUUID();
@@ -34,6 +38,7 @@ function parseNumberInput(value) {
 }
 
 const emptyExpenseForm = {
+  supplierId: "",
   supplierName: "",
   invoiceNumber: "",
   purchaseDate: "",
@@ -43,8 +48,6 @@ const emptyExpenseForm = {
   totalTTC: "",
   category: "",
   notes: "",
-  pdfFileName: "",
-  source: "manual",
 };
 
 const VAT_RATE_OPTIONS = ["", "3", "8", "14", "16", "17", "20"];
@@ -54,17 +57,27 @@ export default function Expenses({
   setData,
   currentRole = "Admin",
   logActivity,
+  setPage,
 }) {
   const [search, setSearch] = useState("");
+  const [supplierFilter, setSupplierFilter] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyExpenseForm);
-  const [importing, setImporting] = useState(false);
-  const fileInputRef = useRef(null);
 
   const itemsPerPage = 25;
   const expenses = data.expenses || [];
+  const canAccessSuppliers = getPermissions(currentRole).pages.includes(
+    "suppliers"
+  );
+  const suppliers = useMemo(
+    () =>
+      [...(data.suppliers || [])].sort((a, b) =>
+        String(a.name || "").localeCompare(String(b.name || ""))
+      ),
+    [data.suppliers]
+  );
 
   const totals = useMemo(() => {
     return expenses.reduce(
@@ -80,8 +93,12 @@ export default function Expenses({
   }, [expenses]);
 
   const filteredExpenses = expenses
-    .filter((expense) =>
-      [
+    .filter((expense) => {
+      const supplier = resolveSupplierForExpense(expense, suppliers);
+      const supplierLabel = supplier?.name || expense.supplierName || "";
+
+      const searchMatch = [
+        supplierLabel,
         expense.supplierName,
         expense.invoiceNumber,
         expense.purchaseDate,
@@ -92,8 +109,15 @@ export default function Expenses({
       ]
         .join(" ")
         .toLowerCase()
-        .includes(search.trim().toLowerCase())
-    )
+        .includes(search.trim().toLowerCase());
+
+      const supplierMatch =
+        !supplierFilter ||
+        String(expense.supplierId || "") === String(supplierFilter) ||
+        String(supplier?.id || "") === String(supplierFilter);
+
+      return searchMatch && supplierMatch;
+    })
     .sort((a, b) => {
       const dateA = new Date(a.purchaseDate || a.createdAt || 0).getTime();
       const dateB = new Date(b.purchaseDate || b.createdAt || 0).getTime();
@@ -111,13 +135,44 @@ export default function Expenses({
     setEditingId(null);
     setForm(emptyExpenseForm);
     setShowForm(false);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
   }
 
   function updateForm(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function handleSupplierSelect(supplierId) {
+    setForm((current) => {
+      const next = { ...current, supplierId };
+      if (supplierId) {
+        const supplier = suppliers.find(
+          (item) => String(item.id) === String(supplierId)
+        );
+        if (supplier) {
+          next.supplierName = supplier.name;
+        }
+      }
+      return next;
+    });
+  }
+
+  function goToSupplier(supplierId) {
+    if (!supplierId || !setPage) return;
+    localStorage.setItem("crm_select_supplier_id", supplierId);
+    setPage("suppliers");
+  }
+
+  function handleExportCsv() {
+    if (filteredExpenses.length === 0) {
+      showToast("Aucune dépense à exporter.", "error");
+      return;
+    }
+
+    exportExpensesCsv(
+      filteredExpenses,
+      `depenses-${new Date().toISOString().slice(0, 10)}.csv`
+    );
+    showToast(`${filteredExpenses.length} dépense(s) exportée(s).`, "success");
   }
 
   function openManualForm() {
@@ -130,6 +185,7 @@ export default function Expenses({
     setEditingId(expense.id);
     setShowForm(true);
     setForm({
+      supplierId: expense.supplierId || "",
       supplierName: expense.supplierName || "",
       invoiceNumber: expense.invoiceNumber || "",
       purchaseDate: expense.purchaseDate || "",
@@ -139,8 +195,6 @@ export default function Expenses({
       totalTTC: expense.totalTTC != null ? String(expense.totalTTC) : "",
       category: expense.category || "",
       notes: expense.notes || "",
-      pdfFileName: expense.pdfFileName || "",
-      source: expense.source || "manual",
     });
   }
 
@@ -167,6 +221,7 @@ export default function Expenses({
     }
 
     const payload = {
+      supplierId: form.supplierId || null,
       supplierName: form.supplierName.trim(),
       invoiceNumber: form.invoiceNumber.trim(),
       purchaseDate: form.purchaseDate || "",
@@ -176,8 +231,7 @@ export default function Expenses({
       totalTTC: totalTTC ?? 0,
       category: form.category.trim(),
       notes: form.notes.trim(),
-      pdfFileName: form.pdfFileName.trim(),
-      source: form.source || "manual",
+      source: "manual",
     };
 
     if (editingId) {
@@ -235,76 +289,12 @@ export default function Expenses({
     showToast("Facture de dépense supprimée.", "success");
   }
 
-  async function handlePdfImport(event) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
-      showToast("Seuls les fichiers PDF sont acceptés.", "error");
-      event.target.value = "";
-      return;
-    }
-
-    setImporting(true);
-
-    try {
-      const parsed = await parseExpenseFromPdf(file);
-
-      setEditingId(null);
-      setForm({
-        supplierName: parsed.supplierName || "",
-        invoiceNumber: parsed.invoiceNumber || "",
-        purchaseDate: parsed.purchaseDate || "",
-        amountHT: parsed.amountHT !== "" ? String(parsed.amountHT) : "",
-        vatRate: parsed.vatRate !== "" ? String(parsed.vatRate) : "",
-        vatAmount: parsed.vatAmount !== "" ? String(parsed.vatAmount) : "",
-        totalTTC: parsed.totalTTC !== "" ? String(parsed.totalTTC) : "",
-        category: "",
-        notes: "",
-        pdfFileName: file.name,
-        source: "pdf-import",
-      });
-      setShowForm(true);
-
-      if (parsed.extractionSuccess) {
-        showToast(
-          "PDF analysé — vérifie les champs avant d'enregistrer.",
-          "success"
-        );
-      } else {
-        showToast(
-          "Extraction partielle — complète les champs manuellement.",
-          "error"
-        );
-      }
-    } catch (error) {
-      console.error(error);
-      setEditingId(null);
-      setForm({
-        ...emptyExpenseForm,
-        pdfFileName: file.name,
-        source: "pdf-import",
-      });
-      setShowForm(true);
-      showToast(
-        "Impossible de lire le PDF — saisis la facture manuellement.",
-        "error"
-      );
-    } finally {
-      setImporting(false);
-      event.target.value = "";
-    }
-  }
-
   return (
     <section className="expenses-page">
       <div className="page-header">
         <div>
           <h2>Factures de dépense</h2>
-          <p>
-            Importe des factures PDF, extrais HT / TVA / TTC et garde une
-            liste comptable.
-          </p>
+          <p>Saisis tes factures fournisseurs et suis HT / TVA / TTC.</p>
         </div>
       </div>
 
@@ -329,47 +319,63 @@ export default function Expenses({
 
       <div className="expenses-toolbar">
         <div className="expenses-toolbar-actions">
-          <label className="primary expenses-import-label">
-            {importing ? "Analyse du PDF..." : "Importer PDF"}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="application/pdf,.pdf"
-              disabled={importing}
-              onChange={handlePdfImport}
-            />
-          </label>
           <button type="button" className="primary" onClick={openManualForm}>
             + Saisie manuelle
           </button>
+          <button type="button" onClick={handleExportCsv}>
+            Exporter CSV
+          </button>
         </div>
 
-        <input
-          className="search expenses-search"
-          placeholder="Rechercher fournisseur, n° facture, catégorie..."
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setCurrentPage(1);
-          }}
-        />
+        <div className="expenses-toolbar-filters">
+          {canAccessSuppliers && (
+            <select
+              className="expenses-supplier-filter"
+              value={supplierFilter}
+              onChange={(e) => {
+                setSupplierFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+            >
+              <option value="">Tous les fournisseurs</option>
+              {suppliers.map((supplier) => (
+                <option key={supplier.id} value={supplier.id}>
+                  {supplier.name}
+                </option>
+              ))}
+            </select>
+          )}
+
+          <input
+            className="search expenses-search"
+            placeholder="Rechercher fournisseur, n° facture, catégorie..."
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setCurrentPage(1);
+            }}
+          />
+        </div>
       </div>
 
       {showForm && (
         <form className="card expenses-form-panel" onSubmit={submitExpense}>
           <h3>
-            {editingId
-              ? "Modifier la facture"
-              : form.source === "pdf-import"
-                ? "Vérifier l'import PDF"
-                : "Nouvelle facture de dépense"}
+            {editingId ? "Modifier la facture" : "Nouvelle facture de dépense"}
           </h3>
 
-          {form.source === "pdf-import" && form.pdfFileName && (
-            <p className="expenses-preview-note">
-              Fichier : <strong>{form.pdfFileName}</strong> — corrige les
-              montants si nécessaire avant enregistrement.
-            </p>
+          {canAccessSuppliers && (
+            <select
+              value={form.supplierId}
+              onChange={(e) => handleSupplierSelect(e.target.value)}
+            >
+              <option value="">Lier à un fournisseur (optionnel)</option>
+              {suppliers.map((supplier) => (
+                <option key={supplier.id} value={supplier.id}>
+                  {supplier.name}
+                </option>
+              ))}
+            </select>
           )}
 
           <input
@@ -377,21 +383,25 @@ export default function Expenses({
             value={form.supplierName}
             onChange={(e) => updateForm("supplierName", e.target.value)}
           />
+
           <input
             placeholder="N° facture"
             value={form.invoiceNumber}
             onChange={(e) => updateForm("invoiceNumber", e.target.value)}
           />
+
           <input
             type="date"
             value={form.purchaseDate}
             onChange={(e) => updateForm("purchaseDate", e.target.value)}
           />
+
           <input
             placeholder="Montant HT"
             value={form.amountHT}
             onChange={(e) => updateForm("amountHT", e.target.value)}
           />
+
           <select
             value={form.vatRate}
             onChange={(e) => updateForm("vatRate", e.target.value)}
@@ -403,21 +413,25 @@ export default function Expenses({
               </option>
             ))}
           </select>
+
           <input
             placeholder="Montant TVA €"
             value={form.vatAmount}
             onChange={(e) => updateForm("vatAmount", e.target.value)}
           />
+
           <input
             placeholder="Total TTC"
             value={form.totalTTC}
             onChange={(e) => updateForm("totalTTC", e.target.value)}
           />
+
           <input
             placeholder="Catégorie (matériel, consommables...)"
             value={form.category}
             onChange={(e) => updateForm("category", e.target.value)}
           />
+
           <textarea
             placeholder="Notes"
             value={form.notes}
@@ -425,7 +439,7 @@ export default function Expenses({
           />
 
           <div className="expenses-form-actions">
-            <button className="primary" type="submit" disabled={importing}>
+            <button className="primary" type="submit">
               {editingId ? "Modifier" : "Enregistrer"}
             </button>
             <button type="button" onClick={resetForm}>
@@ -468,11 +482,27 @@ export default function Expenses({
                 </td>
               </tr>
             )}
-            {paginatedExpenses.map((expense) => (
+            {paginatedExpenses.map((expense) => {
+              const linkedSupplier = resolveSupplierForExpense(
+                expense,
+                suppliers
+              );
+
+              return (
               <tr key={expense.id}>
                 <td>{formatDate(expense.purchaseDate || expense.createdAt)}</td>
                 <td>
-                  <strong>{expense.supplierName || "—"}</strong>
+                  {linkedSupplier && setPage && canAccessSuppliers ? (
+                    <button
+                      type="button"
+                      className="expense-supplier-link"
+                      onClick={() => goToSupplier(linkedSupplier.id)}
+                    >
+                      {expense.supplierName || linkedSupplier.name}
+                    </button>
+                  ) : (
+                    <strong>{expense.supplierName || "—"}</strong>
+                  )}
                   {expense.category && (
                     <div className="expense-meta">{expense.category}</div>
                   )}
@@ -515,7 +545,8 @@ export default function Expenses({
                   </div>
                 </td>
               </tr>
-            ))}
+            );
+            })}
           </tbody>
         </table>
       </div>

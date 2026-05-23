@@ -8,11 +8,14 @@ import {
 import {
   INVOICES_FILTER_KEY,
   isInvoiceOverdue,
+  parseDocumentDate,
   sortOverdueInvoices,
 } from "../utils/invoices";
 import { money } from "../utils/money";
 import { pageToPath } from "../utils/routes";
 import { getPermissions } from "../utils/permissions";
+import { isExpenseInMonth } from "../utils/expenseSuppliers";
+import { exportInvoicesCsv } from "../utils/exportCsv";
 import { showToast } from "../utils/toast";
 import {
   countLowStockProducts,
@@ -33,12 +36,49 @@ export default function Dashboard({
   const canManageInvoices = permissions.pages.includes("invoices");
   const canManageQuotes = permissions.pages.includes("quotes");
   const canManageProducts = permissions.pages.includes("products");
+  const canManageExpenses = permissions.pages.includes("expenses");
 
   const invoices = data.invoices || [];
   const quotes = data.quotes || [];
   const clients = data.clients || [];
   const products = data.products || [];
   const categories = data.categories || [];
+  const expenses = data.expenses || [];
+
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+  const monthLabel = now.toLocaleDateString("fr-FR", {
+    month: "long",
+    year: "numeric",
+  });
+
+  const monthExpenses = expenses.filter((expense) =>
+    isExpenseInMonth(expense, currentYear, currentMonth)
+  );
+  const monthExpensesTTC = monthExpenses.reduce(
+    (sum, expense) => sum + Number(expense.totalTTC || expense.amountHT || 0),
+    0
+  );
+  const monthExpensesHT = monthExpenses.reduce(
+    (sum, expense) => sum + Number(expense.amountHT || 0),
+    0
+  );
+
+  const monthInvoices = invoices.filter((invoice) => {
+    const date = parseDocumentDate(invoice.date);
+    return (
+      date &&
+      date.getFullYear() === currentYear &&
+      date.getMonth() === currentMonth
+    );
+  });
+  const monthRevenueHT = monthInvoices.reduce(
+    (sum, invoice) => sum + Number(invoice.totalHT || 0),
+    0
+  );
+  const monthMarginHT = monthRevenueHT - monthExpensesHT;
+  const marginCalculable = monthRevenueHT > 0 || monthExpensesHT > 0;
 
   const overdueInvoices = sortOverdueInvoices(
     invoices.filter(isInvoiceOverdue)
@@ -199,6 +239,20 @@ export default function Dashboard({
     return invoice.dueDate || "—";
   }
 
+  function handleExportInvoicesCsv() {
+    if (invoices.length === 0) {
+      showToast("Aucune facture à exporter.", "error");
+      return;
+    }
+
+    exportInvoicesCsv(
+      invoices,
+      data,
+      `factures-${new Date().toISOString().slice(0, 10)}.csv`
+    );
+    showToast(`${invoices.length} facture(s) exportée(s).`, "success");
+  }
+
   return (
     <section>
       <div className="page-header">
@@ -206,7 +260,39 @@ export default function Dashboard({
           <h2>Tableau de bord</h2>
           <p>Statistiques, factures en retard, stock bas et conversion devis.</p>
         </div>
+        {canManageInvoices && (
+          <button type="button" onClick={handleExportInvoicesCsv}>
+            Exporter factures CSV
+          </button>
+        )}
       </div>
+
+      {(canManageExpenses || canManageInvoices) && (
+        <div className="stats dashboard-kpis">
+          {canManageExpenses && (
+            <div className="card stat dashboard-kpi">
+              <span>Dépenses du mois ({monthLabel})</span>
+              <strong>{money(monthExpensesTTC)}</strong>
+              <em className="muted">
+                {monthExpenses.length} facture(s) · {money(monthExpensesHT)} HT
+              </em>
+            </div>
+          )}
+          {canManageInvoices && marginCalculable && (
+            <div
+              className={`card stat dashboard-kpi${
+                monthMarginHT < 0 ? " stat--danger" : ""
+              }`}
+            >
+              <span>Marge du mois (CA HT − dépenses HT)</span>
+              <strong>{money(monthMarginHT)}</strong>
+              <em className="muted">
+                CA {money(monthRevenueHT)} · Dépenses {money(monthExpensesHT)}
+              </em>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="stats">
         <div className="card stat">
