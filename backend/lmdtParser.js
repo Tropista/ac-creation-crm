@@ -1,14 +1,7 @@
 const ALLOWED_HOSTS = new Set(["www.lamaisonduteeshirt.com", "lamaisonduteeshirt.com"]);
 
-export function isAllowedLmdtUrl(rawUrl) {
-  try {
-    const url = new URL(rawUrl);
-    if (url.protocol !== "https:") return false;
-    return ALLOWED_HOSTS.has(url.hostname);
-  } catch {
-    return false;
-  }
-}
+/** Bump when packshot selection logic changes — used by /api/catalog/health. */
+export const LMDT_PARSER_VERSION = 5;
 
 export function normalizeLmdtUrl(rawUrl) {
   const url = new URL(rawUrl);
@@ -79,16 +72,55 @@ const MODEL_PATH_HINTS =
   /(?:^|[/_-])(model|modele|look|lookbook|portrait|worn|mannequin|face|tete|head|wear)(?:[/_-]|$)/i;
 const PRODUCT_PATH_HINTS =
   /(?:^|[/_-])(p-blank|p-mt|packshot|product|ghost|flat|blank)(?:[/_-]|$)/i;
-/** Color swatch / model worn shots: /c/15381/15381-17237-1.jpg */
-const MODEL_COLOR_VARIANT_PATH = /\/c\/\d+\/\d+-\d+-\d+\.(jpe?g|webp)/i;
+/** Color swatch / model worn shots: /c/15381/15381-17237-1.jpg or /c/p/175/175-199-1.jpg */
+const MODEL_COLOR_VARIANT_PATH =
+  /\/c\/(?:p\/)?\d+\/\d+-\d+-\d+\.(jpe?g|webp)/i;
+/** Worn/model sequence suffix e.g. 3128-3104-1.jpg or 175-199-1.jpg */
+const MODEL_SEQUENCE_SUFFIX = /\/\d+-\d+-\d+\.(jpe?g|webp)(?:\?|$)/i;
+
+export function isAllowedLmdtUrl(rawUrl) {
+  try {
+    const url = new URL(rawUrl);
+    if (url.protocol !== "https:") return false;
+    return ALLOWED_HOSTS.has(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+export function isLmdtPackshotImagePath(url = "") {
+  const decoded = decodeLmdtMediaPath(url).toLowerCase();
+  if (!decoded) return false;
+  if (PRODUCT_PATH_HINTS.test(decoded)) return true;
+  if (decoded.includes("p-blank") || decoded.includes("/p-mt/")) return true;
+  if (String(url).includes("greybg") || String(url).includes("whitebg")) return true;
+  return false;
+}
 
 export function isLmdtModelImagePath(url = "") {
   const decoded = decodeLmdtMediaPath(url).toLowerCase();
   if (!decoded) return false;
+  if (isLmdtPackshotImagePath(url)) return false;
   if (MODEL_COLOR_VARIANT_PATH.test(decoded)) return true;
+  if (MODEL_SEQUENCE_SUFFIX.test(decoded)) return true;
   if (MODEL_PATH_HINTS.test(decoded)) return true;
-  if (/-\d{4,}-\d+\.(jpe?g|webp)/i.test(decoded)) return true;
+  if (/\/c\/p\/\d+\/\d+-\d+-/i.test(decoded)) return true;
   return false;
+}
+
+export function classifyLmdtImageUrl(url = "") {
+  if (!String(url).trim()) return "none";
+  if (isValidLmdtPackshotUrl(url)) return "packshot";
+  if (isLmdtModelImagePath(url)) return "model";
+  return "unknown";
+}
+
+/** Packshot usable in catalog: greybg crop + p-blank path, never worn/model shots. */
+export function isValidLmdtPackshotUrl(url = "") {
+  const raw = String(url).trim();
+  if (!raw || isLmdtModelImagePath(raw)) return false;
+  if (!raw.includes("greybg")) return false;
+  return isLmdtPackshotImagePath(raw);
 }
 
 export function scoreLmdtImageUrl(url = "", meta = {}) {
@@ -159,6 +191,105 @@ export function extractImgContainerHtml(html = "") {
   return "";
 }
 
+function isAcceptableLmdtImage(url = "", meta = {}) {
+  const score = scoreLmdtImageUrl(url, meta);
+  return score > -100;
+}
+
+function collectOrderedImageProductFromContainer(containerHtml = "") {
+  const images = [];
+  for (const match of String(containerHtml).matchAll(/<img\b[^>]*>/gi)) {
+    const { src, cssClass, alt } = parseImgTag(match[0]);
+    if (!hasCssClass(cssClass, "image-product")) continue;
+    if (!src || !/^https?:\/\//i.test(src)) continue;
+    images.push({ url: src, meta: { cssClass, alt, source: "img-container-product" } });
+  }
+  return images;
+}
+
+function pickFromOrderedImageProducts(ordered = []) {
+  if (!ordered.length) return "";
+
+  let best = null;
+  for (const candidate of ordered) {
+    if (!isAcceptableLmdtImage(candidate.url, candidate.meta)) continue;
+    if (isLmdtModelImagePath(candidate.url)) continue;
+    const score = scoreLmdtImageUrl(candidate.url, candidate.meta);
+    if (!best || score > best.score) {
+      best = { url: candidate.url, score };
+    }
+  }
+  return best?.url || "";
+}
+
+/** Product detail gallery: index 0 is the packshot slide; 1+ are model/color shots. */
+export const PICK_GALLERY_IMAGE_INDEX = 0;
+
+export function collectProductGalleryImageUrls(html = "") {
+  const htmlStr = String(html);
+  const swiperMatch = htmlStr.match(/id="swiper-product-images"[\s\S]*?(?=<div class="swiper-button-prev"|<\/div>\s*<div>\s*<div class="grande_photo")/i);
+  const swiperHtml = swiperMatch ? swiperMatch[0] : htmlStr;
+  const urls = [];
+  const seen = new Set();
+
+  for (const anchorMatch of swiperHtml.matchAll(/<a\b[^>]*>/gi)) {
+    const anchor = anchorMatch[0];
+    const dataSrc = anchor.match(/\bdata-src="(https:\/\/media[^"]+)"/i)?.[1];
+    const dataLink = anchor.match(/\bdata-link="(https:\/\/media[^"]+)"/i)?.[1];
+    for (const url of [dataSrc, dataLink]) {
+      if (!url || seen.has(url)) continue;
+      seen.add(url);
+      urls.push(url);
+    }
+  }
+
+  return urls;
+}
+
+export function parseProductDetailHeroImageUrl(html = "") {
+  const htmlStr = String(html);
+  const photoTag =
+    htmlStr.match(/<img\b[^>]*\bid="photo_produit"[^>]*>/i)?.[0] ||
+    htmlStr.match(/<img\b[^>]*\bid='photo_produit'[^>]*>/i)?.[0] ||
+    "";
+  if (photoTag) {
+    const src =
+      photoTag.match(/\bsrc="(https:\/\/media[^"]+)"/i)?.[1] ||
+      photoTag.match(/\bsrc='(https:\/\/media[^']+)'/i)?.[1] ||
+      "";
+    if (src) return src;
+    const fallbackSrc = photoTag.match(/\bdefault="(https:\/\/media[^"]+)"/i)?.[1];
+    if (fallbackSrc) return fallbackSrc;
+  }
+
+  return "";
+}
+
+/** Packshot preview from galleryLien-main data-src (580greybg), not worn color slides. */
+export function parseGalleryMainPackshotUrl(html = "") {
+  const htmlStr = String(html);
+  const mainSlideMatch = htmlStr.match(
+    /class="swiper-slide galleryLien-main galleryLien-image"[\s\S]*?<a\b[^>]*\bdata-src="(https:\/\/media[^"]+)"/i
+  );
+  return mainSlideMatch?.[1] || "";
+}
+
+export function pickProductDetailImageUrl(html = "", preferredIndex = PICK_GALLERY_IMAGE_INDEX) {
+  void preferredIndex;
+
+  const heroImage = parseProductDetailHeroImageUrl(html);
+  if (isValidLmdtPackshotUrl(heroImage)) {
+    return heroImage;
+  }
+
+  const mainGalleryPackshot = parseGalleryMainPackshotUrl(html);
+  if (isValidLmdtPackshotUrl(mainGalleryPackshot)) {
+    return mainGalleryPackshot;
+  }
+
+  return "";
+}
+
 export function pickBestProductImageFromCard(cardHtml = "") {
   const html = String(cardHtml);
   const candidates = [];
@@ -174,10 +305,12 @@ export function pickBestProductImageFromCard(cardHtml = "") {
 
   const containerHtml = extractImgContainerHtml(html);
   if (containerHtml) {
-    for (const match of containerHtml.matchAll(/<img\b[^>]*>/gi)) {
-      const { src, cssClass, alt } = parseImgTag(match[0]);
-      if (!hasCssClass(cssClass, "image-product")) continue;
-      addCandidate(src, { cssClass, alt, source: "img-container-product" });
+    const orderedProductImages = collectOrderedImageProductFromContainer(containerHtml);
+    const pickedFromOrder = pickFromOrderedImageProducts(orderedProductImages);
+    if (pickedFromOrder) return pickedFromOrder;
+
+    for (const { url, meta } of orderedProductImages) {
+      addCandidate(url, meta);
     }
   }
 
@@ -216,6 +349,89 @@ export function parseProductPath(pathname = "") {
   };
 }
 
+function normalizeLmdtColorName(raw = "") {
+  return decodeHtmlText(raw).replace(/_/g, " ").trim();
+}
+
+function normalizeLmdtColorHex(raw = "") {
+  const value = String(raw || "").trim();
+  if (!value) return "";
+  if (/^#[0-9a-f]{3,8}$/i.test(value)) return value.toLowerCase();
+  if (/^[0-9a-f]{3,8}$/i.test(value)) return `#${value.toLowerCase()}`;
+  const rgbMatch = value.match(/^rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/i);
+  if (rgbMatch) {
+    const toHex = (n) => Number(n).toString(16).padStart(2, "0");
+    return `#${toHex(rgbMatch[1])}${toHex(rgbMatch[2])}${toHex(rgbMatch[3])}`;
+  }
+  return value;
+}
+
+function extractBackgroundColorFromTag(tag = "") {
+  const styleMatch = String(tag).match(/style="([^"]*)"/i);
+  if (!styleMatch) return "";
+  const bgMatch = styleMatch[1].match(/background-color:\s*([^;"']+)/i);
+  return bgMatch?.[1]?.trim() || "";
+}
+
+function pushParsedColor(colors, seen, { name, hex = "", imageUrl = "" }) {
+  if (!name) return;
+  const key = name.toLowerCase();
+  if (seen.has(key)) return;
+  seen.add(key);
+
+  if (hex || imageUrl) {
+    const entry = { name };
+    if (hex) entry.hex = hex;
+    if (imageUrl) entry.imageUrl = imageUrl;
+    colors.push(entry);
+    return;
+  }
+
+  colors.push(name);
+}
+
+function parseListingColorItemSwatches(html = "") {
+  const colors = [];
+  const seen = new Set();
+
+  for (const match of String(html).matchAll(/<a\b[^>]*class="color-item"[^>]*>/gi)) {
+    const tag = match[0];
+    const titleMatch = tag.match(/\btitle="([^"]+)"/i);
+    if (!titleMatch) continue;
+
+    const name = normalizeLmdtColorName(titleMatch[1]);
+    const hex = normalizeLmdtColorHex(extractBackgroundColorFromTag(tag));
+    const imageUrl = tag.match(/\bdata-image="([^"]+)"/i)?.[1]?.trim() || "";
+    pushParsedColor(colors, seen, { name, hex, imageUrl });
+  }
+
+  return colors;
+}
+
+function parseDetailPageColorItemsFromHtml(html = "") {
+  const colors = [];
+  const seen = new Set();
+  const htmlStr = String(html);
+  const choixMatch = htmlStr.match(/id="choixCouleurs"[\s\S]*?(?=<div class="[^"]*tableau|<div id="tableau)/i);
+  const section = choixMatch ? choixMatch[0] : htmlStr;
+
+  for (const match of section.matchAll(
+    /<a\b[^>]*\bid="lien_\d+"[^>]*\bdata-colorId="\d+"[^>]*\brel="(https:\/\/media[^"]+)"[^>]*>[\s\S]*?<div\b[^>]*\btitle="([^"]+)"/gi
+  )) {
+    const imageUrl = match[1]?.trim() || "";
+    const name = normalizeLmdtColorName(match[2]);
+    pushParsedColor(colors, seen, { name, imageUrl });
+  }
+
+  return colors;
+}
+
+export function parseColorItemsFromHtml(html) {
+  const listingColors = parseListingColorItemSwatches(html);
+  if (listingColors.length) return listingColors;
+  return parseDetailPageColorItemsFromHtml(html);
+}
+
 export function parseProductCardsFromHtml(html, baseUrl = "https://www.lamaisonduteeshirt.com") {
   const cards = String(html).split('<div class="product-card-main">').slice(1);
   const products = [];
@@ -233,7 +449,8 @@ export function parseProductCardsFromHtml(html, baseUrl = "https://www.lamaisond
     const pathInfo = parseProductPath(href);
     const brandMatch = chunk.match(/<span class="brand-name">([\s\S]*?)<\/span>/i);
     const nameMatch = chunk.match(/<span class="product-name">([\s\S]*?)<\/span>/i);
-    const imageUrl = pickBestProductImageFromCard(chunk);
+    // Listing thumbnails can be model shots — only detail-page enrichment sets imageUrl.
+    const imageUrl = "";
     const grammageMatch = chunk.match(/<span class="grammage">([^<]+)</i);
     const minQtyMatch = chunk.match(/class="price-explain"[\s\S]*?<span>x(\d+)<\/span>/i);
     const colorsMatch = chunk.match(/class="colors-btn"[\s\S]*?>\s*(\d+)/i);
@@ -242,9 +459,7 @@ export function parseProductCardsFromHtml(html, baseUrl = "https://www.lamaisond
     const productName = decodeHtmlText(nameMatch?.[1] || "");
     const { priceHT, priceTTC } = parsePriceParts(chunk);
 
-    const colors = [...chunk.matchAll(/class="color-item"[^>]+title="([^"]+)"/gi)].map(
-      (match) => decodeHtmlText(match[1]).replace(/_/g, " ")
-    );
+    const colors = parseColorItemsFromHtml(chunk);
 
     products.push({
       name: [brand, productName].filter(Boolean).join(" "),

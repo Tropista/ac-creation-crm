@@ -104,9 +104,6 @@ export async function syncSupabaseData(nextData, previousData = {}) {
     safeCollectionOp("client_catalog_items", () =>
       upsertCollection("client_catalog_items", nextData.clientCatalogItems)
     ),
-    safeCollectionOp("internal_catalog_items", () =>
-      upsertCollection("internal_catalog_items", nextData.internalCatalogItems)
-    ),
     safeCollectionOp("catalog_items", () =>
       upsertCollection("catalog_items", nextData.clientCatalogItems)
     ),
@@ -141,13 +138,6 @@ export async function syncSupabaseData(nextData, previousData = {}) {
         "client_catalog_items",
         nextData.clientCatalogItems,
         previousData.clientCatalogItems
-      )
-    ),
-    safeCollectionOp("internal_catalog_items", () =>
-      deleteRemovedItems(
-        "internal_catalog_items",
-        nextData.internalCatalogItems,
-        previousData.internalCatalogItems
       )
     ),
     safeCollectionOp("catalog_items", () =>
@@ -189,7 +179,6 @@ export async function loadSupabaseData({ normalizeData, emptyData }) {
     catalogItemsRes,
     supplierCatalogItemsRes,
     clientCatalogItemsRes,
-    internalCatalogItemsRes,
     catalogSelectionsRes,
     suppliersRes,
     expensesRes,
@@ -205,7 +194,6 @@ export async function loadSupabaseData({ normalizeData, emptyData }) {
     supabase.from("catalog_items").select("id,data").order("created_at", { ascending: true }),
     supabase.from("supplier_catalog_items").select("id,data").order("created_at", { ascending: true }),
     supabase.from("client_catalog_items").select("id,data").order("created_at", { ascending: true }),
-    supabase.from("internal_catalog_items").select("id,data").order("created_at", { ascending: true }),
     supabase.from("catalog_selections").select("id,data").order("created_at", { ascending: false }),
     supabase.from("suppliers").select("id,data").order("created_at", { ascending: true }),
     supabase.from("expenses").select("id,data").order("created_at", { ascending: true }),
@@ -226,10 +214,6 @@ export async function loadSupabaseData({ normalizeData, emptyData }) {
     clientCatalogItemsRes,
     "client_catalog_items"
   );
-  const resolvedInternalCatalogItemsRes = resolveCollectionResult(
-    internalCatalogItemsRes,
-    "internal_catalog_items"
-  );
   const resolvedCatalogItemsRes = resolveCollectionResult(catalogItemsRes, "catalog_items");
   const resolvedCatalogSelectionsRes = resolveCollectionResult(
     catalogSelectionsRes,
@@ -247,7 +231,6 @@ export async function loadSupabaseData({ normalizeData, emptyData }) {
     categoriesRes,
     resolvedSupplierCatalogItemsRes,
     resolvedClientCatalogItemsRes,
-    resolvedInternalCatalogItemsRes,
     resolvedCatalogItemsRes,
     resolvedCatalogSelectionsRes,
     resolvedSuppliersRes,
@@ -279,7 +262,6 @@ export async function loadSupabaseData({ normalizeData, emptyData }) {
     categories: rowsToItems(categoriesRes.data),
     supplierCatalogItems: rowsToItems(resolvedSupplierCatalogItemsRes.data),
     clientCatalogItems: mergedClientCatalogItems,
-    internalCatalogItems: rowsToItems(resolvedInternalCatalogItemsRes.data),
     catalogSelections: rowsToItems(resolvedCatalogSelectionsRes.data),
     suppliers: rowsToItems(resolvedSuppliersRes.data),
     expenses: rowsToItems(resolvedExpensesRes.data),
@@ -300,7 +282,6 @@ export async function loadSupabaseData({ normalizeData, emptyData }) {
         categoriesRes.data?.length ||
         resolvedSupplierCatalogItemsRes.data?.length ||
         mergedClientCatalogItems.length ||
-        resolvedInternalCatalogItemsRes.data?.length ||
         resolvedCatalogSelectionsRes.data?.length ||
         resolvedSuppliersRes.data?.length ||
         resolvedExpensesRes.data?.length ||

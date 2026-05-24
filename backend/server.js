@@ -2,10 +2,12 @@ import dotenv from "dotenv";
 import express from "express";
 import cors from "cors";
 import axios from "axios";
+import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { scrapeLmdtListing } from "./catalogScraper.js";
+import { scrapeLmdtListing, refreshLmdtProductColors, refreshLmdtProductImages } from "./catalogScraper.js";
+import { LMDT_PARSER_VERSION } from "./lmdtParser.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -26,6 +28,28 @@ function loadEnvFiles() {
 }
 
 loadEnvFiles();
+
+
+function pidsOnPort(port) {
+  if (process.platform !== "win32") return [];
+  try {
+    const output = execSync(
+      `netstat -ano | findstr ":${port}" | findstr LISTENING`,
+      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }
+    );
+    const pids = new Set();
+    for (const line of output.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      const parts = trimmed.split(/\s+/);
+      const pid = parts[parts.length - 1];
+      if (pid && pid !== "0") pids.add(pid);
+    }
+    return [...pids];
+  } catch {
+    return [];
+  }
+}
 
 const app = express();
 app.use(cors());
@@ -259,7 +283,7 @@ app.get("/api/bank/transactions", async (req, res) => {
 });
 
 app.get("/api/catalog/health", (req, res) => {
-  res.json({ ok: true, provider: "lamaisonduteeshirt" });
+  res.json({ ok: true, provider: "lamaisonduteeshirt", parserVersion: LMDT_PARSER_VERSION });
 });
 
 app.post("/api/catalog/scrape", async (req, res) => {
@@ -280,6 +304,48 @@ app.post("/api/catalog/scrape", async (req, res) => {
   }
 });
 
+app.post("/api/catalog/refresh-colors", async (req, res) => {
+  const { sourceUrls } = req.body || {};
+
+  if (!Array.isArray(sourceUrls) || !sourceUrls.length) {
+    return res.status(400).json({ error: "sourceUrls[] requis." });
+  }
+
+  try {
+    const results = await refreshLmdtProductColors(sourceUrls);
+    res.json({
+      results,
+      parserVersion: LMDT_PARSER_VERSION,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(502).json({
+      error: error.message || "Rafraîchissement des couleurs impossible.",
+    });
+  }
+});
+
+app.post("/api/catalog/refresh-images", async (req, res) => {
+  const { sourceUrls } = req.body || {};
+
+  if (!Array.isArray(sourceUrls) || !sourceUrls.length) {
+    return res.status(400).json({ error: "sourceUrls[] requis." });
+  }
+
+  try {
+    const results = await refreshLmdtProductImages(sourceUrls);
+    res.json({
+      results,
+      parserVersion: LMDT_PARSER_VERSION,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(502).json({
+      error: error.message || "Rafraîchissement des images impossible.",
+    });
+  }
+});
+
 const server = app.listen(PORT, HOST, () => {
   console.log(`CRM API OK sur http://${HOST}:${PORT}`);
   if (!tinkConfigured()) {
@@ -289,8 +355,13 @@ const server = app.listen(PORT, HOST, () => {
 
 server.on("error", (error) => {
   if (error.code === "EADDRINUSE") {
+    const pids = pidsOnPort(PORT);
+    const pidHint = pids.length
+      ? ` PID(s) : ${pids.join(", ")}. Exemple : taskkill /PID ${pids[0]} /F — ou npm run bank:win`
+      : ` Verifiez : netstat -ano | findstr :${PORT}`;
+    console.error(`Port ${PORT} deja utilise sur ${HOST}.${pidHint}`);
     console.error(
-      `Port ${PORT} déjà utilisé sur ${HOST}. Arrêtez l'ancien serveur (Ctrl+C ou fermez le terminal npm run bank) puis relancez.`
+      "Si un autre terminal affiche deja CRM API OK, ce serveur tourne : inutile de relancer npm run bank."
     );
     process.exit(1);
   }

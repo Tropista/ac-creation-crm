@@ -1,11 +1,9 @@
 export const SUPPLIER_CATALOG_KEY = "supplierCatalogItems";
 export const CLIENT_CATALOG_KEY = "clientCatalogItems";
-export const INTERNAL_CATALOG_KEY = "internalCatalogItems";
 
 export const CATALOG_COLLECTION_KEYS = [
   SUPPLIER_CATALOG_KEY,
   CLIENT_CATALOG_KEY,
-  INTERNAL_CATALOG_KEY,
 ];
 
 export function resolveActiveCatalogItems(items = []) {
@@ -20,9 +18,6 @@ export function migrateLegacyCatalogData(data = {}) {
   let clientCatalogItems = Array.isArray(data.clientCatalogItems)
     ? data.clientCatalogItems
     : [];
-  const internalCatalogItems = Array.isArray(data.internalCatalogItems)
-    ? data.internalCatalogItems
-    : [];
 
   if (legacy.length && clientCatalogItems.length === 0 && supplierCatalogItems.length === 0) {
     clientCatalogItems = legacy;
@@ -31,7 +26,6 @@ export function migrateLegacyCatalogData(data = {}) {
   return {
     supplierCatalogItems,
     clientCatalogItems,
-    internalCatalogItems,
     catalogItems: [],
   };
 }

@@ -137,10 +137,6 @@ const CatalogueClient = lazy(() =>
   import("./components/CatalogueClient")
 );
 
-const CatalogueInterne = lazy(() =>
-  import("./components/CatalogueInterne")
-);
-
 const ClientCatalog = lazy(() =>
   import("./components/ClientCatalog")
 );
@@ -376,7 +372,8 @@ function CrmApp() {
           };
           let conflictCount = 0;
 
-          const mergedRaw = mergeCloudWithLocal(localData, cloud.data, {
+          const freshLocal = normalizeData(loadData());
+          const mergedRaw = mergeCloudWithLocal(freshLocal, cloud.data, {
             onConflict: ({ entityLabel }) => {
               conflictCount += 1;
               const label = conflictLabels[entityLabel] || entityLabel;
@@ -914,18 +911,6 @@ function CrmApp() {
               element={
                 canAccessPage(currentRole, "catalogueClient") ? (
                   <CatalogueClient
-                    data={data}
-                    setData={updateData}
-                    logActivity={handleLogActivity}
-                  />
-                ) : null
-              }
-            />
-            <Route
-              path={pageToPath("catalogueInterne")}
-              element={
-                canAccessPage(currentRole, "catalogueInterne") ? (
-                  <CatalogueInterne
                     data={data}
                     setData={updateData}
                     logActivity={handleLogActivity}

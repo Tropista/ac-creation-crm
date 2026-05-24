@@ -33,7 +33,11 @@ describe("probeCatalogApi", () => {
         return {
           ok: true,
           status: 200,
-          json: async () => ({ ok: true, provider: "lamaisonduteeshirt" }),
+          json: async () => ({
+            ok: true,
+            provider: "lamaisonduteeshirt",
+            parserVersion: 4,
+          }),
         };
       }
       throw new Error(`Unexpected fetch: ${url}`);
@@ -43,7 +47,26 @@ describe("probeCatalogApi", () => {
       status: "ok",
       url: "http://127.0.0.1:3001",
       provider: "lamaisonduteeshirt",
+      parserVersion: 4,
     });
+  });
+
+  it("detects outdated parser when health lacks version", async () => {
+    global.window = {};
+    vi.stubGlobal("fetch", vi.fn(async (url) => {
+      if (url.endsWith("/api/catalog/health")) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ ok: true, provider: "lamaisonduteeshirt" }),
+        };
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    }));
+
+    const probe = await probeCatalogApi();
+    expect(probe.status).toBe("outdated");
+    expect(probe.message).toMatch(/parseur catalogue est obsolète/i);
   });
 
   it("detects outdated server when bank works but catalog is missing", async () => {

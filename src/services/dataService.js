@@ -38,7 +38,6 @@ export const emptyData = {
   categories: [],
   supplierCatalogItems: [],
   clientCatalogItems: [],
-  internalCatalogItems: [],
   catalogItems: [],
   catalogSelections: [],
   suppliers: [],
@@ -108,10 +107,6 @@ export function normalizeData(data) {
       migrated.clientCatalogItems || []
     ),
 
-    internalCatalogItems: dedupeItemsById(
-      migrated.internalCatalogItems || []
-    ),
-
     catalogItems: [],
 
     catalogSelections: dedupeItemsById(
@@ -169,7 +164,6 @@ export function hasLocalBusinessData(data) {
     data.categories?.length ||
     data.supplierCatalogItems?.length ||
     data.clientCatalogItems?.length ||
-    data.internalCatalogItems?.length ||
     data.catalogSelections?.length ||
     data.suppliers?.length ||
     data.expenses?.length ||

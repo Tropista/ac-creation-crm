@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import { promoteSupplierItemsToCollection } from "./catalogPromote.js";
 import {
   CLIENT_CATALOG_KEY,
-  INTERNAL_CATALOG_KEY,
   SUPPLIER_CATALOG_KEY,
 } from "./catalogCollections.js";
 
@@ -36,21 +35,5 @@ describe("catalogPromote", () => {
     expect(nextData.clientCatalogItems[0].supplierItemId).toBe("sup-1");
     expect(nextData.products).toHaveLength(1);
     expect(nextData.supplierCatalogItems).toHaveLength(1);
-  });
-
-  it("copie vers le catalogue interne sans toucher products", () => {
-    const { nextData, created } = promoteSupplierItemsToCollection(
-      {
-        supplierCatalogItems: [supplierItem],
-        internalCatalogItems: [],
-        products: [],
-      },
-      ["sup-1"],
-      INTERNAL_CATALOG_KEY
-    );
-
-    expect(created).toBe(1);
-    expect(nextData.internalCatalogItems).toHaveLength(1);
-    expect(nextData.products).toHaveLength(0);
   });
 });

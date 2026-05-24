@@ -86,12 +86,10 @@ export function cleanupCatalogData(data = {}) {
   const legacyCatalogItems = Array.isArray(data.catalogItems) ? data.catalogItems : [];
   const clientCatalogItems = Array.isArray(data.clientCatalogItems) ? data.clientCatalogItems : [];
   const supplierCatalogItems = Array.isArray(data.supplierCatalogItems) ? data.supplierCatalogItems : [];
-  const internalCatalogItems = Array.isArray(data.internalCatalogItems) ? data.internalCatalogItems : [];
   const catalogSelections = Array.isArray(data.catalogSelections) ? data.catalogSelections : [];
   const catalogSkus = buildCatalogSkuSet(legacyCatalogItems, [
     ...clientCatalogItems,
     ...supplierCatalogItems,
-    ...internalCatalogItems,
   ]);
   const productsBefore = Array.isArray(data.products) ? data.products.length : 0;
   const cleanedProducts = filterCatalogSourcedProducts(data.products, catalogSkus);
@@ -102,7 +100,6 @@ export function cleanupCatalogData(data = {}) {
       catalogItems: [],
       supplierCatalogItems: [],
       clientCatalogItems: [],
-      internalCatalogItems: [],
       catalogSelections: [],
       products: cleanedProducts,
     },
@@ -111,8 +108,7 @@ export function cleanupCatalogData(data = {}) {
       removedCatalogItems:
         legacyCatalogItems.length +
         clientCatalogItems.length +
-        supplierCatalogItems.length +
-        internalCatalogItems.length,
+        supplierCatalogItems.length,
       removedCatalogSelections: catalogSelections.length,
       productsBefore,
       productsAfter: cleanedProducts.length,
@@ -124,7 +120,7 @@ export function cleanupCatalogData(data = {}) {
 export function applyCatalogCleanupIfNeeded(data = {}) {
   if (typeof localStorage !== "undefined" && localStorage.getItem(CLEANUP_FLAG_KEY)) {
     return {
-      data: cleanupCatalogData(data).data,
+      data,
       applied: false,
       stats: null,
     };

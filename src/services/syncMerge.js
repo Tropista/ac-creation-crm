@@ -38,7 +38,6 @@ export const SYNC_COLLECTIONS = [
   "categories",
   "supplierCatalogItems",
   "clientCatalogItems",
-  "internalCatalogItems",
   "catalogSelections",
   "suppliers",
   "expenses",

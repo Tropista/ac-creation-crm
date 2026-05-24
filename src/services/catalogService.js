@@ -1,6 +1,6 @@
 import { getSupabase, isSupabaseConfigured } from "../supabase";
 import { loadData, saveData } from "./dataService";
-import { loadPublicCatalogCache, savePublicCatalogCache } from "../utils/catalogShare";
+import { loadPublicCatalogCache, mergeLiveCatalogImages, savePublicCatalogCache } from "../utils/catalogShare";
 
 function findLocalCatalogSelection(shareId) {
   const selections = loadData().catalogSelections || [];
@@ -80,40 +80,66 @@ export async function fetchPublicCatalogSelection(shareId) {
 }
 
 export async function fetchPublicCatalogProducts(selection, productIds = []) {
+  let products = [];
+
   if (Array.isArray(selection?.productSnapshots) && selection.productSnapshots.length) {
-    return selection.productSnapshots;
-  }
-
-  if (!productIds.length) return [];
-
-  if (!isSupabaseConfigured) {
-    const catalogItems = loadData().clientCatalogItems || [];
-    return catalogItems.filter((item) => productIds.includes(item.id));
-  }
-
-  try {
-    const supabase = await getSupabase();
-    const { data, error } = await supabase
-      .from("client_catalog_items")
-      .select("id,data")
-      .in("id", productIds);
-
-    if (error) {
-      if (isMissingTableError(error)) {
-        const fallback = await supabase
-          .from("catalog_items")
-          .select("id,data")
-          .in("id", productIds);
-        if (fallback.error) return [];
-        return (fallback.data || []).map((row) => ({ id: row.id, ...(row.data || {}) }));
-      }
-      throw error;
-    }
-
-    return (data || []).map((row) => ({ id: row.id, ...(row.data || {}) }));
-  } catch {
+    products = selection.productSnapshots;
+  } else if (!productIds.length) {
     return [];
   }
+
+  if (!products.length && productIds.length) {
+    if (!isSupabaseConfigured) {
+      const catalogItems = loadData().clientCatalogItems || [];
+      return catalogItems.filter((item) => productIds.includes(item.id));
+    }
+
+    try {
+      const supabase = await getSupabase();
+      const { data, error } = await supabase
+        .from("client_catalog_items")
+        .select("id,data")
+        .in("id", productIds);
+
+      if (error) {
+        if (isMissingTableError(error)) {
+          const fallback = await supabase
+            .from("catalog_items")
+            .select("id,data")
+            .in("id", productIds);
+          if (fallback.error) return [];
+          return (fallback.data || []).map((row) => ({ id: row.id, ...(row.data || {}) }));
+        }
+        throw error;
+      }
+
+      products = (data || []).map((row) => ({ id: row.id, ...(row.data || {}) }));
+    } catch {
+      return [];
+    }
+  }
+
+  if (!products.length) return [];
+
+  let liveItems = [];
+  if (!isSupabaseConfigured) {
+    liveItems = loadData().clientCatalogItems || [];
+  } else if (productIds.length) {
+    try {
+      const supabase = await getSupabase();
+      const { data, error } = await supabase
+        .from("client_catalog_items")
+        .select("id,data")
+        .in("id", productIds);
+      if (!error) {
+        liveItems = (data || []).map((row) => ({ id: row.id, ...(row.data || {}) }));
+      }
+    } catch {
+      liveItems = [];
+    }
+  }
+
+  return mergeLiveCatalogImages(products, liveItems);
 }
 
 export async function submitPublicCatalogSelection(shareId, submission) {

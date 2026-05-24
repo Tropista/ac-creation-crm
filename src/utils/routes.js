@@ -26,7 +26,6 @@ export const PAGE_PATHS = {
   banque: "/banque",
   importFournisseur: "/import-fournisseur",
   catalogueClient: "/catalogue-client",
-  catalogueInterne: "/catalogue-interne",
 };
 
 const PATH_TO_PAGE = Object.fromEntries(

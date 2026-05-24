@@ -2,8 +2,16 @@ import { useEffect, useMemo, useState } from "react";
 import { Download, Globe, RefreshCw } from "lucide-react";
 import { getCatalogApiUrl, probeCatalogApi, scrapeCatalogUrl } from "../utils/catalogApi";
 import { importScrapedToCollection } from "../utils/lmdtImport";
+import { decodeLmdtMediaPath } from "../utils/lmdtImages";
 import { SUPPLIER_CATALOG_KEY } from "../utils/catalogCollections";
 import { showToast } from "../utils/toast";
+
+function imagePathDebug(url = "") {
+  const decoded = decodeLmdtMediaPath(url);
+  if (!decoded) return "";
+  const parts = decoded.split("/").filter(Boolean);
+  return parts.slice(-2).join("/");
+}
 
 function money(value) {
   return Number(value || 0).toLocaleString("fr-FR", {
@@ -230,7 +238,8 @@ export default function CatalogItemImport({
       {meta ? (
         <p className="catalog-import-meta">
           {meta.totalFound} article(s) sur {meta.pagesScraped} page(s)
-          {meta.totalResults ? ` — ${meta.totalResults} au total sur le site` : ""}.
+          {meta.totalResults ? ` — ${meta.totalResults} au total sur le site` : ""}
+          {meta.parserVersion ? ` — parseur v${meta.parserVersion}` : ""}.
         </p>
       ) : null}
 
@@ -275,6 +284,14 @@ export default function CatalogItemImport({
                   <span>{product.category}</span>
                   <span>{product.sku}</span>
                   <span>{money(product.priceHT)} € HT · {product.colorCount} couleur(s)</span>
+                  {product.imageKind ? (
+                    <span className="catalog-import-image-kind">{product.imageKind}</span>
+                  ) : null}
+                  {product.imageUrl ? (
+                    <span className="catalog-import-image-path" title={decodeLmdtMediaPath(product.imageUrl)}>
+                      {imagePathDebug(product.imageUrl)}
+                    </span>
+                  ) : null}
                 </div>
               </label>
             ))}

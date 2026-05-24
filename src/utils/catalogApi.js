@@ -1,4 +1,5 @@
 const DEFAULT_CATALOG_API_URL = "http://127.0.0.1:3001";
+export const EXPECTED_CATALOG_PARSER_VERSION = 4;
 
 function isElectronRenderer() {
   return typeof window !== "undefined" && window.electronAPI?.isElectron;
@@ -41,10 +42,26 @@ export async function probeCatalogApi() {
     );
 
     if (catalogResponse.ok) {
+      const parserVersion = Number(catalogPayload?.parserVersion);
+      if (
+        !Number.isFinite(parserVersion) ||
+        parserVersion < EXPECTED_CATALOG_PARSER_VERSION
+      ) {
+        return {
+          status: "outdated",
+          url,
+          message:
+            `API détectée sur ${url} mais le parseur catalogue est obsolète (v${parserVersion || "?"}). ` +
+            "Arrêtez tout processus sur le port 3001 (Ctrl+C ou Gestionnaire des tâches), " +
+            "puis relancez l'application ou npm run bank.",
+        };
+      }
+
       return {
         status: "ok",
         url,
         provider: catalogPayload?.provider || "lamaisonduteeshirt",
+        parserVersion,
       };
     }
 
@@ -112,4 +129,34 @@ export async function scrapeCatalogUrl({
   }
 
   return payload;
+}
+
+export async function refreshCatalogColors(sourceUrls = []) {
+  const response = await fetch(`${getCatalogApiUrl()}/api/catalog/refresh-colors`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sourceUrls }),
+  });
+
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload.error || "Rafraîchissement des couleurs impossible");
+  }
+
+  return payload.results || [];
+}
+
+export async function refreshCatalogImages(sourceUrls = []) {
+  const response = await fetch(`${getCatalogApiUrl()}/api/catalog/refresh-images`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sourceUrls }),
+  });
+
+  const payload = await response.json();
+  if (!response.ok) {
+    throw new Error(payload.error || "Rafraîchissement des images impossible");
+  }
+
+  return payload.results || [];
 }

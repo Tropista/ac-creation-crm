@@ -16,7 +16,9 @@
     "electron": "electron .",
     "bank": "node backend/server.js",
     "dist": "vite build && electron-builder",
-    "dist:win": "vite build && electron-builder --win"
+    "dist:win": "vite build && electron-builder --win",
+    "bank:win": "powershell -NoProfile -Command \"foreach ($line in (netstat -ano | findstr ':3001' | findstr LISTENING)) { $p = ($line -split '\\s+')[-1]; if ($p -and $p -ne '0') { taskkill /PID $p /F 2>$null } }; node backend/server.js\"",
+    "bank:restart": "powershell -NoProfile -Command \"foreach ($line in (netstat -ano | findstr ':3001' | findstr LISTENING)) { $p = ($line -split '\\s+')[-1]; if ($p -and $p -ne '0') { taskkill /PID $p /F 2>$null } }; node backend/server.js\""
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",

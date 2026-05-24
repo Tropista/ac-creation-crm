@@ -173,6 +173,19 @@ option { background: var(--input-bg); color: var(--input-text); }
   color: var(--muted);
   font-size: 15px;
 }
+.page-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.page-header-actions .spin {
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
 .app-version-line {
   margin-top: 6px;
   font-size: 13px;

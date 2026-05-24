@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
-  Archive,
   Banknote,
   BarChart3,
   Box,
@@ -48,7 +47,6 @@ const pageIcons = {
   products: Box,
   importFournisseur: Download,
   catalogueClient: BookOpen,
-  catalogueInterne: Archive,
   categories: FolderTree,
   suppliers: Factory,
   expenses: FileSpreadsheet,
@@ -86,7 +84,6 @@ const menuGroups = [
     items: [
       { page: "importFournisseur", label: "Import fournisseur", type: "page" },
       { page: "catalogueClient", label: "Catalogue client", type: "page" },
-      { page: "catalogueInterne", label: "Catalogue interne", type: "page" },
     ],
   },
   {

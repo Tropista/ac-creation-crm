@@ -1,25 +1,36 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Copy, Link2, Trash2 } from "lucide-react";
+import { Copy, Link2, RefreshCw, Trash2 } from "lucide-react";
 import { isSupabaseConfigured } from "../supabase";
-import { deleteCatalogSelection } from "../services/catalogService";
-import { emptyData, normalizeData } from "../services/dataService";
+import { deleteCatalogSelection, upsertCatalogSelection } from "../services/catalogService";
+import { emptyData, loadData, normalizeData } from "../services/dataService";
 import {
+  createCatalogSelectionPayload,
   getCatalogShareUrl,
   openQuoteFromCatalogSelection,
 } from "../utils/catalogShare";
 import { resolveActiveCatalogItems } from "../utils/catalogCollections";
+import { mergeCloudWithLocal } from "../services/syncMerge";
+import { probeCatalogApi, refreshCatalogColors, refreshCatalogImages } from "../utils/catalogApi";
+import { patchClientCatalogColors, patchClientCatalogImageUrls } from "../utils/lmdtImport";
+import { patchClientCatalogItemImage } from "../utils/catalogImageOverride";
+import { stripSourceFromDescription } from "../utils/catalogDescription";
 import { showToast } from "../utils/toast";
+import CatalogImageDropZone from "./CatalogImageDropZone";
+import {
+  resolveCatalogColorHex,
+  resolveCatalogColorImageUrl,
+  resolveCatalogColorLabel,
+  enrichCatalogColors,
+} from "../utils/colorNameToHex";
+import {
+  CATALOG_CLIENT_FOLDERS,
+  CATALOG_FOLDER_ALL,
+  CATALOG_FOLDER_OTHER,
+  countItemsByFolder,
+  resolveCatalogFolder,
+} from "../utils/catalogCategoryFolders";
 import "../styles/client-catalog.css";
-
-function money(value) {
-  return (
-    Number(value || 0).toLocaleString("fr-FR", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }) + " €"
-  );
-}
 
 function statusLabel(status) {
   if (status === "submitted") return "Réponse reçue";
@@ -27,26 +38,34 @@ function statusLabel(status) {
   return "En attente client";
 }
 
+function isLmdtSourceUrl(sourceUrl = "") {
+  return String(sourceUrl || "").includes("lamaisonduteeshirt.com");
+}
+
 export default function CatalogueClient({ data, setData, logActivity }) {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("");
+  const [folderFilter, setFolderFilter] = useState(CATALOG_FOLDER_ALL);
   const [sortBy, setSortBy] = useState("name-asc");
   const [priceMin, setPriceMin] = useState("");
   const [priceMax, setPriceMax] = useState("");
   const [selectedItem, setSelectedItem] = useState(null);
+  const [selectedColorIndex, setSelectedColorIndex] = useState(null);
   const [selectedItemIds, setSelectedItemIds] = useState([]);
+  const [refreshingPackshots, setRefreshingPackshots] = useState(false);
+  const [refreshingColors, setRefreshingColors] = useState(false);
+  const [refreshingItemColorsId, setRefreshingItemColorsId] = useState(null);
+  const [creatingSelection, setCreatingSelection] = useState(false);
+  const [selectionForm, setSelectionForm] = useState({
+    title: "",
+    clientName: "",
+    message: "",
+  });
 
   const selections = Array.isArray(data.catalogSelections) ? data.catalogSelections : [];
   const catalogItems = resolveActiveCatalogItems(data.clientCatalogItems);
 
-  const categories = useMemo(() => {
-    const names = new Set();
-    catalogItems.forEach((item) => {
-      if (item.category) names.add(item.category);
-    });
-    return Array.from(names).sort((a, b) => a.localeCompare(b, "fr"));
-  }, [catalogItems]);
+  const folderCounts = useMemo(() => countItemsByFolder(catalogItems), [catalogItems]);
 
   const filteredCatalogItems = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -55,16 +74,17 @@ export default function CatalogueClient({ data, setData, logActivity }) {
 
     const filtered = catalogItems.filter((item) => {
       const price = Number(item.price || 0);
+      const itemFolder = resolveCatalogFolder(item);
       const matchesSearch =
         !query ||
-        [item.name, item.sku, item.category, item.brand, item.description]
+        [item.name, item.sku, item.category, item.brand, item.description, itemFolder]
           .join(" ")
           .toLowerCase()
           .includes(query);
-      const matchesCategory = !categoryFilter || item.category === categoryFilter;
+      const matchesFolder = !folderFilter || itemFolder === folderFilter;
       const matchesPriceMin = minPrice === null || price >= minPrice;
       const matchesPriceMax = maxPrice === null || price <= maxPrice;
-      return matchesSearch && matchesCategory && matchesPriceMin && matchesPriceMax;
+      return matchesSearch && matchesFolder && matchesPriceMin && matchesPriceMax;
     });
 
     return filtered.sort((a, b) => {
@@ -86,16 +106,39 @@ export default function CatalogueClient({ data, setData, logActivity }) {
           return String(a.name || "").localeCompare(String(b.name || ""), "fr");
       }
     });
-  }, [catalogItems, search, categoryFilter, sortBy, priceMin, priceMax]);
+  }, [catalogItems, search, folderFilter, sortBy, priceMin, priceMax]);
 
   const activeSelectedItem = useMemo(() => {
     if (!selectedItem) return null;
     return catalogItems.find((item) => item.id === selectedItem.id) || selectedItem;
   }, [catalogItems, selectedItem]);
 
+  const activeSelectedColors = useMemo(() => {
+    if (!activeSelectedItem?.colors?.length) return [];
+    return enrichCatalogColors(activeSelectedItem.colors);
+  }, [activeSelectedItem?.colors]);
+
+  const sidePanelImageUrl = useMemo(() => {
+    if (!activeSelectedItem) return "";
+    if (selectedColorIndex !== null) {
+      const colorImage = resolveCatalogColorImageUrl(activeSelectedColors[selectedColorIndex]);
+      if (colorImage) return colorImage;
+    }
+    return activeSelectedItem.imageUrl || "";
+  }, [activeSelectedItem, activeSelectedColors, selectedColorIndex]);
+
+  useEffect(() => {
+    setSelectedColorIndex(null);
+  }, [activeSelectedItem?.id]);
+
+  const activeSelectedDescription = useMemo(() => {
+    if (!activeSelectedItem?.description) return "";
+    return stripSourceFromDescription(activeSelectedItem.description);
+  }, [activeSelectedItem?.description]);
+
   function resetCatalogFilters() {
     setSearch("");
-    setCategoryFilter("");
+    setFolderFilter(CATALOG_FOLDER_ALL);
     setSortBy("name-asc");
     setPriceMin("");
     setPriceMax("");
@@ -133,6 +176,7 @@ export default function CatalogueClient({ data, setData, logActivity }) {
     }));
     if (selectedItem?.id === itemId) {
       setSelectedItem(null);
+      setSelectedColorIndex(null);
     }
     setSelectedItemIds((current) => current.filter((id) => id !== itemId));
     logActivity?.("Suppression article catalogue client", item.name, item.sku || "");
@@ -152,6 +196,7 @@ export default function CatalogueClient({ data, setData, logActivity }) {
 
     if (selectedItem?.id && selectedItemIds.includes(selectedItem.id)) {
       setSelectedItem(null);
+      setSelectedColorIndex(null);
     }
 
     logActivity?.(
@@ -189,14 +234,195 @@ export default function CatalogueClient({ data, setData, logActivity }) {
     try {
       const { loadSupabaseData } = await import("../services/supabaseSync");
       const cloud = await loadSupabaseData({ normalizeData, emptyData });
+      const merged = mergeCloudWithLocal(normalizeData(loadData()), cloud.data);
       setData({
         ...data,
-        clientCatalogItems: cloud.data.clientCatalogItems || [],
-        catalogSelections: cloud.data.catalogSelections || [],
+        clientCatalogItems: merged.clientCatalogItems || [],
+        catalogSelections: merged.catalogSelections || [],
       });
       showToast("Catalogue client synchronisé.", "success");
     } catch (error) {
       showToast(error.message || "Synchronisation impossible.", "error");
+    }
+  }
+
+  async function applyPackshotResults(items, results, { logLabel }) {
+    const imageBySourceUrl = new Map();
+    let failed = 0;
+
+    for (const result of results) {
+      if (result.imageUrl) {
+        imageBySourceUrl.set(String(result.sourceUrl || "").trim().toLowerCase(), result.imageUrl);
+      } else {
+        failed += 1;
+      }
+    }
+
+    let updated = 0;
+    await setData((current) => {
+      const patched = patchClientCatalogImageUrls(current, imageBySourceUrl);
+      updated = patched.updated;
+      return patched.nextData;
+    });
+
+    if (activeSelectedItem?.id) {
+      const key = String(activeSelectedItem.sourceUrl || "").trim().toLowerCase();
+      const nextUrl = imageBySourceUrl.get(key);
+      if (nextUrl) {
+        setSelectedItem((current) =>
+          current?.id === activeSelectedItem.id ? { ...current, imageUrl: nextUrl } : current
+        );
+      }
+    }
+
+    logActivity?.(
+      logLabel,
+      `${items.length} article(s)`,
+      `${updated} mis à jour, ${failed} échec(s)`
+    );
+
+    return { updated, failed };
+  }
+
+  async function applyColorRefreshResults(items, results, { logLabel, singleItemId = null }) {
+    const colorsBySourceUrl = new Map();
+    let failed = 0;
+
+    for (const result of results) {
+      if (result.colors?.length) {
+        colorsBySourceUrl.set(String(result.sourceUrl || "").trim().toLowerCase(), result.colors);
+      } else {
+        failed += 1;
+      }
+    }
+
+    let updated = 0;
+    await setData((current) => {
+      const patched = patchClientCatalogColors(current, colorsBySourceUrl);
+      updated = patched.updated;
+      return patched.nextData;
+    });
+
+    if (singleItemId && activeSelectedItem?.id === singleItemId) {
+      const key = String(activeSelectedItem.sourceUrl || "").trim().toLowerCase();
+      const nextColors = colorsBySourceUrl.get(key);
+      if (nextColors?.length) {
+        setSelectedItem((current) =>
+          current?.id === singleItemId
+            ? { ...current, colors: enrichCatalogColors(nextColors) }
+            : current
+        );
+      }
+    }
+
+    logActivity?.(
+      logLabel,
+      `${items.length} article(s)`,
+      `${updated} mis à jour, ${failed} échec(s)`
+    );
+
+    return { updated, failed };
+  }
+
+  async function refreshItemColors(item) {
+    if (!isLmdtSourceUrl(item?.sourceUrl)) {
+      showToast("Couleurs disponibles uniquement pour les articles LMDT.", "warning");
+      return;
+    }
+
+    const probe = await probeCatalogApi();
+    if (probe.status !== "ok") {
+      showToast(probe.message || "API catalogue indisponible.", "error");
+      return;
+    }
+
+    setRefreshingItemColorsId(item.id);
+    try {
+      const results = await refreshCatalogColors([item.sourceUrl]);
+      const { updated } = await applyColorRefreshResults([item], results, {
+        logLabel: "Rafraîchissement couleurs article",
+        singleItemId: item.id,
+      });
+
+      if (updated > 0) {
+        showToast("Couleurs mises à jour depuis la fiche produit.", "success");
+      } else {
+        showToast("Aucune couleur récupérée — vérifiez npm run bank.", "warning");
+      }
+    } catch (error) {
+      showToast(error.message || "Rafraîchissement des couleurs impossible.", "error");
+    } finally {
+      setRefreshingItemColorsId(null);
+    }
+  }
+
+  async function refreshAllCatalogColors() {
+    const lmdtItems = catalogItems.filter((item) => isLmdtSourceUrl(item.sourceUrl));
+
+    if (!lmdtItems.length) {
+      showToast("Aucun article La Maison du Tee-shirt à rafraîchir.", "warning");
+      return;
+    }
+
+    const probe = await probeCatalogApi();
+    if (probe.status !== "ok") {
+      showToast(probe.message || "API catalogue indisponible.", "error");
+      return;
+    }
+
+    setRefreshingColors(true);
+    try {
+      const results = await refreshCatalogColors(lmdtItems.map((item) => item.sourceUrl));
+      const { updated, failed } = await applyColorRefreshResults(lmdtItems, results, {
+        logLabel: "Rafraîchissement couleurs catalogue",
+      });
+
+      if (updated > 0) {
+        showToast(`${updated} fiche(s) couleurs mises à jour.`, "success");
+      } else if (failed > 0) {
+        showToast("Aucune couleur récupérée — vérifiez npm run bank.", "warning");
+      } else {
+        showToast("Les couleurs étaient déjà à jour.", "info");
+      }
+    } catch (error) {
+      showToast(error.message || "Rafraîchissement des couleurs impossible.", "error");
+    } finally {
+      setRefreshingColors(false);
+    }
+  }
+
+  async function refreshPackshotImages() {
+    const lmdtItems = catalogItems.filter((item) => isLmdtSourceUrl(item.sourceUrl));
+
+    if (!lmdtItems.length) {
+      showToast("Aucun article La Maison du Tee-shirt à rafraîchir.", "warning");
+      return;
+    }
+
+    const probe = await probeCatalogApi();
+    if (probe.status !== "ok") {
+      showToast(probe.message || "API catalogue indisponible.", "error");
+      return;
+    }
+
+    setRefreshingPackshots(true);
+    try {
+      const results = await refreshCatalogImages(lmdtItems.map((item) => item.sourceUrl));
+      const { updated, failed } = await applyPackshotResults(lmdtItems, results, {
+        logLabel: "Rafraîchissement images packshot",
+      });
+
+      if (updated > 0) {
+        showToast(`${updated} image(s) packshot mises à jour.`, "success");
+      } else if (failed > 0) {
+        showToast("Aucune image packshot récupérée — vérifiez npm run bank.", "warning");
+      } else {
+        showToast("Les images étaient déjà à jour.", "info");
+      }
+    } catch (error) {
+      showToast(error.message || "Rafraîchissement impossible.", "error");
+    } finally {
+      setRefreshingPackshots(false);
     }
   }
 
@@ -207,6 +433,46 @@ export default function CatalogueClient({ data, setData, logActivity }) {
       showToast("Lien copié dans le presse-papiers.", "success");
     } catch {
       showToast(link, "info");
+    }
+  }
+
+  async function createSelectionFromPicker(event) {
+    event.preventDefault();
+
+    if (!selectedItemIds.length) {
+      showToast("Sélectionnez au moins un article.", "warning");
+      return;
+    }
+
+    const title = selectionForm.title.trim();
+    if (!title) {
+      showToast("Indiquez un titre pour la sélection.", "warning");
+      return;
+    }
+
+    const products = catalogItems.filter((item) => selectedItemIds.includes(item.id));
+    const selection = createCatalogSelectionPayload({
+      title,
+      products,
+      clientName: selectionForm.clientName.trim(),
+      message: selectionForm.message.trim(),
+      settings: data.settings || {},
+    });
+
+    setCreatingSelection(true);
+    try {
+      const nextSelections = [selection, ...selections];
+      setData({ ...data, catalogSelections: nextSelections });
+      await upsertCatalogSelection(selection);
+      await copyLink(selection);
+      logActivity?.("Création sélection catalogue client", selection.title, selection.id);
+      setSelectedItemIds([]);
+      setSelectionForm({ title: "", clientName: "", message: "" });
+      showToast("Sélection créée — lien copié.", "success");
+    } catch (error) {
+      showToast(error.message || "Création impossible.", "error");
+    } finally {
+      setCreatingSelection(false);
     }
   }
 
@@ -223,6 +489,31 @@ export default function CatalogueClient({ data, setData, logActivity }) {
     openQuoteFromCatalogSelection(navigate, selection, items);
   }
 
+  async function updateCatalogItemImage(itemId, imageUrl) {
+    await setData((prev) => patchClientCatalogItemImage(prev, itemId, imageUrl));
+    setSelectedItem((current) =>
+      current?.id === itemId ? { ...current, imageUrl } : current
+    );
+    const item = catalogItems.find((entry) => entry.id === itemId);
+    logActivity?.("Image catalogue client", item?.name || itemId, "");
+    showToast("Image mise à jour", "success");
+  }
+
+  function handleColorSwatchClick(index, color) {
+    const isActive = selectedColorIndex === index;
+    if (isActive) {
+      setSelectedColorIndex(null);
+      return;
+    }
+
+    const colorImage = resolveCatalogColorImageUrl(color);
+    const hex = resolveCatalogColorHex(color);
+    if (!colorImage && hex) {
+      showToast("Actualiser couleurs pour voir le modèle", "warning");
+    }
+    setSelectedColorIndex(index);
+  }
+
   return (
     <div className="catalog-selections-page">
       <div className="page-header">
@@ -233,10 +524,30 @@ export default function CatalogueClient({ data, setData, logActivity }) {
             fournisseur — séparés de vos produits internes (onglet Produits).
           </p>
         </div>
-        <button type="button" className="primary" onClick={refreshFromCloud}>
-          <Link2 size={16} />
-          Rafraîchir
-        </button>
+        <div className="page-header-actions">
+          <button
+            type="button"
+            className="primary"
+            onClick={refreshAllCatalogColors}
+            disabled={refreshingColors || catalogItems.length === 0}
+          >
+            <RefreshCw size={16} className={refreshingColors ? "spin" : ""} />
+            {refreshingColors ? "Couleurs…" : "Rafraîchir couleurs"}
+          </button>
+          <button
+            type="button"
+            className="primary"
+            onClick={refreshPackshotImages}
+            disabled={refreshingPackshots || catalogItems.length === 0}
+          >
+            <RefreshCw size={16} className={refreshingPackshots ? "spin" : ""} />
+            {refreshingPackshots ? "Rafraîchissement…" : "Rafraîchir images packshot"}
+          </button>
+          <button type="button" className="primary" onClick={refreshFromCloud}>
+            <Link2 size={16} />
+            Sync cloud
+          </button>
+        </div>
       </div>
 
       {!isSupabaseConfigured ? (
@@ -250,7 +561,7 @@ export default function CatalogueClient({ data, setData, logActivity }) {
           <div className="filters-title-row">
             <span className="filters-icon">⌕</span>
             <div>
-              <strong>Recherche & filtres catalogue</strong>
+              <strong>Recherche & tri</strong>
               <span>
                 {filteredCatalogItems.length} résultat(s) sur {catalogItems.length} article(s)
               </span>
@@ -268,19 +579,6 @@ export default function CatalogueClient({ data, setData, logActivity }) {
               onChange={(event) => setSearch(event.target.value)}
             />
           </div>
-
-          <select
-            className="filters-select"
-            value={categoryFilter}
-            onChange={(event) => setCategoryFilter(event.target.value)}
-          >
-            <option value="">Toutes les catégories</option>
-            {categories.map((category) => (
-              <option key={category} value={category}>
-                {category}
-              </option>
-            ))}
-          </select>
 
           <select
             className="filters-select"
@@ -361,9 +659,50 @@ export default function CatalogueClient({ data, setData, logActivity }) {
               ) : null}
             </div>
 
+            <div className="catalog-client-browser">
+              <nav className="catalog-folder-nav card" aria-label="Dossiers catalogue">
+                <div className="catalog-folder-nav-header">
+                  <strong>Dossiers</strong>
+                  <span>{catalogItems.length} article(s)</span>
+                </div>
+                <button
+                  type="button"
+                  className={`catalog-folder-btn ${folderFilter === CATALOG_FOLDER_ALL ? "is-active" : ""}`}
+                  onClick={() => setFolderFilter(CATALOG_FOLDER_ALL)}
+                >
+                  <span>Tous</span>
+                  <span className="catalog-folder-count">{catalogItems.length}</span>
+                </button>
+                {CATALOG_CLIENT_FOLDERS.map((folder) => (
+                  <button
+                    key={folder}
+                    type="button"
+                    className={`catalog-folder-btn ${folderFilter === folder ? "is-active" : ""}`}
+                    onClick={() => setFolderFilter(folder)}
+                  >
+                    <span>{folder}</span>
+                    <span className="catalog-folder-count">{folderCounts[folder] || 0}</span>
+                  </button>
+                ))}
+                {(folderCounts[CATALOG_FOLDER_OTHER] || 0) > 0 ? (
+                  <button
+                    type="button"
+                    className={`catalog-folder-btn ${folderFilter === CATALOG_FOLDER_OTHER ? "is-active" : ""}`}
+                    onClick={() => setFolderFilter(CATALOG_FOLDER_OTHER)}
+                  >
+                    <span>{CATALOG_FOLDER_OTHER}</span>
+                    <span className="catalog-folder-count">
+                      {folderCounts[CATALOG_FOLDER_OTHER] || 0}
+                    </span>
+                  </button>
+                ) : null}
+              </nav>
+
             <div className="products-erp-layout">
               <div className="product-premium-grid">
-                {filteredCatalogItems.map((item) => (
+                {filteredCatalogItems.map((item) => {
+                  const itemFolder = resolveCatalogFolder(item);
+                  return (
                   <article
                     key={item.id}
                     className={`product-premium-card ${
@@ -396,8 +735,7 @@ export default function CatalogueClient({ data, setData, logActivity }) {
 
                     <div className="product-tags-row">
                       <span>SKU : {item.sku || "Sans SKU"}</span>
-                      <span>{item.category || "Sans catégorie"}</span>
-                      <span>Prix HT : {money(item.price)}</span>
+                      <span>{itemFolder}</span>
                     </div>
 
                     {item.brand ? (
@@ -412,7 +750,8 @@ export default function CatalogueClient({ data, setData, logActivity }) {
                     </button>
                   </div>
                 </article>
-              ))}
+                  );
+                })}
             </div>
 
             <aside className="product-side-card card">
@@ -423,78 +762,101 @@ export default function CatalogueClient({ data, setData, logActivity }) {
                 </div>
               ) : (
                 <>
-                  <div className="product-side-image">
-                    {activeSelectedItem.imageUrl ? (
-                      <img src={activeSelectedItem.imageUrl} alt={activeSelectedItem.name || "Article"} />
-                    ) : (
-                      <span>{(activeSelectedItem.name || "A").slice(0, 1).toUpperCase()}</span>
-                    )}
-                  </div>
+                  <CatalogImageDropZone
+                    key={`${activeSelectedItem.id}-${selectedColorIndex ?? "default"}-${sidePanelImageUrl}`}
+                    className="product-side-image"
+                    imageUrl={sidePanelImageUrl}
+                    placeholder={(activeSelectedItem.name || "A").slice(0, 1).toUpperCase()}
+                    onImageChange={(imageUrl) =>
+                      updateCatalogItemImage(activeSelectedItem.id, imageUrl)
+                    }
+                  />
 
                   <div className="product-side-header">
                     <div>
                       <h2>{activeSelectedItem.name}</h2>
-                      <span>{activeSelectedItem.category || "Sans catégorie"}</span>
-                    </div>
-                    <strong>{money(activeSelectedItem.price)}</strong>
-                  </div>
-
-                  <div className="product-side-kpis">
-                    <div>
-                      <strong>{activeSelectedItem.sku || "—"}</strong>
-                      <span>SKU</span>
-                    </div>
-                    <div>
-                      <strong>{money(activeSelectedItem.price)}</strong>
-                      <span>Prix HT</span>
-                    </div>
-                    <div>
-                      <strong>
-                        {activeSelectedItem.priceTTC
-                          ? money(activeSelectedItem.priceTTC)
-                          : "—"}
-                      </strong>
-                      <span>Prix TTC</span>
+                      <span>
+                        {resolveCatalogFolder(activeSelectedItem)}
+                        {activeSelectedItem.sku ? ` · SKU ${activeSelectedItem.sku}` : ""}
+                      </span>
                     </div>
                   </div>
 
                   {(activeSelectedItem.brand ||
                     activeSelectedItem.grammage ||
-                    activeSelectedItem.minOrderQty) && (
+                    activeSelectedItem.minOrderQty ||
+                    activeSelectedColors.length) && (
                     <div className="product-side-desc">
                       <strong>Informations</strong>
                       {activeSelectedItem.brand ? <p>Marque : {activeSelectedItem.brand}</p> : null}
+                      {activeSelectedItem.category ? (
+                        <p>Catégorie LMDT : {activeSelectedItem.category}</p>
+                      ) : null}
                       {activeSelectedItem.grammage ? (
                         <p>Grammage : {activeSelectedItem.grammage}</p>
                       ) : null}
                       {activeSelectedItem.minOrderQty ? (
                         <p>Commande minimum : x{activeSelectedItem.minOrderQty}</p>
                       ) : null}
+                      {activeSelectedColors.length ? (
+                        <div className="catalog-color-section">
+                          <div className="catalog-color-section-header">
+                            <p className="catalog-color-section-title">
+                              Couleurs ({activeSelectedColors.length})
+                            </p>
+                            {isLmdtSourceUrl(activeSelectedItem.sourceUrl) ? (
+                              <button
+                                type="button"
+                                className="catalog-color-refresh-btn"
+                                onClick={() => refreshItemColors(activeSelectedItem)}
+                                disabled={refreshingItemColorsId === activeSelectedItem.id}
+                              >
+                                <RefreshCw
+                                  size={12}
+                                  className={
+                                    refreshingItemColorsId === activeSelectedItem.id ? "spin" : ""
+                                  }
+                                />
+                                Actualiser couleurs
+                              </button>
+                            ) : null}
+                          </div>
+                          <div className="catalog-color-swatches catalog-color-swatches--prominent">
+                            {activeSelectedColors.slice(0, 48).map((color, index) => {
+                              const label = resolveCatalogColorLabel(color);
+                              const hex = resolveCatalogColorHex(color);
+                              const hasColorImage = Boolean(resolveCatalogColorImageUrl(color));
+                              const isActive = selectedColorIndex === index;
+                              return (
+                                <button
+                                  type="button"
+                                  key={`${label}-${index}`}
+                                  className={`catalog-color-swatch catalog-color-swatch--circle${
+                                    isActive ? " is-active" : ""
+                                  }${hasColorImage ? " has-image" : ""}`}
+                                  title={label}
+                                  aria-label={`Couleur : ${label}`}
+                                  aria-pressed={isActive}
+                                  onClick={() => handleColorSwatchClick(index, color)}
+                                >
+                                  <span
+                                    className="catalog-color-swatch-dot"
+                                    style={{ backgroundColor: hex || "#cbd5e1" }}
+                                  />
+                                  <span className="catalog-color-swatch-label">{label}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   )}
 
-                  {activeSelectedItem.description ? (
+                  {activeSelectedDescription ? (
                     <div className="product-side-desc">
                       <strong>Description</strong>
-                      <p>{activeSelectedItem.description}</p>
-                    </div>
-                  ) : null}
-
-                  {activeSelectedItem.colors?.length ? (
-                    <div className="product-side-desc">
-                      <strong>Couleurs ({activeSelectedItem.colors.length})</strong>
-                      <p>{activeSelectedItem.colors.slice(0, 20).join(", ")}</p>
-                    </div>
-                  ) : null}
-
-                  {activeSelectedItem.sourceUrl ? (
-                    <div className="product-side-desc">
-                      <strong>Source fournisseur</strong>
-                      <p>
-                        <a href={activeSelectedItem.sourceUrl} target="_blank" rel="noreferrer">
-                          {activeSelectedItem.sourceProvider || "Voir la fiche"}
-                        </a>
-                      </p>
+                      <p>{activeSelectedDescription}</p>
                     </div>
                   ) : null}
 
@@ -512,9 +874,53 @@ export default function CatalogueClient({ data, setData, logActivity }) {
               )}
             </aside>
             </div>
+            </div>
           </>
         )}
       </div>
+
+      {selectedItemIds.length > 0 ? (
+        <form className="card catalog-selection-form" onSubmit={createSelectionFromPicker}>
+          <h3>Créer une sélection client ({selectedItemIds.length} article(s))</h3>
+          <div className="catalog-selection-form-grid">
+            <label>
+              Titre de la sélection *
+              <input
+                required
+                value={selectionForm.title}
+                onChange={(event) =>
+                  setSelectionForm({ ...selectionForm, title: event.target.value })
+                }
+                placeholder="Ex. Projet club 2026"
+              />
+            </label>
+            <label>
+              Nom du client
+              <input
+                value={selectionForm.clientName}
+                onChange={(event) =>
+                  setSelectionForm({ ...selectionForm, clientName: event.target.value })
+                }
+                placeholder="Ex. AS Sportive"
+              />
+            </label>
+          </div>
+          <label>
+            Message pour le client
+            <textarea
+              rows={2}
+              value={selectionForm.message}
+              onChange={(event) =>
+                setSelectionForm({ ...selectionForm, message: event.target.value })
+              }
+              placeholder="Instructions ou contexte pour le client..."
+            />
+          </label>
+          <button type="submit" className="primary" disabled={creatingSelection}>
+            {creatingSelection ? "Création..." : "Générer le lien catalogue"}
+          </button>
+        </form>
+      ) : null}
 
       {selections.length > 0 ? (
         <div className="catalog-selection-list">
