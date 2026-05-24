@@ -23,6 +23,9 @@ jobs:
       - name: Dépendances
         run: npm ci
 
+      - name: ESLint
+        run: npm run lint
+
       - name: Tests unitaires
         run: npm test
 

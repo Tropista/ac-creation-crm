@@ -20,7 +20,7 @@ import {
 } from "../utils/invoices";
 import { computeDueDate, openInvoiceReminderMailto } from "../utils/invoiceReminders";
 import { consumeQuoteDraft } from "../utils/quoteDraft";
-import { PRODUCTION_STATUSES, QUOTE_STATUSES } from "../utils/production";
+import { PRODUCTION_STATUSES } from "../utils/production";
 import { exportInvoicesCsv } from "../utils/exportCsv";
 import { showToast } from "../utils/toast";
 
@@ -219,10 +219,6 @@ const [form, setForm] = useState({
   function removeLine(index) {
     if (form.lines.length === 1) return showToast("Il faut au moins une ligne.", "error");
     setForm({ ...form, lines: form.lines.filter((_, i) => i !== index) });
-  }
-
-  function getProductById(products, productId) {
-    return (products || []).find((product) => String(product.id) === String(productId));
   }
 
   function reset() {

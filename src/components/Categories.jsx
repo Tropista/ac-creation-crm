@@ -11,7 +11,7 @@ function today() {
 export default function Categories({
   data,
   setData,
-  currentRole = "Admin",
+  currentRole: _currentRole = "Admin",
   logActivity
 }) {
       const [form, setForm] = useState({ name: "", description: "" });

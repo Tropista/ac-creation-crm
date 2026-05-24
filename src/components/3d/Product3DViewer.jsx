@@ -1,5 +1,6 @@
+import { Suspense } from "react";
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
+import { Environment, OrbitControls } from "@react-three/drei";
 import Product3DModel from "./Product3DModel";
 import Product3DErrorBoundary from "./Product3DErrorBoundary";
 import MugDesignPatch from "./MugDesignPatch";

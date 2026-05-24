@@ -13,7 +13,6 @@ import {
   stampDataChanges,
   SYNC_STATUS,
 } from "./syncMerge.js";
-import { emptyData } from "./dataService.js";
 
 function createStorage() {
   const store = new Map();

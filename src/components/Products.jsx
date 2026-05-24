@@ -82,7 +82,7 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
   const [priceMin, setPriceMin] = useState("");
   const [priceMax, setPriceMax] = useState("");
   const [editing, setEditing] = useState(null);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [, setCurrentPage] = useState(1);
   const [selectedProductIds, setSelectedProductIds] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [bulkCategory, setBulkCategory] = useState("");
@@ -340,7 +340,7 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
       const stock = Number(product.stock || 0);
       const minStock = Number(product.stockMin || product.minStock || 0);
       const price = Number(product.price || 0);
-      const margin = price - Number(product.purchasePrice || 0);
+      const _margin = price - Number(product.purchasePrice || 0);
 
       const matchesSearch =
         !query ||
@@ -1036,8 +1036,8 @@ function openLinkedDocument(doc) {
           {visibleProducts.map((product) => {
             const stock = Number(product.stock || 0);
             const minStock = Number(product.stockMin || product.minStock || 0);
-            const stockLevel = Math.min(100, Math.max(0, stock));
-            const stockClass =
+            const _stockLevel = Math.min(100, Math.max(0, stock));
+            const _stockClass =
               stock <= 0
                 ? "danger"
                 : minStock > 0 && stock <= minStock

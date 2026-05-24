@@ -1,8 +1,8 @@
 export default function InvoicesPage({
-  data,
-  setData,
-  currentUser,
-  logActivity
+  data: _data,
+  setData: _setData,
+  currentUser: _currentUser,
+  logActivity: _logActivity,
 }) {
   return (
     <>

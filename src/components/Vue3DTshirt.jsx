@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Canvas } from "@react-three/fiber";
 import { Bounds, Center, Environment, OrbitControls, useGLTF } from "@react-three/drei";
@@ -365,12 +365,6 @@ function crc32(bytes) {
   return (crc ^ 0xffffffff) >>> 0;
 }
 
-function writeString(view, offset, value) {
-  for (let i = 0; i < value.length; i += 1) {
-    view.setUint8(offset + i, value.charCodeAt(i));
-  }
-}
-
 function dateToDosTime(date = new Date()) {
   const time = ((date.getHours() & 0x1f) << 11) | ((date.getMinutes() & 0x3f) << 5) | Math.floor(date.getSeconds() / 2);
   const dosDate = (((date.getFullYear() - 1980) & 0x7f) << 9) | (((date.getMonth() + 1) & 0x0f) << 5) | (date.getDate() & 0x1f);
@@ -574,18 +568,6 @@ function drawPrintItemForExport(ctx, item, logoImage, widthPx, heightPx) {
   }
 
   ctx.restore();
-}
-
-function useImage(url) {
-  const [image, setImage] = useState(null);
-  useEffect(() => {
-    if (!url) return setImage(null);
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => setImage(img);
-    img.src = url;
-  }, [url]);
-  return image;
 }
 
 function useItemImages(items) {
@@ -857,7 +839,7 @@ export default function Vue3DTshirt() {
       document.fonts.add(font);
       setCustomFonts((current) => [...current, { name: fontName, src, file, dataUrl, originalName: file.name }]);
       if (selectedItem?.type === "text") updateItem(selectedItem.id, { fontFamily: fontName });
-    } catch (error) {
+    } catch (_error) {
       showToast("Police impossible à charger. Essaie un fichier .ttf, .otf, .woff ou .woff2.", "error");
       URL.revokeObjectURL(src);
     }
@@ -1323,7 +1305,7 @@ export default function Vue3DTshirt() {
     return parts.join("\n");
   }
 
-  function buildZoneEps(area, areaItems) {
+  function _buildZoneEps(area, areaItems) {
     const zone = PRINT_ZONES[area] || PRINT_ZONES.front;
     const zoneSize = getZoneSizeCm(printZoneSizes, area);
     const zoneWidthPt = Number(zoneSize.width || 1) * 28.3465;

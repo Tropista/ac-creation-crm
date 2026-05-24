@@ -161,8 +161,8 @@ export default function UvDtfCalculator({ data, setData, logActivity }) {
     const linearMetersUsed = (heightCm / 100) * qty;
     const linearWasteM = n(form.filmWasteLinearM);
 
-    let filmACost = 0;
-    let filmBCost = 0;
+    let filmACost;
+    let filmBCost;
     if (form.filmPricingMode === "linear") {
       const totalLinear = linearMetersUsed + linearWasteM;
       filmACost = totalLinear * n(form.filmACostPerLinearM);
@@ -176,7 +176,7 @@ export default function UvDtfCalculator({ data, setData, logActivity }) {
     const filmCost = filmACost + filmBCost;
 
     const whiteMultiplier = form.usesWhiteInk ? preset.whiteMultiplier : 1;
-    let inkCost = 0;
+    let inkCost;
     if (form.inkPricingMode === "ml") {
       const cmykMl = totalAreaM2 * n(form.inkMlPerM2Cmyk);
       const whiteMl = form.usesWhiteInk

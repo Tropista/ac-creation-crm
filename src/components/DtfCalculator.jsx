@@ -142,7 +142,7 @@ export default function DtfCalculator({ data, setData, logActivity }) {
     const linearMetersUsed = (heightCm / 100) * qty;
     const linearWasteM = n(form.filmWasteLinearM);
 
-    let filmCost = 0;
+    let filmCost;
     if (form.filmPricingMode === "linear") {
       filmCost =
         (linearMetersUsed + linearWasteM) * n(form.filmCostPerLinearM);
@@ -152,7 +152,7 @@ export default function DtfCalculator({ data, setData, logActivity }) {
     }
 
     const whiteMultiplier = form.usesWhiteInk ? preset.whiteMultiplier : 1;
-    let inkCost = 0;
+    let inkCost;
     if (form.inkPricingMode === "ml") {
       const cmykMl = totalAreaM2 * n(form.inkMlPerM2Cmyk);
       const whiteMl = form.usesWhiteInk
@@ -163,7 +163,7 @@ export default function DtfCalculator({ data, setData, logActivity }) {
       inkCost = totalAreaM2 * n(form.inkCostPerM2) * whiteMultiplier;
     }
 
-    let powderCost = 0;
+    let powderCost;
     if (form.powderPricingMode === "transfer") {
       powderCost = qty * n(form.powderCostPerTransfer);
     } else {

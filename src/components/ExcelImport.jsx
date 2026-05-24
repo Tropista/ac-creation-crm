@@ -1,9 +1,15 @@
 import { useState } from "react";
+import * as XLSX from "xlsx";
+import { uid, today } from "../utils/documents.js";
+
+function normalize(value) {
+  return String(value || "").toLowerCase().replace(/\s+/g, "");
+}
 
 export default function ExcelImport({
   data,
   setData,
-  logActivity,
+  logActivity: _logActivity,
 }) {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");

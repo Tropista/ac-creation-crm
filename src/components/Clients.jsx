@@ -202,7 +202,7 @@ export default function Clients({
     0
   );
 
-  const selectedClientQuoteTotal = selectedClientQuotes.reduce(
+  const _selectedClientQuoteTotal = selectedClientQuotes.reduce(
     (sum, quote) => sum + docTotal(quote),
     0
   );
@@ -211,18 +211,18 @@ export default function Clients({
   const selectedClientUnpaidInvoices = selectedClientInvoices.filter(isUnpaidInvoice);
   const selectedClientAcceptedQuotes = selectedClientQuotes.filter(isAcceptedQuote);
   const selectedClientLastInvoice = selectedClientInvoices[0];
-  const selectedClientLastQuote = selectedClientQuotes[0];
-  const selectedClientLastOrder = selectedClientInvoices[0] || selectedClientAcceptedQuotes[0] || null;
+  const _selectedClientLastQuote = selectedClientQuotes[0];
+  const _selectedClientLastOrder = selectedClientInvoices[0] || selectedClientAcceptedQuotes[0] || null;
 
-  const selectedClientPaidTotal = selectedClientPaidInvoices.reduce(
+  const _selectedClientPaidTotal = selectedClientPaidInvoices.reduce(
     (sum, invoice) => sum + docTotal(invoice),
     0
   );
 
-  const clientAverageBasket =
+  const _clientAverageBasket =
     selectedClientInvoices.length > 0 ? selectedClientInvoiceTotal / selectedClientInvoices.length : 0;
 
-  const clientConversionRate =
+  const _clientConversionRate =
     selectedClientQuotes.length > 0
       ? (selectedClientAcceptedQuotes.length / selectedClientQuotes.length) * 100
       : 0;
@@ -232,7 +232,7 @@ export default function Clients({
     0
   );
 
-  const topProducts = useMemo(() => {
+  const _topProducts = useMemo(() => {
     const stats = {};
 
     selectedClientInvoices.forEach((invoice) => {
@@ -857,15 +857,6 @@ function InfoBox({ label, value }) {
     <div className="client-info-box">
       <strong>{label}</strong>
       <span>{value || "-"}</span>
-    </div>
-  );
-}
-
-function Kpi({ label, value }) {
-  return (
-    <div>
-      <strong>{value}</strong>
-      <span>{label}</span>
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Bounds, Center, OrbitControls, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
@@ -235,12 +235,6 @@ function isPrintAreaMesh(child) {
     parentName.includes("printarea") ||
     parentName.includes("print")
   );
-}
-
-function getItemDrawSize(item) {
-  const width = CANVAS_WIDTH * Math.max(0.03, Number(item.widthScale || 0.22));
-  const height = CANVAS_HEIGHT * Math.max(0.03, Number(item.heightScale || 0.22));
-  return { width, height };
 }
 
 function createPrintTexture(items) {
@@ -842,7 +836,7 @@ export default function Vue3D() {
           if (prev.some((font) => font.family === family)) return prev;
           return [...prev, { family, label: cleanName, file, originalName: file.name }];
         });
-      } catch (error) {
+      } catch (_error) {
         showToast(`Impossible de charger la police : ${file.name}`, "error");
       }
     }

@@ -7,7 +7,6 @@ import {
   loadData,
   flushSaveData,
   STORAGE_KEY,
-  normalizeData,
   isQuotaExceededError,
 } from "./dataService.js";
 import { stampDataChanges } from "./syncMerge.js";

@@ -16,7 +16,7 @@ function hasRecoveryHash() {
 
 export default function AuthPage({
   data,
-  setData,
+  setData: _setData,
   setCurrentUser,
   initialNotice = "",
 }) {

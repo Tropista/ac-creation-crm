@@ -235,7 +235,7 @@ function BarcodeLabels({ data }) {
   );
 }
 
-function ProductLabel({ product, showPrice, showQr = false }) {
+function ProductLabel({ product, showPrice: _showPrice, showQr = false }) {
   const codeValue = product.sku || product.name || product.id;
   return (
     <div className="product-label">
