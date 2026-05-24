@@ -1,8 +1,8 @@
 {
   "rewrites": [
     {
-      "source": "/configurateur-tshirt",
-      "destination": "/"
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }

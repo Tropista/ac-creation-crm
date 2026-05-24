@@ -6,7 +6,8 @@ const pkg = JSON.parse(readFileSync("./package.json", "utf-8"));
 
 export default defineConfig({
   plugins: [react()],
-  base: "./",
+  // Electron (file://) needs relative assets; Vercel needs root-relative paths for deep routes.
+  base: process.env.VERCEL ? "/" : "./",
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
   },
