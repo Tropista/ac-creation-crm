@@ -3,6 +3,7 @@ import {
   buildCatalogMailtoUrl,
   buildCatalogProductSheet,
   buildProductSnapshots,
+  catalogProductsNeedLiveImageMerge,
   compactSelectionForPublicCache,
   createCatalogSelectionPayload,
   mergeLiveCatalogImages,
@@ -128,6 +129,28 @@ describe("catalogShare product sheet", () => {
     expect(sanitizeImageUrlForCache("https://example.com/img.jpg")).toBe(
       "https://example.com/img.jpg"
     );
+  });
+
+  it("detects when live image merge is needed", () => {
+    expect(
+      catalogProductsNeedLiveImageMerge([
+        { id: "p1", imageUrl: "https://example.com/a.jpg", colors: ["Noir"] },
+      ])
+    ).toBe(false);
+    expect(
+      catalogProductsNeedLiveImageMerge([
+        { id: "p1", imageUrl: "", colors: [{ name: "Noir", hex: "#000" }] },
+      ])
+    ).toBe(true);
+    expect(
+      catalogProductsNeedLiveImageMerge([
+        {
+          id: "p1",
+          imageUrl: "https://example.com/a.jpg",
+          colors: [{ name: "Noir", hex: "#000", imageUrl: "data:image/jpeg;base64,x" }],
+        },
+      ])
+    ).toBe(true);
   });
 
   describe("savePublicCatalogCache", () => {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { ChevronDown, Copy, Mail, ShoppingBag, Trash2, X } from "lucide-react";
 import {
@@ -159,6 +159,91 @@ function ClientColorPicker({ colors, value, onChange }) {
   );
 }
 
+const ClientProductCard = memo(function ClientProductCard({
+  product,
+  draft,
+  onUpdateDraft,
+  onAddToCart,
+}) {
+  const sizes = resolveProductSizeOptions(product);
+  const minQty = resolveProductMinQuantity(product);
+  const description = product.description
+    ? stripSourceFromDescription(product.description).split("\n")[0]
+    : "";
+  const displayImage = resolveProductDisplayImage(product, draft.color);
+  const itemFolder = resolveCatalogFolder(product);
+  const itemAudience = resolveCatalogAudience(product);
+
+  return (
+    <article className="client-catalog-card">
+      <div className="client-catalog-card-media">
+        {displayImage ? (
+          <img src={displayImage} alt={product.name} loading="lazy" decoding="async" />
+        ) : (
+          <div className="catalog-import-placeholder">Sans image</div>
+        )}
+        {itemAudience !== CATALOG_AUDIENCE_UNISEXE ? (
+          <span className="client-catalog-audience-badge">{itemAudience}</span>
+        ) : null}
+      </div>
+      <div className="client-catalog-card-body">
+        <h3>{product.name}</h3>
+        <p className="client-catalog-category">{itemFolder}</p>
+        {product.sku ? <p className="client-catalog-sku">Réf. {product.sku}</p> : null}
+        {description ? <p className="client-catalog-description">{description}</p> : null}
+        {product.minOrderQty ? (
+          <p className="client-catalog-min-qty">Commande minimum : x{product.minOrderQty}</p>
+        ) : null}
+
+        <div className="client-catalog-fields">
+          <label>
+            Couleur
+            <ClientColorPicker
+              colors={product.colors}
+              value={draft.color}
+              onChange={(color) => onUpdateDraft(product.id, { color })}
+            />
+          </label>
+          <label>
+            Taille
+            <select
+              value={draft.size || sizes[0]}
+              onChange={(event) => onUpdateDraft(product.id, { size: event.target.value })}
+            >
+              {sizes.map((size) => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Quantité
+            <input
+              type="number"
+              min={minQty}
+              value={draft.quantity || minQty}
+              onChange={(event) =>
+                onUpdateDraft(product.id, {
+                  quantity: Math.max(minQty, Number(event.target.value) || minQty),
+                })
+              }
+            />
+          </label>
+        </div>
+
+        <button
+          type="button"
+          className="primary client-catalog-add-btn"
+          onClick={() => onAddToCart(product.id)}
+        >
+          Ajouter à ma sélection
+        </button>
+      </div>
+    </article>
+  );
+});
+
 function ClientCatalogCartPanel({
   cart,
   productsById,
@@ -312,12 +397,6 @@ export default function ClientCatalog() {
 
         setSubmitted(loadedSelection.status === "submitted");
 
-        const initialDrafts = {};
-        for (const product of visibleProducts) {
-          initialDrafts[product.id] = createDraftForProduct(product);
-        }
-        setDrafts(initialDrafts);
-
         const submission = loadedSelection.clientSubmission;
         if (submission?.clientName) {
           setContact({
@@ -388,6 +467,20 @@ export default function ClientCatalog() {
     return paginateItems(filteredProducts, safePage, CLIENT_CATALOG_PAGE_SIZE);
   }, [filteredProducts, currentPage, totalPages]);
 
+  useEffect(() => {
+    setDrafts((current) => {
+      const next = { ...current };
+      let changed = false;
+      for (const product of paginatedProducts) {
+        if (!next[product.id]) {
+          next[product.id] = createDraftForProduct(product);
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+  }, [paginatedProducts]);
+
   const pageNumbers = useMemo(
     () => buildPageNumbers(currentPage, totalPages),
     [currentPage, totalPages]
@@ -405,36 +498,47 @@ export default function ClientCatalog() {
     [selection]
   );
 
-  function updateDraft(productId, patch) {
-    setDrafts((current) => ({
-      ...current,
-      [productId]: {
-        ...current[productId],
-        ...patch,
-      },
-    }));
-  }
+  const updateDraft = useCallback((productId, patch) => {
+    setDrafts((current) => {
+      const product = products.find((entry) => entry.id === productId);
+      const base = current[productId] || (product ? createDraftForProduct(product) : {});
+      return {
+        ...current,
+        [productId]: {
+          ...base,
+          ...patch,
+        },
+      };
+    });
+  }, [products]);
 
-  function addToCart(productId) {
-    const product = productsById.get(productId);
-    const draft = drafts[productId];
-    if (!product || !draft) return;
+  const addToCart = useCallback(
+    (productId) => {
+      const product = products.find((entry) => entry.id === productId);
+      if (!product) return;
 
-    const minQty = resolveProductMinQuantity(product);
-    const quantity = Math.max(minQty, Number(draft.quantity) || minQty);
+      const draft = drafts[productId] || createDraftForProduct(product);
+      if (!drafts[productId]) {
+        setDrafts((current) => ({ ...current, [productId]: draft }));
+      }
 
-    setCart((current) => [
-      ...current,
-      {
-        id: createLineId(),
-        productId,
-        color: draft.color || "",
-        size: draft.size || "",
-        quantity,
-      },
-    ]);
-    showToast(`${product.name} ajouté à votre sélection.`, "success");
-  }
+      const minQty = resolveProductMinQuantity(product);
+      const quantity = Math.max(minQty, Number(draft.quantity) || minQty);
+
+      setCart((current) => [
+        ...current,
+        {
+          id: createLineId(),
+          productId,
+          color: draft.color || "",
+          size: draft.size || "",
+          quantity,
+        },
+      ]);
+      showToast(`${product.name} ajouté à votre sélection.`, "success");
+    },
+    [products, drafts]
+  );
 
   function updateCartLine(lineId, patch) {
     setCart((current) =>
@@ -540,82 +644,15 @@ export default function ClientCatalog() {
 
   function renderProductCard(product) {
     const draft = drafts[product.id] || createDraftForProduct(product);
-    const sizes = resolveProductSizeOptions(product);
-    const minQty = resolveProductMinQuantity(product);
-    const description = product.description
-      ? stripSourceFromDescription(product.description).split("\n")[0]
-      : "";
-    const displayImage = resolveProductDisplayImage(product, draft.color);
-    const itemFolder = resolveCatalogFolder(product);
-    const itemAudience = resolveCatalogAudience(product);
 
     return (
-      <article key={product.id} className="client-catalog-card">
-        <div className="client-catalog-card-media">
-          {displayImage ? (
-            <img src={displayImage} alt={product.name} loading="lazy" />
-          ) : (
-            <div className="catalog-import-placeholder">Sans image</div>
-          )}
-          {itemAudience !== CATALOG_AUDIENCE_UNISEXE ? (
-            <span className="client-catalog-audience-badge">{itemAudience}</span>
-          ) : null}
-        </div>
-        <div className="client-catalog-card-body">
-          <h3>{product.name}</h3>
-          <p className="client-catalog-category">{itemFolder}</p>
-          {product.sku ? <p className="client-catalog-sku">Réf. {product.sku}</p> : null}
-          {description ? <p className="client-catalog-description">{description}</p> : null}
-          {product.minOrderQty ? (
-            <p className="client-catalog-min-qty">Commande minimum : x{product.minOrderQty}</p>
-          ) : null}
-
-          <div className="client-catalog-fields">
-            <label>
-              Couleur
-              <ClientColorPicker
-                colors={product.colors}
-                value={draft.color}
-                onChange={(color) => updateDraft(product.id, { color })}
-              />
-            </label>
-            <label>
-              Taille
-              <select
-                value={draft.size || sizes[0]}
-                onChange={(event) => updateDraft(product.id, { size: event.target.value })}
-              >
-                {sizes.map((size) => (
-                  <option key={size} value={size}>
-                    {size}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Quantité
-              <input
-                type="number"
-                min={minQty}
-                value={draft.quantity || minQty}
-                onChange={(event) =>
-                  updateDraft(product.id, {
-                    quantity: Math.max(minQty, Number(event.target.value) || minQty),
-                  })
-                }
-              />
-            </label>
-          </div>
-
-          <button
-            type="button"
-            className="primary client-catalog-add-btn"
-            onClick={() => addToCart(product.id)}
-          >
-            Ajouter à ma sélection
-          </button>
-        </div>
-      </article>
+      <ClientProductCard
+        key={product.id}
+        product={product}
+        draft={draft}
+        onUpdateDraft={updateDraft}
+        onAddToCart={addToCart}
+      />
     );
   }
 

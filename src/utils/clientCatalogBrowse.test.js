@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildPageNumbers,
   CLIENT_CATALOG_PAGE_SIZE,
+  CRM_CATALOG_PAGE_SIZE,
   filterProductsByAudience,
   filterProductsByFolder,
   getTotalPages,
@@ -43,6 +44,12 @@ describe("clientCatalogBrowse", () => {
     const many = Array.from({ length: 20 }, (_, index) => ({ id: String(index) }));
     expect(paginateItems(many, 1)).toHaveLength(CLIENT_CATALOG_PAGE_SIZE);
     expect(paginateItems(many, 2)).toHaveLength(5);
+  });
+
+  it("CRM_CATALOG_PAGE_SIZE paginates CRM grid", () => {
+    const many = Array.from({ length: 50 }, (_, index) => ({ id: String(index) }));
+    expect(paginateItems(many, 1, CRM_CATALOG_PAGE_SIZE)).toHaveLength(CRM_CATALOG_PAGE_SIZE);
+    expect(paginateItems(many, 3, CRM_CATALOG_PAGE_SIZE)).toHaveLength(2);
   });
 
   it("getTotalPages computes page count", () => {

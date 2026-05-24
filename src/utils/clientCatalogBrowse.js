@@ -1,6 +1,9 @@
 /** Nombre d'articles par page sur le catalogue client public. */
 export const CLIENT_CATALOG_PAGE_SIZE = 15;
 
+/** Nombre d'articles par page dans le CRM (Catalogue client). */
+export const CRM_CATALOG_PAGE_SIZE = 24;
+
 /**
  * Filtre les produits par dossier catalogue.
  * @param {Array} products

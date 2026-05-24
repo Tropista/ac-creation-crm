@@ -1,6 +1,13 @@
 import { getSupabase, isSupabaseConfigured } from "../supabase";
 import { loadData, saveData } from "./dataService";
-import { loadPublicCatalogCache, mergeLiveCatalogImages, savePublicCatalogCache } from "../utils/catalogShare";
+import {
+  catalogProductsNeedLiveImageMerge,
+  loadPublicCatalogCache,
+  mergeLiveCatalogImages,
+  savePublicCatalogCache,
+} from "../utils/catalogShare";
+
+const SUPABASE_ID_BATCH_SIZE = 100;
 
 function findLocalCatalogSelection(shareId) {
   const selections = loadData().catalogSelections || [];
@@ -43,6 +50,43 @@ function normalizePublicError(error) {
   return error;
 }
 
+export function chunkIds(ids = [], batchSize = SUPABASE_ID_BATCH_SIZE) {
+  const unique = [...new Set((ids || []).filter(Boolean))];
+  const chunks = [];
+  for (let index = 0; index < unique.length; index += batchSize) {
+    chunks.push(unique.slice(index, index + batchSize));
+  }
+  return chunks;
+}
+
+function rowsToCatalogItems(rows = []) {
+  return (rows || []).map((row) => ({ id: row.id, ...(row.data || {}) }));
+}
+
+async function fetchCatalogItemsBatch(supabase, tableName, ids) {
+  const { data, error } = await supabase.from(tableName).select("id,data").in("id", ids);
+  if (error) throw error;
+  return data || [];
+}
+
+async function fetchCatalogItemsByIds(supabase, productIds) {
+  if (!productIds.length) return [];
+
+  const chunks = chunkIds(productIds);
+  const rows = [];
+
+  for (const ids of chunks) {
+    try {
+      rows.push(...(await fetchCatalogItemsBatch(supabase, "client_catalog_items", ids)));
+    } catch (error) {
+      if (!isMissingTableError(error)) throw error;
+      rows.push(...(await fetchCatalogItemsBatch(supabase, "catalog_items", ids)));
+    }
+  }
+
+  return rowsToCatalogItems(rows);
+}
+
 export async function fetchPublicCatalogSelection(shareId) {
   const cached = loadPublicCatalogCache(shareId);
 
@@ -80,40 +124,29 @@ export async function fetchPublicCatalogSelection(shareId) {
 }
 
 export async function fetchPublicCatalogProducts(selection, productIds = []) {
+  const ids = productIds.length
+    ? productIds
+    : Array.isArray(selection?.productIds)
+      ? selection.productIds
+      : [];
+
   let products = [];
 
   if (Array.isArray(selection?.productSnapshots) && selection.productSnapshots.length) {
     products = selection.productSnapshots;
-  } else if (!productIds.length) {
+  } else if (!ids.length) {
     return [];
   }
 
-  if (!products.length && productIds.length) {
+  if (!products.length && ids.length) {
     if (!isSupabaseConfigured) {
       const catalogItems = loadData().clientCatalogItems || [];
-      return catalogItems.filter((item) => productIds.includes(item.id));
+      return catalogItems.filter((item) => ids.includes(item.id));
     }
 
     try {
       const supabase = await getSupabase();
-      const { data, error } = await supabase
-        .from("client_catalog_items")
-        .select("id,data")
-        .in("id", productIds);
-
-      if (error) {
-        if (isMissingTableError(error)) {
-          const fallback = await supabase
-            .from("catalog_items")
-            .select("id,data")
-            .in("id", productIds);
-          if (fallback.error) return [];
-          return (fallback.data || []).map((row) => ({ id: row.id, ...(row.data || {}) }));
-        }
-        throw error;
-      }
-
-      products = (data || []).map((row) => ({ id: row.id, ...(row.data || {}) }));
+      products = await fetchCatalogItemsByIds(supabase, ids);
     } catch {
       return [];
     }
@@ -121,19 +154,16 @@ export async function fetchPublicCatalogProducts(selection, productIds = []) {
 
   if (!products.length) return [];
 
+  const needsLiveMerge = catalogProductsNeedLiveImageMerge(products);
+  if (!needsLiveMerge) return products;
+
   let liveItems = [];
   if (!isSupabaseConfigured) {
-    liveItems = loadData().clientCatalogItems || [];
-  } else if (productIds.length) {
+    liveItems = (loadData().clientCatalogItems || []).filter((item) => ids.includes(item.id));
+  } else if (ids.length) {
     try {
       const supabase = await getSupabase();
-      const { data, error } = await supabase
-        .from("client_catalog_items")
-        .select("id,data")
-        .in("id", productIds);
-      if (!error) {
-        liveItems = (data || []).map((row) => ({ id: row.id, ...(row.data || {}) }));
-      }
+      liveItems = await fetchCatalogItemsByIds(supabase, ids);
     } catch {
       liveItems = [];
     }

@@ -21,6 +21,20 @@ export function sanitizeImageUrlForCache(url) {
   return trimmed;
 }
 
+/** True when snapshots lack http image URLs and a live catalog fetch may help. */
+export function catalogProductsNeedLiveImageMerge(products = []) {
+  if (!Array.isArray(products) || !products.length) return false;
+
+  return products.some((product) => {
+    if (!sanitizeImageUrlForCache(product?.imageUrl)) return true;
+    const colors = Array.isArray(product?.colors) ? product.colors : [];
+    return colors.some((color) => {
+      if (!color || typeof color !== "object" || !("imageUrl" in color)) return false;
+      return !sanitizeImageUrlForCache(color.imageUrl);
+    });
+  });
+}
+
 export function sanitizeColorForSnapshot(color) {
   if (typeof color === "string") {
     const name = color.trim();

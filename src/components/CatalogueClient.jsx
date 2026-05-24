@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Copy, Link2, RefreshCw, Trash2 } from "lucide-react";
 import { isSupabaseConfigured } from "../supabase";
@@ -37,7 +37,11 @@ import {
 import {
   filterProductsByAudience,
   filterProductsByFolder,
+  CRM_CATALOG_PAGE_SIZE,
+  getTotalPages,
+  paginateItems,
 } from "../utils/clientCatalogBrowse";
+import PaginationControls from "./PaginationControls";
 import "../styles/client-catalog.css";
 
 function statusLabel(status) {
@@ -50,14 +54,82 @@ function isLmdtSourceUrl(sourceUrl = "") {
   return String(sourceUrl || "").includes("lamaisonduteeshirt.com");
 }
 
+const FILTER_DEBOUNCE_MS = 300;
+
+const CatalogClientGridCard = memo(function CatalogClientGridCard({
+  item,
+  isSelected,
+  isActive,
+  onSelect,
+  onToggleSelection,
+  onRemove,
+}) {
+  const itemFolder = resolveCatalogFolder(item);
+  const itemAudience = resolveCatalogAudience(item);
+
+  return (
+    <article
+      className={`product-premium-card ${isSelected ? "selected" : ""} ${
+        isActive ? "active-product-card" : ""
+      }`}
+      onClick={() => onSelect(item)}
+    >
+      <div className="product-premium-top">
+        <label className="product-select-pill">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onClick={(event) => event.stopPropagation()}
+            onChange={() => onToggleSelection(item.id)}
+          />
+          <span>Sélection</span>
+        </label>
+      </div>
+
+      <div className="product-visual">
+        {item.imageUrl ? (
+          <img src={item.imageUrl} alt={item.name || "Article"} loading="lazy" decoding="async" />
+        ) : (
+          <span>{(item.name || "A").slice(0, 1).toUpperCase()}</span>
+        )}
+      </div>
+
+      <div className="product-premium-body">
+        <h3>{item.name}</h3>
+
+        <div className="product-tags-row">
+          <span>SKU : {item.sku || "Sans SKU"}</span>
+          <span>{itemFolder}</span>
+          {itemAudience !== CATALOG_AUDIENCE_UNISEXE ? (
+            <span className="catalog-audience-badge">{itemAudience}</span>
+          ) : null}
+        </div>
+
+        {item.brand ? <p className="product-description">Marque : {item.brand}</p> : null}
+      </div>
+
+      <div className="product-actions" onClick={(event) => event.stopPropagation()}>
+        <button type="button" className="danger" onClick={() => onRemove(item.id)}>
+          <Trash2 size={14} />
+          Retirer
+        </button>
+      </div>
+    </article>
+  );
+});
+
 export default function CatalogueClient({ data, setData, logActivity }) {
   const navigate = useNavigate();
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [folderFilter, setFolderFilter] = useState(CATALOG_FOLDER_ALL);
   const [audienceFilter, setAudienceFilter] = useState(CATALOG_AUDIENCE_ALL);
   const [sortBy, setSortBy] = useState("name-asc");
+  const [priceMinInput, setPriceMinInput] = useState("");
+  const [priceMaxInput, setPriceMaxInput] = useState("");
   const [priceMin, setPriceMin] = useState("");
   const [priceMax, setPriceMax] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
   const [selectedItem, setSelectedItem] = useState(null);
   const [selectedColorIndex, setSelectedColorIndex] = useState(null);
   const [selectedItemIds, setSelectedItemIds] = useState([]);
@@ -73,6 +145,23 @@ export default function CatalogueClient({ data, setData, logActivity }) {
 
   const selections = Array.isArray(data.catalogSelections) ? data.catalogSelections : [];
   const catalogItems = resolveActiveCatalogItems(data.clientCatalogItems);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(searchInput.trim()), FILTER_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setPriceMin(priceMinInput);
+      setPriceMax(priceMaxInput);
+    }, FILTER_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [priceMinInput, priceMaxInput]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, folderFilter, audienceFilter, sortBy, priceMin, priceMax]);
 
   const folderCounts = useMemo(() => countItemsByFolder(catalogItems), [catalogItems]);
 
@@ -128,6 +217,16 @@ export default function CatalogueClient({ data, setData, logActivity }) {
     });
   }, [folderScopedItems, audienceFilter, search, sortBy, priceMin, priceMax]);
 
+  const totalPages = useMemo(
+    () => getTotalPages(filteredCatalogItems.length, CRM_CATALOG_PAGE_SIZE),
+    [filteredCatalogItems.length]
+  );
+
+  const paginatedCatalogItems = useMemo(() => {
+    const safePage = Math.min(currentPage, totalPages);
+    return paginateItems(filteredCatalogItems, safePage, CRM_CATALOG_PAGE_SIZE);
+  }, [filteredCatalogItems, currentPage, totalPages]);
+
   const activeSelectedItem = useMemo(() => {
     if (!selectedItem) return null;
     return catalogItems.find((item) => item.id === selectedItem.id) || selectedItem;
@@ -157,12 +256,16 @@ export default function CatalogueClient({ data, setData, logActivity }) {
   }, [activeSelectedItem?.description]);
 
   function resetCatalogFilters() {
+    setSearchInput("");
     setSearch("");
     setFolderFilter(CATALOG_FOLDER_ALL);
     setAudienceFilter(CATALOG_AUDIENCE_ALL);
     setSortBy("name-asc");
+    setPriceMinInput("");
+    setPriceMaxInput("");
     setPriceMin("");
     setPriceMax("");
+    setCurrentPage(1);
   }
 
   function toggleItemSelection(itemId) {
@@ -625,8 +728,8 @@ export default function CatalogueClient({ data, setData, logActivity }) {
             <input
               className="search filters-search-input"
               placeholder="Recherche : nom, SKU, catégorie, marque..."
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
             />
           </div>
 
@@ -647,16 +750,16 @@ export default function CatalogueClient({ data, setData, logActivity }) {
               type="number"
               min="0"
               placeholder="Prix min"
-              value={priceMin}
-              onChange={(event) => setPriceMin(event.target.value)}
+              value={priceMinInput}
+              onChange={(event) => setPriceMinInput(event.target.value)}
             />
             <span>→</span>
             <input
               type="number"
               min="0"
               placeholder="Prix max"
-              value={priceMax}
-              onChange={(event) => setPriceMax(event.target.value)}
+              value={priceMaxInput}
+              onChange={(event) => setPriceMaxInput(event.target.value)}
             />
           </div>
         </div>
@@ -773,64 +876,29 @@ export default function CatalogueClient({ data, setData, logActivity }) {
               </nav>
 
             <div className="products-erp-layout">
-              <div className="product-premium-grid">
-                {filteredCatalogItems.map((item) => {
-                  const itemFolder = resolveCatalogFolder(item);
-                  const itemAudience = resolveCatalogAudience(item);
-                  return (
-                  <article
-                    key={item.id}
-                    className={`product-premium-card ${
-                      selectedItemIds.includes(item.id) ? "selected" : ""
-                    } ${activeSelectedItem?.id === item.id ? "active-product-card" : ""}`}
-                    onClick={() => setSelectedItem(item)}
-                  >
-                    <div className="product-premium-top">
-                      <label className="product-select-pill">
-                        <input
-                          type="checkbox"
-                          checked={selectedItemIds.includes(item.id)}
-                          onClick={(event) => event.stopPropagation()}
-                          onChange={() => toggleItemSelection(item.id)}
-                        />
-                        <span>Sélection</span>
-                      </label>
-                    </div>
+              <div className="catalog-client-grid-column">
+                <div className="product-premium-grid">
+                  {paginatedCatalogItems.map((item) => (
+                    <CatalogClientGridCard
+                      key={item.id}
+                      item={item}
+                      isSelected={selectedItemIds.includes(item.id)}
+                      isActive={activeSelectedItem?.id === item.id}
+                      onSelect={setSelectedItem}
+                      onToggleSelection={toggleItemSelection}
+                      onRemove={removeCatalogItem}
+                    />
+                  ))}
+                </div>
 
-                    <div className="product-visual">
-                    {item.imageUrl ? (
-                      <img src={item.imageUrl} alt={item.name || "Article"} loading="lazy" />
-                    ) : (
-                      <span>{(item.name || "A").slice(0, 1).toUpperCase()}</span>
-                    )}
-                  </div>
-
-                  <div className="product-premium-body">
-                    <h3>{item.name}</h3>
-
-                    <div className="product-tags-row">
-                      <span>SKU : {item.sku || "Sans SKU"}</span>
-                      <span>{itemFolder}</span>
-                      {itemAudience !== CATALOG_AUDIENCE_UNISEXE ? (
-                        <span className="catalog-audience-badge">{itemAudience}</span>
-                      ) : null}
-                    </div>
-
-                    {item.brand ? (
-                      <p className="product-description">Marque : {item.brand}</p>
-                    ) : null}
-                  </div>
-
-                  <div className="product-actions" onClick={(event) => event.stopPropagation()}>
-                    <button type="button" className="danger" onClick={() => removeCatalogItem(item.id)}>
-                      <Trash2 size={14} />
-                      Retirer
-                    </button>
-                  </div>
-                </article>
-                  );
-                })}
-            </div>
+                <PaginationControls
+                  page={Math.min(currentPage, totalPages)}
+                  totalPages={totalPages}
+                  onPageChange={setCurrentPage}
+                  totalItems={filteredCatalogItems.length}
+                  perPage={CRM_CATALOG_PAGE_SIZE}
+                />
+              </div>
 
             <aside className="product-side-card card">
               {!activeSelectedItem ? (
