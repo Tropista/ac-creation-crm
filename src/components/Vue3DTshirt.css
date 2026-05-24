@@ -1039,36 +1039,6 @@
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
 }
 
-.tshirt3d-public-banner-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-}
-
-.tshirt3d-share-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 40px;
-  padding: 0 16px;
-  border-radius: 10px;
-  border: 1px solid #cbd5e1;
-  background: #fff;
-  color: #0f172a;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.tshirt3d-share-btn.secondary {
-  background: #f8fafc;
-}
-
-.tshirt3d-share-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
 .tshirt3d-public-banner strong {
   display: block;
   color: #0f172a;

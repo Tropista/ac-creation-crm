@@ -20,7 +20,6 @@ import {
 } from "../utils/invoices";
 import { computeDueDate, openInvoiceReminderMailto } from "../utils/invoiceReminders";
 import { consumeQuoteDraft } from "../utils/quoteDraft";
-import { decodeQuoteShareParam, QUOTE_SHARE_PARAM } from "../utils/tshirtShare";
 import { PRODUCTION_STATUSES, QUOTE_STATUSES } from "../utils/production";
 import { exportInvoicesCsv } from "../utils/exportCsv";
 import { showToast } from "../utils/toast";
@@ -55,69 +54,35 @@ const [form, setForm] = useState({
 
   useEffect(() => {
     if (!isQuote) return;
+    const draft = location.state?.quoteDraft || consumeQuoteDraft();
+    if (!draft?.lines?.length) return;
 
-    let cancelled = false;
-
-    function applyQuoteDraft(draft) {
-      if (!draft?.lines?.length || cancelled) return;
-
-      setEditingId(null);
-      setForm({
-        clientId: draft.clientId || prefilledClientId || "",
-        status: "Brouillon",
-        globalDiscount: 0,
-        lines: draft.lines.map((line) => ({
-          productId: line.productId || "",
-          sku: line.sku || "",
-          category: line.category || "",
-          categoryId: line.categoryId || "",
-          description: line.description || "",
-          quantity: Number(line.quantity || 1),
-          price: Number(line.price || 0),
-          discount: Number(line.discount || 0),
-        })),
-      });
-      showToast(
-        draft.source
-          ? `Devis pré-rempli depuis ${draft.source}.`
-          : "Devis pré-rempli.",
-        "success"
-      );
+    if (location.state?.quoteDraft) {
+      window.history.replaceState({}, document.title);
     }
 
-    async function loadQuoteDraft() {
-      const params = new URLSearchParams(location.search);
-      const draftParam = params.get(QUOTE_SHARE_PARAM);
-
-      if (draftParam) {
-        try {
-          const sharedDraft = await decodeQuoteShareParam(draftParam);
-          if (sharedDraft) {
-            window.history.replaceState({}, document.title, location.pathname);
-            applyQuoteDraft(sharedDraft);
-            return;
-          }
-        } catch (error) {
-          console.error(error);
-          showToast("Lien de devis invalide ou illisible.", "error");
-        }
-      }
-
-      const draft = location.state?.quoteDraft || consumeQuoteDraft();
-      if (!draft?.lines?.length) return;
-
-      if (location.state?.quoteDraft) {
-        window.history.replaceState({}, document.title);
-      }
-
-      applyQuoteDraft(draft);
-    }
-
-    loadQuoteDraft();
-
-    return () => {
-      cancelled = true;
-    };
+    setEditingId(null);
+    setForm({
+      clientId: draft.clientId || prefilledClientId || "",
+      status: "Brouillon",
+      globalDiscount: 0,
+      lines: draft.lines.map((line) => ({
+        productId: line.productId || "",
+        sku: line.sku || "",
+        category: line.category || "",
+        categoryId: line.categoryId || "",
+        description: line.description || "",
+        quantity: Number(line.quantity || 1),
+        price: Number(line.price || 0),
+        discount: Number(line.discount || 0),
+      })),
+    });
+    showToast(
+      draft.source
+        ? `Devis pré-rempli depuis ${draft.source}.`
+        : "Devis pré-rempli.",
+      "success"
+    );
   }, [isQuote, location.key]);
 
   useEffect(() => {
