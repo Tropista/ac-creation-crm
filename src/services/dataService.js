@@ -90,14 +90,7 @@ export function dedupeItemsById(items = []) {
 }
 
 export function normalizeData(data) {
-  const {
-    supplierCatalogItems: _supplierCatalogItems,
-    clientCatalogItems: _clientCatalogItems,
-    catalogItems: _catalogItems,
-    catalogSelections: _catalogSelections,
-    _localCatalogMeta: _localCatalogMeta,
-    ...rest
-  } = data || {};
+  const rest = { ...(data || {}) };
 
   return {
     ...emptyData,

@@ -35,30 +35,6 @@ CREATE TABLE IF NOT EXISTS categories (
   created_at timestamptz DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS catalog_items (
-  id text PRIMARY KEY,
-  data jsonb NOT NULL DEFAULT '{}'::jsonb,
-  created_at timestamptz DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS supplier_catalog_items (
-  id text PRIMARY KEY,
-  data jsonb NOT NULL DEFAULT '{}'::jsonb,
-  created_at timestamptz DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS client_catalog_items (
-  id text PRIMARY KEY,
-  data jsonb NOT NULL DEFAULT '{}'::jsonb,
-  created_at timestamptz DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS catalog_selections (
-  id text PRIMARY KEY,
-  data jsonb NOT NULL DEFAULT '{}'::jsonb,
-  created_at timestamptz DEFAULT now()
-);
-
 CREATE TABLE IF NOT EXISTS suppliers (
   id text PRIMARY KEY,
   data jsonb NOT NULL DEFAULT '{}'::jsonb,
@@ -129,10 +105,6 @@ ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
-ALTER TABLE catalog_items ENABLE ROW LEVEL SECURITY;
-ALTER TABLE supplier_catalog_items ENABLE ROW LEVEL SECURITY;
-ALTER TABLE client_catalog_items ENABLE ROW LEVEL SECURITY;
-ALTER TABLE catalog_selections ENABLE ROW LEVEL SECURITY;
 ALTER TABLE suppliers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE quotes ENABLE ROW LEVEL SECURITY;
@@ -159,62 +131,6 @@ CREATE POLICY "crm_full_access" ON products
 DROP POLICY IF EXISTS "crm_full_access" ON categories;
 CREATE POLICY "crm_full_access" ON categories
   FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "crm_full_access" ON public.catalog_items;
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE schemaname = 'public'
-      AND tablename = 'catalog_items'
-      AND policyname = 'crm_full_access'
-  ) THEN
-    CREATE POLICY "crm_full_access" ON public.catalog_items
-      FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-  END IF;
-END $$;
-
-DROP POLICY IF EXISTS "crm_full_access" ON public.supplier_catalog_items;
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE schemaname = 'public'
-      AND tablename = 'supplier_catalog_items'
-      AND policyname = 'crm_full_access'
-  ) THEN
-    CREATE POLICY "crm_full_access" ON public.supplier_catalog_items
-      FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-  END IF;
-END $$;
-
-DROP POLICY IF EXISTS "crm_full_access" ON public.client_catalog_items;
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE schemaname = 'public'
-      AND tablename = 'client_catalog_items'
-      AND policyname = 'crm_full_access'
-  ) THEN
-    CREATE POLICY "crm_full_access" ON public.client_catalog_items
-      FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-  END IF;
-END $$;
-
-DROP POLICY IF EXISTS "crm_full_access" ON public.catalog_selections;
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_policies
-    WHERE schemaname = 'public'
-      AND tablename = 'catalog_selections'
-      AND policyname = 'crm_full_access'
-  ) THEN
-    CREATE POLICY "crm_full_access" ON public.catalog_selections
-      FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-  END IF;
-END $$;
 
 DROP POLICY IF EXISTS "crm_full_access" ON suppliers;
 CREATE POLICY "crm_full_access" ON suppliers
@@ -261,20 +177,3 @@ CREATE POLICY "bank_transactions_update" ON bank_transactions
 DROP POLICY IF EXISTS "bank_transactions_delete" ON bank_transactions;
 CREATE POLICY "bank_transactions_delete" ON bank_transactions
   FOR DELETE TO anon, authenticated USING (true);
-
--- ---------------------------------------------------------------------------
--- Index pagination catalogue (ORDER BY created_at, id — évite statement timeout)
--- Voir aussi supabase/migrations/20260524100000_catalog_fetch_indexes.sql
--- ---------------------------------------------------------------------------
-
-CREATE INDEX IF NOT EXISTS idx_supplier_catalog_items_created_at_id
-  ON public.supplier_catalog_items (created_at ASC NULLS FIRST, id ASC);
-
-CREATE INDEX IF NOT EXISTS idx_client_catalog_items_created_at_id
-  ON public.client_catalog_items (created_at ASC NULLS FIRST, id ASC);
-
-CREATE INDEX IF NOT EXISTS idx_catalog_items_created_at_id
-  ON public.catalog_items (created_at ASC NULLS FIRST, id ASC);
-
-CREATE INDEX IF NOT EXISTS idx_catalog_selections_created_at_id
-  ON public.catalog_selections (created_at ASC NULLS FIRST, id ASC);

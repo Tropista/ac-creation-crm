@@ -76,8 +76,8 @@ const menuGroups = [
     ],
   },
   {
-    id: "catalogue",
-    label: "Catalogue",
+    id: "stock",
+    label: "Stock & achats",
     items: [
       { page: "products", label: "Produits", type: "page" },
       { page: "categories", label: "Catégories", type: "page" },

@@ -136,20 +136,4 @@ describe("syncMerge", () => {
     expect(outcome.syncStatus).toBe(SYNC_STATUS.LOCAL_UNAVAILABLE);
     expect(outcome.toast?.message).toContain("Sync cloud indisponible");
   });
-
-  it("mergeCloudWithLocal ignore les clés catalogue legacy", () => {
-    const merged = mergeCloudWithLocal(
-      {
-        ...emptyData,
-        supplierCatalogItems: [{ id: "s1" }],
-      },
-      {
-        ...emptyData,
-        clientCatalogItems: [{ id: "c1" }],
-      }
-    );
-
-    expect(merged.supplierCatalogItems).toEqual([{ id: "s1" }]);
-    expect(merged.clientCatalogItems).toEqual([{ id: "c1" }]);
-  });
 });

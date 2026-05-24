@@ -1,9 +1,4 @@
 const PROCESS_PATTERNS = [
-  {
-    key: "catalog",
-    label: "Demande catalogue",
-    patterns: [/demande catalogue/i],
-  },
   { key: "laser", label: "Laser CO2", patterns: [/laser/i, /co2/i, /découpe/i, /gravure/i] },
   { key: "dtf", label: "DTF", patterns: [/dtf/i, /transfert/i, /mycolor/i] },
   { key: "uvdtf", label: "UV-DTF", patterns: [/uv-dtf/i, /uv dtf/i, /tristar/i] },
@@ -72,20 +67,7 @@ function compareAtelierQuotes(a, b) {
   return String(a?.number || "").localeCompare(String(b?.number || ""));
 }
 
-export function isCatalogAtelierQuote(quote) {
-  return Boolean(
-    quote?.catalogSelectionId ||
-      String(quote?.source || "")
-        .trim()
-        .toLowerCase() === "demande catalogue"
-  );
-}
-
 export function inferProcessType(quote) {
-  if (isCatalogAtelierQuote(quote)) {
-    return PROCESS_PATTERNS.find((entry) => entry.key === "catalog");
-  }
-
   const haystack = [
     quote?.description,
     ...(quote?.lines || []).map(

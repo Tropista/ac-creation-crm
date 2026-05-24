@@ -75,19 +75,6 @@ describe("dataService", () => {
     expect(loaded.clients[0].name).toBe("AC Creation");
   });
 
-  it("normalizeData ignore les clés catalogue legacy", () => {
-    const loaded = normalizeData({
-      supplierCatalogItems: [{ id: "legacy-1", name: "Ancien article" }],
-      clientCatalogItems: [{ id: "legacy-2", name: "Autre" }],
-      catalogSelections: [{ id: "sel-1" }],
-      catalogItems: [{ id: "legacy-3" }],
-    });
-    expect(loaded.supplierCatalogItems).toBeUndefined();
-    expect(loaded.clientCatalogItems).toBeUndefined();
-    expect(loaded.catalogSelections).toBeUndefined();
-    expect(loaded.catalogItems).toBeUndefined();
-  });
-
   it("flushSaveData signale QuotaExceededError", () => {
     const storage = createStorage({ quotaBytes: 50 });
     vi.stubGlobal("localStorage", storage);

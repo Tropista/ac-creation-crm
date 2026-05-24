@@ -161,25 +161,6 @@
   color: #0f172a;
 }
 
-.atelier-card__catalog-title {
-  margin: 0 0 6px;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.atelier-card__catalog-link {
-  display: inline-block;
-  margin-bottom: 8px;
-  font-size: 12px;
-  font-weight: 700;
-  color: #2563eb;
-  text-decoration: none;
-}
-
-.atelier-card__catalog-link:hover {
-  text-decoration: underline;
-}
-
 .atelier-card__date {
   margin: 0 0 12px;
   font-size: 12px;

@@ -662,7 +662,7 @@ export default function Suppliers({
                             <td>
                               <strong>{displayName}</strong>
                               {isLegacy && (
-                                <div className="supplier-meta">Ancien lien catalogue</div>
+                                <div className="supplier-meta">Ancien lien produit</div>
                               )}
                               {link.notes && (
                                 <div className="supplier-meta">{link.notes}</div>
