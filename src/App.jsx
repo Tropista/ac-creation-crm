@@ -391,14 +391,14 @@ function CrmApp() {
 
           const { data: prepared, applied } = prepareAppData(mergedRaw, { notify: !silent });
           setData(prepared);
-          saveData(prepared);
-          flushSaveData();
 
           const needsCatalogPush = hasUnsyncedCatalogChanges(prepared, cloud.data);
           if (applied || needsCatalogPush) {
             await syncSupabaseData(prepared, cloud.data);
-            flushSaveData();
           }
+
+          saveData(prepared);
+          flushSaveData();
 
           setLastSyncAt();
           cloudSyncSucceeded.current = true;
@@ -415,11 +415,11 @@ function CrmApp() {
           const { data: prepared } = prepareAppData(localData, { notify: !silent });
           await syncSupabaseData(prepared, emptyData);
           setData(prepared);
-          saveData(prepared);
-          flushSaveData();
           setLastSyncAt();
           cloudSyncSucceeded.current = true;
           setSyncStatus(SYNC_STATUS.LOCAL_PUSHED);
+          saveData(prepared);
+          flushSaveData();
           if (!silent) {
             showToast("Données locales synchronisées vers Supabase", "success");
           }
@@ -435,10 +435,10 @@ function CrmApp() {
             });
             const { data: prepared } = prepareAppData(mergedRaw, { notify: !silent });
             setData(prepared);
-            saveData(prepared);
-            flushSaveData();
             await syncSupabaseData(prepared, emptyData);
             setLastSyncAt();
+            saveData(prepared);
+            flushSaveData();
             cloudSyncSucceeded.current = true;
             setSyncStatus(SYNC_STATUS.SYNCED);
             if (!silent) {
@@ -535,51 +535,55 @@ function CrmApp() {
       dataRef.current = normalized;
       setData(normalized);
 
-      try {
-        saveData(normalized);
-        flushSaveData();
-      } catch (error) {
-        console.error(error);
+      let cloudSaved = false;
+
+      if (isSupabaseConfigured) {
+        try {
+          setSyncStatus(SYNC_STATUS.SAVING);
+          const { syncSupabaseData } = await loadSupabaseSyncModule();
+          const syncResult = await syncSupabaseData(normalized, previous);
+          if (syncResult?.catalogWrites?.length) {
+            console.info("[CRM sync catalogue]", syncResult.catalogWrites.join(" · "));
+          }
+          setLastSyncAt();
+          cloudSyncSucceeded.current = true;
+          cloudSaved = true;
+          setCloudAvailable(true);
+          setSyncStatus(SYNC_STATUS.SYNCED);
+        } catch (error) {
+          console.error("Échec sync Supabase :", error);
+          if (cloudSyncSucceeded.current) {
+            setCloudAvailable(true);
+            setSyncStatus(SYNC_STATUS.SAVE_ERROR);
+          } else {
+            setCloudAvailable(false);
+            setSyncStatus(SYNC_STATUS.LOCAL_UNAVAILABLE);
+          }
+          showToast(
+            error?.message
+              ? `Erreur de sauvegarde Supabase : ${error.message}`
+              : "Erreur de sauvegarde Supabase — données conservées localement",
+            "error"
+          );
+          throw error;
+        }
+      } else {
+        setSyncStatus(SYNC_STATUS.LOCAL_NO_CONFIG);
+      }
+
+      saveData(normalized);
+      const localSaveResult = flushSaveData();
+
+      if (localSaveResult?.quotaExceeded && cloudSaved) {
+        showToast(
+          "Cache local plein — vos données sont bien enregistrées dans le cloud.",
+          "warning"
+        );
+      } else if (localSaveResult?.quotaExceeded && !cloudSaved) {
         showToast(
           "Quota localStorage dépassé — les données risquent de ne pas survivre au rechargement.",
           "error"
         );
-        throw error;
-      }
-
-      if (!isSupabaseConfigured) {
-        setSyncStatus(SYNC_STATUS.LOCAL_NO_CONFIG);
-        return normalized;
-      }
-
-      try {
-        setSyncStatus(SYNC_STATUS.SAVING);
-        const { syncSupabaseData } = await loadSupabaseSyncModule();
-        const syncResult = await syncSupabaseData(normalized, previous);
-        if (syncResult?.catalogWrites?.length) {
-          console.info("[CRM sync catalogue]", syncResult.catalogWrites.join(" · "));
-        }
-        flushSaveData();
-        setLastSyncAt();
-        cloudSyncSucceeded.current = true;
-        setCloudAvailable(true);
-        setSyncStatus(SYNC_STATUS.SYNCED);
-      } catch (error) {
-        console.error("Échec sync Supabase :", error);
-        if (cloudSyncSucceeded.current) {
-          setCloudAvailable(true);
-          setSyncStatus(SYNC_STATUS.SAVE_ERROR);
-        } else {
-          setCloudAvailable(false);
-          setSyncStatus(SYNC_STATUS.LOCAL_UNAVAILABLE);
-        }
-        showToast(
-          error?.message
-            ? `Erreur de sauvegarde Supabase : ${error.message}`
-            : "Erreur de sauvegarde Supabase — données conservées localement",
-          "error"
-        );
-        throw error;
       }
 
       return normalized;

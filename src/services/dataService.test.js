@@ -1,13 +1,36 @@
-import { describe, expect, it, vi } from "vitest";
-import { emptyData, hasLocalBusinessData, saveData, loadData, flushSaveData, STORAGE_KEY, normalizeData } from "./dataService.js";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+
+vi.mock("../supabase.js", () => ({
+  isSupabaseConfigured: false,
+}));
+
+import {
+  emptyData,
+  hasLocalBusinessData,
+  saveData,
+  loadData,
+  flushSaveData,
+  STORAGE_KEY,
+  LOCAL_CATALOG_META_KEY,
+  normalizeData,
+  prepareDataForLocalStorage,
+  stripBase64FromCatalogItem,
+  isQuotaExceededError,
+} from "./dataService.js";
 import { stampDataChanges } from "./syncMerge.js";
 import { importScrapedCatalogItems } from "../utils/lmdtImport.js";
 
-function createStorage() {
+function createStorage({ quotaBytes = Infinity } = {}) {
   const store = new Map();
   return {
     getItem: (key) => (store.has(key) ? store.get(key) : null),
     setItem: (key, value) => {
+      if (String(value).length > quotaBytes) {
+        const error = new Error("Failed to execute 'setItem' on 'Storage'");
+        error.name = "QuotaExceededError";
+        error.code = 22;
+        throw error;
+      }
       store.set(key, String(value));
     },
     removeItem: (key) => {
@@ -20,6 +43,14 @@ function createStorage() {
 }
 
 describe("dataService", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("hasLocalBusinessData inclut les collections catalogues", () => {
     expect(hasLocalBusinessData(emptyData)).toBe(false);
     expect(
@@ -42,7 +73,16 @@ describe("dataService", () => {
     ).toBe(true);
   });
 
-  it("saveData et loadData conservent supplierCatalogItems", () => {
+  it("hasLocalBusinessData reconnaît les métadonnées catalogue exclues", () => {
+    expect(
+      hasLocalBusinessData({
+        ...emptyData,
+        [LOCAL_CATALOG_META_KEY]: { supplierCount: 6000, clientCount: 120 },
+      })
+    ).toBe(true);
+  });
+
+  it("saveData et loadData conservent supplierCatalogItems sans cloud", () => {
     const storage = createStorage();
     vi.stubGlobal("localStorage", storage);
 
@@ -56,8 +96,6 @@ describe("dataService", () => {
     const loaded = loadData();
     expect(loaded.supplierCatalogItems).toHaveLength(1);
     expect(loaded.supplierCatalogItems[0].name).toBe("Sol's Regent");
-
-    vi.unstubAllGlobals();
   });
 
   it("migre catalogItems legacy vers clientCatalogItems", () => {
@@ -67,6 +105,90 @@ describe("dataService", () => {
     expect(loaded.clientCatalogItems).toHaveLength(1);
     expect(loaded.clientCatalogItems[0].name).toBe("Ancien article");
     expect(loaded.catalogItems).toHaveLength(0);
+  });
+
+  it("stripBase64FromCatalogItem conserve les URLs http", () => {
+    const item = stripBase64FromCatalogItem({
+      id: "1",
+      imageUrl: "https://example.com/img.jpg",
+      colors: [{ name: "Blanc", imageUrl: "https://example.com/blanc.jpg" }],
+    });
+    expect(item.imageUrl).toBe("https://example.com/img.jpg");
+    expect(item.colors[0].imageUrl).toBe("https://example.com/blanc.jpg");
+  });
+
+  it("stripBase64FromCatalogItem supprime les images base64", () => {
+    const item = stripBase64FromCatalogItem({
+      id: "1",
+      imageUrl: "data:image/jpeg;base64,abc123",
+      colors: [{ name: "Blanc", imageUrl: "data:image/jpeg;base64,xyz" }],
+    });
+    expect(item.imageUrl).toBe("");
+    expect(item.colors[0].imageUrl).toBe("");
+  });
+
+  it("prepareDataForLocalStorage exclut les catalogues quand cloud activé", async () => {
+    vi.doUnmock("../supabase.js");
+    vi.resetModules();
+    vi.doMock("../supabase.js", () => ({
+      isSupabaseConfigured: true,
+    }));
+
+    const { prepareDataForLocalStorage: prepareWithCloud } = await import("./dataService.js");
+
+    const payload = prepareWithCloud({
+      ...emptyData,
+      supplierCatalogItems: [{ id: "s1", name: "Pool" }],
+      clientCatalogItems: [{ id: "c1", name: "Client" }],
+      catalogSelections: [{ id: "sel1", title: "Sélection" }],
+    });
+
+    expect(payload.supplierCatalogItems).toHaveLength(0);
+    expect(payload.clientCatalogItems).toHaveLength(0);
+    expect(payload.catalogSelections).toHaveLength(0);
+    expect(payload[LOCAL_CATALOG_META_KEY]).toMatchObject({
+      supplierCount: 1,
+      clientCount: 1,
+      selectionsCount: 1,
+      excludedFromLocal: true,
+    });
+
+    vi.doUnmock("../supabase.js");
+    vi.resetModules();
+  });
+
+  it("flushSaveData récupère gracieusement après QuotaExceededError", () => {
+    const storage = createStorage({ quotaBytes: 3000 });
+    vi.stubGlobal("localStorage", storage);
+
+    const payload = {
+      ...emptyData,
+      clients: [{ id: "cl1", name: "Client test" }],
+      supplierCatalogItems: Array.from({ length: 80 }, (_, index) => ({
+        id: `item-${index}`,
+        name: `Article catalogue numéro ${index}`,
+        sku: `SKU-${index}`,
+        description: "Description longue pour gonfler le cache local ".repeat(3),
+      })),
+    };
+
+    saveData(payload);
+    const result = flushSaveData();
+
+    expect(result?.ok).toBe(true);
+    expect(result?.quotaExceeded).toBe(true);
+    expect(result?.recovered).toBe(true);
+
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    expect(stored.supplierCatalogItems).toHaveLength(0);
+    expect(stored.clients).toHaveLength(1);
+  });
+
+  it("isQuotaExceededError détecte QuotaExceededError", () => {
+    const error = new DOMException("quota", "QuotaExceededError");
+    expect(isQuotaExceededError(error)).toBe(true);
+    expect(isQuotaExceededError({ name: "QuotaExceededError", code: 22 })).toBe(true);
+    expect(isQuotaExceededError(new Error("other"))).toBe(false);
   });
 });
 

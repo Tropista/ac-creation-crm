@@ -1,22 +1,119 @@
 import { dedupeDocuments } from "../utils/documents";
 import { debounce } from "../utils/debounce";
 import { migrateLegacyCatalogData } from "../utils/catalogCollections";
+import { sanitizeImageUrlForCache, compactSelectionForPublicCache } from "../utils/catalogShare";
+import { isSupabaseConfigured } from "../supabase";
 
 export const STORAGE_KEY = "crm_local_data_v2";
+export const LOCAL_CATALOG_META_KEY = "_localCatalogMeta";
 export const SAVE_DEBOUNCE_MS = 400;
 
 let pendingData = null;
 let lastSaveError = null;
 
-function writeDataImmediate(data) {
+export function isQuotaExceededError(error) {
+  if (!error) return false;
+  return error.name === "QuotaExceededError" || error.code === 22;
+}
+
+export function stripBase64FromCatalogItem(item) {
+  if (!item || typeof item !== "object") return item;
+
+  const next = { ...item };
+
+  if (next.imageUrl) {
+    next.imageUrl = sanitizeImageUrlForCache(next.imageUrl);
+  }
+
+  if (Array.isArray(next.colors)) {
+    next.colors = next.colors.map((color) => {
+      if (typeof color === "string") return color;
+      if (!color || typeof color !== "object") return color;
+      return {
+        ...color,
+        imageUrl: sanitizeImageUrlForCache(color.imageUrl),
+      };
+    });
+  }
+
+  return next;
+}
+
+export function stripBase64FromCatalogItems(items = []) {
+  return (items || []).map(stripBase64FromCatalogItem);
+}
+
+export function stripBase64FromCatalogSelections(selections = []) {
+  return (selections || []).map((selection) =>
+    compactSelectionForPublicCache(selection, { omitSnapshots: false })
+  );
+}
+
+export function buildLocalCatalogMeta(data = {}) {
+  return {
+    supplierCount: (data.supplierCatalogItems || []).length,
+    clientCount: (data.clientCatalogItems || []).length,
+    selectionsCount: (data.catalogSelections || []).length,
+    excludedFromLocal: true,
+    savedAt: new Date().toISOString(),
+  };
+}
+
+export function prepareDataForLocalStorage(data, { cloudEnabled = isSupabaseConfigured } = {}) {
+  const stripped = {
+    ...data,
+    supplierCatalogItems: stripBase64FromCatalogItems(data.supplierCatalogItems),
+    clientCatalogItems: stripBase64FromCatalogItems(data.clientCatalogItems),
+    catalogSelections: stripBase64FromCatalogSelections(data.catalogSelections),
+    catalogItems: [],
+  };
+
+  if (!cloudEnabled) {
+    return stripped;
+  }
+
+  return {
+    ...stripped,
+    supplierCatalogItems: [],
+    clientCatalogItems: [],
+    catalogSelections: [],
+    [LOCAL_CATALOG_META_KEY]: buildLocalCatalogMeta(data),
+  };
+}
+
+function writeDataImmediate(data, options = {}) {
+  const payload = prepareDataForLocalStorage(data, options);
+
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     lastSaveError = null;
     pendingData = null;
+    return { ok: true, quotaExceeded: false, recovered: false };
   } catch (error) {
     lastSaveError = error;
+
+    if (isQuotaExceededError(error) && !options.retried) {
+      console.warn("Quota localStorage dépassé — nouvel essai avec cache allégé.", error);
+      try {
+        const minimal = prepareDataForLocalStorage(data, { cloudEnabled: true });
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(minimal));
+        lastSaveError = null;
+        pendingData = null;
+        return { ok: true, quotaExceeded: true, recovered: true };
+      } catch (retryError) {
+        lastSaveError = retryError;
+        console.warn("Impossible d'enregistrer les données localement (quota) :", retryError);
+        return { ok: false, quotaExceeded: true, recovered: false };
+      }
+    }
+
+    if (isQuotaExceededError(error)) {
+      console.warn("Impossible d'enregistrer les données localement (quota) :", error);
+      return { ok: false, quotaExceeded: true, recovered: false };
+    }
+
     console.error("Impossible d'enregistrer les données localement :", error);
-    throw error;
+    return { ok: false, quotaExceeded: false, recovered: false, error };
   }
 }
 
@@ -80,35 +177,36 @@ export function dedupeItemsById(items = []) {
 }
 
 export function normalizeData(data) {
-  const migrated = migrateLegacyCatalogData(data);
+  const { [LOCAL_CATALOG_META_KEY]: _localCatalogMeta, ...rest } = data || {};
+  const migrated = migrateLegacyCatalogData(rest);
 
   return {
     ...emptyData,
-    ...data,
+    ...rest,
     ...migrated,
 
     settings: {
       ...emptyData.settings,
-      ...(data?.settings || {}),
+      ...(rest?.settings || {}),
     },
 
-    users: dedupeItemsById(data?.users || []),
-    clients: dedupeItemsById(data?.clients || []),
+    users: dedupeItemsById(rest?.users || []),
+    clients: dedupeItemsById(rest?.clients || []),
 
     quotes: dedupeDocuments(
-      data?.quotes || []
+      rest?.quotes || []
     ),
 
     invoices: dedupeDocuments(
-      data?.invoices || []
+      rest?.invoices || []
     ),
 
     products: dedupeItemsById(
-      data?.products || []
+      rest?.products || []
     ),
 
     categories: dedupeItemsById(
-      data?.categories || []
+      rest?.categories || []
     ),
 
     supplierCatalogItems: dedupeItemsById(
@@ -122,23 +220,23 @@ export function normalizeData(data) {
     catalogItems: [],
 
     catalogSelections: dedupeItemsById(
-      data?.catalogSelections || []
+      rest?.catalogSelections || []
     ),
 
     suppliers: dedupeItemsById(
-      data?.suppliers || []
+      rest?.suppliers || []
     ),
 
     expenses: dedupeItemsById(
-      data?.expenses || []
+      rest?.expenses || []
     ),
 
     backups: dedupeItemsById(
-      data?.backups || []
+      rest?.backups || []
     ),
 
     logs: dedupeItemsById(
-      data?.logs || []
+      rest?.logs || []
     ),
   };
 }
@@ -163,11 +261,14 @@ export function saveData(data) {
 export function flushSaveData() {
   debouncedWrite.cancel();
   if (pendingData !== null) {
-    writeDataImmediate(pendingData);
+    return writeDataImmediate(pendingData);
   }
+  return null;
 }
 
 export function hasLocalBusinessData(data) {
+  const meta = data?.[LOCAL_CATALOG_META_KEY];
+
   return Boolean(
     data.users?.length ||
     data.backups?.length ||
@@ -177,6 +278,9 @@ export function hasLocalBusinessData(data) {
     data.supplierCatalogItems?.length ||
     data.clientCatalogItems?.length ||
     data.catalogSelections?.length ||
+    meta?.supplierCount ||
+    meta?.clientCount ||
+    meta?.selectionsCount ||
     data.suppliers?.length ||
     data.expenses?.length ||
     data.quotes?.length ||
