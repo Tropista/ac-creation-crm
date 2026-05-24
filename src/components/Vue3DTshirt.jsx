@@ -9,6 +9,14 @@ import Product3DErrorBoundary from "./3d/Product3DErrorBoundary";
 import { showToast } from "../utils/toast";
 import { TSHIRT_MODEL_URL } from "../utils/assets";
 import { buildCalculatorQuoteLine, getCrmQuotesUrl, openQuoteFromCalculator, saveQuoteDraft } from "../utils/quoteDraft";
+import {
+  buildConfiguratorShareUrl,
+  buildQuoteShareUrl,
+  buildShareMailto,
+  copyTextToClipboard,
+  decodeConfiguratorShareParam,
+  CONFIG_SHARE_PARAM,
+} from "../utils/tshirtShare";
 import { estimatePrintPriceHT } from "../utils/tshirtPricing";
 import { PUBLIC_TSHIRT_PATH } from "../utils/routes";
 
@@ -742,6 +750,9 @@ export default function Vue3DTshirt() {
   const [orderQuantity, setOrderQuantity] = useState(1);
   const [currentProjectId, setCurrentProjectId] = useState(null);
   const [quoteSavedModal, setQuoteSavedModal] = useState(false);
+  const [lastQuoteDraft, setLastQuoteDraft] = useState(null);
+  const [shareBusy, setShareBusy] = useState(false);
+  const restoredFromUrlRef = useRef(false);
   const previewRef = useRef(null);
   const editorRef = useRef(null);
   const actionRef = useRef(null);
@@ -784,6 +795,38 @@ export default function Vue3DTshirt() {
       setSavedProjects([]);
     }
   }, []);
+
+  useEffect(() => {
+    if (restoredFromUrlRef.current) return;
+    const params = new URLSearchParams(location.search);
+    const cfgParam = params.get(CONFIG_SHARE_PARAM);
+    if (!cfgParam) return;
+
+    let cancelled = false;
+    restoredFromUrlRef.current = true;
+
+    (async () => {
+      try {
+        const snapshot = await decodeConfiguratorShareParam(cfgParam);
+        if (!snapshot || cancelled) return;
+        await applyProjectSnapshot(snapshot);
+        showToast("Configuration restaurée depuis le lien partagé.", "success");
+        params.delete(CONFIG_SHARE_PARAM);
+        const remaining = params.toString();
+        navigate(
+          { pathname: location.pathname, search: remaining ? `?${remaining}` : "" },
+          { replace: true }
+        );
+      } catch (error) {
+        console.error("Restauration lien configurateur :", error);
+        showToast("Lien de configuration invalide ou illisible.", "error");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [location.search, location.pathname, navigate]);
 
   function updateItem(id, patch) {
     setItems((current) =>
@@ -1100,6 +1143,7 @@ export default function Vue3DTshirt() {
       id: uid(),
       name: makeLayerName(name, `Projet T-shirt ${new Date().toLocaleDateString("fr-FR")}`),
       savedAt: new Date().toISOString(),
+      orderQuantity: Math.max(1, Number(orderQuantity) || 1),
       activeArea,
       tshirtColor,
       showPrintZone,
@@ -1114,6 +1158,90 @@ export default function Vue3DTshirt() {
         dataUrl: font.dataUrl || font.src || null,
       })),
     };
+  }
+
+  async function applyProjectSnapshot(project) {
+    if (!project) return;
+    await restoreCustomFonts(project.customFonts || []);
+    setItems((project.items || []).map((item) =>
+      limitItemToPrintArea(item, project.printZoneSizes || PRINT_ZONE_SIZES_CM)
+    ));
+    setSelectedId(null);
+    setActiveArea(project.activeArea || "front");
+    setTshirtColor(project.tshirtColor || "#ffffff");
+    setShowPrintZone(project.showPrintZone ?? true);
+    setSnapEnabled(project.snapEnabled ?? true);
+    setDefaultTechnique(project.defaultTechnique || "dtf");
+    setGarmentSize(project.garmentSize || "M");
+    setPrintZoneSizes(project.printZoneSizes || PRINT_ZONE_SIZES_CM);
+    setProjectName(project.name || "");
+    if (project.orderQuantity != null) {
+      setOrderQuantity(Math.max(1, Number(project.orderQuantity) || 1));
+    }
+  }
+
+  async function copyConfigurationLink() {
+    if (shareBusy) return;
+    setShareBusy(true);
+    try {
+      const url = await buildConfiguratorShareUrl(buildProjectSnapshot(projectName));
+      await copyTextToClipboard(url);
+      showToast("Lien copié dans le presse-papiers.", "success");
+    } catch (error) {
+      if (error?.message === "LINK_TOO_LONG") {
+        showToast(
+          "Configuration trop volumineuse pour un lien (logos lourds). Exportez le projet JSON ou réduisez les images.",
+          "error",
+          8000
+        );
+      } else {
+        console.error(error);
+        showToast("Impossible de générer le lien de partage.", "error");
+      }
+    } finally {
+      setShareBusy(false);
+    }
+  }
+
+  async function sendConfigurationByEmail() {
+    if (shareBusy) return;
+    setShareBusy(true);
+    try {
+      const url = await buildConfiguratorShareUrl(buildProjectSnapshot(projectName));
+      window.location.href = buildShareMailto(url, projectName);
+    } catch (error) {
+      if (error?.message === "LINK_TOO_LONG") {
+        showToast(
+          "Configuration trop volumineuse pour un lien (logos lourds). Exportez le projet JSON ou réduisez les images.",
+          "error",
+          8000
+        );
+      } else {
+        console.error(error);
+        showToast("Impossible de préparer l'e-mail de partage.", "error");
+      }
+    } finally {
+      setShareBusy(false);
+    }
+  }
+
+  async function copyQuoteShareLink(draft) {
+    if (!draft || shareBusy) return;
+    setShareBusy(true);
+    try {
+      const url = await buildQuoteShareUrl(draft);
+      await copyTextToClipboard(url);
+      showToast("Lien devis copié dans le presse-papiers.", "success");
+    } catch (error) {
+      if (error?.message === "LINK_TOO_LONG") {
+        showToast("Devis trop volumineux pour un lien. Utilisez le CRM sur le même navigateur.", "error", 7000);
+      } else {
+        console.error(error);
+        showToast("Impossible de générer le lien devis.", "error");
+      }
+    } finally {
+      setShareBusy(false);
+    }
   }
 
   async function restoreCustomFonts(fonts = []) {
@@ -1161,16 +1289,7 @@ export default function Vue3DTshirt() {
     if (!project) return;
 
     setCurrentProjectId(project.id);
-    await restoreCustomFonts(project.customFonts || []);
-    setItems((project.items || []).map((item) => limitItemToPrintArea(item, project.printZoneSizes || PRINT_ZONE_SIZES_CM)));
-    setSelectedId(null);
-    setActiveArea(project.activeArea || "front");
-    setTshirtColor(project.tshirtColor || "#ffffff");
-    setShowPrintZone(project.showPrintZone ?? true);
-    setSnapEnabled(project.snapEnabled ?? true);
-    setDefaultTechnique(project.defaultTechnique || "dtf");
-    setGarmentSize(project.garmentSize || "M");
-    setPrintZoneSizes(project.printZoneSizes || PRINT_ZONE_SIZES_CM);
+    await applyProjectSnapshot(project);
     setProjectName(project.name || "");
   }
 
@@ -1199,16 +1318,7 @@ export default function Vue3DTshirt() {
       const nextProjects = [snapshot, ...savedProjects.filter((entry) => entry.id !== snapshot.id)].slice(0, 30);
       persistProjects(nextProjects);
 
-      await restoreCustomFonts(snapshot.customFonts || []);
-      setItems((snapshot.items || []).map((item) => limitItemToPrintArea(item, snapshot.printZoneSizes || PRINT_ZONE_SIZES_CM)));
-      setSelectedId(null);
-      setActiveArea(snapshot.activeArea || "front");
-      setTshirtColor(snapshot.tshirtColor || "#ffffff");
-      setShowPrintZone(snapshot.showPrintZone ?? true);
-      setSnapEnabled(snapshot.snapEnabled ?? true);
-      setDefaultTechnique(snapshot.defaultTechnique || "dtf");
-      setGarmentSize(snapshot.garmentSize || "M");
-      setPrintZoneSizes(snapshot.printZoneSizes || PRINT_ZONE_SIZES_CM);
+      await applyProjectSnapshot(snapshot);
       setProjectName(snapshot.name || "");
       setCurrentProjectId(snapshot.id);
     } catch (error) {
@@ -1802,9 +1912,10 @@ ${customizationLines.join("\n")}`,
 
     if (isPublicConfigurator) {
       saveQuoteDraft(draft);
+      setLastQuoteDraft(draft);
       setQuoteSavedModal(true);
       showToast(
-        "Projet enregistré dans ce navigateur. Ouvrez le CRM → Devis pour finaliser.",
+        "Projet enregistré. Partagez le lien ou ouvrez le CRM → Devis pour finaliser.",
         "info",
         7000
       );
@@ -1821,11 +1932,31 @@ ${customizationLines.join("\n")}`,
         <div className="tshirt3d-public-banner">
           <div>
             <strong>Configurateur public AC Creation</strong>
-            <p>Créez votre visuel, puis cliquez sur « Créer un devis ». Le projet est enregistré dans ce navigateur.</p>
+            <p>
+              Créez votre visuel, partagez un lien pour reprendre plus tard, puis finalisez le devis dans le CRM.
+            </p>
           </div>
-          <a className="tshirt3d-public-crm-link" href={getCrmQuotesUrl()}>
-            Ouvrir le CRM → Devis
-          </a>
+          <div className="tshirt3d-public-banner-actions">
+            <button
+              type="button"
+              className="tshirt3d-share-btn"
+              onClick={copyConfigurationLink}
+              disabled={shareBusy}
+            >
+              Copier le lien
+            </button>
+            <button
+              type="button"
+              className="tshirt3d-share-btn secondary"
+              onClick={sendConfigurationByEmail}
+              disabled={shareBusy}
+            >
+              Envoyer ma configuration
+            </button>
+            <a className="tshirt3d-public-crm-link" href={getCrmQuotesUrl()}>
+              Ouvrir le CRM → Devis
+            </a>
+          </div>
         </div>
       ) : null}
 
@@ -1834,11 +1965,25 @@ ${customizationLines.join("\n")}`,
           <div className="tshirt3d-quote-modal-card">
             <h3 id="tshirt-quote-modal-title">Projet prêt pour le devis</h3>
             <p>
-              Le configurateur a enregistré votre projet dans ce navigateur. Connectez-vous au CRM
-              sur la page <strong>Devis</strong> pour retrouver les lignes pré-remplies.
+              Votre projet est prêt. Partagez le lien de configuration, copiez le lien devis, ou connectez-vous au CRM
+              sur la page <strong>Devis</strong> pour finaliser.
             </p>
-            <p className="muted">Utilisez le même navigateur (Chrome, Edge, etc.) que celui-ci.</p>
+            <p className="muted">
+              Le brouillon local fonctionne sur le même navigateur ; les liens fonctionnent partout.
+            </p>
             <div className="tshirt3d-quote-modal-actions">
+              <button type="button" onClick={copyConfigurationLink} disabled={shareBusy}>
+                Copier le lien configuration
+              </button>
+              {lastQuoteDraft ? (
+                <button
+                  type="button"
+                  onClick={() => copyQuoteShareLink(lastQuoteDraft)}
+                  disabled={shareBusy}
+                >
+                  Copier le lien devis
+                </button>
+              ) : null}
               <a className="primary" href={getCrmQuotesUrl()}>
                 Ouvrir AC Creation CRM → Devis
               </a>
