@@ -555,7 +555,10 @@ function CrmApp() {
       try {
         setSyncStatus(SYNC_STATUS.SAVING);
         const { syncSupabaseData } = await loadSupabaseSyncModule();
-        await syncSupabaseData(normalized, previous);
+        const syncResult = await syncSupabaseData(normalized, previous);
+        if (syncResult?.catalogWrites?.length) {
+          console.info("[CRM sync catalogue]", syncResult.catalogWrites.join(" · "));
+        }
         flushSaveData();
         setLastSyncAt();
         cloudSyncSucceeded.current = true;

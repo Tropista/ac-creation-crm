@@ -3,13 +3,42 @@ import { getSupabase } from "../supabase";
 /** Refuse de pousser une suppression massive vers le cloud (ex. migration ou snapshot vide). */
 export const MASS_DELETE_GUARD_MIN = 50;
 
+export const UPSERT_CHUNK_SIZE = 50;
+
+export const CATALOG_TABLES = {
+  supplierCatalogItems: "supplier_catalog_items",
+  clientCatalogItems: "client_catalog_items",
+  catalogSelections: "catalog_selections",
+};
+
+function stableSerialize(value) {
+  return JSON.stringify(value);
+}
+
+export function getCollectionDelta(previousItems = [], nextItems = []) {
+  const previousMap = new Map(
+    (previousItems || []).filter((item) => item?.id).map((item) => [String(item.id), item])
+  );
+  const delta = [];
+
+  for (const item of nextItems || []) {
+    if (!item?.id) continue;
+    const previous = previousMap.get(String(item.id));
+    if (!previous || stableSerialize(previous) !== stableSerialize(item)) {
+      delta.push(item);
+    }
+  }
+
+  return delta;
+}
+
 export function shouldSkipMassDelete(nextItems = [], previousItems = [], removedCount = 0) {
   if (!removedCount) return false;
   if ((nextItems || []).length > 0) return false;
   return (previousItems || []).length >= MASS_DELETE_GUARD_MIN;
 }
 
-function isMissingTableError(error) {
+export function isMissingTableError(error) {
   if (!error) return false;
   const code = String(error.code || "");
   const message = String(error.message || "");
@@ -18,6 +47,24 @@ function isMissingTableError(error) {
     code === "42P01" ||
     /could not find the table|relation .* does not exist/i.test(message)
   );
+}
+
+export function formatSupabaseCollectionError(tableName, error) {
+  if (isMissingTableError(error)) {
+    return new Error(
+      `Table Supabase « ${tableName} » absente. Exécutez docs/supabase-migration.sql (section catalogue).`
+    );
+  }
+
+  const code = String(error?.code || "");
+  if (code === "42501") {
+    return new Error(
+      `Permission refusée sur « ${tableName} » — ajoutez une politique RLS INSERT/UPDATE (voir docs/supabase-migration.sql).`
+    );
+  }
+
+  const message = String(error?.message || error || "").trim();
+  return new Error(message || `Erreur Supabase lors de l'écriture dans « ${tableName} ».`);
 }
 
 function resolveCollectionResult(res, tableName) {
@@ -86,18 +133,28 @@ async function fetchCatalogCollectionRows(supabase, tableName) {
   }
 }
 
-async function safeCollectionOp(tableName, operation) {
+/** Écriture catalogue : ne jamais avaler les erreurs (table absente, RLS, quota). */
+async function requireCollectionWrite(tableName, operation) {
   try {
-    await operation();
+    return await operation();
+  } catch (error) {
+    throw formatSupabaseCollectionError(tableName, error);
+  }
+}
+
+/** Écriture optionnelle : tables CRM parfois absentes sur d'anciens projets. */
+async function safeOptionalCollectionWrite(tableName, operation) {
+  try {
+    return await operation();
   } catch (error) {
     if (isMissingTableError(error)) {
       console.warn(
         `Table Supabase "${tableName}" introuvable — sync ignorée. Voir docs/SUPABASE.md.`,
         error
       );
-      return;
+      return 0;
     }
-    throw error;
+    throw formatSupabaseCollectionError(tableName, error);
   }
 }
 
@@ -108,8 +165,30 @@ function rowsToItems(rows) {
   }));
 }
 
+async function upsertRowsBatched(supabase, table, items = []) {
+  const payload = (items || [])
+    .filter((item) => item?.id)
+    .map((item) => ({
+      id: item.id,
+      data: item,
+    }));
+
+  if (!payload.length) return 0;
+
+  let written = 0;
+  for (let offset = 0; offset < payload.length; offset += UPSERT_CHUNK_SIZE) {
+    const chunk = payload.slice(offset, offset + UPSERT_CHUNK_SIZE);
+    const { error } = await supabase.from(table).upsert(chunk, { onConflict: "id" });
+    if (error) throw error;
+    written += chunk.length;
+  }
+
+  return written;
+}
+
 export async function syncSupabaseData(nextData, previousData = {}) {
   const supabase = await getSupabase();
+  const catalogWriteSummary = [];
 
   const deleteRemovedItems = async (table, nextItems = [], previousItems = []) => {
     const nextIds = new Set((nextItems || []).map((item) => item.id));
@@ -128,41 +207,47 @@ export async function syncSupabaseData(nextData, previousData = {}) {
       return;
     }
 
-    const { error } = await supabase
-      .from(table)
-      .delete()
-      .in("id", removedIds);
+    const { error } = await supabase.from(table).delete().in("id", removedIds);
 
-    if (error) throw error;
+    if (error) throw formatSupabaseCollectionError(table, error);
   };
 
   const upsertCollection = async (table, items = []) => {
-    if (!items.length) return;
-
-    const payload = items
-      .filter((item) => item?.id)
-      .map((item) => ({
-        id: item.id,
-        data: item,
-      }));
-
-    if (!payload.length) return;
-
-    const { error } = await supabase
-      .from(table)
-      .upsert(payload, { onConflict: "id" });
-
-    if (error) throw error;
+    if (!items.length) return 0;
+    return upsertRowsBatched(supabase, table, items);
   };
 
-  const { error: settingsError } = await supabase
-    .from("settings")
-    .upsert({
-      id: "main",
-      data: nextData.settings,
-    });
+  const upsertCollectionDelta = async (
+    table,
+    previousItems = [],
+    nextItems = [],
+    { required = false, label = table } = {}
+  ) => {
+    const delta = getCollectionDelta(previousItems, nextItems);
+    if (!delta.length) return 0;
 
-  if (settingsError) throw settingsError;
+    const write = async () => {
+      const written = await upsertCollection(table, delta);
+      if (written > 0) {
+        catalogWriteSummary.push(`${label}: ${written}`);
+        console.info(`[Supabase sync] ${written} ligne(s) upsert dans ${table}`);
+      }
+      return written;
+    };
+
+    if (required) {
+      return requireCollectionWrite(table, write);
+    }
+
+    return safeOptionalCollectionWrite(table, write);
+  };
+
+  const { error: settingsError } = await supabase.from("settings").upsert({
+    id: "main",
+    data: nextData.settings,
+  });
+
+  if (settingsError) throw formatSupabaseCollectionError("settings", settingsError);
 
   await Promise.all([
     upsertCollection("users", nextData.users),
@@ -170,23 +255,37 @@ export async function syncSupabaseData(nextData, previousData = {}) {
     upsertCollection("clients", nextData.clients),
     upsertCollection("products", nextData.products),
     upsertCollection("categories", nextData.categories),
-    safeCollectionOp("supplier_catalog_items", () =>
-      upsertCollection("supplier_catalog_items", nextData.supplierCatalogItems)
+    upsertCollectionDelta(
+      CATALOG_TABLES.supplierCatalogItems,
+      previousData.supplierCatalogItems,
+      nextData.supplierCatalogItems,
+      { required: true, label: "pool fournisseur" }
     ),
-    safeCollectionOp("client_catalog_items", () =>
-      upsertCollection("client_catalog_items", nextData.clientCatalogItems)
+    upsertCollectionDelta(
+      CATALOG_TABLES.clientCatalogItems,
+      previousData.clientCatalogItems,
+      nextData.clientCatalogItems,
+      { required: true, label: "catalogue client" }
     ),
-    safeCollectionOp("catalog_items", () =>
-      upsertCollection("catalog_items", nextData.clientCatalogItems)
+    safeOptionalCollectionWrite("catalog_items", () =>
+      upsertCollectionDelta(
+        "catalog_items",
+        previousData.clientCatalogItems,
+        nextData.clientCatalogItems
+      )
     ),
-    safeCollectionOp("catalog_selections", () =>
-      upsertCollection("catalog_selections", nextData.catalogSelections)
+    safeOptionalCollectionWrite(CATALOG_TABLES.catalogSelections, () =>
+      upsertCollectionDelta(
+        CATALOG_TABLES.catalogSelections,
+        previousData.catalogSelections,
+        nextData.catalogSelections
+      )
     ),
-    safeCollectionOp("suppliers", () =>
-      upsertCollection("suppliers", nextData.suppliers)
+    safeOptionalCollectionWrite("suppliers", () =>
+      upsertCollectionDelta("suppliers", previousData.suppliers, nextData.suppliers)
     ),
-    safeCollectionOp("expenses", () =>
-      upsertCollection("expenses", nextData.expenses)
+    safeOptionalCollectionWrite("expenses", () =>
+      upsertCollectionDelta("expenses", previousData.expenses, nextData.expenses)
     ),
     upsertCollection("quotes", nextData.quotes),
     upsertCollection("invoices", nextData.invoices),
@@ -198,44 +297,48 @@ export async function syncSupabaseData(nextData, previousData = {}) {
     deleteRemovedItems("clients", nextData.clients, previousData.clients),
     deleteRemovedItems("products", nextData.products, previousData.products),
     deleteRemovedItems("categories", nextData.categories, previousData.categories),
-    safeCollectionOp("supplier_catalog_items", () =>
+    requireCollectionWrite(CATALOG_TABLES.supplierCatalogItems, () =>
       deleteRemovedItems(
-        "supplier_catalog_items",
+        CATALOG_TABLES.supplierCatalogItems,
         nextData.supplierCatalogItems,
         previousData.supplierCatalogItems
       )
     ),
-    safeCollectionOp("client_catalog_items", () =>
+    requireCollectionWrite(CATALOG_TABLES.clientCatalogItems, () =>
       deleteRemovedItems(
-        "client_catalog_items",
+        CATALOG_TABLES.clientCatalogItems,
         nextData.clientCatalogItems,
         previousData.clientCatalogItems
       )
     ),
-    safeCollectionOp("catalog_items", () =>
+    safeOptionalCollectionWrite("catalog_items", () =>
       deleteRemovedItems(
         "catalog_items",
         nextData.clientCatalogItems,
         previousData.clientCatalogItems
       )
     ),
-    safeCollectionOp("catalog_selections", () =>
+    safeOptionalCollectionWrite(CATALOG_TABLES.catalogSelections, () =>
       deleteRemovedItems(
-        "catalog_selections",
+        CATALOG_TABLES.catalogSelections,
         nextData.catalogSelections,
         previousData.catalogSelections
       )
     ),
-    safeCollectionOp("suppliers", () =>
+    safeOptionalCollectionWrite("suppliers", () =>
       deleteRemovedItems("suppliers", nextData.suppliers, previousData.suppliers)
     ),
-    safeCollectionOp("expenses", () =>
+    safeOptionalCollectionWrite("expenses", () =>
       deleteRemovedItems("expenses", nextData.expenses, previousData.expenses)
     ),
     deleteRemovedItems("quotes", nextData.quotes, previousData.quotes),
     deleteRemovedItems("invoices", nextData.invoices, previousData.invoices),
     deleteRemovedItems("backups", nextData.backups, previousData.backups),
   ]);
+
+  return {
+    catalogWrites: catalogWriteSummary,
+  };
 }
 
 export async function loadSupabaseCatalogRecovery() {
