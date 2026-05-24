@@ -4,6 +4,7 @@ import { Copy, Link2, RefreshCw, Trash2 } from "lucide-react";
 import { isSupabaseConfigured } from "../supabase";
 import { deleteCatalogSelection, upsertCatalogSelection } from "../services/catalogService";
 import { loadData, normalizeData } from "../services/dataService";
+import { formatCatalogSyncMessage } from "../services/supabaseSync";
 import {
   createCatalogSelectionPayload,
   getCatalogShareUrl,
@@ -395,12 +396,11 @@ export default function CatalogueClient({ data, setData, logActivity }) {
       });
 
       const count = (merged.clientCatalogItems || []).length;
-      showToast(
-        count
-          ? `Catalogue client synchronisé — ${count} article(s) chargé(s).`
-          : "Catalogue synchronisé depuis Supabase.",
-        "success"
+      const supplierCount = (merged.supplierCatalogItems || []).length;
+      console.info(
+        `[Supabase] Sync cloud manuel — ${count} client, ${supplierCount} fournisseur.`
       );
+      showToast(formatCatalogSyncMessage(count, supplierCount), "success");
     } catch (error) {
       showToast(error.message || "Synchronisation impossible.", "error");
     }
@@ -691,6 +691,17 @@ export default function CatalogueClient({ data, setData, logActivity }) {
           <p className="page-subtitle">
             Articles proposés à vos clients. Importez-les depuis l&apos;onglet Import
             fournisseur — séparés de vos produits internes (onglet Produits).
+            {isSupabaseConfigured ? (
+              <>
+                {" "}
+                <strong>
+                  {catalogItems.length} article(s) catalogue client
+                </strong>
+                {(data.supplierCatalogItems || []).length > 0
+                  ? ` · ${resolveActiveCatalogItems(data.supplierCatalogItems).length} en pool fournisseur`
+                  : ""}
+              </>
+            ) : null}
           </p>
         </div>
         <div className="page-header-actions">

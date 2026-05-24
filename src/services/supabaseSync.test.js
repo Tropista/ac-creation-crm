@@ -1,5 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
+  COLLECTION_PAGE_SIZE,
+  fetchCollectionRows,
+  formatCatalogFetchLog,
+  formatCatalogSyncMessage,
   formatSupabaseCollectionError,
   getCollectionDelta,
   shouldSkipMassDelete,
@@ -58,5 +62,132 @@ describe("supabaseSync catalog delta", () => {
 
     expect(error.message).toContain("Permission refusée");
     expect(error.message).toContain("client_catalog_items");
+  });
+});
+
+describe("fetchCollectionRows pagination", () => {
+  function createMockSupabase(pagesByTable) {
+    const calls = [];
+    const pageState = new Map();
+
+    return {
+      calls,
+      from(tableName) {
+        if (!pageState.has(tableName)) {
+          pageState.set(tableName, 0);
+        }
+
+        const pages = pagesByTable[tableName] || [];
+
+        const chain = {
+          select() {
+            return chain;
+          },
+          order() {
+            return chain;
+          },
+          range(from, to) {
+            const callIndex = pageState.get(tableName);
+            calls.push({ tableName, from, to, callIndex });
+            const page = pages[callIndex] ?? [];
+            pageState.set(tableName, callIndex + 1);
+            return Promise.resolve({ data: page, error: null });
+          },
+        };
+
+        return chain;
+      },
+    };
+  }
+
+  it("charge toutes les pages jusqu'à épuisement (2500 lignes = 3 pages)", async () => {
+    const makePage = (start, count) =>
+      Array.from({ length: count }, (_, i) => ({
+        id: `row-${start + i}`,
+        data: { name: `Item ${start + i}` },
+      }));
+
+    const supabase = createMockSupabase({
+      client_catalog_items: [
+        makePage(0, COLLECTION_PAGE_SIZE),
+        makePage(COLLECTION_PAGE_SIZE, COLLECTION_PAGE_SIZE),
+        makePage(2 * COLLECTION_PAGE_SIZE, 500),
+      ],
+    });
+
+    const rows = await fetchCollectionRows(supabase, "client_catalog_items");
+
+    expect(rows).toHaveLength(2500);
+    expect(supabase.calls).toHaveLength(3);
+    expect(supabase.calls[0]).toMatchObject({ from: 0, to: COLLECTION_PAGE_SIZE - 1 });
+    expect(supabase.calls[1]).toMatchObject({
+      from: COLLECTION_PAGE_SIZE,
+      to: 2 * COLLECTION_PAGE_SIZE - 1,
+    });
+    expect(supabase.calls[2]).toMatchObject({
+      from: 2 * COLLECTION_PAGE_SIZE,
+      to: 3 * COLLECTION_PAGE_SIZE - 1,
+    });
+  });
+
+  it("s'arrête sur une page partielle (< 1000 lignes)", async () => {
+    const page1 = Array.from({ length: 440 }, (_, i) => ({
+      id: `row-${i}`,
+      data: {},
+    }));
+
+    const supabase = createMockSupabase({
+      supplier_catalog_items: [page1],
+    });
+
+    const rows = await fetchCollectionRows(supabase, "supplier_catalog_items");
+
+    expect(rows).toHaveLength(440);
+    expect(supabase.calls).toHaveLength(1);
+  });
+
+  it("propage les erreurs Supabase (ne tronque pas silencieusement à 1000)", async () => {
+    const page1 = Array.from({ length: COLLECTION_PAGE_SIZE }, (_, i) => ({
+      id: `row-${i}`,
+      data: {},
+    }));
+
+    let rangeCalls = 0;
+    const supabase = {
+      from() {
+        const chain = {
+          select() {
+            return chain;
+          },
+          order() {
+            return chain;
+          },
+          range() {
+            rangeCalls += 1;
+            if (rangeCalls === 1) {
+              return Promise.resolve({ data: page1, error: null });
+            }
+            return Promise.resolve({
+              data: null,
+              error: { code: "57014", message: "canceling statement due to statement timeout" },
+            });
+          },
+        };
+        return chain;
+      },
+    };
+
+    await expect(fetchCollectionRows(supabase, "client_catalog_items")).rejects.toThrow(
+      "canceling statement due to statement timeout"
+    );
+  });
+
+  it("formatCatalogFetchLog et formatCatalogSyncMessage affichent les totaux", () => {
+    expect(formatCatalogFetchLog("client_catalog_items", 2500, 3)).toContain("2500");
+    expect(formatCatalogFetchLog("client_catalog_items", 2500, 3)).toContain("3 pages");
+
+    expect(formatCatalogSyncMessage(1440, 6000)).toContain("1440");
+    expect(formatCatalogSyncMessage(1440, 6000)).toContain("6000");
+    expect(formatCatalogSyncMessage(0, 0)).toContain("Catalogue synchronisé");
   });
 });

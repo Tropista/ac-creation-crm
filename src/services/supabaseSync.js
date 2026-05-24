@@ -91,28 +91,69 @@ function resolveOptionalResult(res, tableName) {
   return resolved;
 }
 
-const COLLECTION_PAGE_SIZE = 1000;
+export const COLLECTION_PAGE_SIZE = 1000;
 
-async function fetchCollectionRows(supabase, tableName) {
+export function formatCatalogFetchLog(tableName, count, pageCount = 1) {
+  const pages =
+    pageCount > 1 ? ` (${pageCount} pages)` : count > COLLECTION_PAGE_SIZE ? "" : "";
+  return `${count} article(s) chargé(s) depuis Supabase « ${tableName} »${pages}`;
+}
+
+export function formatCatalogSyncMessage(clientCount = 0, supplierCount = 0) {
+  const parts = [];
+  if (clientCount > 0) parts.push(`${clientCount} article(s) catalogue client`);
+  if (supplierCount > 0) parts.push(`${supplierCount} article(s) pool fournisseur`);
+  if (!parts.length) return "Catalogue synchronisé depuis Supabase";
+  return `${parts.join(", ")} chargé(s) depuis Supabase`;
+}
+
+/** Paginate with .range() until all rows are loaded (PostgREST default cap: 1000/request). */
+export async function fetchCollectionRows(supabase, tableName) {
   let from = 0;
   const rows = [];
+  let pageCount = 0;
+  const maxPages = 500;
 
-  while (true) {
+  while (pageCount < maxPages) {
     const res = await supabase
       .from(tableName)
       .select("id,data")
-      .order("created_at", { ascending: true })
+      .order("created_at", { ascending: true, nullsFirst: true })
+      .order("id", { ascending: true })
       .range(from, from + COLLECTION_PAGE_SIZE - 1);
 
-    const resolved = resolveOptionalResult(res, tableName);
-    const page = resolved.data || [];
-    rows.push(...page);
+    if (res.error) {
+      if (isMissingTableError(res.error)) {
+        console.warn(
+          `Table Supabase "${tableName}" introuvable — utilisation d'un tableau vide. Voir docs/SUPABASE.md.`,
+          res.error
+        );
+        return [];
+      }
+      throw formatSupabaseCollectionError(tableName, res.error);
+    }
+
+    const page = res.data || [];
+    for (const row of page) {
+      rows.push(row);
+    }
+    pageCount += 1;
 
     if (page.length < COLLECTION_PAGE_SIZE) {
       break;
     }
 
     from += COLLECTION_PAGE_SIZE;
+  }
+
+  if (pageCount >= maxPages) {
+    throw new Error(
+      `Pagination Supabase interrompue sur « ${tableName} » après ${maxPages} pages — vérifiez le volume de données.`
+    );
+  }
+
+  if (rows.length > 0) {
+    console.info(`[Supabase] ${formatCatalogFetchLog(tableName, rows.length, pageCount)}`);
   }
 
   return rows;
@@ -364,15 +405,29 @@ export async function loadSupabaseCatalogRecovery() {
     ? clientItems
     : rowsToItems(legacyCatalogItems);
 
+  const supplierItems = rowsToItems(supplierCatalogItems);
+  const clientItemsOut = mergedClientCatalogItems;
+  const selectionItems = rowsToItems(catalogSelections);
+
+  const counts = {
+    supplier: supplierItems.length,
+    client: clientItemsOut.length,
+    selections: selectionItems.length,
+    total: supplierItems.length + clientItemsOut.length + selectionItems.length,
+  };
+
+  if (counts.total > 0) {
+    console.info(
+      `[Supabase] Catalogue récupéré — ${counts.client} client, ${counts.supplier} fournisseur, ${counts.selections} sélection(s).`
+    );
+  }
+
   return {
-    supplierCatalogItems: rowsToItems(supplierCatalogItems),
-    clientCatalogItems: mergedClientCatalogItems,
-    catalogSelections: rowsToItems(catalogSelections),
-    hasCatalogData: Boolean(
-      supplierCatalogItems.length ||
-        mergedClientCatalogItems.length ||
-        catalogSelections.length
-    ),
+    supplierCatalogItems: supplierItems,
+    clientCatalogItems: clientItemsOut,
+    catalogSelections: selectionItems,
+    counts,
+    hasCatalogData: counts.total > 0,
   };
 }
 
@@ -464,8 +519,20 @@ export async function loadSupabaseData({ normalizeData, emptyData }) {
     logs: rowsToItems(logsRes.data),
   });
 
+  const catalogCounts = {
+    supplier: cloudData.supplierCatalogItems.length,
+    client: cloudData.clientCatalogItems.length,
+    selections: cloudData.catalogSelections.length,
+  };
+  if (catalogCounts.supplier || catalogCounts.client) {
+    console.info(
+      `[Supabase] Sync cloud — ${catalogCounts.client} catalogue client, ${catalogCounts.supplier} pool fournisseur chargé(s).`
+    );
+  }
+
   return {
     data: cloudData,
+    catalogCounts,
     hasCloudData: Boolean(
       settingsRes.data ||
         usersRes.data?.length ||

@@ -6,6 +6,7 @@ vi.mock("../supabase.js", () => ({
 
 import {
   emptyData,
+  getLocalCatalogMeta,
   hasLocalBusinessData,
   saveData,
   loadData,
@@ -125,6 +126,31 @@ describe("dataService", () => {
     });
     expect(item.imageUrl).toBe("");
     expect(item.colors[0].imageUrl).toBe("");
+  });
+
+  it("getLocalCatalogMeta lit les compteurs catalogue depuis le stockage brut", () => {
+    const storage = createStorage();
+    vi.stubGlobal("localStorage", storage);
+
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        clients: [{ id: "c1" }],
+        [LOCAL_CATALOG_META_KEY]: {
+          supplierCount: 6200,
+          clientCount: 1440,
+          excludedFromLocal: true,
+        },
+      })
+    );
+
+    const meta = getLocalCatalogMeta();
+    expect(meta?.supplierCount).toBe(6200);
+    expect(meta?.clientCount).toBe(1440);
+
+    const loaded = loadData();
+    expect(loaded.clientCatalogItems).toHaveLength(0);
+    expect(hasLocalBusinessData(loaded)).toBe(true);
   });
 
   it("prepareDataForLocalStorage exclut les catalogues quand cloud activé", async () => {

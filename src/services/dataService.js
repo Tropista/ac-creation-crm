@@ -266,8 +266,17 @@ export function flushSaveData() {
   return null;
 }
 
+export function getLocalCatalogMeta() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
+    return raw?.[LOCAL_CATALOG_META_KEY] || null;
+  } catch {
+    return null;
+  }
+}
+
 export function hasLocalBusinessData(data) {
-  const meta = data?.[LOCAL_CATALOG_META_KEY];
+  const meta = data?.[LOCAL_CATALOG_META_KEY] || getLocalCatalogMeta();
 
   return Boolean(
     data.users?.length ||

@@ -80,6 +80,7 @@ import {
   stampDataChanges,
   SYNC_STATUS,
 } from "./services/syncMerge";
+import { formatCatalogSyncMessage } from "./services/supabaseSync";
 import "./styles/sidebar.css";
 import "./styles/dashboard.css";
 import "./styles/clients.css";
@@ -404,10 +405,12 @@ function CrmApp() {
           cloudSyncSucceeded.current = true;
           setSyncStatus(SYNC_STATUS.SYNCED);
           if (!silent) {
+            const clientCount = (prepared.clientCatalogItems || []).length;
+            const supplierCount = (prepared.supplierCatalogItems || []).length;
             showToast(
               conflictCount
                 ? "Données fusionnées — conflits résolus localement"
-                : "Données chargées depuis Supabase",
+                : formatCatalogSyncMessage(clientCount, supplierCount),
               conflictCount ? "info" : "success"
             );
           }
@@ -443,7 +446,10 @@ function CrmApp() {
             setSyncStatus(SYNC_STATUS.SYNCED);
             if (!silent) {
               showToast(
-                `Catalogue récupéré depuis Supabase — ${(prepared.clientCatalogItems || []).length} article(s) client`,
+                formatCatalogSyncMessage(
+                  (prepared.clientCatalogItems || []).length,
+                  (prepared.supplierCatalogItems || []).length
+                ),
                 "success"
               );
             }
