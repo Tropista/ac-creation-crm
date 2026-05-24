@@ -104,6 +104,41 @@
   gap: 10px;
 }
 
+.atelier-card__top-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.atelier-delete-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid rgba(254, 226, 226, 0.95);
+  border-radius: 10px;
+  background: #fff5f5;
+  color: #dc2626;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.atelier-delete-btn:hover {
+  background: #fee2e2;
+  border-color: #fecaca;
+  transform: translateY(-1px);
+}
+
+.atelier-delete-btn:focus-visible {
+  outline: 2px solid rgba(220, 38, 38, 0.35);
+  outline-offset: 2px;
+}
+
 .atelier-card__number {
   padding: 0;
   border: 0;

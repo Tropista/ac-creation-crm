@@ -42,4 +42,43 @@ test.describe("Atelier — changement de statut", () => {
     await expect(statusSelect).toHaveValue("En production");
     await expect(page.getByText("En production").first()).toBeVisible();
   });
+
+  test("supprime une commande de l'atelier", async ({ page }) => {
+    const data = makeTestData({
+      quotes: [
+        {
+          id: "quote-atelier-delete",
+          number: "DEV-E2E-DEL",
+          status: "Accepté",
+          clientId: "client-1",
+          date: "2026-05-23",
+          description: "Gravure laser test",
+          lines: [
+            {
+              description: "Gravure laser test",
+              quantity: 1,
+              price: 50,
+              discount: 0,
+              totalHT: 50,
+            },
+          ],
+          totalHT: 50,
+          totalTVA: 8.5,
+          totalTTC: 58.5,
+          taxRate: 17,
+          globalDiscount: 0,
+        },
+      ],
+    });
+
+    page.on("dialog", (dialog) => dialog.accept());
+
+    await seedCrm(page, { session: adminSession, data });
+    await page.goto("/atelier");
+
+    await expect(page.getByText("DEV-E2E-DEL")).toBeVisible();
+    await page.getByTestId("atelier-delete-quote-atelier-delete").click();
+    await expect(page.getByText("DEV-E2E-DEL")).not.toBeVisible();
+    await expect(page.getByText("Aucune commande en file")).toBeVisible();
+  });
 });

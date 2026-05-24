@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { clientName, statusClass } from "../utils/documents";
 import {
@@ -29,7 +30,7 @@ function advanceLabel(status) {
   return null;
 }
 
-function AtelierCard({ data, quote, onOpen, onAdvance, onStatusChange }) {
+function AtelierCard({ data, quote, onOpen, onAdvance, onStatusChange, onDelete }) {
   const process = inferProcessType(quote);
   const nextLabel = advanceLabel(quote.status);
 
@@ -55,7 +56,19 @@ function AtelierCard({ data, quote, onOpen, onAdvance, onStatusChange }) {
         >
           {quote.number}
         </button>
-        <span className={statusClass(quote.status)}>{quote.status}</span>
+        <div className="atelier-card__top-actions">
+          <span className={statusClass(quote.status)}>{quote.status}</span>
+          <button
+            type="button"
+            className="atelier-delete-btn"
+            data-testid={`atelier-delete-${quote.id}`}
+            onClick={() => onDelete(quote)}
+            title="Supprimer la commande"
+            aria-label={`Supprimer ${quote.number}`}
+          >
+            <Trash2 size={14} aria-hidden="true" />
+          </button>
+        </div>
       </div>
 
       <p className="atelier-card__client">{clientName(data, quote.clientId)}</p>
@@ -158,6 +171,24 @@ export default function Atelier({ data, setData, logActivity }) {
     updateQuoteStatus(quote, nextStatus);
   }
 
+  function handleDelete(quote) {
+    if (
+      !confirm(
+        `Supprimer la commande « ${quote.number} » de l'atelier ?\n\nCette action supprime définitivement le devis.`
+      )
+    ) {
+      return;
+    }
+
+    const nextQuotes = quotes.filter(
+      (entry) => String(entry.id) !== String(quote.id)
+    );
+
+    setData({ ...data, quotes: nextQuotes });
+    logActivity?.("Suppression devis atelier", quote.number, quote.status);
+    showToast(`${quote.number} supprimé de l'atelier`, "success");
+  }
+
   function handleDropOnStatus(event, status) {
     event.preventDefault();
     setDragOverStatus("");
@@ -258,6 +289,7 @@ export default function Atelier({ data, setData, logActivity }) {
                       onOpen={openQuote}
                       onAdvance={handleAdvance}
                       onStatusChange={updateQuoteStatus}
+                      onDelete={handleDelete}
                     />
                   ))}
                 </div>
@@ -289,6 +321,7 @@ export default function Atelier({ data, setData, logActivity }) {
                       onOpen={openQuote}
                       onAdvance={handleAdvance}
                       onStatusChange={updateQuoteStatus}
+                      onDelete={handleDelete}
                     />
                   ))}
                 </div>
