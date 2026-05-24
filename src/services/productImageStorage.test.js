@@ -27,6 +27,7 @@ vi.mock("../utils/productImages.js", async (importOriginal) => {
 
 import {
   PRODUCT_IMAGES_BUCKET,
+  formatProductImageUploadError,
   getProductImagePublicUrl,
   uploadProductImageBlob,
 } from "./productImageStorage.js";
@@ -58,5 +59,26 @@ describe("productImageStorage", () => {
     const url = getProductImagePublicUrl(supabase, "prod-1/test.jpg");
     expect(mockFrom).toHaveBeenCalledWith(PRODUCT_IMAGES_BUCKET);
     expect(url).toContain("ac-creation-products");
+  });
+
+  it("formate une erreur RLS Storage en français", () => {
+    const message = formatProductImageUploadError({
+      code: "42501",
+      message: "new row violates row-level security policy",
+    });
+    expect(message).toContain("Import refusé");
+    expect(message).toContain("Storage");
+    expect(message).toContain("SUPABASE.md");
+  });
+
+  it("relance une erreur RLS depuis uploadProductImageBlob", async () => {
+    mockUpload.mockResolvedValue({
+      error: { code: "42501", message: "new row violates row-level security policy" },
+    });
+    const blob = new Blob(["jpeg"], { type: "image/jpeg" });
+
+    await expect(uploadProductImageBlob(blob, { productId: "prod-1" })).rejects.toThrow(
+      /Import refusé/
+    );
   });
 });

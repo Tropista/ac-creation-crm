@@ -270,5 +270,100 @@ Formats autorisés : JPEG, PNG, WebP — taille max 5 Mo par fichier.
 | Symptôme | Action |
 |----------|--------|
 | « Image trop lourde… utilisez une URL » | Se connecter ou coller une URL HTTPS |
+| Toast « new row violates row-level security policy » / `42501` | Politiques Storage absentes ou compte inactif — voir **SQL immédiat** ci-dessous |
 | Upload échoue `42501` | Vérifier login + entrée `users` active ; exécuter la migration Storage |
 | Image absente après rechargement | Base64 > 100 Ko retirée — re-uploader ou utiliser une URL |
+
+### SQL immédiat (SQL Editor Supabase)
+
+Si l’import d’image produit échoue avec *« new row violates row-level security policy »*, le bucket ou ses politiques RLS ne sont pas configurés. Coller et exécuter **en une fois** :
+
+```sql
+-- AC Creation CRM — Storage images produits (correction RLS upload)
+-- Idempotent : safe to re-run
+
+CREATE OR REPLACE FUNCTION public.crm_user_is_active()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.users u
+    WHERE lower(u.data->>'email') = lower(coalesce(auth.jwt() ->> 'email', ''))
+      AND coalesce(u.data->>'status', 'Actif') <> 'Désactivé'
+  );
+$$;
+
+REVOKE ALL ON FUNCTION public.crm_user_is_active() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.crm_user_is_active() TO authenticated;
+
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+  'ac-creation-products',
+  'ac-creation-products',
+  true,
+  5242880,
+  ARRAY['image/jpeg', 'image/png', 'image/webp']::text[]
+)
+ON CONFLICT (id) DO UPDATE
+SET
+  public = EXCLUDED.public,
+  file_size_limit = EXCLUDED.file_size_limit,
+  allowed_mime_types = EXCLUDED.allowed_mime_types;
+
+ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "ac_creation_products_public_read" ON storage.objects;
+DROP POLICY IF EXISTS "ac_creation_products_authenticated_insert" ON storage.objects;
+DROP POLICY IF EXISTS "ac_creation_products_authenticated_update" ON storage.objects;
+DROP POLICY IF EXISTS "ac_creation_products_authenticated_delete" ON storage.objects;
+
+CREATE POLICY "ac_creation_products_public_read"
+ON storage.objects
+FOR SELECT
+TO public
+USING (bucket_id = 'ac-creation-products');
+
+CREATE POLICY "ac_creation_products_authenticated_insert"
+ON storage.objects
+FOR INSERT
+TO authenticated
+WITH CHECK (
+  bucket_id = 'ac-creation-products'
+  AND public.crm_user_is_active()
+);
+
+CREATE POLICY "ac_creation_products_authenticated_update"
+ON storage.objects
+FOR UPDATE
+TO authenticated
+USING (
+  bucket_id = 'ac-creation-products'
+  AND public.crm_user_is_active()
+)
+WITH CHECK (
+  bucket_id = 'ac-creation-products'
+  AND public.crm_user_is_active()
+);
+
+CREATE POLICY "ac_creation_products_authenticated_delete"
+ON storage.objects
+FOR DELETE
+TO authenticated
+USING (
+  bucket_id = 'ac-creation-products'
+  AND public.crm_user_is_active()
+);
+```
+
+Puis vérifier :
+
+1. **Authentication → Users** : votre email existe avec un mot de passe.
+2. **Table `users`** : même email, statut **Actif** (pas « Désactivé »).
+3. **Storage → Buckets** : `ac-creation-products` est **public** (lecture).
+4. Reconnectez-vous au CRM et réessayez l’import d’image.
+
+Source versionnée : [`supabase/migrations/20260524120000_product_images_storage.sql`](../supabase/migrations/20260524120000_product_images_storage.sql)

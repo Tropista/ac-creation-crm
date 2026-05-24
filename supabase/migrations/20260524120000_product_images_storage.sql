@@ -1,6 +1,26 @@
 -- AC Creation CRM — bucket Storage images produits
 -- À exécuter après docs/supabase-migration.sql et 20260524100000_secure_rls.sql
 -- (crm_user_is_active() requis pour les politiques d'écriture)
+-- Idempotent : safe to re-run
+
+-- Prérequis : helper RLS (no-op si déjà appliqué via secure_rls.sql)
+CREATE OR REPLACE FUNCTION public.crm_user_is_active()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.users u
+    WHERE lower(u.data->>'email') = lower(coalesce(auth.jwt() ->> 'email', ''))
+      AND coalesce(u.data->>'status', 'Actif') <> 'Désactivé'
+  );
+$$;
+
+REVOKE ALL ON FUNCTION public.crm_user_is_active() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.crm_user_is_active() TO authenticated;
 
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES (
@@ -15,6 +35,8 @@ SET
   public = EXCLUDED.public,
   file_size_limit = EXCLUDED.file_size_limit,
   allowed_mime_types = EXCLUDED.allowed_mime_types;
+
+ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "ac_creation_products_public_read" ON storage.objects;
 DROP POLICY IF EXISTS "ac_creation_products_authenticated_insert" ON storage.objects;

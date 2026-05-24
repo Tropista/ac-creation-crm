@@ -135,7 +135,7 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
       setForm((current) => ({ ...current, imageUrl: dataUrl }));
       showToast("Image importée localement (mode hors ligne).", "info");
     } catch (error) {
-      showToast(error.message || "Erreur pendant l'import de l'image.", "error");
+      showToast(error?.message || "Erreur pendant l'import de l'image.", "error");
     } finally {
       setImageUploading(false);
     }
