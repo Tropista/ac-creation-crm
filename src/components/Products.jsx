@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   canDeleteData
 } from "../services/authService";
@@ -91,6 +91,7 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
   const [stockMoveReason, setStockMoveReason] = useState("Ajustement manuel");
   const [imageUploading, setImageUploading] = useState(false);
   const [imageDragActive, setImageDragActive] = useState(false);
+  const imageDragCounterRef = useRef(0);
   const [form, setForm] = useState({
     name: "",
     sku: "",
@@ -148,21 +149,35 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
     event.target.value = "";
   }
 
+  function handleProductImageDragEnter(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    imageDragCounterRef.current += 1;
+    setImageDragActive(true);
+  }
+
   function handleProductImageDragOver(event) {
     event.preventDefault();
     event.stopPropagation();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = "copy";
+    }
     setImageDragActive(true);
   }
 
   function handleProductImageDragLeave(event) {
     event.preventDefault();
     event.stopPropagation();
-    setImageDragActive(false);
+    imageDragCounterRef.current = Math.max(0, imageDragCounterRef.current - 1);
+    if (imageDragCounterRef.current === 0) {
+      setImageDragActive(false);
+    }
   }
 
   async function handleProductImageDrop(event) {
     event.preventDefault();
     event.stopPropagation();
+    imageDragCounterRef.current = 0;
     setImageDragActive(false);
 
     const file = event.dataTransfer?.files?.[0];
@@ -806,13 +821,28 @@ function openLinkedDocument(doc) {
         <input type="number" min="0" placeholder="Stock actuel" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} />
         <input type="number" min="0" placeholder="Stock minimum / alerte" value={form.stockMin} onChange={(e) => setForm({ ...form, stockMin: e.target.value })} />
         <div
-          className={`product-image-field ${imageDragActive ? "drag-active" : ""}`}
+          className={`product-image-field ${imageDragActive ? "drag-active" : ""} ${imageUploading ? "uploading" : ""}`}
+          onDragEnter={handleProductImageDragEnter}
           onDragOver={handleProductImageDragOver}
           onDragLeave={handleProductImageDragLeave}
           onDrop={handleProductImageDrop}
         >
+          <div className="product-image-drop-zone" aria-live="polite">
+            <span className="product-image-drop-icon" aria-hidden="true">🖼️</span>
+            <strong>
+              {imageUploading
+                ? "Envoi en cours…"
+                : imageDragActive
+                  ? "Déposez l'image ici"
+                  : "Glissez une image ici"}
+            </strong>
+            {!imageUploading && (
+              <span className="product-image-drop-hint">PNG, JPEG ou WebP depuis votre bureau</span>
+            )}
+          </div>
+
           <label className="image-upload-button">
-            {imageUploading ? "⏳ Envoi en cours…" : "📷 Importer ou glisser une image"}
+            {imageUploading ? "⏳ Envoi en cours…" : "📷 Importer une image"}
             <input
               type="file"
               accept="image/png,image/jpeg,image/webp"

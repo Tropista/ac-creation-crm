@@ -497,20 +497,75 @@ tbody tr:hover td { background: var(--table-hover); }
 }
 .product-description { color: var(--muted); }
 .product-actions { display: flex; gap: 8px; padding: 0 16px 16px; }
-.product-image-field { display: grid; gap: 10px; }
+.product-image-field {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 2px dashed #cbd5e1;
+  border-radius: 16px;
+  background: #f8fafc;
+  transition: border-color .15s ease, background .15s ease, box-shadow .15s ease;
+}
+.product-image-field.drag-active {
+  border-color: #6366f1;
+  background: #eef2ff;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, .18);
+}
+.product-image-field.uploading {
+  opacity: .85;
+  pointer-events: none;
+}
+.product-image-drop-zone {
+  display: grid;
+  place-items: center;
+  gap: 4px;
+  min-height: 92px;
+  padding: 12px;
+  border-radius: 12px;
+  text-align: center;
+  color: #64748b;
+  pointer-events: none;
+}
+.product-image-field.drag-active .product-image-drop-zone {
+  color: #4338ca;
+}
+.product-image-drop-icon {
+  font-size: 28px;
+  line-height: 1;
+}
+.product-image-drop-zone strong {
+  font-size: 14px;
+  font-weight: 900;
+}
+.product-image-drop-hint {
+  font-size: 12px;
+  color: #94a3b8;
+}
+.product-image-field.drag-active .product-image-drop-hint {
+  color: #6366f1;
+}
 .image-upload-button {
   display: grid;
   place-items: center;
   gap: 8px;
-  min-height: 46px;
-  border: 1px dashed #cbd5e1;
-  border-radius: 16px;
-  background: #f8fafc;
+  min-height: 42px;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  background: #fff;
   cursor: pointer;
   color: #475569;
   font-weight: 900;
 }
+.image-upload-button:hover {
+  border-color: #6366f1;
+  color: #4338ca;
+  background: #fff;
+}
 .image-upload-button input { display: none; }
+.product-image-preview {
+  display: grid;
+  gap: 8px;
+}
 .product-image-preview img { width: 100%; max-height: 190px; object-fit: contain; border-radius: 16px; background: #f8fafc; }
 .product-empty-state {
   display: grid;
