@@ -73,6 +73,7 @@ import {
   finalizeDataWithCatalogCleanup,
 } from "./utils/cleanupCatalogData";
 import {
+  hasUnsyncedCatalogChanges,
   mergeCloudWithLocal,
   resolveCloudInitError,
   setLastSyncAt,
@@ -267,6 +268,7 @@ function CrmApp() {
   const autoBackupStarted = useRef(false);
   const cloudInitPromise = useRef(null);
   const cloudSyncSucceeded = useRef(false);
+  const saveQueueRef = useRef(Promise.resolve());
 
   const currentRole = userRole(currentUser?.email, data.users);
   const permissions = getPermissions(currentRole);
@@ -319,6 +321,9 @@ function CrmApp() {
 
   useEffect(() => {
     saveData(data);
+    return () => {
+      flushSaveData();
+    };
   }, [data]);
 
   useEffect(() => {
@@ -389,7 +394,8 @@ function CrmApp() {
           saveData(prepared);
           flushSaveData();
 
-          if (applied) {
+          const needsCatalogPush = hasUnsyncedCatalogChanges(prepared, cloud.data);
+          if (applied || needsCatalogPush) {
             await syncSupabaseData(prepared, cloud.data);
             flushSaveData();
           }
@@ -513,48 +519,71 @@ function CrmApp() {
   }
 
   async function updateData(next) {
-    const current = dataRef.current;
-    const resolved = typeof next === "function" ? next(current) : next;
-    const stamped = stampDataChanges(current, resolved);
-    const normalized = normalizeData({
-      ...stamped,
-      users: dedupeItemsById(stamped.users || []),
-      backups: dedupeItemsById(stamped.backups || []),
-      logs: dedupeItemsById(stamped.logs || []),
+    const task = saveQueueRef.current.then(async () => {
+      const current = dataRef.current;
+      const resolved = typeof next === "function" ? next(current) : next;
+      const stamped = stampDataChanges(current, resolved);
+      const normalized = normalizeData({
+        ...stamped,
+        users: dedupeItemsById(stamped.users || []),
+        backups: dedupeItemsById(stamped.backups || []),
+        logs: dedupeItemsById(stamped.logs || []),
+      });
+
+      const previous = current;
+
+      dataRef.current = normalized;
+      setData(normalized);
+
+      try {
+        saveData(normalized);
+        flushSaveData();
+      } catch (error) {
+        console.error(error);
+        showToast(
+          "Quota localStorage dépassé — les données risquent de ne pas survivre au rechargement.",
+          "error"
+        );
+        throw error;
+      }
+
+      if (!isSupabaseConfigured) {
+        setSyncStatus(SYNC_STATUS.LOCAL_NO_CONFIG);
+        return normalized;
+      }
+
+      try {
+        setSyncStatus(SYNC_STATUS.SAVING);
+        const { syncSupabaseData } = await loadSupabaseSyncModule();
+        await syncSupabaseData(normalized, previous);
+        flushSaveData();
+        setLastSyncAt();
+        cloudSyncSucceeded.current = true;
+        setCloudAvailable(true);
+        setSyncStatus(SYNC_STATUS.SYNCED);
+      } catch (error) {
+        console.error("Échec sync Supabase :", error);
+        if (cloudSyncSucceeded.current) {
+          setCloudAvailable(true);
+          setSyncStatus(SYNC_STATUS.SAVE_ERROR);
+        } else {
+          setCloudAvailable(false);
+          setSyncStatus(SYNC_STATUS.LOCAL_UNAVAILABLE);
+        }
+        showToast(
+          error?.message
+            ? `Erreur de sauvegarde Supabase : ${error.message}`
+            : "Erreur de sauvegarde Supabase — données conservées localement",
+          "error"
+        );
+        throw error;
+      }
+
+      return normalized;
     });
 
-    const previous = current;
-
-    dataRef.current = normalized;
-    setData(normalized);
-    saveData(normalized);
-    flushSaveData();
-
-    if (!isSupabaseConfigured) {
-      setSyncStatus(SYNC_STATUS.LOCAL_NO_CONFIG);
-      return;
-    }
-
-    try {
-      setSyncStatus(SYNC_STATUS.SAVING);
-      const { syncSupabaseData } = await loadSupabaseSyncModule();
-      await syncSupabaseData(normalized, previous);
-      flushSaveData();
-      setLastSyncAt();
-      cloudSyncSucceeded.current = true;
-      setCloudAvailable(true);
-      setSyncStatus(SYNC_STATUS.SYNCED);
-    } catch (error) {
-      console.error(error);
-      if (cloudSyncSucceeded.current) {
-        setCloudAvailable(true);
-        setSyncStatus(SYNC_STATUS.SAVE_ERROR);
-      } else {
-        setCloudAvailable(false);
-        setSyncStatus(SYNC_STATUS.LOCAL_UNAVAILABLE);
-      }
-      showToast("Erreur de sauvegarde Supabase", "error");
-    }
+    saveQueueRef.current = task.catch(() => {});
+    return task;
   }
 
   function handleLogActivity(payloadOrAction, target = "", details = "") {

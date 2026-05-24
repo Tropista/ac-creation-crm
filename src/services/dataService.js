@@ -6,10 +6,22 @@ export const STORAGE_KEY = "crm_local_data_v2";
 export const SAVE_DEBOUNCE_MS = 400;
 
 let pendingData = null;
+let lastSaveError = null;
 
 function writeDataImmediate(data) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  pendingData = null;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    lastSaveError = null;
+    pendingData = null;
+  } catch (error) {
+    lastSaveError = error;
+    console.error("Impossible d'enregistrer les données localement :", error);
+    throw error;
+  }
+}
+
+export function getLastSaveError() {
+  return lastSaveError;
 }
 
 const debouncedWrite = debounce((data) => {

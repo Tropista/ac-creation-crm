@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   LAST_SYNC_AT_KEY,
   getLastSyncAt,
+  hasLocalCatalogChangesSinceSync,
+  hasUnsyncedCatalogChanges,
   mergeCloudWithLocal,
   mergeCollection,
   parseUpdatedAt,
@@ -11,6 +13,8 @@ import {
   stampDataChanges,
   SYNC_STATUS,
 } from "./syncMerge.js";
+import { importScrapedToCollection } from "../utils/lmdtImport.js";
+import { emptyData } from "./dataService.js";
 
 function createStorage() {
   const store = new Map();
@@ -120,18 +124,40 @@ describe("syncMerge", () => {
   it("mergeCloudWithLocal conserve le catalogue local si le cloud est vide", () => {
     setLastSyncAt(Date.parse("2026-05-23T09:00:00.000Z"));
 
-    const localItems = Array.from({ length: 60 }, (_, index) => ({
-      id: `s${index}`,
-      name: `Article ${index}`,
-      updatedAt: "2026-05-23T10:00:00.000Z",
-    }));
+    const localItems = [
+      { id: "s1", name: "Article importé", updatedAt: "2026-05-24T10:00:00.000Z" },
+      { id: "s2", name: "Article importé 2", updatedAt: "2026-05-24T10:00:00.000Z" },
+    ];
 
     const merged = mergeCloudWithLocal(
       { supplierCatalogItems: localItems },
       { supplierCatalogItems: [] }
     );
 
-    expect(merged.supplierCatalogItems).toHaveLength(60);
+    expect(merged.supplierCatalogItems).toHaveLength(2);
+  });
+
+  it("mergeCloudWithLocal conserve les imports locaux récents avec un cloud volumineux", () => {
+    setLastSyncAt(Date.parse("2026-05-24T08:00:00.000Z"));
+
+    const localItems = Array.from({ length: 5 }, (_, index) => ({
+      id: `new-${index}`,
+      name: `Import ${index}`,
+      updatedAt: "2026-05-24T10:00:00.000Z",
+    }));
+    const cloudItems = Array.from({ length: 962 }, (_, index) => ({
+      id: `c${index}`,
+      name: `Client ${index}`,
+      updatedAt: "2026-05-23T10:00:00.000Z",
+    }));
+
+    const merged = mergeCloudWithLocal(
+      { clientCatalogItems: localItems },
+      { clientCatalogItems: cloudItems }
+    );
+
+    expect(merged.clientCatalogItems).toHaveLength(967);
+    expect(merged.clientCatalogItems.some((item) => item.id === "new-0")).toBe(true);
   });
 
   it("mergeCloudWithLocal préfère le cloud si le catalogue local est vide", () => {
@@ -180,6 +206,58 @@ describe("syncMerge", () => {
     expect(outcome.cloudAvailable).toBe(false);
     expect(outcome.syncStatus).toBe(SYNC_STATUS.LOCAL_UNAVAILABLE);
     expect(outcome.toast?.message).toContain("Sync cloud indisponible");
+  });
+
+  it("hasUnsyncedCatalogChanges détecte les articles absents du cloud", () => {
+    setLastSyncAt(Date.parse("2026-05-24T08:00:00.000Z"));
+
+    expect(
+      hasUnsyncedCatalogChanges(
+        {
+          supplierCatalogItems: [
+            { id: "s1", name: "Pool", updatedAt: "2026-05-24T10:00:00.000Z" },
+          ],
+        },
+        { supplierCatalogItems: [] }
+      )
+    ).toBe(true);
+  });
+
+  it("import puis rechargement merge conserve pool fournisseur et catalogue client", () => {
+    setLastSyncAt(Date.parse("2026-05-24T08:00:00.000Z"));
+
+    const scraped = [
+      {
+        name: "Sol's Regent",
+        sku: "SO-11380",
+        category: "Tee-shirts",
+        priceHT: 1.77,
+        sourceUrl: "https://www.lamaisonduteeshirt.com/produits/tee-shirts/so-11380/regent",
+      },
+    ];
+
+    const cloudItems = Array.from({ length: 962 }, (_, index) => ({
+      id: `c${index}`,
+      name: `Client ${index}`,
+      updatedAt: "2026-05-23T10:00:00.000Z",
+    }));
+
+    let local = emptyData;
+    const supplierImport = importScrapedToCollection(local, scraped, "supplierCatalogItems");
+    local = stampDataChanges(local, supplierImport.nextData);
+    const clientImport = importScrapedToCollection(local, scraped, "clientCatalogItems");
+    local = stampDataChanges(local, clientImport.nextData);
+
+    const merged = mergeCloudWithLocal(
+      local,
+      { clientCatalogItems: cloudItems, supplierCatalogItems: [] }
+    );
+
+    expect(merged.supplierCatalogItems).toHaveLength(1);
+    expect(merged.clientCatalogItems).toHaveLength(963);
+    expect(hasLocalCatalogChangesSinceSync(merged.supplierCatalogItems, getLastSyncAt())).toBe(
+      true
+    );
   });
 
   it("resolveCloudInitError marque récupéré si le catalogue cloud a été restauré", () => {

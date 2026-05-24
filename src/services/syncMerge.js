@@ -192,11 +192,21 @@ export function mergeCollection(
   return merged;
 }
 
-export function shouldPreferCloudCatalog(localItems = [], cloudItems = []) {
+export function hasLocalCatalogChangesSinceSync(localItems = [], lastSyncAt = 0) {
+  const since = lastSyncAt || 0;
+  return (localItems || []).some((item) => parseUpdatedAt(item) > since);
+}
+
+export function shouldPreferCloudCatalog(
+  localItems = [],
+  cloudItems = [],
+  lastSyncAt = 0
+) {
   const localCount = (localItems || []).length;
   const cloudCount = (cloudItems || []).length;
   if (!cloudCount) return false;
   if (!localCount) return true;
+  if (hasLocalCatalogChangesSinceSync(localItems, lastSyncAt)) return false;
   return (
     localCount < EMPTY_CLOUD_CATALOG_GUARD_MIN &&
     cloudCount >= EMPTY_CLOUD_CATALOG_GUARD_MIN
@@ -204,10 +214,31 @@ export function shouldPreferCloudCatalog(localItems = [], cloudItems = []) {
 }
 
 export function shouldKeepLocalCatalogOverEmptyCloud(localItems = [], cloudItems = []) {
-  return (
-    (localItems || []).length >= EMPTY_CLOUD_CATALOG_GUARD_MIN &&
-    (cloudItems || []).length === 0
-  );
+  return (localItems || []).length > 0 && (cloudItems || []).length === 0;
+}
+
+export function hasUnsyncedCatalogChanges(
+  localData = {},
+  cloudData = {},
+  lastSyncAt = getLastSyncAt()
+) {
+  for (const key of CATALOG_SYNC_COLLECTIONS) {
+    const localItems = localData[key] || [];
+    const cloudItems = cloudData[key] || [];
+
+    if (hasLocalCatalogChangesSinceSync(localItems, lastSyncAt)) {
+      return true;
+    }
+
+    const cloudIds = new Set(
+      (cloudItems || []).filter((item) => item?.id).map((item) => String(item.id))
+    );
+    if ((localItems || []).some((item) => item?.id && !cloudIds.has(String(item.id)))) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 export function mergeCloudWithLocal(localData = {}, cloudData = {}, { onConflict } = {}) {
@@ -226,7 +257,7 @@ export function mergeCloudWithLocal(localData = {}, cloudData = {}, { onConflict
         merged[key] = localItems;
         continue;
       }
-      if (shouldPreferCloudCatalog(localItems, cloudItems)) {
+      if (shouldPreferCloudCatalog(localItems, cloudItems, lastSyncAt)) {
         merged[key] = cloudItems;
         continue;
       }

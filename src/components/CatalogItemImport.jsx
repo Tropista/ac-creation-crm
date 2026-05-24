@@ -127,18 +127,31 @@ export default function CatalogItemImport({
     let created = 0;
     let updated = 0;
 
-    await setData((current) => {
-      const result = importScrapedToCollection(current, selectedProducts, collectionKey);
-      created = result.created;
-      updated = result.updated;
-      return result.nextData;
-    });
+    try {
+      await setData((current) => {
+        const result = importScrapedToCollection(current, selectedProducts, collectionKey);
+        created = result.created;
+        updated = result.updated;
+        return result.nextData;
+      });
+    } catch (error) {
+      showToast(
+        error?.message || "Import enregistré localement mais sync Supabase échouée.",
+        "error"
+      );
+      return;
+    }
 
-    await logActivity?.(
-      actionLabel,
-      url,
-      `${created} créé(s), ${updated} mis à jour`
-    );
+    try {
+      await logActivity?.(
+        actionLabel,
+        url,
+        `${created} créé(s), ${updated} mis à jour`
+      );
+    } catch (error) {
+      console.warn("Journal d'activité non enregistré :", error);
+    }
+
     showToast(
       `${created} créé(s), ${updated} mis à jour dans le ${messageLabel}.`,
       "success"
