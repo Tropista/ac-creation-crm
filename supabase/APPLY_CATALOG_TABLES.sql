@@ -2,6 +2,9 @@
 -- À exécuter une fois dans Supabase → SQL Editor
 -- Idempotent : safe to re-run (IF NOT EXISTS / DROP POLICY IF EXISTS)
 -- Ne supprime aucune donnée existante.
+--
+-- Erreur 42710 « policy already exists » : les tables et politiques existent
+-- déjà — vous pouvez passer à l'import catalogue sans réexécuter ce script.
 
 -- ---------------------------------------------------------------------------
 -- Tables catalogue (id text + data jsonb + created_at)
@@ -45,21 +48,61 @@ ALTER TABLE client_catalog_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE catalog_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE catalog_selections ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "crm_full_access" ON supplier_catalog_items;
-CREATE POLICY "crm_full_access" ON supplier_catalog_items
-  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "crm_full_access" ON public.supplier_catalog_items;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'supplier_catalog_items'
+      AND policyname = 'crm_full_access'
+  ) THEN
+    CREATE POLICY "crm_full_access" ON public.supplier_catalog_items
+      FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+  END IF;
+END $$;
 
-DROP POLICY IF EXISTS "crm_full_access" ON client_catalog_items;
-CREATE POLICY "crm_full_access" ON client_catalog_items
-  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "crm_full_access" ON public.client_catalog_items;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'client_catalog_items'
+      AND policyname = 'crm_full_access'
+  ) THEN
+    CREATE POLICY "crm_full_access" ON public.client_catalog_items
+      FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+  END IF;
+END $$;
 
-DROP POLICY IF EXISTS "crm_full_access" ON catalog_items;
-CREATE POLICY "crm_full_access" ON catalog_items
-  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "crm_full_access" ON public.catalog_items;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'catalog_items'
+      AND policyname = 'crm_full_access'
+  ) THEN
+    CREATE POLICY "crm_full_access" ON public.catalog_items
+      FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+  END IF;
+END $$;
 
-DROP POLICY IF EXISTS "crm_full_access" ON catalog_selections;
-CREATE POLICY "crm_full_access" ON catalog_selections
-  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "crm_full_access" ON public.catalog_selections;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'catalog_selections'
+      AND policyname = 'crm_full_access'
+  ) THEN
+    CREATE POLICY "crm_full_access" ON public.catalog_selections
+      FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+  END IF;
+END $$;
 
 -- ---------------------------------------------------------------------------
 -- Nettoyage optionnel : catalogue interne retiré de l'application

@@ -160,21 +160,61 @@ DROP POLICY IF EXISTS "crm_full_access" ON categories;
 CREATE POLICY "crm_full_access" ON categories
   FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
-DROP POLICY IF EXISTS "crm_full_access" ON catalog_items;
-CREATE POLICY "crm_full_access" ON catalog_items
-  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "crm_full_access" ON public.catalog_items;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'catalog_items'
+      AND policyname = 'crm_full_access'
+  ) THEN
+    CREATE POLICY "crm_full_access" ON public.catalog_items
+      FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+  END IF;
+END $$;
 
-DROP POLICY IF EXISTS "crm_full_access" ON supplier_catalog_items;
-CREATE POLICY "crm_full_access" ON supplier_catalog_items
-  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "crm_full_access" ON public.supplier_catalog_items;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'supplier_catalog_items'
+      AND policyname = 'crm_full_access'
+  ) THEN
+    CREATE POLICY "crm_full_access" ON public.supplier_catalog_items
+      FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+  END IF;
+END $$;
 
-DROP POLICY IF EXISTS "crm_full_access" ON client_catalog_items;
-CREATE POLICY "crm_full_access" ON client_catalog_items
-  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "crm_full_access" ON public.client_catalog_items;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'client_catalog_items'
+      AND policyname = 'crm_full_access'
+  ) THEN
+    CREATE POLICY "crm_full_access" ON public.client_catalog_items
+      FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+  END IF;
+END $$;
 
-DROP POLICY IF EXISTS "crm_full_access" ON catalog_selections;
-CREATE POLICY "crm_full_access" ON catalog_selections
-  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "crm_full_access" ON public.catalog_selections;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'catalog_selections'
+      AND policyname = 'crm_full_access'
+  ) THEN
+    CREATE POLICY "crm_full_access" ON public.catalog_selections
+      FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+  END IF;
+END $$;
 
 DROP POLICY IF EXISTS "crm_full_access" ON suppliers;
 CREATE POLICY "crm_full_access" ON suppliers
