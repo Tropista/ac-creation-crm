@@ -184,7 +184,10 @@ export default function Sidebar({
     return () => document.body.classList.remove("sidebar-drawer-open");
   }, [mobileOpen]);
 
+  const hideCatalogMenu = Boolean(data?.settings?.hideCatalogMenu);
+
   const visibleGroups = menuGroups
+    .filter((group) => !(hideCatalogMenu && group.id === "catalogues"))
     .map((group) => ({
       ...group,
       items: group.items.filter(canShow),

@@ -641,7 +641,7 @@ export async function loadSupabaseCatalogRecovery() {
   };
 }
 
-export async function loadSupabaseData({ normalizeData, emptyData }) {
+export async function loadSupabaseData({ normalizeData, emptyData, skipCatalog = false } = {}) {
   const supabase = await getSupabase();
 
   const settingsRes = resolveOptionalResult(
@@ -670,26 +670,34 @@ export async function loadSupabaseData({ normalizeData, emptyData }) {
     fetchCollectionRows(supabase, "clients").then((data) => ({ data, error: null })),
     fetchCollectionRows(supabase, "products").then((data) => ({ data, error: null })),
     fetchCollectionRows(supabase, "categories").then((data) => ({ data, error: null })),
-    fetchCatalogCollectionRows(supabase, "catalog_items").then((result) => ({
-      data: result.rows,
-      error: result.error,
-      partial: result.partial,
-    })),
-    fetchCatalogCollectionRows(supabase, "supplier_catalog_items").then((result) => ({
-      data: result.rows,
-      error: result.error,
-      partial: result.partial,
-    })),
-    fetchCatalogCollectionRows(supabase, "client_catalog_items").then((result) => ({
-      data: result.rows,
-      error: result.error,
-      partial: result.partial,
-    })),
-    fetchCatalogCollectionRows(supabase, "catalog_selections").then((result) => ({
-      data: result.rows,
-      error: result.error,
-      partial: result.partial,
-    })),
+    skipCatalog
+      ? Promise.resolve({ data: [], error: null, partial: false })
+      : fetchCatalogCollectionRows(supabase, "catalog_items").then((result) => ({
+          data: result.rows,
+          error: result.error,
+          partial: result.partial,
+        })),
+    skipCatalog
+      ? Promise.resolve({ data: [], error: null, partial: false })
+      : fetchCatalogCollectionRows(supabase, "supplier_catalog_items").then((result) => ({
+          data: result.rows,
+          error: result.error,
+          partial: result.partial,
+        })),
+    skipCatalog
+      ? Promise.resolve({ data: [], error: null, partial: false })
+      : fetchCatalogCollectionRows(supabase, "client_catalog_items").then((result) => ({
+          data: result.rows,
+          error: result.error,
+          partial: result.partial,
+        })),
+    skipCatalog
+      ? Promise.resolve({ data: [], error: null, partial: false })
+      : fetchCatalogCollectionRows(supabase, "catalog_selections").then((result) => ({
+          data: result.rows,
+          error: result.error,
+          partial: result.partial,
+        })),
     fetchCollectionRows(supabase, "suppliers").then((data) => ({ data, error: null })),
     fetchCollectionRows(supabase, "expenses").then((data) => ({ data, error: null })),
     fetchCollectionRows(supabase, "quotes").then((data) => ({ data, error: null })),
@@ -704,14 +712,16 @@ export async function loadSupabaseData({ normalizeData, emptyData }) {
     { tableName: "catalog_selections", res: catalogSelectionsRes },
   ];
 
-  const catalogFetchErrorMessage = formatCatalogRecoveryErrors(
-    catalogTableResults.map(({ tableName, res }) => ({
-      tableName,
-      rows: res.data || [],
-      error: res.error,
-      partial: res.partial,
-    }))
-  );
+  const catalogFetchErrorMessage = skipCatalog
+    ? null
+    : formatCatalogRecoveryErrors(
+        catalogTableResults.map(({ tableName, res }) => ({
+          tableName,
+          rows: res.data || [],
+          error: res.error,
+          partial: res.partial,
+        }))
+      );
 
   const resolvedSupplierCatalogItemsRes = resolveCollectionResult(
     supplierCatalogItemsRes,
@@ -757,7 +767,7 @@ export async function loadSupabaseData({ normalizeData, emptyData }) {
     client: cloudData.clientCatalogItems.length,
     selections: cloudData.catalogSelections.length,
   };
-  if (catalogCounts.supplier || catalogCounts.client || catalogCounts.selections) {
+  if (!skipCatalog && (catalogCounts.supplier || catalogCounts.client || catalogCounts.selections)) {
     console.info(
       `[Supabase] Sync cloud — ${catalogCounts.client} catalogue client, ${catalogCounts.supplier} pool fournisseur, ${catalogCounts.selections} sélection(s) chargée(s).`
     );
@@ -780,13 +790,14 @@ export async function loadSupabaseData({ normalizeData, emptyData }) {
         clientsRes.data?.length ||
         productsRes.data?.length ||
         categoriesRes.data?.length ||
-        resolvedSupplierCatalogItemsRes.data?.length ||
-        mergedClientCatalogItems.length ||
-        resolvedCatalogSelectionsRes.data?.length ||
+        (!skipCatalog && resolvedSupplierCatalogItemsRes.data?.length) ||
+        (!skipCatalog && mergedClientCatalogItems.length) ||
+        (!skipCatalog && resolvedCatalogSelectionsRes.data?.length) ||
         resolvedSuppliersRes.data?.length ||
         resolvedExpensesRes.data?.length ||
         quotesRes.data?.length ||
         invoicesRes.data?.length
     ),
+    catalogSkipped: skipCatalog,
   };
 }

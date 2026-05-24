@@ -144,6 +144,7 @@ export const emptyData = {
     bankInfo:
       "Informations bancaires : Tout paiement au nom de votre entreprise\nNom de la banque : BCEE\nBIC : BCEELULL\nIBAN : LU00 0000 0000 0000 0000\nVeuillez indiquer le numéro de facture dans votre communication",
     taxRate: 17,
+    hideCatalogMenu: false,
   },
   clients: [],
   quotes: [],

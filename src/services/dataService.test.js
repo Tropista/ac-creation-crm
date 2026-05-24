@@ -250,4 +250,16 @@ describe("catalog import persistence", () => {
     expect(afterLog.supplierCatalogItems[0].sku).toBe("SO-11380");
     expect(afterLog.logs).toHaveLength(1);
   });
+
+  it("normalizeData conserve hideCatalogMenu dans les paramètres", () => {
+    const normalized = normalizeData({
+      ...emptyData,
+      settings: {
+        ...emptyData.settings,
+        hideCatalogMenu: true,
+      },
+    });
+
+    expect(normalized.settings.hideCatalogMenu).toBe(true);
+  });
 });

@@ -1,5 +1,6 @@
 import { Trash2 } from "lucide-react";
 import CatalogItemImport from "./CatalogItemImport";
+import { useLazyCatalogLoad } from "../hooks/useLazyCatalogLoad";
 import {
   CLIENT_CATALOG_KEY,
   resolveActiveCatalogItems,
@@ -8,6 +9,8 @@ import { showToast } from "../utils/toast";
 import "../styles/client-catalog.css";
 
 export default function ImportFournisseur({ data, setData, logActivity }) {
+  useLazyCatalogLoad(data, setData);
+
   const supplierItems = resolveActiveCatalogItems(data.supplierCatalogItems);
 
   function removeItem(itemId) {

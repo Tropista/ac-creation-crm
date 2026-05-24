@@ -80,7 +80,6 @@ import {
   stampDataChanges,
   SYNC_STATUS,
 } from "./services/syncMerge";
-import { formatCatalogSyncMessage } from "./services/supabaseSync";
 import "./styles/sidebar.css";
 import "./styles/dashboard.css";
 import "./styles/clients.css";
@@ -153,54 +152,6 @@ function getInitialAuthState() {
 
 async function loadSupabaseSyncModule() {
   return import("./services/supabaseSync");
-}
-
-function showCatalogSyncToasts(
-  {
-    clientCount = 0,
-    supplierCount = 0,
-    selectionsCount = 0,
-    fetchErrorMessage = null,
-    partial = false,
-    conflictCount = 0,
-    silent = false,
-  } = {}
-) {
-  if (silent) return;
-
-  if (fetchErrorMessage) {
-    showToast(
-      partial
-        ? `${fetchErrorMessage} — ${formatCatalogSyncMessage(clientCount, supplierCount, selectionsCount)}`
-        : fetchErrorMessage,
-      partial ? "warning" : "error"
-    );
-    return;
-  }
-
-  if (conflictCount) {
-    showToast("Données fusionnées — conflits résolus localement", "info");
-    return;
-  }
-
-  if (clientCount || supplierCount || selectionsCount) {
-    showToast(formatCatalogSyncMessage(clientCount, supplierCount, selectionsCount), "success");
-  }
-}
-
-async function enrichDataWithCatalogRecovery(baseData, { loadSupabaseCatalogRecovery, mergeCloudWithLocal }) {
-  const recovery = await loadSupabaseCatalogRecovery();
-  if (!recovery.hasCatalogData) {
-    return { data: baseData, recovery };
-  }
-
-  const merged = mergeCloudWithLocal(baseData, {
-    supplierCatalogItems: recovery.supplierCatalogItems,
-    clientCatalogItems: recovery.clientCatalogItems,
-    catalogSelections: recovery.catalogSelections,
-  });
-
-  return { data: merged, recovery };
 }
 
 function prepareAppData(raw, { notify = false } = {}) {
@@ -410,11 +361,11 @@ function CrmApp() {
           return;
         }
 
-        const { loadSupabaseData, syncSupabaseData, loadSupabaseCatalogRecovery } =
-          await loadSupabaseSyncModule();
+        const { loadSupabaseData, syncSupabaseData } = await loadSupabaseSyncModule();
         const cloud = await loadSupabaseData({
           normalizeData,
-          emptyData
+          emptyData,
+          skipCatalog: true,
         });
 
         if (cloud.hasCloudData) {
@@ -438,18 +389,11 @@ function CrmApp() {
             },
           });
 
-          const { data: catalogEnriched, recovery } = await enrichDataWithCatalogRecovery(
-            mergedRaw,
-            { loadSupabaseCatalogRecovery, mergeCloudWithLocal }
-          );
-          const catalogFetchErrorMessage =
-            recovery.fetchErrorMessage || cloud.catalogFetchErrorMessage || null;
-          const catalogPartial = recovery.partial || cloud.catalogFetchPartial || false;
-
-          const { data: prepared, applied } = prepareAppData(catalogEnriched, { notify: !silent });
+          const { data: prepared, applied } = prepareAppData(mergedRaw, { notify: !silent });
           setData(prepared);
 
-          const needsCatalogPush = hasUnsyncedCatalogChanges(prepared, cloud.data);
+          const needsCatalogPush =
+            !cloud.catalogSkipped && hasUnsyncedCatalogChanges(prepared, cloud.data);
           if (applied || needsCatalogPush) {
             await syncSupabaseData(prepared, cloud.data);
           }
@@ -460,15 +404,9 @@ function CrmApp() {
           setLastSyncAt();
           cloudSyncSucceeded.current = true;
           setSyncStatus(SYNC_STATUS.SYNCED);
-          showCatalogSyncToasts({
-            clientCount: (prepared.clientCatalogItems || []).length,
-            supplierCount: (prepared.supplierCatalogItems || []).length,
-            selectionsCount: (prepared.catalogSelections || []).length,
-            fetchErrorMessage: catalogFetchErrorMessage,
-            partial: catalogPartial,
-            conflictCount,
-            silent,
-          });
+          if (!silent && conflictCount) {
+            showToast("Données fusionnées — conflits résolus localement", "info");
+          }
         } else if (hasLocalBusinessData(localData)) {
           const { data: prepared } = prepareAppData(localData, { notify: !silent });
           await syncSupabaseData(prepared, emptyData);
@@ -482,86 +420,24 @@ function CrmApp() {
             showToast("Données locales synchronisées vers Supabase", "success");
           }
         } else {
-          const { loadSupabaseCatalogRecovery } = await loadSupabaseSyncModule();
-          const recovery = await loadSupabaseCatalogRecovery();
-
-          if (recovery.hasCatalogData) {
-            const mergedRaw = mergeCloudWithLocal(localData, {
-              supplierCatalogItems: recovery.supplierCatalogItems,
-              clientCatalogItems: recovery.clientCatalogItems,
-              catalogSelections: recovery.catalogSelections,
-            });
-            const { data: prepared } = prepareAppData(mergedRaw, { notify: !silent });
-            setData(prepared);
-            await syncSupabaseData(prepared, emptyData);
-            setLastSyncAt();
-            saveData(prepared);
-            flushSaveData();
-            cloudSyncSucceeded.current = true;
-            setSyncStatus(SYNC_STATUS.SYNCED);
-            showCatalogSyncToasts({
-              clientCount: (prepared.clientCatalogItems || []).length,
-              supplierCount: (prepared.supplierCatalogItems || []).length,
-              selectionsCount: (prepared.catalogSelections || []).length,
-              fetchErrorMessage: recovery.fetchErrorMessage,
-              partial: recovery.partial,
-              silent,
-            });
-          } else if (recovery.fetchErrorMessage) {
-            if (!silent) {
-              showToast(recovery.fetchErrorMessage, "error");
-            }
-          } else {
-            const { data: prepared } = prepareAppData(emptyData, { notify: !silent });
-            await syncSupabaseData(prepared, emptyData);
-            setData(prepared);
-            saveData(prepared);
-            flushSaveData();
-            setLastSyncAt();
-            cloudSyncSucceeded.current = true;
-            setSyncStatus(SYNC_STATUS.READY);
-          }
+          const { data: prepared } = prepareAppData(emptyData, { notify: !silent });
+          await syncSupabaseData(prepared, emptyData);
+          setData(prepared);
+          saveData(prepared);
+          flushSaveData();
+          setLastSyncAt();
+          cloudSyncSucceeded.current = true;
+          setSyncStatus(SYNC_STATUS.READY);
         }
 
         setCloudAvailable(true);
       } catch (error) {
         console.error(error);
-        let catalogRecovered = false;
-        let recoveredData = normalizeData(loadData());
-
-        if (isSupabaseConfigured) {
-          try {
-            const { loadSupabaseCatalogRecovery } = await loadSupabaseSyncModule();
-            const recovery = await loadSupabaseCatalogRecovery();
-            if (recovery.hasCatalogData) {
-              recoveredData = normalizeData({
-                ...recoveredData,
-                supplierCatalogItems: recovery.supplierCatalogItems.length
-                  ? recovery.supplierCatalogItems
-                  : recoveredData.supplierCatalogItems,
-                clientCatalogItems: recovery.clientCatalogItems.length
-                  ? recovery.clientCatalogItems
-                  : recoveredData.clientCatalogItems,
-                catalogSelections: recovery.catalogSelections.length
-                  ? recovery.catalogSelections
-                  : recoveredData.catalogSelections,
-              });
-              catalogRecovered = true;
-            }
-            if (!silent && recovery.fetchErrorMessage) {
-              showToast(
-                recovery.fetchErrorMessage,
-                recovery.partial ? "warning" : "error"
-              );
-            }
-          } catch (recoveryError) {
-            console.warn("Récupération catalogue Supabase impossible :", recoveryError);
-          }
-        }
+        const recoveredData = normalizeData(loadData());
 
         const outcome = resolveCloudInitError({
           cloudAlreadySynced: cloudSyncSucceeded.current,
-          catalogRecovered,
+          catalogRecovered: false,
           error,
         });
         setCloudAvailable(outcome.cloudAvailable);
@@ -574,10 +450,6 @@ function CrmApp() {
         setData(prepared);
         saveData(prepared);
         flushSaveData();
-
-        if (catalogRecovered) {
-          cloudSyncSucceeded.current = true;
-        }
       } finally {
         setLoading(false);
         cloudInitPromise.current = null;

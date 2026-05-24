@@ -8,8 +8,6 @@ import {
   fetchCatalogSelectionsFromCloud,
   upsertCatalogSelection,
 } from "../services/catalogService";
-import { loadData, normalizeData } from "../services/dataService";
-import { formatCatalogSyncMessage } from "../services/supabaseSync";
 import {
   createCatalogSelectionPayload,
   buildAtelierQuoteFromCatalogSelection,
@@ -21,9 +19,14 @@ import { resolveActiveCatalogItems } from "../utils/catalogCollections";
 import {
   countCatalogSubmissionsReceived,
   mergeCatalogSelectionsCollection,
-  mergeCloudWithLocal,
 } from "../services/syncMerge";
 import { probeCatalogApi, refreshCatalogColors, refreshCatalogImages } from "../utils/catalogApi";
+import { useLazyCatalogLoad } from "../hooks/useLazyCatalogLoad";
+import {
+  fetchCatalogRecoveryFromCloud,
+  formatCatalogLoadToast,
+  mergeCatalogRecoveryIntoState,
+} from "../services/catalogLoad";
 import { patchClientCatalogColors, patchClientCatalogImageUrls } from "../utils/lmdtImport";
 import { patchClientCatalogItemImage } from "../utils/catalogImageOverride";
 import { stripSourceFromDescription } from "../utils/catalogDescription";
@@ -139,6 +142,7 @@ const CatalogClientGridCard = memo(function CatalogClientGridCard({
 
 export default function CatalogueClient({ data, setData, logActivity }) {
   const navigate = useNavigate();
+  useLazyCatalogLoad(data, setData);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [folderFilter, setFolderFilter] = useState(CATALOG_FOLDER_ALL);
@@ -437,8 +441,7 @@ export default function CatalogueClient({ data, setData, logActivity }) {
     }
 
     try {
-      const { loadSupabaseCatalogRecovery } = await import("../services/supabaseSync");
-      const recovery = await loadSupabaseCatalogRecovery();
+      const { recovery } = await fetchCatalogRecoveryFromCloud();
 
       if (!recovery.hasCatalogData && !recovery.fetchErrorMessage) {
         showToast("Aucun article catalogue trouvé dans Supabase.", "warning");
@@ -450,12 +453,7 @@ export default function CatalogueClient({ data, setData, logActivity }) {
         return;
       }
 
-      const local = normalizeData(loadData());
-      const merged = mergeCloudWithLocal(local, {
-        supplierCatalogItems: recovery.supplierCatalogItems,
-        clientCatalogItems: recovery.clientCatalogItems,
-        catalogSelections: recovery.catalogSelections,
-      });
+      const merged = mergeCatalogRecoveryIntoState(data, recovery);
 
       await setData((prev) => ({
         ...prev,
@@ -471,16 +469,13 @@ export default function CatalogueClient({ data, setData, logActivity }) {
       console.info(
         `[Supabase] Sync cloud manuel — ${count} client, ${supplierCount} fournisseur, ${selectionsCount} sélection(s), ${submissionsCount} réponse(s).`
       );
-      showToast(
-        recovery.fetchErrorMessage
-          ? recovery.partial
-            ? `${recovery.fetchErrorMessage} · ${formatCatalogSyncMessage(count, supplierCount, selectionsCount)}`
-            : recovery.fetchErrorMessage
-          : submissionsCount > 0
-            ? `${formatCatalogSyncMessage(count, supplierCount, selectionsCount)} · ${submissionsCount} réponse(s) client`
-            : formatCatalogSyncMessage(count, supplierCount, selectionsCount),
-        recovery.fetchErrorMessage ? (recovery.partial ? "warning" : "error") : "success"
-      );
+
+      const toast = formatCatalogLoadToast(recovery, merged);
+      if (submissionsCount > 0 && !recovery.fetchErrorMessage) {
+        showToast(`${toast.message} · ${submissionsCount} réponse(s) client`, toast.type);
+      } else {
+        showToast(toast.message, recovery.fetchErrorMessage ? (recovery.partial ? "warning" : "error") : toast.type);
+      }
     } catch (error) {
       showToast(error.message || "Synchronisation impossible.", "error");
     }

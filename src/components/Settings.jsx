@@ -130,6 +130,32 @@ Version installée : <strong>{APP_VERSION}</strong>
 </div>
 ) : null}
 
+<div className="card">
+  <h3>Navigation</h3>
+  <label className="theme-field" style={{ flexDirection: "row", alignItems: "flex-start", gap: "0.75rem" }}>
+    <input
+      type="checkbox"
+      data-testid="hide-catalog-menu"
+      checked={Boolean(form.hideCatalogMenu)}
+      onChange={(e) =>
+        setForm({
+          ...form,
+          hideCatalogMenu: e.target.checked,
+        })
+      }
+      style={{ marginTop: "0.25rem" }}
+    />
+    <span>
+      <strong>Masquer le menu Catalogues</strong>
+      <p className="page-subtitle" style={{ margin: "0.35rem 0 0" }}>
+        Retire la section « Catalogues » du menu latéral (Import fournisseur, Catalogue client).
+        Les liens publics de catalogue client partagés avec vos clients (Vercel) restent actifs et
+        indépendants de ce réglage.
+      </p>
+    </span>
+  </label>
+</div>
+
 <div className="card theme-settings-card">
   <h3>Apparence</h3>
   <label className="theme-field">
