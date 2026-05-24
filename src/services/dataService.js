@@ -1,7 +1,12 @@
 import { dedupeDocuments } from "../utils/documents";
 import { debounce } from "../utils/debounce";
 import { migrateLegacyCatalogData } from "../utils/catalogCollections";
-import { sanitizeImageUrlForCache, compactSelectionForPublicCache } from "../utils/catalogShare";
+import {
+  DEFAULT_CATALOG_RECIPIENT_EMAIL,
+  LEGACY_CATALOG_RECIPIENT_EMAIL,
+  sanitizeImageUrlForCache,
+  compactSelectionForPublicCache,
+} from "../utils/catalogShare";
 import { isSupabaseConfigured } from "../supabase";
 
 export const STORAGE_KEY = "crm_local_data_v2";
@@ -129,7 +134,7 @@ export const emptyData = {
   users: [],
   settings: {
     companyName: "Mon Entreprise",
-    companyEmail: "contact@monentreprise.com",
+    companyEmail: DEFAULT_CATALOG_RECIPIENT_EMAIL,
     companyPhone: "+352 00 00 00 00",
     companyAddress: "Adresse de l'entreprise",
     vatNumber: "LU00000000",
@@ -185,10 +190,18 @@ export function normalizeData(data) {
     ...rest,
     ...migrated,
 
-    settings: {
-      ...emptyData.settings,
-      ...(rest?.settings || {}),
-    },
+    settings: (() => {
+      const stored = rest?.settings || {};
+      const companyEmail =
+        !stored.companyEmail || stored.companyEmail === LEGACY_CATALOG_RECIPIENT_EMAIL
+          ? emptyData.settings.companyEmail
+          : stored.companyEmail;
+      return {
+        ...emptyData.settings,
+        ...stored,
+        companyEmail,
+      };
+    })(),
 
     users: dedupeItemsById(rest?.users || []),
     clients: dedupeItemsById(rest?.clients || []),

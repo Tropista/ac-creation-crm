@@ -13,6 +13,16 @@ export const PUBLIC_CATALOG_CACHE_PREFIX = "crm_catalog_public_";
 
 export const DEFAULT_CATALOG_SIZES = ["XS", "S", "M", "L", "XL", "2XL", "3XL"];
 
+export const DEFAULT_CATALOG_RECIPIENT_EMAIL = "ac.creation.officiel@gmail.com";
+
+export const LEGACY_CATALOG_RECIPIENT_EMAIL = "contact@monentreprise.com";
+
+function normalizeCatalogRecipientEmail(value) {
+  const email = String(value || "").trim();
+  if (!email || email === LEGACY_CATALOG_RECIPIENT_EMAIL) return "";
+  return email;
+}
+
 const PUBLIC_CATALOG_CACHE_MAX_ENTRIES = 8;
 const SNAPSHOT_DESCRIPTION_MAX_LENGTH = 1500;
 
@@ -110,11 +120,20 @@ export function resolveProductSizeOptions(product) {
   return DEFAULT_CATALOG_SIZES;
 }
 
-export function resolveCatalogRecipientEmail(selection) {
-  const settings = selection?.settings || {};
-  return String(
-    settings.companyEmail || settings.email || selection?.companyEmail || ""
-  ).trim();
+export function resolveCatalogRecipientEmail(selection, liveSettings) {
+  const liveEmail = normalizeCatalogRecipientEmail(
+    liveSettings?.companyEmail || liveSettings?.email
+  );
+  if (liveEmail) return liveEmail;
+
+  const snapshotEmail = normalizeCatalogRecipientEmail(
+    selection?.settings?.companyEmail ||
+      selection?.settings?.email ||
+      selection?.companyEmail
+  );
+  if (snapshotEmail) return snapshotEmail;
+
+  return DEFAULT_CATALOG_RECIPIENT_EMAIL;
 }
 
 export function resolveProductMinQuantity(product) {
@@ -224,10 +243,14 @@ export function createCatalogSelectionPayload({
     productIds: productSnapshots.map((product) => product.id),
     productSnapshots,
     settings: {
-      companyEmail: settings.companyEmail || "",
+      companyEmail:
+        normalizeCatalogRecipientEmail(settings.companyEmail) ||
+        DEFAULT_CATALOG_RECIPIENT_EMAIL,
       companyName: settings.companyName || "",
       companyPhone: settings.companyPhone || "",
-      email: settings.email || settings.companyEmail || "",
+      email:
+        normalizeCatalogRecipientEmail(settings.email || settings.companyEmail) ||
+        DEFAULT_CATALOG_RECIPIENT_EMAIL,
     },
     status: "open",
     createdAt: now,

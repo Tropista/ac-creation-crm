@@ -1,5 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import {
+  DEFAULT_CATALOG_RECIPIENT_EMAIL,
+  LEGACY_CATALOG_RECIPIENT_EMAIL,
   buildCatalogMailtoUrl,
   buildCatalogProductSheet,
   buildProductSnapshots,
@@ -341,6 +343,23 @@ describe("catalogShare product sheet", () => {
     ).toBe("info@accreation.fr");
   });
 
+  it("prefers live settings over stale selection snapshot", () => {
+    expect(
+      resolveCatalogRecipientEmail(
+        { settings: { companyEmail: LEGACY_CATALOG_RECIPIENT_EMAIL } },
+        { companyEmail: "live@accreation.fr" }
+      )
+    ).toBe("live@accreation.fr");
+  });
+
+  it("replaces legacy placeholder email with default recipient", () => {
+    expect(
+      resolveCatalogRecipientEmail({
+        settings: { companyEmail: LEGACY_CATALOG_RECIPIENT_EMAIL },
+      })
+    ).toBe(DEFAULT_CATALOG_RECIPIENT_EMAIL);
+  });
+
   it("builds mailto url with subject and body", () => {
     const url = buildCatalogMailtoUrl({
       recipientEmail: "contact@accreation.fr",
@@ -365,5 +384,16 @@ describe("catalogShare product sheet", () => {
     expect(payload.productIds).toEqual(["p1"]);
     expect(payload.settings.companyEmail).toBe("hello@accreation.fr");
     expect(payload.status).toBe("open");
+  });
+
+  it("snapshots default recipient when settings email is missing or legacy", () => {
+    const payload = createCatalogSelectionPayload({
+      title: "Club sportif",
+      products: [product],
+      settings: { companyEmail: LEGACY_CATALOG_RECIPIENT_EMAIL },
+    });
+
+    expect(payload.settings.companyEmail).toBe(DEFAULT_CATALOG_RECIPIENT_EMAIL);
+    expect(payload.settings.email).toBe(DEFAULT_CATALOG_RECIPIENT_EMAIL);
   });
 });

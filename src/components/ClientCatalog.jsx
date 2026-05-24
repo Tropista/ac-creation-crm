@@ -4,6 +4,7 @@ import { ChevronDown, Copy, Mail, ShoppingBag, Trash2, X } from "lucide-react";
 import {
   fetchPublicCatalogProducts,
   fetchPublicCatalogSelection,
+  fetchPublicCatalogSettings,
   submitPublicCatalogSelection,
 } from "../services/catalogService";
 import { APP_LOGO_URL } from "../utils/assets";
@@ -335,6 +336,7 @@ export default function ClientCatalog() {
   const { shareId } = useParams();
   const [loading, setLoading] = useState(true);
   const [selection, setSelection] = useState(null);
+  const [liveSettings, setLiveSettings] = useState(null);
   const [products, setProducts] = useState([]);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -372,7 +374,10 @@ export default function ClientCatalog() {
       setError("");
 
       try {
-        const loadedSelection = await fetchPublicCatalogSelection(shareId);
+        const [loadedSelection, loadedLiveSettings] = await Promise.all([
+          fetchPublicCatalogSelection(shareId),
+          fetchPublicCatalogSettings(),
+        ]);
         if (!active || timedOut) return;
 
         if (!loadedSelection) {
@@ -390,6 +395,7 @@ export default function ClientCatalog() {
 
         const visibleProducts = loadedProducts.filter((product) => product && !product.archived);
         setSelection(loadedSelection);
+        setLiveSettings(loadedLiveSettings);
         setProducts(visibleProducts);
 
         if (!visibleProducts.length) {
@@ -499,8 +505,8 @@ export default function ClientCatalog() {
     : 0;
 
   const recipientEmail = useMemo(
-    () => resolveCatalogRecipientEmail(selection),
-    [selection]
+    () => resolveCatalogRecipientEmail(selection, liveSettings),
+    [selection, liveSettings]
   );
 
   const updateDraft = useCallback((productId, patch) => {

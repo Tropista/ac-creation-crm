@@ -270,6 +270,41 @@ export async function fetchPublicCatalogProducts(selection, productIds = []) {
   return mergeLiveCatalogImages(products, liveItems);
 }
 
+export async function fetchPublicCatalogSettings() {
+  if (!isSupabaseConfigured) {
+    try {
+      return loadData().settings || {};
+    } catch {
+      return {};
+    }
+  }
+
+  try {
+    const supabase = await getSupabase();
+    const row = await fetchWithRetry(
+      async () => {
+        const { data, error } = await supabase
+          .from("settings")
+          .select("data")
+          .eq("id", "main")
+          .maybeSingle();
+        if (error) throw error;
+        return data;
+      },
+      { label: "Chargement des paramètres entreprise" }
+    );
+    if (row?.data) return row.data;
+  } catch {
+    // Fall back to local CRM settings when Supabase is unavailable.
+  }
+
+  try {
+    return loadData().settings || {};
+  } catch {
+    return {};
+  }
+}
+
 export async function submitPublicCatalogSelection(shareId, submission) {
   const current = await fetchPublicCatalogSelection(shareId);
   if (!current) {
