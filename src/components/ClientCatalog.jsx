@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Copy, Mail, Trash2, X } from "lucide-react";
+import { ChevronDown, Copy, Mail, Trash2, X } from "lucide-react";
 import {
   fetchPublicCatalogProducts,
   fetchPublicCatalogSelection,
@@ -18,6 +18,7 @@ import { stripSourceFromDescription } from "../utils/catalogDescription";
 import {
   enrichCatalogColors,
   resolveCatalogColorHex,
+  resolveCatalogColorImageUrl,
   resolveCatalogColorLabel,
 } from "../utils/colorNameToHex";
 import { showToast } from "../utils/toast";
@@ -38,8 +39,39 @@ function createDraftForProduct(product) {
   };
 }
 
+function resolveProductDisplayImage(product, colorLabel) {
+  if (!product) return "";
+  const colors = enrichCatalogColors(product.colors || []);
+  const match = colors.find((color) => resolveCatalogColorLabel(color) === colorLabel);
+  const colorImage = match ? resolveCatalogColorImageUrl(match) : "";
+  return colorImage || product.imageUrl || "";
+}
+
 function ClientColorPicker({ colors, value, onChange }) {
   const enriched = enrichCatalogColors(colors);
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    function handlePointerDown(event) {
+      if (rootRef.current && !rootRef.current.contains(event.target)) {
+        setOpen(false);
+      }
+    }
+
+    function handleEscape(event) {
+      if (event.key === "Escape") setOpen(false);
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [open]);
 
   if (!enriched.length) {
     return (
@@ -51,42 +83,59 @@ function ClientColorPicker({ colors, value, onChange }) {
     );
   }
 
+  const selected =
+    enriched.find((color) => resolveCatalogColorLabel(color) === value) || enriched[0];
+  const selectedLabel = resolveCatalogColorLabel(selected);
+  const selectedHex = resolveCatalogColorHex(selected);
+
   return (
-    <div className="client-catalog-color-picker">
-      <div className="client-catalog-color-swatches">
-        {enriched.map((color, index) => {
-          const label = resolveCatalogColorLabel(color);
-          const hex = resolveCatalogColorHex(color);
-          const isActive = value === label;
-          return (
-            <button
-              key={`${label}-${index}`}
-              type="button"
-              className={`client-catalog-color-swatch${isActive ? " is-active" : ""}`}
-              title={label}
-              aria-label={`Couleur : ${label}`}
-              aria-pressed={isActive}
-              onClick={() => onChange(label)}
-            >
-              <span
-                className="client-catalog-color-dot"
-                style={{ backgroundColor: hex || "#cbd5e1" }}
-              />
-              <span className="client-catalog-color-label">{label}</span>
-            </button>
-          );
-        })}
-      </div>
-      <select value={value || enriched[0]?.name || ""} onChange={(event) => onChange(event.target.value)}>
-        {enriched.map((color, index) => {
-          const label = resolveCatalogColorLabel(color);
-          return (
-            <option key={`${label}-${index}`} value={label}>
-              {label}
-            </option>
-          );
-        })}
-      </select>
+    <div className="client-catalog-color-picker" ref={rootRef}>
+      <button
+        type="button"
+        className="client-catalog-color-trigger"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={`Couleur : ${selectedLabel}`}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span
+          className="client-catalog-color-dot"
+          style={{ backgroundColor: selectedHex || "#cbd5e1" }}
+          aria-hidden="true"
+        />
+        <span className="client-catalog-color-trigger-label">{selectedLabel}</span>
+        <ChevronDown size={16} className="client-catalog-color-chevron" aria-hidden="true" />
+      </button>
+      {open ? (
+        <ul className="client-catalog-color-menu" role="listbox" aria-label="Couleurs disponibles">
+          {enriched.map((color, index) => {
+            const label = resolveCatalogColorLabel(color);
+            const hex = resolveCatalogColorHex(color);
+            const isActive = value === label;
+            return (
+              <li key={`${label}-${index}`} role="presentation">
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={isActive}
+                  className={`client-catalog-color-option${isActive ? " is-active" : ""}`}
+                  onClick={() => {
+                    onChange(label);
+                    setOpen(false);
+                  }}
+                >
+                  <span
+                    className="client-catalog-color-dot"
+                    style={{ backgroundColor: hex || "#cbd5e1" }}
+                    aria-hidden="true"
+                  />
+                  <span className="client-catalog-color-option-label">{label}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
     </div>
   );
 }
@@ -376,12 +425,13 @@ export default function ClientCatalog() {
                 const description = product.description
                   ? stripSourceFromDescription(product.description).split("\n")[0]
                   : "";
+                const displayImage = resolveProductDisplayImage(product, draft.color);
 
                 return (
                   <article key={product.id} className="client-catalog-card">
                     <div className="client-catalog-card-media">
-                      {product.imageUrl ? (
-                        <img src={product.imageUrl} alt={product.name} loading="lazy" />
+                      {displayImage ? (
+                        <img src={displayImage} alt={product.name} loading="lazy" />
                       ) : (
                         <div className="catalog-import-placeholder">Sans image</div>
                       )}
@@ -494,11 +544,10 @@ export default function ClientCatalog() {
                         <div className="client-catalog-cart-item-fields">
                           <label>
                             Couleur
-                            <input
-                              value={line.color || ""}
-                              onChange={(event) =>
-                                updateCartLine(line.id, { color: event.target.value })
-                              }
+                            <ClientColorPicker
+                              colors={product?.colors}
+                              value={line.color}
+                              onChange={(color) => updateCartLine(line.id, { color })}
                             />
                           </label>
                           <label>

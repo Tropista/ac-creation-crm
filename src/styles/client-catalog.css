@@ -395,49 +395,98 @@
 }
 
 .client-catalog-color-picker {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  position: relative;
 }
 
-.client-catalog-color-swatches {
+.client-catalog-color-trigger {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.client-catalog-color-swatch {
-  display: inline-flex;
-  flex-direction: column;
   align-items: center;
-  gap: 4px;
-  min-width: 52px;
-  max-width: 72px;
-  padding: 0;
+  gap: 8px;
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  padding: 8px 10px;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.client-catalog-color-trigger:hover {
+  border-color: rgba(255, 255, 255, 0.32);
+}
+
+.client-catalog-color-trigger-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.client-catalog-color-chevron {
+  flex-shrink: 0;
+  opacity: 0.75;
+  transition: transform 0.15s ease;
+}
+
+.client-catalog-color-trigger[aria-expanded="true"] .client-catalog-color-chevron {
+  transform: rotate(180deg);
+}
+
+.client-catalog-color-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: #10265f;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.client-catalog-color-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
   border: none;
+  border-radius: 8px;
   background: transparent;
   color: #fff;
   cursor: pointer;
   font: inherit;
+  text-align: left;
+}
+
+.client-catalog-color-option:hover,
+.client-catalog-color-option.is-active {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.client-catalog-color-option-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .client-catalog-color-dot {
-  width: 28px;
-  height: 28px;
+  width: 18px;
+  height: 18px;
   border-radius: 50%;
   border: 1px solid rgba(255, 255, 255, 0.35);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
-}
-
-.client-catalog-color-swatch.is-active .client-catalog-color-dot {
-  box-shadow: 0 0 0 2px #10265f, 0 0 0 4px #38bdf8;
-}
-
-.client-catalog-color-label {
-  font-size: 10px;
-  line-height: 1.2;
-  text-align: center;
-  opacity: 0.9;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  flex-shrink: 0;
 }
 
 .client-catalog-modal-overlay {
