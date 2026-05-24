@@ -57,7 +57,7 @@ export function formatSupabaseCollectionError(tableName, error) {
   const code = String(error?.code || "");
   if (code === "42501") {
     return new Error(
-      `Permission refusée sur « ${tableName} » — ajoutez une politique RLS INSERT/UPDATE (voir docs/supabase-migration.sql).`
+      `Permission refusée sur « ${tableName} » — connectez-vous au CRM et exécutez supabase/migrations/20260524100000_secure_rls.sql si besoin.`
     );
   }
 

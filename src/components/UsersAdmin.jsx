@@ -1,9 +1,6 @@
 import { useState } from "react";
 import { getSupabase } from "../supabase";
-import {
-  normalizeEmail,
-  isAdminEmail
-} from "../services/authService";
+import { normalizeEmail } from "../services/authService";
 import { showToast } from "../utils/toast";
 function uid() {
   return crypto.randomUUID();
@@ -50,7 +47,6 @@ export default function UsersAdmin({ data, setData, logActivity }) {
     const email = normalizeEmail(form.email);
 
     if (!email) return showToast("Email obligatoire.", "error");
-    if (isAdminEmail(email)) return showToast("Cet email est déjà administrateur principal.", "error");
     if (users.some((user) => normalizeEmail(user.email) === email)) {
       return showToast("Cet utilisateur existe déjà.", "error");
     }
@@ -179,14 +175,6 @@ export default function UsersAdmin({ data, setData, logActivity }) {
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td>AC Creation</td>
-              <td>ac.creation.officiel@gmail.com</td>
-              <td><span className="badge vip">Admin principal</span></td>
-              <td><span className="badge client">Actif</span></td>
-              <td>-</td>
-            </tr>
-
             {users.map((user) => (
               <tr key={user.id}>
                 <td>{user.name}</td>

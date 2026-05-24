@@ -12,7 +12,11 @@ import {
   useNavigate,
   useLocation,
 } from "react-router-dom";
-import { getSupabase, isSupabaseConfigured } from "./supabase";
+import {
+  getSupabase,
+  hasSupabaseAuthSession,
+  isSupabaseConfigured,
+} from "./supabase";
 import {
   PUBLIC_TSHIRT_PATH,
   pageToPath,
@@ -240,8 +244,32 @@ function CrmApp() {
   }, [currentUser?.email]);
 
   useEffect(() => {
-    initializeCloudData();
+    let cancelled = false;
+
+    async function verifySupabaseSession() {
+      const crmSession = loadSession();
+      if (!crmSession?.email || crmSession.expired || !isSupabaseConfigured) {
+        return;
+      }
+
+      const hasAuth = await hasSupabaseAuthSession();
+      if (!hasAuth && !cancelled) {
+        clearSession();
+        setCurrentUser(null);
+        setAuthNotice(SESSION_EXPIRED_MESSAGE);
+      }
+    }
+
+    verifySupabaseSession();
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  useEffect(() => {
+    cloudInitPromise.current = null;
+    initializeCloudData();
+  }, [currentUser?.email]);
 
   useEffect(() => {
     if (!currentUser) return undefined;
@@ -318,6 +346,17 @@ function CrmApp() {
           saveData(prepared);
           flushSaveData();
           setSyncStatus(SYNC_STATUS.LOCAL_NO_CONFIG);
+          return;
+        }
+
+        const hasAuth = await hasSupabaseAuthSession();
+        if (!hasAuth) {
+          const prepared = prepareAppData(localData);
+          setData(prepared);
+          saveData(prepared);
+          flushSaveData();
+          setSyncStatus(SYNC_STATUS.LOCAL_UNAVAILABLE);
+          setCloudAvailable(false);
           return;
         }
 
@@ -432,7 +471,7 @@ function CrmApp() {
 
       let cloudSaved = false;
 
-      if (isSupabaseConfigured) {
+      if (isSupabaseConfigured && (await hasSupabaseAuthSession())) {
         try {
           setSyncStatus(SYNC_STATUS.SAVING);
           const { syncSupabaseData } = await loadSupabaseSyncModule();

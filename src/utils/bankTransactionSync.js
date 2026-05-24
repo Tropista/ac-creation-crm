@@ -6,11 +6,12 @@
  *   ADD COLUMN IF NOT EXISTS matched_invoice text,
  *   ADD COLUMN IF NOT EXISTS matched_invoice_id text;
  *
- * CREATE POLICY "bank_transactions_update" ON bank_transactions
- *   FOR UPDATE TO anon, authenticated USING (true) WITH CHECK (true);
+ * CREATE POLICY "bank_transactions_authenticated" ON bank_transactions
+ *   FOR ALL TO authenticated
+ *   USING (public.crm_user_is_active())
+ *   WITH CHECK (public.crm_user_is_active());
  *
- * CREATE POLICY "bank_transactions_delete" ON bank_transactions
- *   FOR DELETE TO anon, authenticated USING (true);
+ * Voir supabase/migrations/20260524100000_secure_rls.sql
  */
 
 export function logBankTransactionError(action, error) {
@@ -34,7 +35,7 @@ export function bankTransactionErrorHint(error) {
     message.includes("row-level security") ||
     message.includes("permission")
   ) {
-    return " Droits insuffisants : ajoutez une politique RLS UPDATE/DELETE sur bank_transactions.";
+    return " Droits insuffisants : connectez-vous au CRM et exécutez supabase/migrations/20260524100000_secure_rls.sql.";
   }
   if (message.includes("invalid input syntax for type uuid")) {
     return " matched_invoice_id doit être en texte, pas en UUID.";

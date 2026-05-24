@@ -6,6 +6,15 @@ const SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 export function makeTestData(overrides = {}) {
   return {
     ...emptyData,
+    users: [
+      {
+        id: "admin-1",
+        email: "ac.creation.officiel@gmail.com",
+        name: "Admin AC Creation",
+        role: "Admin",
+        status: "Actif",
+      },
+    ],
     clients: [
       {
         id: "client-1",

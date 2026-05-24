@@ -2,11 +2,23 @@
 
 Configuration PostgreSQL attendue par l’application. À exécuter dans le **SQL Editor** du projet Supabase (adapter selon votre instance existante).
 
-**Migration complète (recommandé)** : copier-coller une seule fois le contenu de [`docs/supabase-migration.sql`](supabase-migration.sql) dans le SQL Editor Supabase. Ce fichier crée toutes les tables CRM, `bank_transactions`, et les politiques RLS.
+**Migration complète (recommandé)** :
+
+1. Copier-coller une seule fois le contenu de [`docs/supabase-migration.sql`](supabase-migration.sql) dans le SQL Editor Supabase (tables CRM + `bank_transactions`).
+2. **Durcir la sécurité** : exécuter [`supabase/migrations/20260524100000_secure_rls.sql`](../supabase/migrations/20260524100000_secure_rls.sql) (RLS authenticated, rôles admin depuis la table `users`).
 
 ## Auth
 
-Activer **Email + mot de passe** dans Authentication → Providers. Les utilisateurs CRM sont aussi enregistrés dans la table `users` (rôle, statut).
+Activer **Email + mot de passe** dans Authentication → Providers. Les utilisateurs CRM sont enregistrés dans la table `users` (rôle, statut).
+
+### Flux d’accès
+
+1. Créer le compte dans **Authentication → Users** (email + mot de passe).
+2. Ajouter l’utilisateur dans la table `users` via le CRM (page Utilisateurs) **ou** via le seed SQL de la migration RLS pour les admins initiaux.
+3. Se connecter au CRM : Supabase Auth vérifie le mot de passe, l’app vérifie que l’email existe dans `users` avec statut **Actif**.
+4. Les requêtes cloud utilisent le JWT **authenticated** — la clé **anon** seule ne suffit plus.
+
+> **Configurateur public** (`/configurateur-tshirt`) : aucun accès Supabase. Brouillon en `localStorage` uniquement.
 
 ## Modèle de données CRM
 
@@ -100,50 +112,41 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 ```
 
-### Politiques RLS (collections CRM)
+## Politiques RLS (sécurisées)
 
-Pour un usage interne avec la clé **anon** côté client, activer RLS et autoriser les opérations nécessaires à la sync (à durcir en production selon votre modèle d’auth) :
+### Principe
+
+| Rôle Postgres | Accès CRM |
+|---------------|-----------|
+| `anon` | **Aucun** accès aux tables CRM |
+| `authenticated` | Accès si email JWT présent dans `users` avec statut ≠ `Désactivé` |
+
+La fonction helper `crm_user_is_active()` vérifie `lower(data->>'email') = lower(auth.jwt()->>'email')`.
+
+### Application (obligatoire en production)
+
+Exécuter le script complet :
+
+[`supabase/migrations/20260524100000_secure_rls.sql`](../supabase/migrations/20260524100000_secure_rls.sql)
+
+Ce script :
+
+- supprime les anciennes politiques `crm_full_access` (anon + authenticated),
+- crée `crm_authenticated_access` sur toutes les tables CRM,
+- restreint `bank_transactions` aux utilisateurs authentifiés actifs,
+- insère les admins initiaux s’ils sont absents de `users`.
+
+### Rôles admin
+
+Les rôles **Admin** / **Employé** / etc. sont lus depuis `users.data.role` — plus d’emails admin hardcodés dans le code. Pour promouvoir un admin :
 
 ```sql
-ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
-ALTER TABLE products ENABLE ROW LEVEL SECURITY;
-ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
-ALTER TABLE suppliers ENABLE ROW LEVEL SECURITY;
-ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
-ALTER TABLE quotes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE invoices ENABLE ROW LEVEL SECURITY;
-ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE backups ENABLE ROW LEVEL SECURITY;
-ALTER TABLE crm_logs ENABLE ROW LEVEL SECURITY;
-ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
-
--- Accès complet pour anon/authenticated (à restreindre si besoin)
--- Répéter pour chaque table CRM :
-CREATE POLICY "crm_full_access" ON clients
-  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "crm_full_access" ON products
-  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "crm_full_access" ON categories
-  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "crm_full_access" ON suppliers
-  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "crm_full_access" ON expenses
-  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "crm_full_access" ON quotes
-  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "crm_full_access" ON invoices
-  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "crm_full_access" ON users
-  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "crm_full_access" ON backups
-  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "crm_full_access" ON crm_logs
-  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-CREATE POLICY "crm_full_access" ON settings
-  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+UPDATE users
+SET data = data || '{"role":"Admin","status":"Actif"}'::jsonb
+WHERE lower(data->>'email') = lower('votre@email.com');
 ```
 
-> Pour un script idempotent prêt à coller (avec `DROP POLICY IF EXISTS`), utiliser [`supabase-migration.sql`](supabase-migration.sql).
+Ou via la page **Utilisateurs** du CRM (réservée aux Admin).
 
 ## Table `bank_transactions`
 
@@ -196,23 +199,9 @@ ALTER TABLE bank_transactions
 
 ### RLS — rapprochement bancaire
 
-Sans politiques **UPDATE** et **DELETE**, les actions Rapprocher / Ignorer / Supprimer renvoient une erreur de permissions.
+Inclus dans `20260524100000_secure_rls.sql` : politique `bank_transactions_authenticated` (authenticated + `crm_user_is_active()`).
 
-```sql
-ALTER TABLE bank_transactions ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "bank_transactions_select" ON bank_transactions
-  FOR SELECT TO anon, authenticated USING (true);
-
-CREATE POLICY "bank_transactions_insert" ON bank_transactions
-  FOR INSERT TO anon, authenticated WITH CHECK (true);
-
-CREATE POLICY "bank_transactions_update" ON bank_transactions
-  FOR UPDATE TO anon, authenticated USING (true) WITH CHECK (true);
-
-CREATE POLICY "bank_transactions_delete" ON bank_transactions
-  FOR DELETE TO anon, authenticated USING (true);
-```
+Sans cette migration, les actions Rapprocher / Ignorer / Supprimer renvoient `42501`.
 
 ### Contrainte `status`
 
@@ -224,9 +213,11 @@ L’app tente plusieurs variantes de statut (`rapprochée`, `ignorée`, `payée`
 |----------|----------------|--------|
 | `PGRST205` / table introuvable | Table CRM non créée (ex. `suppliers`, `expenses`) | Exécuter le `CREATE TABLE` correspondant ci-dessus |
 | `PGRST204` / colonne manquante | Migration non appliquée | `ALTER TABLE` ci-dessus |
-| `42501` / row-level security | RLS sans politique UPDATE/DELETE | Créer les policies `bank_transactions_*` |
+| `42501` / row-level security | RLS durci sans session auth ou utilisateur absent de `users` | Se reconnecter ; vérifier `users` ; exécuter `20260524100000_secure_rls.sql` |
 | `invalid input syntax for type uuid` sur `matched_invoice_id` | Colonne en UUID au lieu de text | `ALTER COLUMN matched_invoice_id TYPE text` |
 | Aucune ligne mise à jour | RLS ou mauvais `id` | Vérifier policies et `eq("id", transactionId)` |
+| « Compte non autorisé » au login | Email absent de `users` ou statut Désactivé | Ajouter l’utilisateur dans le CRM ou via SQL |
+| Sync cloud indisponible sans login | Comportement attendu (RLS) | Se connecter pour activer la sync |
 
 Messages d’aide côté app : `bankTransactionErrorHint()` dans `src/utils/bankTransactionSync.js`.
 
@@ -234,3 +225,11 @@ Messages d’aide côté app : `bankTransactionErrorHint()` dans `src/utils/bank
 
 - Les factures restent dans `invoices.data` (jsonb).
 - Le rapprochement met à jour `bank_transactions` **et** le statut local des factures (`Payée`) via le state React ; la sync Supabase des factures se fait via `syncSupabaseData` comme le reste du CRM.
+
+## Checklist déploiement RLS
+
+1. Exécuter `docs/supabase-migration.sql` (si tables absentes).
+2. Exécuter `supabase/migrations/20260524100000_secure_rls.sql`.
+3. Vérifier que chaque utilisateur CRM existe dans **Authentication** ET dans `users` (rôle + statut Actif).
+4. Rebuild Electron / redeploy Vercel avec les variables `VITE_SUPABASE_*`.
+5. Tester login + sync + page Banque.

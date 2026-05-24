@@ -97,7 +97,7 @@ ALTER TABLE bank_transactions
 
 -- ---------------------------------------------------------------------------
 -- Row Level Security — CRM collections
--- Restrict anon/authenticated in production as needed.
+-- Politiques durcies : authenticated + utilisateur actif (voir migration RLS)
 -- ---------------------------------------------------------------------------
 
 ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
@@ -112,49 +112,8 @@ ALTER TABLE invoices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE backups ENABLE ROW LEVEL SECURITY;
 ALTER TABLE crm_logs ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "crm_full_access" ON settings;
-CREATE POLICY "crm_full_access" ON settings
-  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "crm_full_access" ON users;
-CREATE POLICY "crm_full_access" ON users
-  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "crm_full_access" ON clients;
-CREATE POLICY "crm_full_access" ON clients
-  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "crm_full_access" ON products;
-CREATE POLICY "crm_full_access" ON products
-  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "crm_full_access" ON categories;
-CREATE POLICY "crm_full_access" ON categories
-  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "crm_full_access" ON suppliers;
-CREATE POLICY "crm_full_access" ON suppliers
-  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "crm_full_access" ON expenses;
-CREATE POLICY "crm_full_access" ON expenses
-  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "crm_full_access" ON quotes;
-CREATE POLICY "crm_full_access" ON quotes
-  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "crm_full_access" ON invoices;
-CREATE POLICY "crm_full_access" ON invoices
-  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "crm_full_access" ON backups;
-CREATE POLICY "crm_full_access" ON backups
-  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "crm_full_access" ON crm_logs;
-CREATE POLICY "crm_full_access" ON crm_logs
-  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+-- Pour les politiques RLS sécurisées (production), exécuter ensuite :
+-- supabase/migrations/20260524100000_secure_rls.sql
 
 -- ---------------------------------------------------------------------------
 -- Row Level Security — bank_transactions
@@ -162,18 +121,5 @@ CREATE POLICY "crm_full_access" ON crm_logs
 
 ALTER TABLE bank_transactions ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "bank_transactions_select" ON bank_transactions;
-CREATE POLICY "bank_transactions_select" ON bank_transactions
-  FOR SELECT TO anon, authenticated USING (true);
-
-DROP POLICY IF EXISTS "bank_transactions_insert" ON bank_transactions;
-CREATE POLICY "bank_transactions_insert" ON bank_transactions
-  FOR INSERT TO anon, authenticated WITH CHECK (true);
-
-DROP POLICY IF EXISTS "bank_transactions_update" ON bank_transactions;
-CREATE POLICY "bank_transactions_update" ON bank_transactions
-  FOR UPDATE TO anon, authenticated USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "bank_transactions_delete" ON bank_transactions;
-CREATE POLICY "bank_transactions_delete" ON bank_transactions
-  FOR DELETE TO anon, authenticated USING (true);
+-- Pour les politiques RLS sécurisées (production), exécuter ensuite :
+-- supabase/migrations/20260524100000_secure_rls.sql

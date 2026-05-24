@@ -19,7 +19,13 @@ export async function getSupabase() {
   if (!clientPromise) {
     clientPromise = import("@supabase/supabase-js")
       .then(({ createClient }) => {
-        clientInstance = createClient(supabaseUrl, supabaseKey);
+        clientInstance = createClient(supabaseUrl, supabaseKey, {
+          auth: {
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: true,
+          },
+        });
         return clientInstance;
       })
       .catch((error) => {
@@ -29,4 +35,27 @@ export async function getSupabase() {
   }
 
   return clientPromise;
+}
+
+export async function getSupabaseAuthSession() {
+  const supabase = await getSupabase();
+  const {
+    data: { session },
+    error,
+  } = await supabase.auth.getSession();
+
+  if (error) {
+    throw error;
+  }
+
+  return session;
+}
+
+export async function hasSupabaseAuthSession() {
+  try {
+    const session = await getSupabaseAuthSession();
+    return Boolean(session?.user);
+  } catch {
+    return false;
+  }
 }

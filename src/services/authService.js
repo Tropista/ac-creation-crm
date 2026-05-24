@@ -1,10 +1,5 @@
 import { getPermissions } from "../utils/permissions";
 
-export const ADMIN_EMAILS = [
-  "ac.creation.officiel@gmail.com",
-  "dos.santos.alves.daniel@gmail.com",
-];
-
 export const SESSION_KEY = "crm_current_user_v2";
 export const SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 export const SESSION_EXPIRED_MESSAGE =
@@ -16,30 +11,25 @@ export function normalizeEmail(email) {
     .toLowerCase();
 }
 
-export function isAdminEmail(email) {
-  return ADMIN_EMAILS.map(normalizeEmail).includes(normalizeEmail(email));
+export function findUserByEmail(email, users = []) {
+  const normalizedEmail = normalizeEmail(email);
+  return (users || []).find(
+    (user) => normalizeEmail(user.email) === normalizedEmail
+  );
+}
+
+export function isAdminUser(email, users = []) {
+  const found = findUserByEmail(email, users);
+  return found?.role === "Admin" && found?.status !== "Désactivé";
 }
 
 export function isAllowedUser(email, users = []) {
-  const normalizedEmail = normalizeEmail(email);
-
-  return (
-    isAdminEmail(normalizedEmail) ||
-    (users || []).some(
-      (user) =>
-        normalizeEmail(user.email) === normalizedEmail &&
-        user.status !== "Désactivé"
-    )
-  );
+  const found = findUserByEmail(email, users);
+  return Boolean(found && found.status !== "Désactivé");
 }
 
 export function userRole(email, users = []) {
-  if (isAdminEmail(email)) return "Admin";
-
-  const found = (users || []).find(
-    (user) => normalizeEmail(user.email) === normalizeEmail(email)
-  );
-
+  const found = findUserByEmail(email, users);
   return found?.role || "Utilisateur";
 }
 
