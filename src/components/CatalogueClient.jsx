@@ -24,12 +24,20 @@ import {
   enrichCatalogColors,
 } from "../utils/colorNameToHex";
 import {
+  CATALOG_AUDIENCES,
+  CATALOG_AUDIENCE_ALL,
+  CATALOG_AUDIENCE_UNISEXE,
   CATALOG_CLIENT_FOLDERS,
   CATALOG_FOLDER_ALL,
   CATALOG_FOLDER_OTHER,
   countItemsByFolder,
+  resolveCatalogAudience,
   resolveCatalogFolder,
 } from "../utils/catalogCategoryFolders";
+import {
+  filterProductsByAudience,
+  filterProductsByFolder,
+} from "../utils/clientCatalogBrowse";
 import "../styles/client-catalog.css";
 
 function statusLabel(status) {
@@ -46,6 +54,7 @@ export default function CatalogueClient({ data, setData, logActivity }) {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [folderFilter, setFolderFilter] = useState(CATALOG_FOLDER_ALL);
+  const [audienceFilter, setAudienceFilter] = useState(CATALOG_AUDIENCE_ALL);
   const [sortBy, setSortBy] = useState("name-asc");
   const [priceMin, setPriceMin] = useState("");
   const [priceMax, setPriceMax] = useState("");
@@ -67,24 +76,35 @@ export default function CatalogueClient({ data, setData, logActivity }) {
 
   const folderCounts = useMemo(() => countItemsByFolder(catalogItems), [catalogItems]);
 
+  const folderScopedItems = useMemo(
+    () => filterProductsByFolder(catalogItems, folderFilter, resolveCatalogFolder),
+    [catalogItems, folderFilter]
+  );
+
   const filteredCatalogItems = useMemo(() => {
     const query = search.trim().toLowerCase();
     const minPrice = priceMin === "" ? null : Number(priceMin);
     const maxPrice = priceMax === "" ? null : Number(priceMax);
 
-    const filtered = catalogItems.filter((item) => {
+    const byAudience = filterProductsByAudience(
+      folderScopedItems,
+      audienceFilter,
+      resolveCatalogAudience
+    );
+
+    const filtered = byAudience.filter((item) => {
       const price = Number(item.price || 0);
       const itemFolder = resolveCatalogFolder(item);
+      const itemAudience = resolveCatalogAudience(item);
       const matchesSearch =
         !query ||
-        [item.name, item.sku, item.category, item.brand, item.description, itemFolder]
+        [item.name, item.sku, item.category, item.brand, item.description, itemFolder, itemAudience]
           .join(" ")
           .toLowerCase()
           .includes(query);
-      const matchesFolder = !folderFilter || itemFolder === folderFilter;
       const matchesPriceMin = minPrice === null || price >= minPrice;
       const matchesPriceMax = maxPrice === null || price <= maxPrice;
-      return matchesSearch && matchesFolder && matchesPriceMin && matchesPriceMax;
+      return matchesSearch && matchesPriceMin && matchesPriceMax;
     });
 
     return filtered.sort((a, b) => {
@@ -106,7 +126,7 @@ export default function CatalogueClient({ data, setData, logActivity }) {
           return String(a.name || "").localeCompare(String(b.name || ""), "fr");
       }
     });
-  }, [catalogItems, search, folderFilter, sortBy, priceMin, priceMax]);
+  }, [folderScopedItems, audienceFilter, search, sortBy, priceMin, priceMax]);
 
   const activeSelectedItem = useMemo(() => {
     if (!selectedItem) return null;
@@ -139,6 +159,7 @@ export default function CatalogueClient({ data, setData, logActivity }) {
   function resetCatalogFilters() {
     setSearch("");
     setFolderFilter(CATALOG_FOLDER_ALL);
+    setAudienceFilter(CATALOG_AUDIENCE_ALL);
     setSortBy("name-asc");
     setPriceMin("");
     setPriceMax("");
@@ -621,6 +642,30 @@ export default function CatalogueClient({ data, setData, logActivity }) {
         </div>
 
         <div className="filters-bottom-row">
+          <div className="catalog-audience-filter-row" aria-label="Public cible">
+            <span className="catalog-audience-filter-label">Public :</span>
+            <button
+              type="button"
+              className={`catalog-audience-btn ${audienceFilter === CATALOG_AUDIENCE_ALL ? "is-active" : ""}`}
+              onClick={() => setAudienceFilter(CATALOG_AUDIENCE_ALL)}
+            >
+              Tous
+              <span className="catalog-audience-count">{folderScopedItems.length}</span>
+            </button>
+            {CATALOG_AUDIENCES.map((audience) => (
+              <button
+                key={audience}
+                type="button"
+                className={`catalog-audience-btn ${audienceFilter === audience ? "is-active" : ""}`}
+                onClick={() => setAudienceFilter(audience)}
+              >
+                {audience}
+                <span className="catalog-audience-count">
+                  {filterProductsByAudience(folderScopedItems, audience, resolveCatalogAudience).length}
+                </span>
+              </button>
+            ))}
+          </div>
           <button type="button" className="filters-reset-button" onClick={resetCatalogFilters}>
             ↺ Réinitialiser
           </button>
@@ -711,6 +756,7 @@ export default function CatalogueClient({ data, setData, logActivity }) {
               <div className="product-premium-grid">
                 {filteredCatalogItems.map((item) => {
                   const itemFolder = resolveCatalogFolder(item);
+                  const itemAudience = resolveCatalogAudience(item);
                   return (
                   <article
                     key={item.id}
@@ -745,6 +791,9 @@ export default function CatalogueClient({ data, setData, logActivity }) {
                     <div className="product-tags-row">
                       <span>SKU : {item.sku || "Sans SKU"}</span>
                       <span>{itemFolder}</span>
+                      {itemAudience !== CATALOG_AUDIENCE_UNISEXE ? (
+                        <span className="catalog-audience-badge">{itemAudience}</span>
+                      ) : null}
                     </div>
 
                     {item.brand ? (
@@ -786,6 +835,9 @@ export default function CatalogueClient({ data, setData, logActivity }) {
                       <h2>{activeSelectedItem.name}</h2>
                       <span>
                         {resolveCatalogFolder(activeSelectedItem)}
+                        {resolveCatalogAudience(activeSelectedItem) !== CATALOG_AUDIENCE_UNISEXE
+                          ? ` · ${resolveCatalogAudience(activeSelectedItem)}`
+                          : ""}
                         {activeSelectedItem.sku ? ` · SKU ${activeSelectedItem.sku}` : ""}
                       </span>
                     </div>

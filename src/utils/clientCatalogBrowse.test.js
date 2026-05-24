@@ -2,18 +2,19 @@ import { describe, expect, it } from "vitest";
 import {
   buildPageNumbers,
   CLIENT_CATALOG_PAGE_SIZE,
+  filterProductsByAudience,
   filterProductsByFolder,
   getTotalPages,
   paginateItems,
 } from "./clientCatalogBrowse.js";
-import { resolveCatalogFolder } from "./catalogCategoryFolders.js";
+import { resolveCatalogAudience, resolveCatalogFolder } from "./catalogCategoryFolders.js";
 
 describe("clientCatalogBrowse", () => {
   const products = [
-    { id: "1", category: "Tee-shirts", name: "Tee A" },
-    { id: "2", category: "Polos", name: "Polo B" },
+    { id: "1", category: "Tee-shirts", name: "Tee A Homme" },
+    { id: "2", category: "Polos", name: "Polo B Femme" },
     { id: "3", category: "Polos", name: "Polo C" },
-    { id: "4", category: "Sweats", name: "Sweat D" },
+    { id: "4", category: "Sweats", name: "Sweat Enfant D" },
   ];
 
   it("filterProductsByFolder returns all when filter is empty", () => {
@@ -24,6 +25,18 @@ describe("clientCatalogBrowse", () => {
     const polos = filterProductsByFolder(products, "Polos", resolveCatalogFolder);
     expect(polos).toHaveLength(2);
     expect(polos.map((item) => item.id)).toEqual(["2", "3"]);
+  });
+
+  it("filterProductsByAudience filters by resolved audience", () => {
+    const hommes = filterProductsByAudience(products, "Homme", resolveCatalogAudience);
+    expect(hommes.map((item) => item.id)).toEqual(["1", "3"]);
+
+    const enfants = filterProductsByAudience(products, "Enfant", resolveCatalogAudience);
+    expect(enfants.map((item) => item.id)).toEqual(["4"]);
+  });
+
+  it("filterProductsByAudience returns all when filter is empty", () => {
+    expect(filterProductsByAudience(products, "", resolveCatalogAudience)).toHaveLength(4);
   });
 
   it("paginateItems returns 15 items per page", () => {

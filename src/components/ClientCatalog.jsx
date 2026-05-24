@@ -22,16 +22,21 @@ import {
   resolveCatalogColorLabel,
 } from "../utils/colorNameToHex";
 import {
+  CATALOG_AUDIENCES,
+  CATALOG_AUDIENCE_ALL,
+  CATALOG_AUDIENCE_UNISEXE,
   CATALOG_CLIENT_FOLDERS,
   CATALOG_FOLDER_ALL,
   CATALOG_FOLDER_OTHER,
   countItemsByFolder,
+  resolveCatalogAudience,
   resolveCatalogFolder,
 } from "../utils/catalogCategoryFolders";
 import {
+  filterProductsByAudience,
+  filterProductsByFolder,
   buildPageNumbers,
   CLIENT_CATALOG_PAGE_SIZE,
-  filterProductsByFolder,
   getTotalPages,
   paginateItems,
 } from "../utils/clientCatalogBrowse";
@@ -261,6 +266,7 @@ export default function ClientCatalog() {
   const [showCartDrawer, setShowCartDrawer] = useState(false);
   const [ficheText, setFicheText] = useState("");
   const [folderFilter, setFolderFilter] = useState(CATALOG_FOLDER_ALL);
+  const [audienceFilter, setAudienceFilter] = useState(CATALOG_AUDIENCE_ALL);
   const [currentPage, setCurrentPage] = useState(1);
   const [contact, setContact] = useState({
     clientName: "",
@@ -342,7 +348,7 @@ export default function ClientCatalog() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [folderFilter]);
+  }, [folderFilter, audienceFilter]);
 
   useEffect(() => {
     if (!showCartDrawer) return undefined;
@@ -362,10 +368,15 @@ export default function ClientCatalog() {
 
   const folderCounts = useMemo(() => countItemsByFolder(products), [products]);
 
-  const filteredProducts = useMemo(
+  const folderScopedProducts = useMemo(
     () => filterProductsByFolder(products, folderFilter, resolveCatalogFolder),
     [products, folderFilter]
   );
+
+  const filteredProducts = useMemo(() => {
+    const byFolder = filterProductsByFolder(products, folderFilter, resolveCatalogFolder);
+    return filterProductsByAudience(byFolder, audienceFilter, resolveCatalogAudience);
+  }, [products, folderFilter, audienceFilter]);
 
   const totalPages = useMemo(
     () => getTotalPages(filteredProducts.length, CLIENT_CATALOG_PAGE_SIZE),
@@ -536,6 +547,7 @@ export default function ClientCatalog() {
       : "";
     const displayImage = resolveProductDisplayImage(product, draft.color);
     const itemFolder = resolveCatalogFolder(product);
+    const itemAudience = resolveCatalogAudience(product);
 
     return (
       <article key={product.id} className="client-catalog-card">
@@ -545,6 +557,9 @@ export default function ClientCatalog() {
           ) : (
             <div className="catalog-import-placeholder">Sans image</div>
           )}
+          {itemAudience !== CATALOG_AUDIENCE_UNISEXE ? (
+            <span className="client-catalog-audience-badge">{itemAudience}</span>
+          ) : null}
         </div>
         <div className="client-catalog-card-body">
           <h3>{product.name}</h3>
@@ -643,6 +658,42 @@ export default function ClientCatalog() {
               </span>
             </button>
           ) : null}
+        </div>
+      </nav>
+    );
+  }
+
+  function renderAudienceNav() {
+    const scopedCount = folderScopedProducts.length;
+
+    return (
+      <nav className="client-catalog-audience-nav" aria-label="Public cible">
+        <div className="client-catalog-audience-nav-header">
+          <strong>Public</strong>
+          <span>{scopedCount} article(s)</span>
+        </div>
+        <div className="client-catalog-audience-nav-list">
+          <button
+            type="button"
+            className={`client-catalog-audience-btn ${audienceFilter === CATALOG_AUDIENCE_ALL ? "is-active" : ""}`}
+            onClick={() => setAudienceFilter(CATALOG_AUDIENCE_ALL)}
+          >
+            <span>Tous</span>
+            <span className="client-catalog-audience-count">{scopedCount}</span>
+          </button>
+          {CATALOG_AUDIENCES.map((audience) => (
+            <button
+              key={audience}
+              type="button"
+              className={`client-catalog-audience-btn ${audienceFilter === audience ? "is-active" : ""}`}
+              onClick={() => setAudienceFilter(audience)}
+            >
+              <span>{audience}</span>
+              <span className="client-catalog-audience-count">
+                {filterProductsByAudience(folderScopedProducts, audience, resolveCatalogAudience).length}
+              </span>
+            </button>
+          ))}
         </div>
       </nav>
     );
@@ -751,11 +802,12 @@ export default function ClientCatalog() {
             <div className="client-catalog-layout">
               <div className="client-catalog-main">
                 {renderFolderNav()}
+                {renderAudienceNav()}
 
                 {filteredProducts.length === 0 ? (
                   <div className="client-catalog-empty-folder card">
                     <strong>Aucun article dans cette catégorie</strong>
-                    <span>Essayez une autre catégorie ou « Tous ».</span>
+                    <span>Essayez une autre catégorie, un autre public ou « Tous ».</span>
                   </div>
                 ) : (
                   <>

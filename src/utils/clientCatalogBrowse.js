@@ -13,6 +13,27 @@ export function filterProductsByFolder(products, folderFilter, resolveFolder) {
 }
 
 /**
+ * Filtre les produits par audience catalogue.
+ * @param {Array} products
+ * @param {string} audienceFilter — vide = tous
+ * @param {(item: object) => string} resolveAudience
+ */
+export function filterProductsByAudience(products, audienceFilter, resolveAudience) {
+  if (!audienceFilter) return products;
+  return products.filter((product) => {
+    const audience = resolveAudience(product);
+    if (audience === audienceFilter) return true;
+    if (
+      audience === "Unisexe" &&
+      (audienceFilter === "Homme" || audienceFilter === "Femme")
+    ) {
+      return true;
+    }
+    return false;
+  });
+}
+
+/**
  * Découpe une liste pour la pagination (page 1-based).
  */
 export function paginateItems(items, page, pageSize = CLIENT_CATALOG_PAGE_SIZE) {
