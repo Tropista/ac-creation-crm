@@ -50,7 +50,7 @@ export async function fetchPublicCatalogSelection(shareId) {
     if (cached) return cached;
     const local = findLocalCatalogSelection(shareId);
     if (local) {
-      savePublicCatalogCache(local);
+      savePublicCatalogCache(local, { omitSnapshots: false });
       return local;
     }
     throw new Error(
@@ -69,7 +69,7 @@ export async function fetchPublicCatalogSelection(shareId) {
     if (error) throw normalizePublicError(error);
     const selection = rowToSelection(data);
     if (selection) {
-      savePublicCatalogCache(selection);
+      savePublicCatalogCache(selection, { omitSnapshots: true });
       return selection;
     }
     return cached;
@@ -161,7 +161,7 @@ export async function submitPublicCatalogSelection(shareId, submission) {
     updatedAt: new Date().toISOString(),
   };
 
-  savePublicCatalogCache(nextSelection);
+  savePublicCatalogCache(nextSelection, { omitSnapshots: isSupabaseConfigured });
 
   if (!isSupabaseConfigured) {
     patchLocalCatalogSelection(nextSelection);
@@ -186,17 +186,17 @@ export async function submitPublicCatalogSelection(shareId, submission) {
 }
 
 export async function upsertCatalogSelection(selection) {
-  savePublicCatalogCache(selection);
+  if (isSupabaseConfigured) {
+    const supabase = await getSupabase();
+    const { error } = await supabase.from("catalog_selections").upsert({
+      id: selection.id,
+      data: selection,
+    });
 
-  if (!isSupabaseConfigured) return;
+    if (error) throw normalizePublicError(error);
+  }
 
-  const supabase = await getSupabase();
-  const { error } = await supabase.from("catalog_selections").upsert({
-    id: selection.id,
-    data: selection,
-  });
-
-  if (error) throw normalizePublicError(error);
+  return savePublicCatalogCache(selection, { omitSnapshots: isSupabaseConfigured });
 }
 
 export async function deleteCatalogSelection(shareId) {

@@ -463,12 +463,21 @@ export default function CatalogueClient({ data, setData, logActivity }) {
     try {
       const nextSelections = [selection, ...selections];
       setData({ ...data, catalogSelections: nextSelections });
-      await upsertCatalogSelection(selection);
+      const cacheResult = await upsertCatalogSelection(selection);
       await copyLink(selection);
       logActivity?.("Création sélection catalogue client", selection.title, selection.id);
       setSelectedItemIds([]);
       setSelectionForm({ title: "", clientName: "", message: "" });
-      showToast("Sélection créée — lien copié.", "success");
+      if (cacheResult?.ok === false) {
+        showToast(
+          isSupabaseConfigured
+            ? "Sélection créée en ligne. Espace local insuffisant — le lien public fonctionne quand même."
+            : "Sélection enregistrée, mais le cache local est plein. Videz les données du site si le lien ne s'ouvre pas sur cet appareil.",
+          "warning"
+        );
+      } else {
+        showToast("Sélection créée — lien copié.", "success");
+      }
     } catch (error) {
       showToast(error.message || "Création impossible.", "error");
     } finally {

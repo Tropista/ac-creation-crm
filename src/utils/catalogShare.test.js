@@ -1,13 +1,38 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import {
   buildCatalogMailtoUrl,
   buildCatalogProductSheet,
   buildProductSnapshots,
+  compactSelectionForPublicCache,
   createCatalogSelectionPayload,
+  pruneOldPublicCatalogCaches,
+  PUBLIC_CATALOG_CACHE_PREFIX,
   resolveCatalogRecipientEmail,
   resolveProductMinQuantity,
   resolveProductSizeOptions,
+  sanitizeImageUrlForCache,
+  savePublicCatalogCache,
 } from "./catalogShare";
+
+function createStorage() {
+  const store = new Map();
+  return {
+    get length() {
+      return store.size;
+    },
+    key: (index) => Array.from(store.keys())[index] ?? null,
+    getItem: (key) => (store.has(key) ? store.get(key) : null),
+    setItem: (key, value) => {
+      store.set(key, String(value));
+    },
+    removeItem: (key) => {
+      store.delete(key);
+    },
+    clear: () => {
+      store.clear();
+    },
+  };
+}
 
 describe("catalogShare product sheet", () => {
   const product = {
@@ -25,6 +50,115 @@ describe("catalogShare product sheet", () => {
     const [snapshot] = buildProductSnapshots([product]);
     expect(snapshot.sizes).toEqual(["S", "M", "L"]);
     expect(snapshot.minOrderQty).toBe(10);
+  });
+
+  it("strips base64 images and color image urls from snapshots", () => {
+    const [snapshot] = buildProductSnapshots([
+      {
+        ...product,
+        imageUrl: "data:image/jpeg;base64,abc123",
+        colors: [{ name: "Noir", hex: "#000", imageUrl: "https://example.com/swatch.jpg" }],
+      },
+    ]);
+
+    expect(snapshot.imageUrl).toBe("");
+    expect(snapshot.colors).toEqual([{ name: "Noir", hex: "#000" }]);
+  });
+
+  it("compacts public cache without snapshots when requested", () => {
+    const selection = {
+      id: "abc123",
+      productIds: ["p1"],
+      productSnapshots: [{ id: "p1", imageUrl: "https://example.com/a.jpg" }],
+      title: "Test",
+    };
+
+    expect(compactSelectionForPublicCache(selection, { omitSnapshots: true })).toEqual({
+      id: "abc123",
+      productIds: ["p1"],
+      title: "Test",
+    });
+  });
+
+  it("sanitizes data urls for cache storage", () => {
+    expect(sanitizeImageUrlForCache("data:image/png;base64,xyz")).toBe("");
+    expect(sanitizeImageUrlForCache("https://example.com/img.jpg")).toBe(
+      "https://example.com/img.jpg"
+    );
+  });
+
+  describe("savePublicCatalogCache", () => {
+    beforeEach(() => {
+      vi.stubGlobal("localStorage", createStorage());
+      vi.stubGlobal("window", {});
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it("stores compact selection and prunes older caches", () => {
+      for (let index = 0; index < 12; index += 1) {
+        localStorage.setItem(
+          `${PUBLIC_CATALOG_CACHE_PREFIX}old-${index}`,
+          JSON.stringify({
+            id: `old-${index}`,
+            updatedAt: `2026-01-${String(index + 1).padStart(2, "0")}T00:00:00.000Z`,
+          })
+        );
+      }
+
+      const selection = createCatalogSelectionPayload({
+        title: "Nouvelle sélection",
+        products: [product],
+      });
+
+      const result = savePublicCatalogCache(selection);
+      expect(result.ok).toBe(true);
+
+      let remaining = 0;
+      for (let index = 0; index < localStorage.length; index += 1) {
+        const key = localStorage.key(index);
+        if (key?.startsWith(PUBLIC_CATALOG_CACHE_PREFIX)) remaining += 1;
+      }
+      expect(remaining).toBeLessThanOrEqual(8);
+      expect(localStorage.getItem(`${PUBLIC_CATALOG_CACHE_PREFIX}${selection.id}`)).toBeTruthy();
+    });
+
+    it("falls back to metadata-only cache when quota is exceeded", () => {
+      const backing = new Map();
+      let calls = 0;
+      const storage = {
+        get length() {
+          return backing.size;
+        },
+        key: (index) => Array.from(backing.keys())[index] ?? null,
+        getItem: (key) => (backing.has(key) ? backing.get(key) : null),
+        setItem: (key, value) => {
+          calls += 1;
+          if (calls === 1) {
+            throw new DOMException("quota", "QuotaExceededError");
+          }
+          backing.set(key, String(value));
+        },
+        removeItem: (key) => {
+          backing.delete(key);
+        },
+        clear: () => {
+          backing.clear();
+        },
+      };
+      vi.stubGlobal("localStorage", storage);
+
+      const selection = createCatalogSelectionPayload({
+        title: "Fallback",
+        products: [product],
+      });
+
+      const result = savePublicCatalogCache(selection);
+      expect(result.ok).toBe(true);
+      expect(result.minimized).toBe(true);
+    });
   });
 
   it("resolves size options from product or defaults", () => {

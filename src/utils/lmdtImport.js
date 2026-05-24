@@ -93,7 +93,8 @@ function refreshSelectionSnapshots(data, updatedItems = []) {
       const fresh = updatedById.get(snapshot.id);
       if (!fresh?.imageUrl || fresh.imageUrl === snapshot.imageUrl) return snapshot;
       selectionChanged = true;
-      return { ...snapshot, imageUrl: fresh.imageUrl };
+      const imageUrl = String(fresh.imageUrl || "").startsWith("data:image/") ? "" : fresh.imageUrl;
+      return { ...snapshot, imageUrl };
     });
 
     if (!selectionChanged) return selection;
