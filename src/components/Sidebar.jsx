@@ -20,6 +20,7 @@ import {
   LogOut,
   Menu,
   Receipt,
+  RefreshCw,
   ScanLine,
   Settings,
   Shield,
@@ -34,6 +35,7 @@ import {
 import { APP_LOGO_URL } from "../utils/assets";
 import { APP_VERSION } from "../utils/appVersion";
 import { pageToPath } from "../utils/routes";
+import { formatLastSyncRelative } from "../services/syncMerge";
 
 const SECTIONS_STORAGE_KEY = "crm_sidebar_sections_v1";
 
@@ -136,12 +138,19 @@ export default function Sidebar({
   currentUser,
   currentRole,
   syncStatus,
+  lastSyncAt = 0,
+  cloudAvailable = false,
+  resyncing = false,
+  onResync,
   permissions,
   logout,
 }) {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [sectionState, setSectionState] = useState(loadSectionState);
+  const [syncTimeLabel, setSyncTimeLabel] = useState(() =>
+    formatLastSyncRelative(lastSyncAt)
+  );
 
   function canShow(item) {
     if (item.type === "page") {
@@ -171,6 +180,14 @@ export default function Sidebar({
     document.body.classList.toggle("sidebar-drawer-open", mobileOpen);
     return () => document.body.classList.remove("sidebar-drawer-open");
   }, [mobileOpen]);
+
+  useEffect(() => {
+    setSyncTimeLabel(formatLastSyncRelative(lastSyncAt));
+    const interval = setInterval(() => {
+      setSyncTimeLabel(formatLastSyncRelative(lastSyncAt));
+    }, 30_000);
+    return () => clearInterval(interval);
+  }, [lastSyncAt]);
 
   const visibleGroups = menuGroups
     .map((group) => ({
@@ -224,8 +241,34 @@ export default function Sidebar({
         </div>
 
         <div className="sidebar-sync">
-          <Cloud size={16} aria-hidden="true" />
-          <span>{syncStatus}</span>
+          <div className="sidebar-sync__info">
+            <Cloud size={16} aria-hidden="true" />
+            <div className="sidebar-sync__text">
+              <span className="sidebar-sync__status">{syncStatus}</span>
+              <span className="sidebar-sync__time">{syncTimeLabel}</span>
+            </div>
+          </div>
+          {onResync ? (
+            <button
+              type="button"
+              className="sidebar-sync__btn"
+              onClick={onResync}
+              disabled={!cloudAvailable || resyncing}
+              aria-busy={resyncing}
+              title={
+                cloudAvailable
+                  ? "Télécharger et fusionner les données cloud"
+                  : "Cloud indisponible — resynchronisation impossible"
+              }
+            >
+              <RefreshCw
+                size={14}
+                aria-hidden="true"
+                className={resyncing ? "sidebar-sync__spin" : ""}
+              />
+              {resyncing ? "Synchronisation…" : "Resynchroniser"}
+            </button>
+          ) : null}
         </div>
 
         <div className="sidebar-body">

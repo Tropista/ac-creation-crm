@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   LAST_SYNC_AT_KEY,
+  formatLastSyncRelative,
+  formatSyncConflictMessage,
   getLastSyncAt,
   mergeCloudWithLocal,
   mergeCollection,
@@ -121,6 +123,25 @@ describe("syncMerge", () => {
   it("setLastSyncAt persiste dans localStorage", () => {
     setLastSyncAt(1234567890);
     expect(localStorage.getItem(LAST_SYNC_AT_KEY)).toBe("1234567890");
+  });
+
+  it("formatLastSyncRelative affiche le délai en français", () => {
+    const now = Date.parse("2026-05-24T12:00:00.000Z");
+    expect(formatLastSyncRelative(0, now)).toBe("Dernière sync : jamais");
+    expect(formatLastSyncRelative(now - 30_000, now)).toBe("Dernière sync : à l'instant");
+    expect(formatLastSyncRelative(now - 5 * 60_000, now)).toBe("Dernière sync : il y a 5 min");
+    expect(formatLastSyncRelative(now - 3 * 60 * 60_000, now)).toBe("Dernière sync : il y a 3 h");
+  });
+
+  it("formatSyncConflictMessage inclut la référence document", () => {
+    const message = formatSyncConflictMessage({
+      entityLabel: "invoices",
+      local: { id: "inv-1", number: "FAC-2026-042" },
+    });
+
+    expect(message).toContain("FAC-2026-042");
+    expect(message).toContain("facture");
+    expect(message).toContain("Resynchroniser");
   });
 
   it("resolveCloudInitError conserve le statut sync si le cloud a déjà réussi", () => {

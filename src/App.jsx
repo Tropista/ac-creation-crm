@@ -73,6 +73,8 @@ import {
   logActivity
 } from "./services/logService";
 import {
+  formatSyncConflictMessage,
+  getLastSyncAt,
   mergeCloudWithLocal,
   resolveCloudInitError,
   setLastSyncAt,
@@ -229,6 +231,8 @@ function CrmApp() {
   const [loading, setLoading] = useState(true);
   const [cloudAvailable, setCloudAvailable] = useState(false);
   const [syncStatus, setSyncStatus] = useState(SYNC_STATUS.CONNECTING);
+  const [lastSyncAt, setLastSyncAtState] = useState(() => getLastSyncAt());
+  const [resyncing, setResyncing] = useState(false);
   const autoBackupStarted = useRef(false);
   const cloudInitPromise = useRef(null);
   const cloudSyncSucceeded = useRef(false);
@@ -326,10 +330,32 @@ function CrmApp() {
   }, []);
 
   useEffect(() => {
-    if (page === "invoices") {
+    if (page === "invoices" || page === "quotes" || page === "atelier") {
       initializeCloudData({ silent: true });
     }
   }, [page]);
+
+  function markSyncSuccess(timestamp = Date.now()) {
+    setLastSyncAt(timestamp);
+    setLastSyncAtState(timestamp);
+  }
+
+  async function resyncFromCloud() {
+    if (resyncing) return;
+
+    setResyncing(true);
+    cloudInitPromise.current = null;
+
+    try {
+      await initializeCloudData({ silent: false });
+      showToast("Resynchronisation terminée", "success");
+    } catch (error) {
+      console.error("Échec resynchronisation :", error);
+    } finally {
+      setResyncing(false);
+      setLastSyncAtState(getLastSyncAt());
+    }
+  }
 
   async function initializeCloudData({ silent = false } = {}) {
     if (cloudInitPromise.current) {
@@ -367,23 +393,18 @@ function CrmApp() {
         });
 
         if (cloud.hasCloudData) {
-          const conflictLabels = {
-            clients: "client",
-            quotes: "devis",
-            invoices: "facture",
-            settings: "paramètres",
-          };
           let conflictCount = 0;
 
           const freshLocal = normalizeData(loadData());
           const mergedRaw = mergeCloudWithLocal(freshLocal, cloud.data, {
-            onConflict: ({ entityLabel }) => {
+            onConflict: (payload) => {
               conflictCount += 1;
-              const label = conflictLabels[entityLabel] || entityLabel;
-              showToast(
-                `Conflit détecté — version locale conservée (${label})`,
-                "warning"
-              );
+              const message = formatSyncConflictMessage(payload);
+              if (silent) {
+                console.warn("[Sync]", message);
+              } else {
+                showToast(message, "warning");
+              }
             },
           });
 
@@ -394,17 +415,20 @@ function CrmApp() {
           saveData(prepared);
           flushSaveData();
 
-          setLastSyncAt();
+          markSyncSuccess();
           cloudSyncSucceeded.current = true;
           setSyncStatus(SYNC_STATUS.SYNCED);
           if (!silent && conflictCount) {
-            showToast("Données fusionnées — conflits résolus localement", "info");
+            showToast(
+              `${conflictCount} conflit(s) — versions locales conservées. Vérifiez vos données ou resynchronisez.`,
+              "info"
+            );
           }
         } else if (hasLocalBusinessData(localData)) {
           const prepared = prepareAppData(localData);
           await syncSupabaseData(prepared, emptyData);
           setData(prepared);
-          setLastSyncAt();
+          markSyncSuccess();
           cloudSyncSucceeded.current = true;
           setSyncStatus(SYNC_STATUS.LOCAL_PUSHED);
           saveData(prepared);
@@ -418,7 +442,7 @@ function CrmApp() {
           setData(prepared);
           saveData(prepared);
           flushSaveData();
-          setLastSyncAt();
+          markSyncSuccess();
           cloudSyncSucceeded.current = true;
           setSyncStatus(SYNC_STATUS.READY);
         }
@@ -476,7 +500,7 @@ function CrmApp() {
           setSyncStatus(SYNC_STATUS.SAVING);
           const { syncSupabaseData } = await loadSupabaseSyncModule();
           await syncSupabaseData(normalized, previous);
-          setLastSyncAt();
+          markSyncSuccess();
           cloudSyncSucceeded.current = true;
           cloudSaved = true;
           setCloudAvailable(true);
@@ -622,6 +646,10 @@ function CrmApp() {
         currentUser={currentUser}
         currentRole={currentRole}
         syncStatus={syncStatus}
+        lastSyncAt={lastSyncAt}
+        cloudAvailable={cloudAvailable}
+        resyncing={resyncing}
+        onResync={resyncFromCloud}
         permissions={permissions}
         logout={logout}
       />

@@ -67,6 +67,58 @@ export function setLastSyncAt(timestamp = Date.now()) {
   localStorage.setItem(LAST_SYNC_AT_KEY, String(timestamp));
 }
 
+export function formatLastSyncRelative(timestamp = getLastSyncAt(), now = Date.now()) {
+  if (!timestamp || timestamp <= 0) {
+    return "Dernière sync : jamais";
+  }
+
+  const diffMs = Math.max(0, now - timestamp);
+  const diffSec = Math.floor(diffMs / 1000);
+
+  if (diffSec < 60) {
+    return "Dernière sync : à l'instant";
+  }
+
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) {
+    return `Dernière sync : il y a ${diffMin} min`;
+  }
+
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) {
+    return `Dernière sync : il y a ${diffHours} h`;
+  }
+
+  const diffDays = Math.floor(diffHours / 24);
+  return `Dernière sync : il y a ${diffDays} j`;
+}
+
+const CONFLICT_ENTITY_LABELS = {
+  clients: "client",
+  quotes: "devis",
+  invoices: "facture",
+  settings: "paramètres",
+};
+
+export function formatSyncConflictMessage({ entityLabel, local } = {}) {
+  const typeLabel = CONFLICT_ENTITY_LABELS[entityLabel] || entityLabel || "donnée";
+  let reference = "";
+
+  if (entityLabel === "clients") {
+    reference = local?.name || local?.companyName || local?.id || "";
+  } else if (entityLabel === "quotes" || entityLabel === "invoices") {
+    reference = local?.number || local?.id || "";
+  } else if (entityLabel === "settings") {
+    reference = local?.companyName || "paramètres";
+  }
+
+  const referencePart = reference ? ` (${reference})` : "";
+  return (
+    `Conflit cloud/local — version locale conservée${referencePart} (${typeLabel}). ` +
+    "Utilisez « Resynchroniser » si besoin."
+  );
+}
+
 export function parseUpdatedAt(item) {
   const raw = item?.updatedAt;
   if (!raw) return 0;
