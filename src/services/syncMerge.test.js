@@ -134,6 +134,35 @@ describe("syncMerge", () => {
     expect(merged.supplierCatalogItems).toHaveLength(60);
   });
 
+  it("mergeCloudWithLocal préfère le cloud si le catalogue local est vide", () => {
+    const cloudItems = Array.from({ length: 962 }, (_, index) => ({
+      id: `c${index}`,
+      name: `Client ${index}`,
+    }));
+
+    const merged = mergeCloudWithLocal(
+      { clientCatalogItems: [] },
+      { clientCatalogItems: cloudItems }
+    );
+
+    expect(merged.clientCatalogItems).toHaveLength(962);
+  });
+
+  it("mergeCloudWithLocal préfère le cloud volumineux si le local est quasi vide", () => {
+    const localItems = [{ id: "local-1", name: "Local seul" }];
+    const cloudItems = Array.from({ length: 60 }, (_, index) => ({
+      id: `cloud-${index}`,
+      name: `Cloud ${index}`,
+    }));
+
+    const merged = mergeCloudWithLocal(
+      { supplierCatalogItems: localItems },
+      { supplierCatalogItems: cloudItems }
+    );
+
+    expect(merged.supplierCatalogItems).toHaveLength(60);
+  });
+
   it("setLastSyncAt persiste dans localStorage", () => {
     setLastSyncAt(1234567890);
     expect(localStorage.getItem(LAST_SYNC_AT_KEY)).toBe("1234567890");
@@ -151,5 +180,12 @@ describe("syncMerge", () => {
     expect(outcome.cloudAvailable).toBe(false);
     expect(outcome.syncStatus).toBe(SYNC_STATUS.LOCAL_UNAVAILABLE);
     expect(outcome.toast?.message).toContain("Sync cloud indisponible");
+  });
+
+  it("resolveCloudInitError marque récupéré si le catalogue cloud a été restauré", () => {
+    const outcome = resolveCloudInitError({ catalogRecovered: true });
+    expect(outcome.cloudAvailable).toBe(true);
+    expect(outcome.syncStatus).toBe(SYNC_STATUS.SYNCED);
+    expect(outcome.toast?.message).toContain("Catalogue récupéré");
   });
 });

@@ -418,21 +418,75 @@ function CrmApp() {
             showToast("Données locales synchronisées vers Supabase", "success");
           }
         } else {
-          const { data: prepared } = prepareAppData(emptyData, { notify: !silent });
-          await syncSupabaseData(prepared, emptyData);
-          setData(prepared);
-          saveData(prepared);
-          flushSaveData();
-          setLastSyncAt();
-          cloudSyncSucceeded.current = true;
-          setSyncStatus(SYNC_STATUS.READY);
+          const { loadSupabaseCatalogRecovery } = await loadSupabaseSyncModule();
+          const recovery = await loadSupabaseCatalogRecovery();
+
+          if (recovery.hasCatalogData) {
+            const mergedRaw = mergeCloudWithLocal(localData, {
+              supplierCatalogItems: recovery.supplierCatalogItems,
+              clientCatalogItems: recovery.clientCatalogItems,
+              catalogSelections: recovery.catalogSelections,
+            });
+            const { data: prepared } = prepareAppData(mergedRaw, { notify: !silent });
+            setData(prepared);
+            saveData(prepared);
+            flushSaveData();
+            await syncSupabaseData(prepared, emptyData);
+            setLastSyncAt();
+            cloudSyncSucceeded.current = true;
+            setSyncStatus(SYNC_STATUS.SYNCED);
+            if (!silent) {
+              showToast(
+                `Catalogue récupéré depuis Supabase — ${(prepared.clientCatalogItems || []).length} article(s) client`,
+                "success"
+              );
+            }
+          } else {
+            const { data: prepared } = prepareAppData(emptyData, { notify: !silent });
+            await syncSupabaseData(prepared, emptyData);
+            setData(prepared);
+            saveData(prepared);
+            flushSaveData();
+            setLastSyncAt();
+            cloudSyncSucceeded.current = true;
+            setSyncStatus(SYNC_STATUS.READY);
+          }
         }
 
         setCloudAvailable(true);
       } catch (error) {
         console.error(error);
+        let catalogRecovered = false;
+        let recoveredData = normalizeData(loadData());
+
+        if (isSupabaseConfigured) {
+          try {
+            const { loadSupabaseCatalogRecovery } = await loadSupabaseSyncModule();
+            const recovery = await loadSupabaseCatalogRecovery();
+            if (recovery.hasCatalogData) {
+              recoveredData = normalizeData({
+                ...recoveredData,
+                supplierCatalogItems: recovery.supplierCatalogItems.length
+                  ? recovery.supplierCatalogItems
+                  : recoveredData.supplierCatalogItems,
+                clientCatalogItems: recovery.clientCatalogItems.length
+                  ? recovery.clientCatalogItems
+                  : recoveredData.clientCatalogItems,
+                catalogSelections: recovery.catalogSelections.length
+                  ? recovery.catalogSelections
+                  : recoveredData.catalogSelections,
+              });
+              catalogRecovered = true;
+            }
+          } catch (recoveryError) {
+            console.warn("Récupération catalogue Supabase impossible :", recoveryError);
+          }
+        }
+
         const outcome = resolveCloudInitError({
           cloudAlreadySynced: cloudSyncSucceeded.current,
+          catalogRecovered,
+          error,
         });
         setCloudAvailable(outcome.cloudAvailable);
         setSyncStatus(outcome.syncStatus);
@@ -440,10 +494,14 @@ function CrmApp() {
           showToast(outcome.toast.message, outcome.toast.type);
         }
 
-        const { data: prepared } = prepareAppData(normalizeData(loadData()), { notify: !silent });
+        const { data: prepared } = prepareAppData(recoveredData, { notify: !silent });
         setData(prepared);
         saveData(prepared);
         flushSaveData();
+
+        if (catalogRecovered) {
+          cloudSyncSucceeded.current = true;
+        }
       } finally {
         setLoading(false);
         cloudInitPromise.current = null;

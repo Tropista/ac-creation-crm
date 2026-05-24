@@ -11,20 +11,36 @@ export const SYNC_STATUS = {
   SAVE_ERROR: "Erreur de sauvegarde Supabase",
 };
 
-export function resolveCloudInitError({ cloudAlreadySynced }) {
-  if (cloudAlreadySynced) {
+export function resolveCloudInitError({
+  cloudAlreadySynced,
+  catalogRecovered = false,
+  error = null,
+} = {}) {
+  if (cloudAlreadySynced || catalogRecovered) {
     return {
       cloudAvailable: true,
-      syncStatus: SYNC_STATUS.SYNCED,
-      toast: null,
+      syncStatus: catalogRecovered && !cloudAlreadySynced
+        ? SYNC_STATUS.SYNCED
+        : SYNC_STATUS.SYNCED,
+      toast: catalogRecovered && !cloudAlreadySynced
+        ? {
+            message: "Catalogue récupéré depuis Supabase (sync partielle)",
+            type: "success",
+          }
+        : null,
     };
   }
 
+  const message = String(error?.message || "");
+  const isConfigError = /supabase non configur/i.test(message);
+
   return {
     cloudAvailable: false,
-    syncStatus: SYNC_STATUS.LOCAL_UNAVAILABLE,
+    syncStatus: isConfigError ? SYNC_STATUS.LOCAL_NO_CONFIG : SYNC_STATUS.LOCAL_UNAVAILABLE,
     toast: {
-      message: "Sync cloud indisponible — données locales utilisées",
+      message: isConfigError
+        ? "Supabase non configuré — vérifiez VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY"
+        : "Sync cloud indisponible — données locales utilisées",
       type: "info",
     },
   };
@@ -176,6 +192,24 @@ export function mergeCollection(
   return merged;
 }
 
+export function shouldPreferCloudCatalog(localItems = [], cloudItems = []) {
+  const localCount = (localItems || []).length;
+  const cloudCount = (cloudItems || []).length;
+  if (!cloudCount) return false;
+  if (!localCount) return true;
+  return (
+    localCount < EMPTY_CLOUD_CATALOG_GUARD_MIN &&
+    cloudCount >= EMPTY_CLOUD_CATALOG_GUARD_MIN
+  );
+}
+
+export function shouldKeepLocalCatalogOverEmptyCloud(localItems = [], cloudItems = []) {
+  return (
+    (localItems || []).length >= EMPTY_CLOUD_CATALOG_GUARD_MIN &&
+    (cloudItems || []).length === 0
+  );
+}
+
 export function mergeCloudWithLocal(localData = {}, cloudData = {}, { onConflict } = {}) {
   const lastSyncAt = getLastSyncAt();
   const merged = {
@@ -187,13 +221,15 @@ export function mergeCloudWithLocal(localData = {}, cloudData = {}, { onConflict
     const localItems = localData[key] || [];
     const cloudItems = cloudData[key] || [];
 
-    if (
-      CATALOG_SYNC_COLLECTIONS.has(key) &&
-      localItems.length >= EMPTY_CLOUD_CATALOG_GUARD_MIN &&
-      cloudItems.length === 0
-    ) {
-      merged[key] = localItems;
-      continue;
+    if (CATALOG_SYNC_COLLECTIONS.has(key)) {
+      if (shouldKeepLocalCatalogOverEmptyCloud(localItems, cloudItems)) {
+        merged[key] = localItems;
+        continue;
+      }
+      if (shouldPreferCloudCatalog(localItems, cloudItems)) {
+        merged[key] = cloudItems;
+        continue;
+      }
     }
 
     merged[key] = mergeCollection(localItems, cloudItems, {

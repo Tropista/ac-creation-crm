@@ -31,6 +31,61 @@ function resolveCollectionResult(res, tableName) {
   return res;
 }
 
+function resolveOptionalResult(res, tableName) {
+  const resolved = resolveCollectionResult(res, tableName);
+  if (resolved.error) {
+    console.warn(
+      `Lecture Supabase "${tableName}" impossible — collection ignorée.`,
+      resolved.error
+    );
+    return { data: [], error: null };
+  }
+  return resolved;
+}
+
+const COLLECTION_PAGE_SIZE = 1000;
+
+async function fetchCollectionRows(supabase, tableName) {
+  let from = 0;
+  const rows = [];
+
+  while (true) {
+    const res = await supabase
+      .from(tableName)
+      .select("id,data")
+      .order("created_at", { ascending: true })
+      .range(from, from + COLLECTION_PAGE_SIZE - 1);
+
+    const resolved = resolveOptionalResult(res, tableName);
+    const page = resolved.data || [];
+    rows.push(...page);
+
+    if (page.length < COLLECTION_PAGE_SIZE) {
+      break;
+    }
+
+    from += COLLECTION_PAGE_SIZE;
+  }
+
+  return rows;
+}
+
+async function fetchCatalogCollectionRows(supabase, tableName) {
+  try {
+    return await fetchCollectionRows(supabase, tableName);
+  } catch (error) {
+    if (isMissingTableError(error)) {
+      console.warn(
+        `Table Supabase "${tableName}" introuvable — utilisation d'un tableau vide. Voir docs/SUPABASE.md.`,
+        error
+      );
+      return [];
+    }
+    console.warn(`Lecture Supabase "${tableName}" impossible — collection ignorée.`, error);
+    return [];
+  }
+}
+
 async function safeCollectionOp(tableName, operation) {
   try {
     await operation();
@@ -183,11 +238,47 @@ export async function syncSupabaseData(nextData, previousData = {}) {
   ]);
 }
 
-export async function loadSupabaseData({ normalizeData, emptyData }) {
+export async function loadSupabaseCatalogRecovery() {
   const supabase = await getSupabase();
 
   const [
-    settingsRes,
+    supplierCatalogItems,
+    clientCatalogItems,
+    legacyCatalogItems,
+    catalogSelections,
+  ] = await Promise.all([
+    fetchCatalogCollectionRows(supabase, "supplier_catalog_items"),
+    fetchCatalogCollectionRows(supabase, "client_catalog_items"),
+    fetchCatalogCollectionRows(supabase, "catalog_items"),
+    fetchCatalogCollectionRows(supabase, "catalog_selections"),
+  ]);
+
+  const clientItems = rowsToItems(clientCatalogItems);
+  const mergedClientCatalogItems = clientItems.length
+    ? clientItems
+    : rowsToItems(legacyCatalogItems);
+
+  return {
+    supplierCatalogItems: rowsToItems(supplierCatalogItems),
+    clientCatalogItems: mergedClientCatalogItems,
+    catalogSelections: rowsToItems(catalogSelections),
+    hasCatalogData: Boolean(
+      supplierCatalogItems.length ||
+        mergedClientCatalogItems.length ||
+        catalogSelections.length
+    ),
+  };
+}
+
+export async function loadSupabaseData({ normalizeData, emptyData }) {
+  const supabase = await getSupabase();
+
+  const settingsRes = resolveOptionalResult(
+    await supabase.from("settings").select("id,data").eq("id", "main").maybeSingle(),
+    "settings"
+  );
+
+  const [
     usersRes,
     backupsRes,
     clientsRes,
@@ -201,27 +292,32 @@ export async function loadSupabaseData({ normalizeData, emptyData }) {
     expensesRes,
     quotesRes,
     invoicesRes,
+    logsRes,
   ] = await Promise.all([
-    supabase.from("settings").select("id,data").eq("id", "main").maybeSingle(),
-    supabase.from("users").select("id,data").order("created_at", { ascending: true }),
-    supabase.from("backups").select("id,data").order("created_at", { ascending: false }),
-    supabase.from("clients").select("id,data").order("created_at", { ascending: true }),
-    supabase.from("products").select("id,data").order("created_at", { ascending: true }),
-    supabase.from("categories").select("id,data").order("created_at", { ascending: true }),
-    supabase.from("catalog_items").select("id,data").order("created_at", { ascending: true }),
-    supabase.from("supplier_catalog_items").select("id,data").order("created_at", { ascending: true }),
-    supabase.from("client_catalog_items").select("id,data").order("created_at", { ascending: true }),
-    supabase.from("catalog_selections").select("id,data").order("created_at", { ascending: false }),
-    supabase.from("suppliers").select("id,data").order("created_at", { ascending: true }),
-    supabase.from("expenses").select("id,data").order("created_at", { ascending: true }),
-    supabase.from("quotes").select("id,data").order("created_at", { ascending: true }),
-    supabase.from("invoices").select("id,data").order("created_at", { ascending: true }),
+    fetchCollectionRows(supabase, "users").then((data) => ({ data, error: null })),
+    fetchCollectionRows(supabase, "backups").then((data) => ({ data, error: null })),
+    fetchCollectionRows(supabase, "clients").then((data) => ({ data, error: null })),
+    fetchCollectionRows(supabase, "products").then((data) => ({ data, error: null })),
+    fetchCollectionRows(supabase, "categories").then((data) => ({ data, error: null })),
+    fetchCatalogCollectionRows(supabase, "catalog_items").then((data) => ({ data, error: null })),
+    fetchCatalogCollectionRows(supabase, "supplier_catalog_items").then((data) => ({
+      data,
+      error: null,
+    })),
+    fetchCatalogCollectionRows(supabase, "client_catalog_items").then((data) => ({
+      data,
+      error: null,
+    })),
+    fetchCatalogCollectionRows(supabase, "catalog_selections").then((data) => ({
+      data,
+      error: null,
+    })),
+    fetchCatalogCollectionRows(supabase, "suppliers").then((data) => ({ data, error: null })),
+    fetchCatalogCollectionRows(supabase, "expenses").then((data) => ({ data, error: null })),
+    fetchCollectionRows(supabase, "quotes").then((data) => ({ data, error: null })),
+    fetchCollectionRows(supabase, "invoices").then((data) => ({ data, error: null })),
+    fetchCollectionRows(supabase, "crm_logs").then((data) => ({ data, error: null })),
   ]);
-
-  const logsRes = await supabase
-    .from("crm_logs")
-    .select("id,data")
-    .order("created_at", { ascending: false });
 
   const resolvedSupplierCatalogItemsRes = resolveCollectionResult(
     supplierCatalogItemsRes,
@@ -238,31 +334,6 @@ export async function loadSupabaseData({ normalizeData, emptyData }) {
   );
   const resolvedSuppliersRes = resolveCollectionResult(suppliersRes, "suppliers");
   const resolvedExpensesRes = resolveCollectionResult(expensesRes, "expenses");
-
-  const errors = [
-    settingsRes,
-    usersRes,
-    backupsRes,
-    clientsRes,
-    productsRes,
-    categoriesRes,
-    resolvedSupplierCatalogItemsRes,
-    resolvedClientCatalogItemsRes,
-    resolvedCatalogItemsRes,
-    resolvedCatalogSelectionsRes,
-    resolvedSuppliersRes,
-    resolvedExpensesRes,
-    quotesRes,
-    invoicesRes,
-    logsRes,
-  ]
-    .map((res) => res.error)
-    .filter(Boolean);
-
-  if (errors.length) {
-    console.error("Erreur Supabase :", errors);
-    throw errors[0];
-  }
 
   const legacyClientItems = rowsToItems(resolvedCatalogItemsRes.data);
   const clientCatalogItems = rowsToItems(resolvedClientCatalogItemsRes.data);

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Copy, Link2, RefreshCw, Trash2 } from "lucide-react";
 import { isSupabaseConfigured } from "../supabase";
 import { deleteCatalogSelection, upsertCatalogSelection } from "../services/catalogService";
-import { emptyData, loadData, normalizeData } from "../services/dataService";
+import { loadData, normalizeData } from "../services/dataService";
 import {
   createCatalogSelectionPayload,
   getCatalogShareUrl,
@@ -248,20 +248,40 @@ export default function CatalogueClient({ data, setData, logActivity }) {
 
   async function refreshFromCloud() {
     if (!isSupabaseConfigured) {
-      showToast("Supabase non configuré.", "warning");
+      showToast("Supabase non configuré — rebuild avec .env (VITE_SUPABASE_*).", "warning");
       return;
     }
 
     try {
-      const { loadSupabaseData } = await import("../services/supabaseSync");
-      const cloud = await loadSupabaseData({ normalizeData, emptyData });
-      const merged = mergeCloudWithLocal(normalizeData(loadData()), cloud.data);
+      const { loadSupabaseCatalogRecovery } = await import("../services/supabaseSync");
+      const recovery = await loadSupabaseCatalogRecovery();
+
+      if (!recovery.hasCatalogData) {
+        showToast("Aucun article catalogue trouvé dans Supabase.", "warning");
+        return;
+      }
+
+      const local = normalizeData(loadData());
+      const merged = mergeCloudWithLocal(local, {
+        supplierCatalogItems: recovery.supplierCatalogItems,
+        clientCatalogItems: recovery.clientCatalogItems,
+        catalogSelections: recovery.catalogSelections,
+      });
+
       setData({
         ...data,
+        supplierCatalogItems: merged.supplierCatalogItems || [],
         clientCatalogItems: merged.clientCatalogItems || [],
         catalogSelections: merged.catalogSelections || [],
       });
-      showToast("Catalogue client synchronisé.", "success");
+
+      const count = (merged.clientCatalogItems || []).length;
+      showToast(
+        count
+          ? `Catalogue client synchronisé — ${count} article(s) chargé(s).`
+          : "Catalogue synchronisé depuis Supabase.",
+        "success"
+      );
     } catch (error) {
       showToast(error.message || "Synchronisation impossible.", "error");
     }
