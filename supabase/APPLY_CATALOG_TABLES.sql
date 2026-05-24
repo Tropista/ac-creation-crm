@@ -63,8 +63,13 @@ CREATE POLICY "crm_full_access" ON catalog_selections
 
 -- ---------------------------------------------------------------------------
 -- Nettoyage optionnel : catalogue interne retiré de l'application
--- (sans impact si la table n'existe pas)
+-- DROP POLICY sur une table absente provoque 42P01 — on vérifie d'abord.
 -- ---------------------------------------------------------------------------
 
-DROP POLICY IF EXISTS "crm_full_access" ON internal_catalog_items;
-DROP TABLE IF EXISTS internal_catalog_items;
+DO $$
+BEGIN
+  IF to_regclass('public.internal_catalog_items') IS NOT NULL THEN
+    DROP POLICY IF EXISTS "crm_full_access" ON public.internal_catalog_items;
+    DROP TABLE public.internal_catalog_items;
+  END IF;
+END $$;
