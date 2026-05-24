@@ -91,7 +91,9 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
   const [stockMoveReason, setStockMoveReason] = useState("Ajustement manuel");
   const [imageUploading, setImageUploading] = useState(false);
   const [imageDragActive, setImageDragActive] = useState(false);
+  const [sideImageDragActive, setSideImageDragActive] = useState(false);
   const imageDragCounterRef = useRef(0);
+  const sideImageDragCounterRef = useRef(0);
   const [form, setForm] = useState({
     name: "",
     sku: "",
@@ -103,7 +105,37 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
     description: "",
   });
 
-  async function processProductImageFile(file) {
+  function applyProductImageUrl(imageUrl, productIdOverride) {
+    const normalizedUrl = String(imageUrl || "").trim();
+    setForm((current) => ({ ...current, imageUrl: normalizedUrl }));
+
+    const targetId = productIdOverride ?? editing;
+    if (!targetId) return;
+
+    setData((current) => ({
+      ...current,
+      products: (current.products || []).map((product) =>
+        product.id === targetId
+          ? { ...product, imageUrl: normalizedUrl, updatedAt: today() }
+          : product
+      ),
+    }));
+
+    setSelectedProduct((current) =>
+      current?.id === targetId
+        ? { ...current, imageUrl: normalizedUrl, updatedAt: today() }
+        : current
+    );
+  }
+
+  function getProductDisplayImageUrl(product) {
+    if (editing === product.id && form.imageUrl) {
+      return form.imageUrl;
+    }
+    return product.imageUrl || "";
+  }
+
+  async function processProductImageFile(file, { productId } = {}) {
     if (!file || !file.type.startsWith("image/")) {
       showToast("Choisis une image valide (PNG, JPEG ou WebP).", "error");
       return;
@@ -113,10 +145,11 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
 
     try {
       const canUpload = await canUploadProductImages();
+      const storageProductId = productId ?? editing ?? undefined;
 
       if (canUpload) {
-        const imageUrl = await uploadProductImageFile(file, { productId: editing || undefined });
-        setForm((current) => ({ ...current, imageUrl }));
+        const imageUrl = await uploadProductImageFile(file, { productId: storageProductId });
+        applyProductImageUrl(imageUrl, storageProductId);
         showToast("Image enregistrée sur Supabase Storage.", "success");
         return;
       }
@@ -132,7 +165,7 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
         return;
       }
 
-      setForm((current) => ({ ...current, imageUrl: dataUrl }));
+      applyProductImageUrl(dataUrl, storageProductId);
       showToast("Image importée localement (mode hors ligne).", "info");
     } catch (error) {
       showToast(error?.message || "Erreur pendant l'import de l'image.", "error");
@@ -185,12 +218,53 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
     await processProductImageFile(file);
   }
 
+  function handleSideImageDragEnter(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    sideImageDragCounterRef.current += 1;
+    setSideImageDragActive(true);
+  }
+
+  function handleSideImageDragOver(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = "copy";
+    }
+    setSideImageDragActive(true);
+  }
+
+  function handleSideImageDragLeave(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    sideImageDragCounterRef.current = Math.max(0, sideImageDragCounterRef.current - 1);
+    if (sideImageDragCounterRef.current === 0) {
+      setSideImageDragActive(false);
+    }
+  }
+
+  async function handleSideImageDrop(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    sideImageDragCounterRef.current = 0;
+    setSideImageDragActive(false);
+
+    const file = event.dataTransfer?.files?.[0];
+    if (!file || !selectedProduct) return;
+
+    if (editing !== selectedProduct.id) {
+      edit(selectedProduct);
+    }
+
+    await processProductImageFile(file, { productId: selectedProduct.id });
+  }
+
   function handleProductImageUrlChange(value) {
-    setForm((current) => ({ ...current, imageUrl: value.trim() }));
+    applyProductImageUrl(value);
   }
 
   function removeProductImage() {
-    setForm((current) => ({ ...current, imageUrl: "" }));
+    applyProductImageUrl("");
   }
 
 
@@ -827,17 +901,38 @@ function openLinkedDocument(doc) {
           onDragLeave={handleProductImageDragLeave}
           onDrop={handleProductImageDrop}
         >
-          <div className="product-image-drop-zone" aria-live="polite">
-            <span className="product-image-drop-icon" aria-hidden="true">🖼️</span>
-            <strong>
-              {imageUploading
-                ? "Envoi en cours…"
-                : imageDragActive
-                  ? "Déposez l'image ici"
-                  : "Glissez une image ici"}
-            </strong>
-            {!imageUploading && (
-              <span className="product-image-drop-hint">PNG, JPEG ou WebP depuis votre bureau</span>
+          <div
+            className={`product-image-preview ${form.imageUrl ? "" : "product-image-preview--empty"}`}
+            aria-live="polite"
+          >
+            {form.imageUrl ? (
+              <img src={form.imageUrl} alt="Aperçu produit" />
+            ) : (
+              <span className="product-image-placeholder-icon" aria-hidden="true">🖼️</span>
+            )}
+
+            <div className="product-image-drop-overlay">
+              <strong>
+                {imageUploading
+                  ? "Envoi en cours…"
+                  : imageDragActive
+                    ? "Déposez l'image ici"
+                    : "Glissez une image ici"}
+              </strong>
+              {!imageUploading && !imageDragActive && (
+                <span className="product-image-drop-hint">PNG, JPEG ou WebP depuis votre bureau</span>
+              )}
+            </div>
+
+            {form.imageUrl && (
+              <button
+                type="button"
+                className="product-image-remove"
+                onClick={removeProductImage}
+                disabled={imageUploading}
+              >
+                Retirer
+              </button>
             )}
           </div>
 
@@ -857,17 +952,6 @@ function openLinkedDocument(doc) {
             value={isHttpImageUrl(form.imageUrl) ? form.imageUrl : ""}
             onChange={(e) => handleProductImageUrlChange(e.target.value)}
           />
-
-          {form.imageUrl && (
-            <div className="product-image-preview">
-              <img src={form.imageUrl} alt="Aperçu produit" />
-              <button type="button" onClick={removeProductImage} disabled={imageUploading}>
-                Retirer
-              </button>
-            </div>
-          )}
-
-
         </div>
         <textarea placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
         <button className="primary">{editing ? "Modifier" : "Ajouter produit"}</button>
@@ -1044,6 +1128,8 @@ function openLinkedDocument(doc) {
                   ? "warning"
                   : "success";
 
+            const cardImageUrl = getProductDisplayImageUrl(product);
+
             return (
               <article
                 className={`product-premium-card ${
@@ -1065,8 +1151,8 @@ function openLinkedDocument(doc) {
                 </div>
 
                 <div className="product-visual">
-                  {product.imageUrl ? (
-                    <img src={product.imageUrl} alt={product.name || "Produit"} />
+                  {cardImageUrl ? (
+                    <img src={cardImageUrl} alt={product.name || "Produit"} />
                   ) : (
                     <span>{(product.name || "P").slice(0, 1).toUpperCase()}</span>
                   )}
@@ -1103,12 +1189,31 @@ function openLinkedDocument(doc) {
               </div>
             ) : (
               <>
-                <div className="product-side-image">
-                  {selectedProduct.imageUrl ? (
+                <div
+                  className={`product-side-image ${sideImageDragActive ? "drag-active" : ""} ${imageUploading ? "uploading" : ""}`}
+                  onDragEnter={handleSideImageDragEnter}
+                  onDragOver={handleSideImageDragOver}
+                  onDragLeave={handleSideImageDragLeave}
+                  onDrop={handleSideImageDrop}
+                  aria-live="polite"
+                >
+                  {form.imageUrl && editing === selectedProduct.id ? (
+                    <img src={form.imageUrl} alt={selectedProduct.name || "Produit"} />
+                  ) : selectedProduct.imageUrl ? (
                     <img src={selectedProduct.imageUrl} alt={selectedProduct.name || "Produit"} />
                   ) : (
                     <span>{(selectedProduct.name || "P").slice(0, 1).toUpperCase()}</span>
                   )}
+
+                  <div className="product-side-image-overlay">
+                    <strong>
+                      {imageUploading
+                        ? "Envoi en cours…"
+                        : sideImageDragActive
+                          ? "Déposez l'image ici"
+                          : "Glissez une image ici"}
+                    </strong>
+                  </div>
                 </div>
 
                 <div className="product-side-header">
