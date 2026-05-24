@@ -299,7 +299,7 @@ const [form, setForm] = useState({
         lines: cleanLines,
         stockAdjusted: !isQuote && form.status !== "Annulée",
         ...(!isQuote && {
-          dueDate: computeDueDate(today(), data.settings.paymentDays || 30),
+          dueDate: computeDueDate(today(), data.settings.paymentDays),
         }),
         ...totals,
       };

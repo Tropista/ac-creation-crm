@@ -141,7 +141,7 @@ export function convertQuoteToInvoiceData(data, quote) {
     number: nextDocumentNumber(data.invoices || [], "FAC"),
     date: today(),
     status: "Non payée",
-    dueDate: computeDueDate(today(), data.settings?.paymentDays || 30),
+    dueDate: computeDueDate(today(), data.settings?.paymentDays),
     stockAdjusted: true,
     convertedFrom: quote.number,
   };

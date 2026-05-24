@@ -1,5 +1,6 @@
 import { dedupeDocuments } from "../utils/documents";
 import { debounce } from "../utils/debounce";
+import { normalizePaymentDays } from "../utils/invoiceReminders";
 
 export const STORAGE_KEY = "crm_local_data_v2";
 export const SAVE_DEBOUNCE_MS = 400;
@@ -56,6 +57,7 @@ export const emptyData = {
     bankInfo:
       "Informations bancaires : Tout paiement au nom de votre entreprise\nNom de la banque : BCEE\nBIC : BCEELULL\nIBAN : LU00 0000 0000 0000 0000\nVeuillez indiquer le numéro de facture dans votre communication",
     taxRate: 17,
+    paymentDays: 30,
   },
   clients: [],
   quotes: [],
@@ -106,6 +108,7 @@ export function normalizeData(data) {
         ...emptyData.settings,
         ...stored,
         companyEmail,
+        paymentDays: normalizePaymentDays(stored.paymentDays),
       };
     })(),
 

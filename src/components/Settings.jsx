@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
 import { APP_VERSION } from "../utils/appVersion";
+import {
+  MAX_PAYMENT_DAYS,
+  MIN_PAYMENT_DAYS,
+  normalizePaymentDays,
+} from "../utils/invoiceReminders";
 import { showToast } from "../utils/toast";
 import { getStoredTheme, setTheme, THEMES } from "../utils/theme";
 
@@ -65,6 +70,19 @@ export default function Settings({
 
     e.preventDefault();
 
+    const rawPaymentDays = Number(form.paymentDays);
+    if (
+      !Number.isFinite(rawPaymentDays) ||
+      rawPaymentDays < MIN_PAYMENT_DAYS ||
+      rawPaymentDays > MAX_PAYMENT_DAYS
+    ) {
+      showToast(
+        `Le délai de paiement doit être entre ${MIN_PAYMENT_DAYS} et ${MAX_PAYMENT_DAYS} jours`,
+        "error"
+      );
+      return;
+    }
+
     setData({
       ...data,
       settings: {
@@ -72,7 +90,8 @@ export default function Settings({
         taxRate:
           Number(
             form.taxRate || 0
-          )
+          ),
+        paymentDays: normalizePaymentDays(form.paymentDays),
       }
     });
 
@@ -238,6 +257,29 @@ e.target.value
 })
 }
 />
+
+<label className="theme-field">
+  <span>Délai de paiement (jours)</span>
+  <input
+    type="number"
+    min={MIN_PAYMENT_DAYS}
+    max={MAX_PAYMENT_DAYS}
+    step="1"
+    data-testid="payment-days-input"
+    value={form.paymentDays ?? 30}
+    onChange={(e) =>
+      setForm({
+        ...form,
+        paymentDays: e.target.value,
+      })
+    }
+  />
+  <p className="muted" style={{ margin: 0, fontSize: "12px", lineHeight: 1.4 }}>
+    Nombre de jours après la date de facture pour calculer l&apos;échéance.
+    Utilisé à la création des factures et pour détecter les retards de paiement
+    (relances par e-mail).
+  </p>
+</label>
 
 <textarea
 placeholder="Conditions de paiement"

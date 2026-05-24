@@ -3,8 +3,26 @@ import { isInvoiceOverdue } from "./invoices.js";
 import {
   buildInvoiceReminderEmail,
   computeDueDate,
+  MAX_PAYMENT_DAYS,
+  MIN_PAYMENT_DAYS,
+  normalizePaymentDays,
   openInvoiceReminderMailto,
 } from "./invoiceReminders.js";
+
+describe("normalizePaymentDays", () => {
+  it("retourne 30 par défaut pour les valeurs invalides", () => {
+    expect(normalizePaymentDays(undefined)).toBe(30);
+    expect(normalizePaymentDays("")).toBe(30);
+    expect(normalizePaymentDays(0)).toBe(30);
+    expect(normalizePaymentDays(-5)).toBe(30);
+  });
+
+  it("borne la valeur entre 1 et 365 jours", () => {
+    expect(normalizePaymentDays(45)).toBe(45);
+    expect(normalizePaymentDays(400)).toBe(MAX_PAYMENT_DAYS);
+    expect(normalizePaymentDays(MIN_PAYMENT_DAYS)).toBe(MIN_PAYMENT_DAYS);
+  });
+});
 
 describe("computeDueDate", () => {
   it("ajoute les jours de paiement à la date d'émission", () => {
@@ -46,13 +64,23 @@ describe("buildInvoiceReminderEmail", () => {
     expect(body).toContain("hello@accreation.fr");
   });
 
-  it("omets l'échéance si absente", () => {
+  it("omets l'échéance si absente et sans date d'émission", () => {
     const { body } = buildInvoiceReminderEmail(
-      { ...invoice, dueDate: "" },
+      { ...invoice, dueDate: "", date: "" },
       client
     );
 
     expect(body).not.toContain("Échéance :");
+  });
+
+  it("calcule l'échéance depuis paymentDays si dueDate absente", () => {
+    const { body } = buildInvoiceReminderEmail(
+      { ...invoice, dueDate: "" },
+      client,
+      { paymentDays: 30 }
+    );
+
+    expect(body).toContain("Échéance : 31/05/2025");
   });
 });
 
