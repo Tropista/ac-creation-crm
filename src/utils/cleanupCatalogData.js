@@ -98,18 +98,15 @@ export function cleanupCatalogData(data = {}) {
     data: {
       ...data,
       catalogItems: [],
-      supplierCatalogItems: [],
-      clientCatalogItems: [],
-      catalogSelections: [],
+      supplierCatalogItems,
+      clientCatalogItems,
+      catalogSelections,
       products: cleanedProducts,
     },
     stats: {
       removedProducts: productsBefore - cleanedProducts.length,
-      removedCatalogItems:
-        legacyCatalogItems.length +
-        clientCatalogItems.length +
-        supplierCatalogItems.length,
-      removedCatalogSelections: catalogSelections.length,
+      removedCatalogItems: legacyCatalogItems.length,
+      removedCatalogSelections: 0,
       productsBefore,
       productsAfter: cleanedProducts.length,
       clearedPublicCaches: clearPublicCatalogCaches(),

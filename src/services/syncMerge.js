@@ -52,6 +52,15 @@ export const CRITICAL_SYNC_COLLECTIONS = new Set([
   "invoices",
 ]);
 
+export const CATALOG_SYNC_COLLECTIONS = new Set([
+  "supplierCatalogItems",
+  "clientCatalogItems",
+  "catalogSelections",
+]);
+
+/** Ne pas remplacer un catalogue local volumineux par un snapshot cloud vide. */
+export const EMPTY_CLOUD_CATALOG_GUARD_MIN = 50;
+
 export function getLastSyncAt() {
   const raw = localStorage.getItem(LAST_SYNC_AT_KEY);
   const parsed = Number(raw);
@@ -175,7 +184,19 @@ export function mergeCloudWithLocal(localData = {}, cloudData = {}, { onConflict
   };
 
   for (const key of SYNC_COLLECTIONS) {
-    merged[key] = mergeCollection(localData[key], cloudData[key], {
+    const localItems = localData[key] || [];
+    const cloudItems = cloudData[key] || [];
+
+    if (
+      CATALOG_SYNC_COLLECTIONS.has(key) &&
+      localItems.length >= EMPTY_CLOUD_CATALOG_GUARD_MIN &&
+      cloudItems.length === 0
+    ) {
+      merged[key] = localItems;
+      continue;
+    }
+
+    merged[key] = mergeCollection(localItems, cloudItems, {
       lastSyncAt,
       critical: CRITICAL_SYNC_COLLECTIONS.has(key),
       onConflict,

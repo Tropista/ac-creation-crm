@@ -59,7 +59,7 @@ describe("cleanupCatalogData", () => {
     ).toBe(false);
   });
 
-  it("retire les produits catalogue et vide les collections catalogues", () => {
+  it("retire les produits catalogue du stock ERP sans effacer les collections catalogue", () => {
     const input = {
       products: [
         { id: "p1", name: "Mug", sku: "MUG-001" },
@@ -70,6 +70,7 @@ describe("cleanupCatalogData", () => {
           sourceProvider: "lamaisonduteeshirt",
         },
       ],
+      catalogItems: [{ id: "legacy-1", sku: "OLD-1" }],
       clientCatalogItems: [{ id: "c1", sku: "SO-11380", name: "Sol's Regent" }],
       supplierCatalogItems: [{ id: "s1", sku: "SO-9999" }],
       catalogSelections: [{ id: "sel1", title: "Selection client" }],
@@ -79,12 +80,13 @@ describe("cleanupCatalogData", () => {
 
     expect(data.products).toHaveLength(1);
     expect(data.products[0].sku).toBe("MUG-001");
-    expect(data.clientCatalogItems).toEqual([]);
-    expect(data.supplierCatalogItems).toEqual([]);
-    expect(data.catalogSelections).toEqual([]);
+    expect(data.clientCatalogItems).toHaveLength(1);
+    expect(data.supplierCatalogItems).toHaveLength(1);
+    expect(data.catalogSelections).toHaveLength(1);
+    expect(data.catalogItems).toEqual([]);
     expect(stats.removedProducts).toBe(1);
-    expect(stats.removedCatalogItems).toBe(2);
-    expect(stats.removedCatalogSelections).toBe(1);
+    expect(stats.removedCatalogItems).toBe(1);
+    expect(stats.removedCatalogSelections).toBe(0);
   });
 
   it("retire aussi les produits dont le SKU existe dans clientCatalogItems", () => {
@@ -126,7 +128,7 @@ describe("cleanupCatalogData", () => {
 
     expect(first.applied).toBe(true);
     expect(first.data.products).toHaveLength(0);
-    expect(localStorage.getItem(CLEANUP_FLAG_KEY)).toBeTruthy();
+    expect(first.data.clientCatalogItems).toHaveLength(1);
     expect(second.applied).toBe(false);
     expect(second.data.clientCatalogItems).toHaveLength(1);
     expect(second.data.clientCatalogItems[0].id).toBe("c2");

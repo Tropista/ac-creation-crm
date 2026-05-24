@@ -162,13 +162,13 @@ function prepareAppData(raw, { notify = false } = {}) {
     logs: dedupeItemsById(data.logs || []),
   });
 
-  if (notify && stats && (stats.removedProducts > 0 || stats.removedCatalogItems > 0 || stats.removedCatalogSelections > 0)) {
+  if (notify && stats && (stats.removedProducts > 0 || stats.removedCatalogItems > 0)) {
     const parts = [];
     if (stats.removedProducts > 0) {
-      parts.push(`${stats.removedProducts} produit(s) importés retirés`);
+      parts.push(`${stats.removedProducts} produit(s) importés retirés du stock ERP`);
     }
-    if (stats.removedCatalogItems > 0 || stats.removedCatalogSelections > 0) {
-      parts.push("données catalogue client effacées");
+    if (stats.removedCatalogItems > 0) {
+      parts.push(`${stats.removedCatalogItems} article(s) legacy retirés`);
     }
     showToast(`Nettoyage catalogue : ${parts.join(", ")}`, "info");
   }

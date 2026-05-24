@@ -1,5 +1,14 @@
 import { getSupabase } from "../supabase";
 
+/** Refuse de pousser une suppression massive vers le cloud (ex. migration ou snapshot vide). */
+export const MASS_DELETE_GUARD_MIN = 50;
+
+export function shouldSkipMassDelete(nextItems = [], previousItems = [], removedCount = 0) {
+  if (!removedCount) return false;
+  if ((nextItems || []).length > 0) return false;
+  return (previousItems || []).length >= MASS_DELETE_GUARD_MIN;
+}
+
 function isMissingTableError(error) {
   if (!error) return false;
   const code = String(error.code || "");
@@ -55,6 +64,14 @@ export async function syncSupabaseData(nextData, previousData = {}) {
       .map((item) => item.id);
 
     if (!removedIds.length) return;
+
+    if (shouldSkipMassDelete(nextItems, previousItems, removedIds.length)) {
+      console.warn(
+        `Protection anti-suppression : ${removedIds.length} enregistrement(s) de "${table}" non supprimés ` +
+          `(passage de ${previousItems.length} à 0).`
+      );
+      return;
+    }
 
     const { error } = await supabase
       .from(table)

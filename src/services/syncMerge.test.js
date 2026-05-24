@@ -117,6 +117,23 @@ describe("syncMerge", () => {
     expect(merged.products[0].name).toBe("Produit cloud");
   });
 
+  it("mergeCloudWithLocal conserve le catalogue local si le cloud est vide", () => {
+    setLastSyncAt(Date.parse("2026-05-23T09:00:00.000Z"));
+
+    const localItems = Array.from({ length: 60 }, (_, index) => ({
+      id: `s${index}`,
+      name: `Article ${index}`,
+      updatedAt: "2026-05-23T10:00:00.000Z",
+    }));
+
+    const merged = mergeCloudWithLocal(
+      { supplierCatalogItems: localItems },
+      { supplierCatalogItems: [] }
+    );
+
+    expect(merged.supplierCatalogItems).toHaveLength(60);
+  });
+
   it("setLastSyncAt persiste dans localStorage", () => {
     setLastSyncAt(1234567890);
     expect(localStorage.getItem(LAST_SYNC_AT_KEY)).toBe("1234567890");
