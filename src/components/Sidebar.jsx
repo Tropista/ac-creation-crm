@@ -36,6 +36,7 @@ import { APP_LOGO_URL } from "../utils/assets";
 import { APP_VERSION } from "../utils/appVersion";
 import { pageToPath } from "../utils/routes";
 import { countCatalogSubmissionsReceived } from "../services/syncMerge";
+import { filterMenuGroupsBySettings } from "../utils/sidebarMenu";
 
 const SECTIONS_STORAGE_KEY = "crm_sidebar_sections_v1";
 
@@ -184,10 +185,7 @@ export default function Sidebar({
     return () => document.body.classList.remove("sidebar-drawer-open");
   }, [mobileOpen]);
 
-  const hideCatalogMenu = Boolean(data?.settings?.hideCatalogMenu);
-
-  const visibleGroups = menuGroups
-    .filter((group) => !(hideCatalogMenu && group.id === "catalogues"))
+  const visibleGroups = filterMenuGroupsBySettings(menuGroups, data?.settings)
     .map((group) => ({
       ...group,
       items: group.items.filter(canShow),
