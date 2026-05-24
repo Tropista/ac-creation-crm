@@ -1,6 +1,7 @@
 import { dedupeDocuments } from "../utils/documents";
 import { debounce } from "../utils/debounce";
 import { normalizePaymentDays } from "../utils/invoiceReminders";
+import { sanitizeProductsForPersistence } from "../utils/productImages";
 
 export const STORAGE_KEY = "crm_local_data_v2";
 export const SAVE_DEBOUNCE_MS = 400;
@@ -16,9 +17,17 @@ export function isQuotaExceededError(error) {
   return error.name === "QuotaExceededError" || error.code === 22;
 }
 
+function prepareDataForLocalStorage(data) {
+  if (!data?.products?.length) return data;
+  return {
+    ...data,
+    products: sanitizeProductsForPersistence(data.products),
+  };
+}
+
 function writeDataImmediate(data) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(prepareDataForLocalStorage(data)));
     lastSaveError = null;
     pendingData = null;
     return { ok: true, quotaExceeded: false, recovered: false };

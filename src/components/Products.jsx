@@ -2,6 +2,17 @@ import { useMemo, useState } from "react";
 import {
   canDeleteData
 } from "../services/authService";
+import {
+  canUploadProductImages,
+  uploadProductImageFile,
+} from "../services/productImageStorage";
+import {
+  blobToDataUrl,
+  compressProductImageFile,
+  isHttpImageUrl,
+  isLargeBase64Image,
+  PRODUCT_IMAGE_MAX_BASE64_BYTES,
+} from "../utils/productImages";
 import { applyProductStockChange } from "../utils/stock";
 import { showToast } from "../utils/toast";
 
@@ -78,6 +89,8 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
   const [bulkStock, setBulkStock] = useState(100);
   const [stockMoveQty, setStockMoveQty] = useState(1);
   const [stockMoveReason, setStockMoveReason] = useState("Ajustement manuel");
+  const [imageUploading, setImageUploading] = useState(false);
+  const [imageDragActive, setImageDragActive] = useState(false);
   const [form, setForm] = useState({
     name: "",
     sku: "",
@@ -89,54 +102,76 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
     description: "",
   });
 
-  function compressProductImage(file, maxWidth = 900, quality = 0.78) {
-    return new Promise((resolve, reject) => {
-      if (!file || !file.type.startsWith("image/")) {
-        reject(new Error("Choisis une image valide."));
+  async function processProductImageFile(file) {
+    if (!file || !file.type.startsWith("image/")) {
+      showToast("Choisis une image valide (PNG, JPEG ou WebP).", "error");
+      return;
+    }
+
+    setImageUploading(true);
+
+    try {
+      const canUpload = await canUploadProductImages();
+
+      if (canUpload) {
+        const imageUrl = await uploadProductImageFile(file, { productId: editing || undefined });
+        setForm((current) => ({ ...current, imageUrl }));
+        showToast("Image enregistrée sur Supabase Storage.", "success");
         return;
       }
 
-      const reader = new FileReader();
+      const blob = await compressProductImageFile(file);
+      const dataUrl = await blobToDataUrl(blob);
 
-      reader.onload = (event) => {
-        const img = new Image();
+      if (isLargeBase64Image(dataUrl)) {
+        showToast(
+          `Image trop lourde (>${Math.round(PRODUCT_IMAGE_MAX_BASE64_BYTES / 1024)} Ko). Connecte-toi pour uploader ou saisis une URL.`,
+          "error"
+        );
+        return;
+      }
 
-        img.onload = () => {
-          const scale = Math.min(1, maxWidth / img.width);
-          const width = Math.round(img.width * scale);
-          const height = Math.round(img.height * scale);
-
-          const canvas = document.createElement("canvas");
-          canvas.width = width;
-          canvas.height = height;
-
-          const ctx = canvas.getContext("2d");
-          ctx.drawImage(img, 0, 0, width, height);
-
-          resolve(canvas.toDataURL("image/jpeg", quality));
-        };
-
-        img.onerror = () => reject(new Error("Image impossible à lire."));
-        img.src = event.target.result;
-      };
-
-      reader.onerror = () => reject(new Error("Image impossible à importer."));
-      reader.readAsDataURL(file);
-    });
+      setForm((current) => ({ ...current, imageUrl: dataUrl }));
+      showToast("Image importée localement (mode hors ligne).", "info");
+    } catch (error) {
+      showToast(error.message || "Erreur pendant l'import de l'image.", "error");
+    } finally {
+      setImageUploading(false);
+    }
   }
 
   async function handleProductImageUpload(event) {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    try {
-      const imageUrl = await compressProductImage(file);
-      setForm((current) => ({ ...current, imageUrl }));
-    } catch (error) {
-      showToast(error.message || "Erreur pendant l'import de l'image.", "error");
-    } finally {
-      event.target.value = "";
-    }
+    await processProductImageFile(file);
+    event.target.value = "";
+  }
+
+  function handleProductImageDragOver(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    setImageDragActive(true);
+  }
+
+  function handleProductImageDragLeave(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    setImageDragActive(false);
+  }
+
+  async function handleProductImageDrop(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    setImageDragActive(false);
+
+    const file = event.dataTransfer?.files?.[0];
+    if (!file) return;
+    await processProductImageFile(file);
+  }
+
+  function handleProductImageUrlChange(value) {
+    setForm((current) => ({ ...current, imageUrl: value.trim() }));
   }
 
   function removeProductImage() {
@@ -457,6 +492,14 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
     e.preventDefault();
     if (!form.name) return showToast("Nom du produit obligatoire.", "error");
 
+    const imageUrl = String(form.imageUrl || "").trim();
+    if (imageUrl && !isHttpImageUrl(imageUrl) && isLargeBase64Image(imageUrl)) {
+      return showToast(
+        "Image trop lourde pour l'enregistrement local. Utilise une URL ou connecte-toi pour uploader.",
+        "error"
+      );
+    }
+
     const finalSku = String(form.sku || generateSkuForCategory(form.category) || "").trim();
 
     const productData = {
@@ -762,20 +805,33 @@ function openLinkedDocument(doc) {
         />
         <input type="number" min="0" placeholder="Stock actuel" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} />
         <input type="number" min="0" placeholder="Stock minimum / alerte" value={form.stockMin} onChange={(e) => setForm({ ...form, stockMin: e.target.value })} />
-        <div className="product-image-field">
+        <div
+          className={`product-image-field ${imageDragActive ? "drag-active" : ""}`}
+          onDragOver={handleProductImageDragOver}
+          onDragLeave={handleProductImageDragLeave}
+          onDrop={handleProductImageDrop}
+        >
           <label className="image-upload-button">
-            📷 Importer une image
+            {imageUploading ? "⏳ Envoi en cours…" : "📷 Importer ou glisser une image"}
             <input
               type="file"
               accept="image/png,image/jpeg,image/webp"
               onChange={handleProductImageUpload}
+              disabled={imageUploading}
             />
           </label>
+
+          <input
+            type="url"
+            placeholder="Ou coller une URL d'image (https://…)"
+            value={isHttpImageUrl(form.imageUrl) ? form.imageUrl : ""}
+            onChange={(e) => handleProductImageUrlChange(e.target.value)}
+          />
 
           {form.imageUrl && (
             <div className="product-image-preview">
               <img src={form.imageUrl} alt="Aperçu produit" />
-              <button type="button" onClick={removeProductImage}>
+              <button type="button" onClick={removeProductImage} disabled={imageUploading}>
                 Retirer
               </button>
             </div>

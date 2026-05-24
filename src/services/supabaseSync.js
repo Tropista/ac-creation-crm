@@ -1,4 +1,5 @@
 import { getSupabase } from "../supabase";
+import { sanitizeProductsForPersistence } from "../utils/productImages";
 
 /** Refuse de pousser une suppression massive vers le cloud (ex. migration ou snapshot vide). */
 export const MASS_DELETE_GUARD_MIN = 50;
@@ -294,6 +295,10 @@ async function upsertRowsBatched(supabase, table, items = []) {
 
 export async function syncSupabaseData(nextData, previousData = {}) {
   const supabase = await getSupabase();
+  const syncedData = {
+    ...nextData,
+    products: sanitizeProductsForPersistence(nextData.products),
+  };
 
   const deleteRemovedItems = async (table, nextItems = [], previousItems = []) => {
     const nextIds = new Set((nextItems || []).map((item) => item.id));
@@ -332,42 +337,42 @@ export async function syncSupabaseData(nextData, previousData = {}) {
 
   const { error: settingsError } = await supabase.from("settings").upsert({
     id: "main",
-    data: nextData.settings,
+    data: syncedData.settings,
   });
 
   if (settingsError) throw formatSupabaseCollectionError("settings", settingsError);
 
   await Promise.all([
-    upsertCollection("users", nextData.users),
-    upsertCollection("backups", nextData.backups),
-    upsertCollection("clients", nextData.clients),
-    upsertCollection("products", nextData.products),
-    upsertCollection("categories", nextData.categories),
+    upsertCollection("users", syncedData.users),
+    upsertCollection("backups", syncedData.backups),
+    upsertCollection("clients", syncedData.clients),
+    upsertCollection("products", syncedData.products),
+    upsertCollection("categories", syncedData.categories),
     safeOptionalCollectionWrite("suppliers", () =>
-      upsertCollectionDelta("suppliers", previousData.suppliers, nextData.suppliers)
+      upsertCollectionDelta("suppliers", previousData.suppliers, syncedData.suppliers)
     ),
     safeOptionalCollectionWrite("expenses", () =>
-      upsertCollectionDelta("expenses", previousData.expenses, nextData.expenses)
+      upsertCollectionDelta("expenses", previousData.expenses, syncedData.expenses)
     ),
-    upsertCollection("quotes", nextData.quotes),
-    upsertCollection("invoices", nextData.invoices),
-    upsertCollection("crm_logs", nextData.logs),
+    upsertCollection("quotes", syncedData.quotes),
+    upsertCollection("invoices", syncedData.invoices),
+    upsertCollection("crm_logs", syncedData.logs),
   ]);
 
   await Promise.all([
-    deleteRemovedItems("users", nextData.users, previousData.users),
-    deleteRemovedItems("clients", nextData.clients, previousData.clients),
-    deleteRemovedItems("products", nextData.products, previousData.products),
-    deleteRemovedItems("categories", nextData.categories, previousData.categories),
+    deleteRemovedItems("users", syncedData.users, previousData.users),
+    deleteRemovedItems("clients", syncedData.clients, previousData.clients),
+    deleteRemovedItems("products", syncedData.products, previousData.products),
+    deleteRemovedItems("categories", syncedData.categories, previousData.categories),
     safeOptionalCollectionWrite("suppliers", () =>
-      deleteRemovedItems("suppliers", nextData.suppliers, previousData.suppliers)
+      deleteRemovedItems("suppliers", syncedData.suppliers, previousData.suppliers)
     ),
     safeOptionalCollectionWrite("expenses", () =>
-      deleteRemovedItems("expenses", nextData.expenses, previousData.expenses)
+      deleteRemovedItems("expenses", syncedData.expenses, previousData.expenses)
     ),
-    deleteRemovedItems("quotes", nextData.quotes, previousData.quotes),
-    deleteRemovedItems("invoices", nextData.invoices, previousData.invoices),
-    deleteRemovedItems("backups", nextData.backups, previousData.backups),
+    deleteRemovedItems("quotes", syncedData.quotes, previousData.quotes),
+    deleteRemovedItems("invoices", syncedData.invoices, previousData.invoices),
+    deleteRemovedItems("backups", syncedData.backups, previousData.backups),
   ]);
 }
 

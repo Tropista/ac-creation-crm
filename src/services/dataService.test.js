@@ -76,6 +76,27 @@ describe("dataService", () => {
     expect(loaded.clients[0].name).toBe("AC Creation");
   });
 
+  it("saveData retire les images produits base64 trop lourdes du localStorage", () => {
+    const storage = createStorage();
+    vi.stubGlobal("localStorage", storage);
+
+    const largeBase64 = `data:image/jpeg;base64,${"A".repeat(200000)}`;
+    const payload = {
+      ...emptyData,
+      products: [
+        { id: "p1", name: "Lourd", imageUrl: largeBase64 },
+        { id: "p2", name: "URL", imageUrl: "https://cdn.example.com/p.jpg" },
+      ],
+    };
+
+    saveData(payload);
+    flushSaveData();
+
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    expect(stored.products[0].imageUrl).toBe("");
+    expect(stored.products[1].imageUrl).toBe("https://cdn.example.com/p.jpg");
+  });
+
   it("flushSaveData signale QuotaExceededError", () => {
     const storage = createStorage({ quotaBytes: 50 });
     vi.stubGlobal("localStorage", storage);

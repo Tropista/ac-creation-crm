@@ -123,3 +123,25 @@ ALTER TABLE bank_transactions ENABLE ROW LEVEL SECURITY;
 
 -- Pour les politiques RLS sécurisées (production), exécuter ensuite :
 -- supabase/migrations/20260524100000_secure_rls.sql
+
+-- ---------------------------------------------------------------------------
+-- Supabase Storage — bucket images produits (policies : voir migration dédiée)
+-- ---------------------------------------------------------------------------
+
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+  'ac-creation-products',
+  'ac-creation-products',
+  true,
+  5242880,
+  ARRAY['image/jpeg', 'image/png', 'image/webp']::text[]
+)
+ON CONFLICT (id) DO UPDATE
+SET
+  public = EXCLUDED.public,
+  file_size_limit = EXCLUDED.file_size_limit,
+  allowed_mime_types = EXCLUDED.allowed_mime_types;
+
+-- Politiques Storage (authenticated + crm_user_is_active) :
+-- supabase/migrations/20260524120000_product_images_storage.sql
+-- À exécuter après 20260524100000_secure_rls.sql

@@ -233,3 +233,42 @@ Messages d’aide côté app : `bankTransactionErrorHint()` dans `src/utils/bank
 3. Vérifier que chaque utilisateur CRM existe dans **Authentication** ET dans `users` (rôle + statut Actif).
 4. Rebuild Electron / redeploy Vercel avec les variables `VITE_SUPABASE_*`.
 5. Tester login + sync + page Banque.
+
+## Storage — images produits
+
+Bucket **`ac-creation-products`** : les images produit ne sont plus stockées en base64 dans `localStorage` ni dans le JSON Supabase lorsqu’elles sont uploadées via le CRM.
+
+### Comportement app
+
+| Mode | Import image |
+|------|----------------|
+| Connecté + Supabase configuré | Upload vers Storage → URL publique dans `product.imageUrl` |
+| Hors ligne / non connecté | Base64 compressé autorisé si ≤ 100 Ko ; sinon message « utilisez une URL » |
+| Saisie manuelle | Champ URL (`https://…`) dans la fiche produit |
+
+À la sauvegarde locale, les images base64 **> 100 Ko** sont retirées automatiquement pour limiter le quota `localStorage`. Les petites images legacy restent affichables jusqu’à re-upload.
+
+### Setup Supabase
+
+1. Exécuter `supabase/migrations/20260524100000_secure_rls.sql` (fonction `crm_user_is_active()` requise).
+2. Exécuter `supabase/migrations/20260524120000_product_images_storage.sql`  
+   *(ou la section Storage en fin de `docs/supabase-migration.sql`)*.
+3. Vérifier dans **Storage → Buckets** que `ac-creation-products` existe et est **public** (lecture).
+4. Se connecter au CRM avec un utilisateur **Actif** dans la table `users`, puis tester l’import d’image sur un produit.
+
+### Politiques Storage
+
+| Action | Rôle | Condition |
+|--------|------|-----------|
+| Lecture (SELECT) | `public` | Bucket `ac-creation-products` |
+| Upload / update / delete | `authenticated` | `crm_user_is_active()` |
+
+Formats autorisés : JPEG, PNG, WebP — taille max 5 Mo par fichier.
+
+### Diagnostic
+
+| Symptôme | Action |
+|----------|--------|
+| « Image trop lourde… utilisez une URL » | Se connecter ou coller une URL HTTPS |
+| Upload échoue `42501` | Vérifier login + entrée `users` active ; exécuter la migration Storage |
+| Image absente après rechargement | Base64 > 100 Ko retirée — re-uploader ou utiliser une URL |
