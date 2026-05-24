@@ -134,6 +134,56 @@
   gap: 14px;
 }
 
+.catalog-selection-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.catalog-submission-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #166534;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.catalog-selection-card.has-client-submission {
+  border-color: #86efac;
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.15);
+}
+
+.catalog-submission-date {
+  margin: 4px 0 8px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.catalog-submission-sheet {
+  margin-top: 10px;
+}
+
+.catalog-submission-sheet summary {
+  cursor: pointer;
+  color: #2563eb;
+  font-weight: 600;
+}
+
+.catalog-submission-sheet pre {
+  margin-top: 8px;
+  padding: 12px;
+  border-radius: 10px;
+  background: #f8fafc;
+  white-space: pre-wrap;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .catalog-selection-actions {
   display: flex;
   gap: 8px;

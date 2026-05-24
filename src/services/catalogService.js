@@ -305,6 +305,24 @@ export async function fetchPublicCatalogSettings() {
   }
 }
 
+export async function fetchCatalogSelectionsFromCloud() {
+  if (!isSupabaseConfigured) {
+    return loadData().catalogSelections || [];
+  }
+
+  const supabase = await getSupabase();
+  const rows = await fetchWithRetry(
+    async () => {
+      const { data, error } = await supabase.from("catalog_selections").select("id,data");
+      if (error) throw error;
+      return data || [];
+    },
+    { label: "Chargement des sélections catalogue" }
+  );
+
+  return rows.map((row) => rowToSelection(row)).filter(Boolean);
+}
+
 export async function submitPublicCatalogSelection(shareId, submission) {
   const current = await fetchPublicCatalogSelection(shareId);
   if (!current) {
@@ -325,36 +343,40 @@ export async function submitPublicCatalogSelection(shareId, submission) {
   };
 
   savePublicCatalogCache(nextSelection, { omitSnapshots: isSupabaseConfigured });
+  patchLocalCatalogSelection(nextSelection);
 
   if (!isSupabaseConfigured) {
-    patchLocalCatalogSelection(nextSelection);
     return nextSelection;
   }
 
-  try {
-    const supabase = await getSupabase();
-    const { error } = await supabase.from("catalog_selections").upsert({
+  const supabase = await getSupabase();
+  const { error } = await supabase.from("catalog_selections").upsert(
+    {
       id: shareId,
       data: nextSelection,
-    });
+    },
+    { onConflict: "id" }
+  );
 
-    if (error) throw normalizePublicError(error);
-  } catch (error) {
-    if (!isMissingTableError(error)) {
-      throw error;
-    }
+  if (error) {
+    throw normalizePublicError(error);
   }
 
   return nextSelection;
 }
 
 export async function upsertCatalogSelection(selection) {
+  patchLocalCatalogSelection(selection);
+
   if (isSupabaseConfigured) {
     const supabase = await getSupabase();
-    const { error } = await supabase.from("catalog_selections").upsert({
-      id: selection.id,
-      data: selection,
-    });
+    const { error } = await supabase.from("catalog_selections").upsert(
+      {
+        id: selection.id,
+        data: selection,
+      },
+      { onConflict: "id" }
+    );
 
     if (error) throw normalizePublicError(error);
   }

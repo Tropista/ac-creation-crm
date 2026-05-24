@@ -1,8 +1,12 @@
-import { memo, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Copy, Link2, RefreshCw, Trash2 } from "lucide-react";
 import { isSupabaseConfigured } from "../supabase";
-import { deleteCatalogSelection, upsertCatalogSelection } from "../services/catalogService";
+import {
+  deleteCatalogSelection,
+  fetchCatalogSelectionsFromCloud,
+  upsertCatalogSelection,
+} from "../services/catalogService";
 import { loadData, normalizeData } from "../services/dataService";
 import { formatCatalogSyncMessage } from "../services/supabaseSync";
 import {
@@ -11,7 +15,11 @@ import {
   openQuoteFromCatalogSelection,
 } from "../utils/catalogShare";
 import { resolveActiveCatalogItems } from "../utils/catalogCollections";
-import { mergeCloudWithLocal } from "../services/syncMerge";
+import {
+  countCatalogSubmissionsReceived,
+  mergeCatalogSelectionsCollection,
+  mergeCloudWithLocal,
+} from "../services/syncMerge";
 import { probeCatalogApi, refreshCatalogColors, refreshCatalogImages } from "../utils/catalogApi";
 import { patchClientCatalogColors, patchClientCatalogImageUrls } from "../utils/lmdtImport";
 import { patchClientCatalogItemImage } from "../utils/catalogImageOverride";
@@ -44,6 +52,13 @@ import {
 } from "../utils/clientCatalogBrowse";
 import PaginationControls from "./PaginationControls";
 import "../styles/client-catalog.css";
+
+function formatSubmissionDate(value) {
+  if (!value) return "";
+  const parsed = Date.parse(String(value));
+  if (!Number.isFinite(parsed)) return "";
+  return new Date(parsed).toLocaleString("fr-FR");
+}
 
 function statusLabel(status) {
   if (status === "submitted") return "Réponse reçue";
@@ -146,7 +161,53 @@ export default function CatalogueClient({ data, setData, logActivity }) {
   });
 
   const selections = Array.isArray(data.catalogSelections) ? data.catalogSelections : [];
+  const submittedSelectionsCount = useMemo(
+    () => countCatalogSubmissionsReceived(selections),
+    [selections]
+  );
   const catalogItems = resolveActiveCatalogItems(data.clientCatalogItems);
+
+  const refreshSelectionsFromCloud = useCallback(async () => {
+    if (!isSupabaseConfigured) return false;
+
+    try {
+      const cloudSelections = await fetchCatalogSelectionsFromCloud();
+      if (!cloudSelections.length) return false;
+
+      let changed = false;
+      await setData((prev) => {
+        const merged = mergeCatalogSelectionsCollection(
+          prev.catalogSelections || [],
+          cloudSelections
+        );
+
+        if (JSON.stringify(merged) === JSON.stringify(prev.catalogSelections || [])) {
+          return prev;
+        }
+
+        changed = true;
+        return { ...prev, catalogSelections: merged };
+      });
+
+      return changed;
+    } catch (error) {
+      console.warn("Rafraîchissement des sélections catalogue impossible :", error);
+      return false;
+    }
+  }, [setData]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return undefined;
+
+    refreshSelectionsFromCloud();
+
+    function handleFocus() {
+      refreshSelectionsFromCloud();
+    }
+
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, [refreshSelectionsFromCloud]);
 
   useEffect(() => {
     const timer = setTimeout(() => setSearch(searchInput.trim()), FILTER_DEBOUNCE_MS);
@@ -388,19 +449,26 @@ export default function CatalogueClient({ data, setData, logActivity }) {
         catalogSelections: recovery.catalogSelections,
       });
 
-      setData({
-        ...data,
-        supplierCatalogItems: merged.supplierCatalogItems || [],
-        clientCatalogItems: merged.clientCatalogItems || [],
+      await setData((prev) => ({
+        ...prev,
+        supplierCatalogItems: merged.supplierCatalogItems || prev.supplierCatalogItems || [],
+        clientCatalogItems: merged.clientCatalogItems || prev.clientCatalogItems || [],
         catalogSelections: merged.catalogSelections || [],
-      });
+      }));
 
       const count = (merged.clientCatalogItems || []).length;
       const supplierCount = (merged.supplierCatalogItems || []).length;
+      const selectionsCount = (merged.catalogSelections || []).length;
+      const submissionsCount = countCatalogSubmissionsReceived(merged.catalogSelections);
       console.info(
-        `[Supabase] Sync cloud manuel — ${count} client, ${supplierCount} fournisseur.`
+        `[Supabase] Sync cloud manuel — ${count} client, ${supplierCount} fournisseur, ${selectionsCount} sélection(s), ${submissionsCount} réponse(s).`
       );
-      showToast(formatCatalogSyncMessage(count, supplierCount), "success");
+      showToast(
+        submissionsCount > 0
+          ? `${formatCatalogSyncMessage(count, supplierCount, selectionsCount)} · ${submissionsCount} réponse(s) client`
+          : formatCatalogSyncMessage(count, supplierCount, selectionsCount),
+        "success"
+      );
     } catch (error) {
       showToast(error.message || "Synchronisation impossible.", "error");
     }
@@ -1107,13 +1175,25 @@ export default function CatalogueClient({ data, setData, logActivity }) {
 
       {selections.length > 0 ? (
         <div className="catalog-selection-list">
-          <h3>Sélections client existantes</h3>
+          <div className="catalog-selection-list-header">
+            <h3>Sélections client existantes</h3>
+            {submittedSelectionsCount > 0 ? (
+              <span className="catalog-submission-badge" aria-label={`${submittedSelectionsCount} réponse(s) reçue(s)`}>
+                {submittedSelectionsCount} réponse{submittedSelectionsCount > 1 ? "s" : ""} reçue
+                {submittedSelectionsCount > 1 ? "s" : ""}
+              </span>
+            ) : null}
+          </div>
           {selections.map((selection) => {
             const link = getCatalogShareUrl(selection.shareId || selection.id);
             const submission = selection.clientSubmission;
+            const hasSubmission = selection.status === "submitted" && submission;
 
             return (
-              <article key={selection.id} className="card catalog-selection-card">
+              <article
+                key={selection.id}
+                className={`card catalog-selection-card ${hasSubmission ? "has-client-submission" : ""}`}
+              >
                 <div className="catalog-selection-card-header">
                   <div>
                     <h3>{selection.title}</h3>
@@ -1157,6 +1237,11 @@ export default function CatalogueClient({ data, setData, logActivity }) {
                 {submission ? (
                   <div className="catalog-selection-submission">
                     <strong>Réponse client</strong>
+                    {submission.submittedAt ? (
+                      <p className="catalog-submission-date">
+                        Reçue le {formatSubmissionDate(submission.submittedAt)}
+                      </p>
+                    ) : null}
                     <p>
                       {submission.clientName || "—"} · {submission.clientEmail || "—"} ·{" "}
                       {submission.clientPhone || "—"}
@@ -1174,6 +1259,12 @@ export default function CatalogueClient({ data, setData, logActivity }) {
                         );
                       })}
                     </ul>
+                    {submission.productSheet ? (
+                      <details className="catalog-submission-sheet">
+                        <summary>Fiche produit envoyée</summary>
+                        <pre>{submission.productSheet}</pre>
+                      </details>
+                    ) : null}
                   </div>
                 ) : null}
               </article>

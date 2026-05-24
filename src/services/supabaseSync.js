@@ -1,4 +1,5 @@
 import { getSupabase } from "../supabase";
+import { mergeCatalogSelectionRecord } from "./syncMerge";
 
 /** Refuse de pousser une suppression massive vers le cloud (ex. migration ou snapshot vide). */
 export const MASS_DELETE_GUARD_MIN = 50;
@@ -99,12 +100,61 @@ export function formatCatalogFetchLog(tableName, count, pageCount = 1) {
   return `${count} article(s) chargé(s) depuis Supabase « ${tableName} »${pages}`;
 }
 
-export function formatCatalogSyncMessage(clientCount = 0, supplierCount = 0) {
+export function formatCatalogSyncMessage(
+  clientCount = 0,
+  supplierCount = 0,
+  selectionsCount = 0
+) {
   const parts = [];
   if (clientCount > 0) parts.push(`${clientCount} article(s) catalogue client`);
   if (supplierCount > 0) parts.push(`${supplierCount} article(s) pool fournisseur`);
+  if (selectionsCount > 0) {
+    parts.push(`${selectionsCount} sélection(s) client`);
+  }
   if (!parts.length) return "Catalogue synchronisé depuis Supabase";
   return `${parts.join(", ")} chargé(s) depuis Supabase`;
+}
+
+async function fetchCatalogSelectionRowsByIds(supabase, ids = []) {
+  if (!ids.length) return [];
+
+  const uniqueIds = [...new Set(ids.filter(Boolean))];
+  const rows = [];
+
+  for (let offset = 0; offset < uniqueIds.length; offset += DELETE_CHUNK_SIZE) {
+    const chunk = uniqueIds.slice(offset, offset + DELETE_CHUNK_SIZE);
+    const { data, error } = await supabase
+      .from(CATALOG_TABLES.catalogSelections)
+      .select("id,data")
+      .in("id", chunk);
+
+    if (error) {
+      if (isMissingTableError(error)) return [];
+      throw formatSupabaseCollectionError(CATALOG_TABLES.catalogSelections, error);
+    }
+
+    rows.push(...(data || []));
+  }
+
+  return rows;
+}
+
+async function protectCatalogSelectionsDelta(supabase, delta = []) {
+  if (!delta.length) return delta;
+
+  const cloudRows = await fetchCatalogSelectionRowsByIds(
+    supabase,
+    delta.map((item) => item.id)
+  );
+  const cloudMap = new Map(
+    cloudRows.map((row) => [String(row.id), { id: row.id, ...(row.data || {}) }])
+  );
+
+  return delta.map((item) => {
+    const cloud = cloudMap.get(String(item.id));
+    if (!cloud) return item;
+    return mergeCatalogSelectionRecord(item, cloud);
+  });
 }
 
 /** Paginate with .range() until all rows are loaded (PostgREST default cap: 1000/request). */
@@ -265,12 +315,16 @@ export async function syncSupabaseData(nextData, previousData = {}) {
     table,
     previousItems = [],
     nextItems = [],
-    { required = false, label = table } = {}
+    { required = false, label = table, protectSelections = false } = {}
   ) => {
-    const delta = getCollectionDelta(previousItems, nextItems);
+    let delta = getCollectionDelta(previousItems, nextItems);
     if (!delta.length) return 0;
 
     const write = async () => {
+      if (protectSelections) {
+        delta = await protectCatalogSelectionsDelta(supabase, delta);
+      }
+
       const written = await upsertCollection(table, delta);
       if (written > 0) {
         catalogWriteSummary.push(`${label}: ${written}`);
@@ -322,7 +376,8 @@ export async function syncSupabaseData(nextData, previousData = {}) {
       upsertCollectionDelta(
         CATALOG_TABLES.catalogSelections,
         previousData.catalogSelections,
-        nextData.catalogSelections
+        nextData.catalogSelections,
+        { label: "sélections catalogue", protectSelections: true }
       )
     ),
     safeOptionalCollectionWrite("suppliers", () =>
@@ -524,9 +579,9 @@ export async function loadSupabaseData({ normalizeData, emptyData }) {
     client: cloudData.clientCatalogItems.length,
     selections: cloudData.catalogSelections.length,
   };
-  if (catalogCounts.supplier || catalogCounts.client) {
+  if (catalogCounts.supplier || catalogCounts.client || catalogCounts.selections) {
     console.info(
-      `[Supabase] Sync cloud — ${catalogCounts.client} catalogue client, ${catalogCounts.supplier} pool fournisseur chargé(s).`
+      `[Supabase] Sync cloud — ${catalogCounts.client} catalogue client, ${catalogCounts.supplier} pool fournisseur, ${catalogCounts.selections} sélection(s) chargée(s).`
     );
   }
 

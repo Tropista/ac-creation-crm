@@ -88,10 +88,72 @@ export function setLastSyncAt(timestamp = Date.now()) {
 }
 
 export function parseUpdatedAt(item) {
-  const raw = item?.updatedAt;
+  const raw = item?.updatedAt || item?.clientSubmission?.submittedAt;
   if (!raw) return 0;
   const parsed = Date.parse(String(raw));
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export function hasCatalogClientSubmission(selection) {
+  return Boolean(
+    selection?.clientSubmission &&
+      (selection.status === "submitted" || selection.clientSubmission.submittedAt)
+  );
+}
+
+/** Préserve les réponses client cloud lors d'une fusion ou d'un push CRM. */
+export function mergeCatalogSelectionRecord(local, cloud) {
+  if (!local) return cloud;
+  if (!cloud) return local;
+
+  const localSubmitted = hasCatalogClientSubmission(local);
+  const cloudSubmitted = hasCatalogClientSubmission(cloud);
+
+  if (cloudSubmitted && !localSubmitted) {
+    return {
+      ...local,
+      ...cloud,
+      clientSubmission: cloud.clientSubmission,
+      status: cloud.status,
+      updatedAt: cloud.updatedAt || local.updatedAt,
+    };
+  }
+
+  if (localSubmitted && !cloudSubmitted) {
+    return local;
+  }
+
+  if (localSubmitted && cloudSubmitted) {
+    const localAt = parseUpdatedAt(local.clientSubmission);
+    const cloudAt = parseUpdatedAt(cloud.clientSubmission);
+    return cloudAt >= localAt ? cloud : local;
+  }
+
+  const localAt = parseUpdatedAt(local);
+  const cloudAt = parseUpdatedAt(cloud);
+  return cloudAt > localAt ? { ...local, ...cloud } : local;
+}
+
+export function mergeCatalogSelectionsCollection(localItems = [], cloudItems = []) {
+  const localMap = new Map(
+    (localItems || []).filter((item) => item?.id).map((item) => [String(item.id), item])
+  );
+  const cloudMap = new Map(
+    (cloudItems || []).filter((item) => item?.id).map((item) => [String(item.id), item])
+  );
+
+  const ids = new Set([...localMap.keys(), ...cloudMap.keys()]);
+  const merged = [];
+
+  for (const id of ids) {
+    merged.push(mergeCatalogSelectionRecord(localMap.get(id), cloudMap.get(id)));
+  }
+
+  return merged;
+}
+
+export function countCatalogSubmissionsReceived(selections = []) {
+  return (selections || []).filter((selection) => hasCatalogClientSubmission(selection)).length;
 }
 
 function stableSerialize(value) {
@@ -251,6 +313,14 @@ export function mergeCloudWithLocal(localData = {}, cloudData = {}, { onConflict
   for (const key of SYNC_COLLECTIONS) {
     const localItems = localData[key] || [];
     const cloudItems = cloudData[key] || [];
+
+    if (key === "catalogSelections") {
+      merged[key] = mergeCatalogSelectionsCollection(localItems, cloudItems, {
+        lastSyncAt,
+        onConflict,
+      });
+      continue;
+    }
 
     if (CATALOG_SYNC_COLLECTIONS.has(key)) {
       if (shouldKeepLocalCatalogOverEmptyCloud(localItems, cloudItems)) {

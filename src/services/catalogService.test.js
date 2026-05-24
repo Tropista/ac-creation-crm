@@ -24,7 +24,9 @@ import {
   chunkIds,
   fetchPublicCatalogProducts,
   isRetryableSupabaseError,
+  submitPublicCatalogSelection,
 } from "./catalogService.js";
+import { loadPublicCatalogCache, savePublicCatalogCache } from "../utils/catalogShare.js";
 
 describe("catalogService", () => {
   beforeEach(() => {
@@ -130,5 +132,55 @@ describe("catalogService", () => {
       inCalls.every((call) => call.batchIds.every((id) => ids.includes(id)))
     ).toBe(true);
     expect(new Set(inCalls.flatMap((call) => call.batchIds)).size).toBe(ids.length);
+  });
+
+  it("submitPublicCatalogSelection enregistre clientSubmission dans Supabase", async () => {
+    const upsert = vi.fn().mockResolvedValue({ error: null });
+    const shareId = "share-123";
+    const currentSelection = {
+      id: shareId,
+      shareId,
+      title: "Sélection test",
+      status: "open",
+      productIds: ["p1"],
+      updatedAt: "2026-05-24T10:00:00.000Z",
+    };
+
+    loadPublicCatalogCache.mockReturnValue(currentSelection);
+    getSupabase.mockResolvedValue({
+      from: (table) => ({
+        select: () => ({
+          eq: () => ({
+            maybeSingle: () => Promise.resolve({ data: { id: shareId, data: currentSelection }, error: null }),
+          }),
+        }),
+        upsert: upsert,
+      }),
+    });
+
+    const result = await submitPublicCatalogSelection(shareId, {
+      clientName: "Client Test",
+      clientEmail: "client@example.com",
+      choices: [{ productId: "p1", quantity: 2 }],
+      productSheet: "Fiche produit",
+    });
+
+    expect(result.status).toBe("submitted");
+    expect(result.clientSubmission.clientName).toBe("Client Test");
+    expect(result.clientSubmission.productSheet).toBe("Fiche produit");
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: shareId,
+        data: expect.objectContaining({
+          status: "submitted",
+          clientSubmission: expect.objectContaining({
+            clientName: "Client Test",
+            submittedAt: expect.any(String),
+          }),
+        }),
+      }),
+      { onConflict: "id" }
+    );
+    expect(savePublicCatalogCache).toHaveBeenCalled();
   });
 });

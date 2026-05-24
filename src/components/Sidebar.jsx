@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   Banknote,
@@ -35,6 +35,7 @@ import {
 import { APP_LOGO_URL } from "../utils/assets";
 import { APP_VERSION } from "../utils/appVersion";
 import { pageToPath } from "../utils/routes";
+import { countCatalogSubmissionsReceived } from "../services/syncMerge";
 
 const SECTIONS_STORAGE_KEY = "crm_sidebar_sections_v1";
 
@@ -190,6 +191,11 @@ export default function Sidebar({
     }))
     .filter((group) => group.items.length > 0);
 
+  const catalogSubmissionCount = useMemo(
+    () => countCatalogSubmissionsReceived(data?.catalogSelections),
+    [data?.catalogSelections]
+  );
+
   return (
     <>
       <button
@@ -272,6 +278,14 @@ export default function Sidebar({
                         >
                           <NavIcon page={item.page} />
                           {item.label}
+                          {item.page === "catalogueClient" && catalogSubmissionCount > 0 ? (
+                            <span
+                              className="sidebar-nav-badge"
+                              aria-label={`${catalogSubmissionCount} réponse(s) client reçue(s)`}
+                            >
+                              {catalogSubmissionCount}
+                            </span>
+                          ) : null}
                         </NavLink>
                       ))}
                     </div>
