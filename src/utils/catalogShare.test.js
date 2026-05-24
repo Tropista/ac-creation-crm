@@ -10,6 +10,7 @@ import {
   pruneOldPublicCatalogCaches,
   PUBLIC_CATALOG_CACHE_PREFIX,
   resolveCatalogRecipientEmail,
+  resolveProductDisplayImage,
   resolveProductMinQuantity,
   resolveProductSizeOptions,
   sanitizeImageUrlForCache,
@@ -136,7 +137,7 @@ describe("catalogShare product sheet", () => {
       catalogProductsNeedLiveImageMerge([
         { id: "p1", imageUrl: "https://example.com/a.jpg", colors: ["Noir"] },
       ])
-    ).toBe(false);
+    ).toBe(true);
     expect(
       catalogProductsNeedLiveImageMerge([
         { id: "p1", imageUrl: "", colors: [{ name: "Noir", hex: "#000" }] },
@@ -151,6 +152,76 @@ describe("catalogShare product sheet", () => {
         },
       ])
     ).toBe(true);
+    expect(
+      catalogProductsNeedLiveImageMerge([
+        {
+          id: "p1",
+          imageUrl: "https://example.com/a.jpg",
+          colors: [{ name: "Noir", hex: "#000", imageUrl: "https://example.com/noir.jpg" }],
+        },
+      ])
+    ).toBe(false);
+  });
+
+  it("merges per-color image urls from live catalog when snapshot colors are strings", () => {
+    const [merged] = mergeLiveCatalogImages(
+      [
+        {
+          id: "p1",
+          name: "T-shirt",
+          imageUrl: "https://example.com/default.jpg",
+          colors: ["Sport Grey", "White"],
+        },
+      ],
+      [
+        {
+          id: "p1",
+          colors: [
+            { name: "Sport Grey", hex: "#808080", imageUrl: "https://example.com/grey.jpg" },
+            { name: "White", hex: "#fff", imageUrl: "https://example.com/white.jpg" },
+          ],
+        },
+      ]
+    );
+
+    expect(merged.colors).toEqual([
+      { name: "Sport Grey", imageUrl: "https://example.com/grey.jpg" },
+      { name: "White", imageUrl: "https://example.com/white.jpg" },
+    ]);
+  });
+
+  describe("resolveProductDisplayImage", () => {
+    const product = {
+      id: "p1",
+      imageUrl: "https://example.com/default.jpg",
+      colors: [
+        { name: "White", hex: "#fff", imageUrl: "https://example.com/white.jpg" },
+        { name: "Sport Grey", hex: "#808080", imageUrl: "https://example.com/grey.jpg" },
+      ],
+    };
+
+    it("returns per-color image when available", () => {
+      expect(resolveProductDisplayImage(product, "Sport Grey")).toBe(
+        "https://example.com/grey.jpg"
+      );
+      expect(resolveProductDisplayImage(product, "White")).toBe("https://example.com/white.jpg");
+    });
+
+    it("falls back to default product image when color has no imageUrl", () => {
+      const noColorImage = {
+        ...product,
+        colors: [{ name: "Sport Grey", hex: "#808080" }],
+      };
+      expect(resolveProductDisplayImage(noColorImage, "Sport Grey")).toBe(
+        "https://example.com/default.jpg"
+      );
+    });
+
+    it("returns empty string when no images are available", () => {
+      expect(
+        resolveProductDisplayImage({ colors: [{ name: "Noir", hex: "#000" }] }, "Noir")
+      ).toBe("");
+    });
   });
 
   describe("savePublicCatalogCache", () => {

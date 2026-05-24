@@ -2,6 +2,7 @@ import { isHashRouterMode, pageToPath } from "./routes";
 import { openQuoteFromCalculator } from "./quoteDraft";
 import { stripSourceFromDescription } from "./catalogDescription";
 import {
+  enrichCatalogColors,
   resolveCatalogColorImageUrl,
   resolveCatalogColorLabel,
 } from "./colorNameToHex";
@@ -21,6 +22,11 @@ export function sanitizeImageUrlForCache(url) {
   return trimmed;
 }
 
+function colorHasHttpImageUrl(color) {
+  if (!color || typeof color !== "object") return false;
+  return Boolean(sanitizeImageUrlForCache(resolveCatalogColorImageUrl(color)));
+}
+
 /** True when snapshots lack http image URLs and a live catalog fetch may help. */
 export function catalogProductsNeedLiveImageMerge(products = []) {
   if (!Array.isArray(products) || !products.length) return false;
@@ -28,11 +34,19 @@ export function catalogProductsNeedLiveImageMerge(products = []) {
   return products.some((product) => {
     if (!sanitizeImageUrlForCache(product?.imageUrl)) return true;
     const colors = Array.isArray(product?.colors) ? product.colors : [];
-    return colors.some((color) => {
-      if (!color || typeof color !== "object" || !("imageUrl" in color)) return false;
-      return !sanitizeImageUrlForCache(color.imageUrl);
-    });
+    if (!colors.length) return false;
+    return colors.some((color) => !colorHasHttpImageUrl(color));
   });
+}
+
+/** Image shown for a product card: per-color packshot, else default product image. */
+export function resolveProductDisplayImage(product, colorLabel) {
+  if (!product) return "";
+  const colors = enrichCatalogColors(product.colors || []);
+  const match = colors.find((color) => resolveCatalogColorLabel(color) === colorLabel);
+  const colorImage = match ? resolveCatalogColorImageUrl(match) : "";
+  const defaultImage = sanitizeImageUrlForCache(product.imageUrl);
+  return colorImage || defaultImage || "";
 }
 
 export function sanitizeColorForSnapshot(color) {

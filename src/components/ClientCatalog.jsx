@@ -11,6 +11,7 @@ import {
   buildCatalogMailtoUrl,
   buildCatalogProductSheet,
   resolveCatalogRecipientEmail,
+  resolveProductDisplayImage,
   resolveProductMinQuantity,
   resolveProductSizeOptions,
 } from "../utils/catalogShare";
@@ -18,7 +19,6 @@ import { stripSourceFromDescription } from "../utils/catalogDescription";
 import {
   enrichCatalogColors,
   resolveCatalogColorHex,
-  resolveCatalogColorImageUrl,
   resolveCatalogColorLabel,
 } from "../utils/colorNameToHex";
 import {
@@ -56,14 +56,6 @@ function createDraftForProduct(product) {
     size: sizes.includes("M") ? "M" : sizes[0] || "M",
     quantity: minQty,
   };
-}
-
-function resolveProductDisplayImage(product, colorLabel) {
-  if (!product) return "";
-  const colors = enrichCatalogColors(product.colors || []);
-  const match = colors.find((color) => resolveCatalogColorLabel(color) === colorLabel);
-  const colorImage = match ? resolveCatalogColorImageUrl(match) : "";
-  return colorImage || product.imageUrl || "";
 }
 
 function ClientColorPicker({ colors, value, onChange }) {

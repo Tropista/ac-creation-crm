@@ -154,13 +154,14 @@ export async function fetchPublicCatalogProducts(selection, productIds = []) {
 
   if (!products.length) return [];
 
-  const needsLiveMerge = catalogProductsNeedLiveImageMerge(products);
-  if (!needsLiveMerge) return products;
+  const shouldFetchLive =
+    ids.length && (isSupabaseConfigured || catalogProductsNeedLiveImageMerge(products));
+  if (!shouldFetchLive) return products;
 
   let liveItems = [];
   if (!isSupabaseConfigured) {
     liveItems = (loadData().clientCatalogItems || []).filter((item) => ids.includes(item.id));
-  } else if (ids.length) {
+  } else {
     try {
       const supabase = await getSupabase();
       liveItems = await fetchCatalogItemsByIds(supabase, ids);
