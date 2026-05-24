@@ -1,5 +1,8 @@
 const DEFAULT_CATALOG_API_URL = "http://127.0.0.1:3001";
 export const EXPECTED_CATALOG_PARSER_VERSION = 4;
+export const CATALOG_SERVER_UNAVAILABLE_MESSAGE =
+  "Serveur catalogue indisponible — lancez npm run bank:win";
+const REFRESH_BATCH_SIZE = 50;
 
 function isElectronRenderer() {
   return typeof window !== "undefined" && window.electronAPI?.isElectron;
@@ -12,17 +15,73 @@ export function getCatalogApiUrl() {
   return import.meta.env.VITE_CATALOG_API_URL || import.meta.env.VITE_BANK_API_URL || DEFAULT_CATALOG_API_URL;
 }
 
-async function fetchJson(url, options) {
-  const response = await fetch(url, options);
-  let payload = null;
+function isHtmlPayload(text = "", contentType = "") {
+  const trimmed = String(text || "").trimStart();
+  return (
+    /text\/html/i.test(contentType) ||
+    trimmed.startsWith("<!DOCTYPE") ||
+    trimmed.startsWith("<html") ||
+    (trimmed.startsWith("<") && trimmed.includes("</"))
+  );
+}
+
+export async function parseCatalogJsonResponse(response) {
+  const contentType = response.headers.get("content-type") || "";
+  const text = await response.text();
+
+  if (isHtmlPayload(text, contentType)) {
+    throw new Error(CATALOG_SERVER_UNAVAILABLE_MESSAGE);
+  }
+
+  if (!text) return null;
 
   try {
-    payload = await response.json();
+    return JSON.parse(text);
   } catch {
+    throw new Error(CATALOG_SERVER_UNAVAILABLE_MESSAGE);
+  }
+}
+
+async function catalogFetch(path, options) {
+  const url = `${getCatalogApiUrl()}${path}`;
+
+  let response;
+  try {
+    response = await fetch(url, options);
+  } catch {
+    throw new Error(CATALOG_SERVER_UNAVAILABLE_MESSAGE);
+  }
+
+  const payload = await parseCatalogJsonResponse(response);
+  return { response, payload };
+}
+
+async function fetchJson(url, options) {
+  let response;
+  try {
+    response = await fetch(url, options);
+  } catch {
+    return { response: null, payload: null, unreachable: true, htmlResponse: false };
+  }
+
+  let payload = null;
+  let htmlResponse = false;
+  try {
+    payload = await parseCatalogJsonResponse(response);
+  } catch (error) {
+    htmlResponse = error?.message === CATALOG_SERVER_UNAVAILABLE_MESSAGE;
     payload = null;
   }
 
-  return { response, payload };
+  return { response, payload, unreachable: false, htmlResponse };
+}
+
+function chunkArray(items = [], batchSize = REFRESH_BATCH_SIZE) {
+  const chunks = [];
+  for (let index = 0; index < items.length; index += batchSize) {
+    chunks.push(items.slice(index, index + batchSize));
+  }
+  return chunks;
 }
 
 /**
@@ -37,11 +96,28 @@ export async function probeCatalogApi() {
   const url = getCatalogApiUrl();
 
   try {
-    const { response: catalogResponse, payload: catalogPayload } = await fetchJson(
-      `${url}/api/catalog/health`
-    );
+    const { response: catalogResponse, payload: catalogPayload, unreachable, htmlResponse } =
+      await fetchJson(`${url}/api/catalog/health`);
 
-    if (catalogResponse.ok) {
+    if (unreachable || !catalogResponse) {
+      return {
+        status: "unreachable",
+        url,
+        message:
+          `Impossible de joindre ${url}. Lancez npm run bank:win dans un terminal séparé, ` +
+          "puis vérifiez que VITE_BANK_API_URL pointe vers la même adresse.",
+      };
+    }
+
+    if (htmlResponse) {
+      return {
+        status: "unreachable",
+        url,
+        message: CATALOG_SERVER_UNAVAILABLE_MESSAGE,
+      };
+    }
+
+    if (catalogResponse.ok && catalogPayload) {
       const parserVersion = Number(catalogPayload?.parserVersion);
       if (
         !Number.isFinite(parserVersion) ||
@@ -53,7 +129,7 @@ export async function probeCatalogApi() {
           message:
             `API détectée sur ${url} mais le parseur catalogue est obsolète (v${parserVersion || "?"}). ` +
             "Arrêtez tout processus sur le port 3001 (Ctrl+C ou Gestionnaire des tâches), " +
-            "puis relancez l'application ou npm run bank.",
+            "puis relancez l'application ou npm run bank:win.",
         };
       }
 
@@ -68,18 +144,26 @@ export async function probeCatalogApi() {
     if (catalogResponse.status === 404) {
       try {
         const { response: bankResponse } = await fetchJson(`${url}/api/bank/status`);
-        if (bankResponse.ok) {
+        if (bankResponse?.ok) {
           return {
             status: "outdated",
             url,
             message:
               `API détectée sur ${url} mais sans import catalogue (version obsolète). ` +
-              "Arrêtez le processus sur le port 3001, puis relancez npm run bank.",
+              "Arrêtez le processus sur le port 3001, puis relancez npm run bank:win.",
           };
         }
       } catch {
         // Fall through to generic error below.
       }
+    }
+
+    if (!catalogPayload && isHtmlPayload("", catalogResponse.headers.get("content-type") || "")) {
+      return {
+        status: "unreachable",
+        url,
+        message: CATALOG_SERVER_UNAVAILABLE_MESSAGE,
+      };
     }
 
     return {
@@ -91,9 +175,7 @@ export async function probeCatalogApi() {
     return {
       status: "unreachable",
       url,
-      message:
-        `Impossible de joindre ${url}. Lancez npm run bank dans un terminal séparé, ` +
-        "puis vérifiez que VITE_BANK_API_URL pointe vers la même adresse.",
+      message: CATALOG_SERVER_UNAVAILABLE_MESSAGE,
     };
   }
 }
@@ -103,7 +185,7 @@ export async function fetchCatalogApiHealth() {
   if (probe.status === "ok") {
     return { ok: true, provider: probe.provider };
   }
-  throw new Error(probe.message || "API catalogue indisponible");
+  throw new Error(probe.message || CATALOG_SERVER_UNAVAILABLE_MESSAGE);
 }
 
 export async function scrapeCatalogUrl({
@@ -112,51 +194,55 @@ export async function scrapeCatalogUrl({
   maxProducts = 200,
   importAll = false,
 }) {
-  const response = await fetch(`${getCatalogApiUrl()}/api/catalog/scrape`, {
+  const { response, payload } = await catalogFetch("/api/catalog/scrape", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ url, maxPages, maxProducts, importAll }),
   });
 
-  const payload = await response.json();
   if (!response.ok) {
     if (response.status === 404) {
       throw new Error(
-        "Route /api/catalog/scrape introuvable — redémarrez npm run bank avec la dernière version."
+        "Route /api/catalog/scrape introuvable — redémarrez npm run bank:win avec la dernière version."
       );
     }
-    throw new Error(payload.error || "Import catalogue impossible");
+    throw new Error(payload?.error || "Import catalogue impossible");
   }
 
   return payload;
 }
 
-export async function refreshCatalogColors(sourceUrls = []) {
-  const response = await fetch(`${getCatalogApiUrl()}/api/catalog/refresh-colors`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sourceUrls }),
-  });
+async function refreshCatalogBatch(path, sourceUrls = []) {
+  const uniqueUrls = [...new Set((sourceUrls || []).filter(Boolean))];
+  if (!uniqueUrls.length) return [];
 
-  const payload = await response.json();
-  if (!response.ok) {
-    throw new Error(payload.error || "Rafraîchissement des couleurs impossible");
+  const results = [];
+  for (const batch of chunkArray(uniqueUrls)) {
+    const { response, payload } = await catalogFetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sourceUrls: batch }),
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        payload?.error ||
+          (path.includes("colors")
+            ? "Rafraîchissement des couleurs impossible"
+            : "Rafraîchissement des images impossible")
+      );
+    }
+
+    results.push(...(payload?.results || []));
   }
 
-  return payload.results || [];
+  return results;
+}
+
+export async function refreshCatalogColors(sourceUrls = []) {
+  return refreshCatalogBatch("/api/catalog/refresh-colors", sourceUrls);
 }
 
 export async function refreshCatalogImages(sourceUrls = []) {
-  const response = await fetch(`${getCatalogApiUrl()}/api/catalog/refresh-images`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sourceUrls }),
-  });
-
-  const payload = await response.json();
-  if (!response.ok) {
-    throw new Error(payload.error || "Rafraîchissement des images impossible");
-  }
-
-  return payload.results || [];
+  return refreshCatalogBatch("/api/catalog/refresh-images", sourceUrls);
 }

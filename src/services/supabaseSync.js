@@ -4,6 +4,7 @@ import { getSupabase } from "../supabase";
 export const MASS_DELETE_GUARD_MIN = 50;
 
 export const UPSERT_CHUNK_SIZE = 50;
+export const DELETE_CHUNK_SIZE = 100;
 
 export const CATALOG_TABLES = {
   supplierCatalogItems: "supplier_catalog_items",
@@ -207,9 +208,11 @@ export async function syncSupabaseData(nextData, previousData = {}) {
       return;
     }
 
-    const { error } = await supabase.from(table).delete().in("id", removedIds);
-
-    if (error) throw formatSupabaseCollectionError(table, error);
+    for (let offset = 0; offset < removedIds.length; offset += DELETE_CHUNK_SIZE) {
+      const chunk = removedIds.slice(offset, offset + DELETE_CHUNK_SIZE);
+      const { error } = await supabase.from(table).delete().in("id", chunk);
+      if (error) throw formatSupabaseCollectionError(table, error);
+    }
   };
 
   const upsertCollection = async (table, items = []) => {

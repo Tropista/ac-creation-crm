@@ -135,6 +135,7 @@ export default function CatalogueClient({ data, setData, logActivity }) {
   const [selectedItemIds, setSelectedItemIds] = useState([]);
   const [refreshingPackshots, setRefreshingPackshots] = useState(false);
   const [refreshingColors, setRefreshingColors] = useState(false);
+  const [removingSelection, setRemovingSelection] = useState(false);
   const [refreshingItemColorsId, setRefreshingItemColorsId] = useState(null);
   const [creatingSelection, setCreatingSelection] = useState(false);
   const [selectionForm, setSelectionForm] = useState({
@@ -306,30 +307,45 @@ export default function CatalogueClient({ data, setData, logActivity }) {
     logActivity?.("Suppression article catalogue client", item.name, item.sku || "");
   }
 
-  function removeSelectedCatalogItems() {
+  async function removeSelectedCatalogItems() {
     const count = selectedItemIds.length;
-    if (!count) return;
+    if (!count || removingSelection) return;
     if (!confirm(`Supprimer ${count} article(s) du catalogue client ?`)) return;
 
-    setData((prev) => ({
-      ...prev,
-      clientCatalogItems: (prev.clientCatalogItems || []).filter(
-        (entry) => !selectedItemIds.includes(entry.id)
-      ),
-    }));
+    const idsToRemove = [...selectedItemIds];
+    const shouldClearDetail =
+      selectedItem?.id && idsToRemove.includes(selectedItem.id);
 
-    if (selectedItem?.id && selectedItemIds.includes(selectedItem.id)) {
-      setSelectedItem(null);
-      setSelectedColorIndex(null);
+    setRemovingSelection(true);
+    try {
+      await setData((prev) => ({
+        ...prev,
+        clientCatalogItems: (prev.clientCatalogItems || []).filter(
+          (entry) => !idsToRemove.includes(entry.id)
+        ),
+      }));
+
+      if (shouldClearDetail) {
+        setSelectedItem(null);
+        setSelectedColorIndex(null);
+      }
+
+      logActivity?.(
+        "Suppression groupée catalogue client",
+        `${count} article(s)`,
+        ""
+      );
+      setSelectedItemIds([]);
+      showToast(`${count} article(s) retiré(s) du catalogue client`, "success");
+    } catch (error) {
+      showToast(
+        error?.message ||
+          "Suppression impossible — vérifiez la connexion cloud et réessayez.",
+        "error"
+      );
+    } finally {
+      setRemovingSelection(false);
     }
-
-    logActivity?.(
-      "Suppression groupée catalogue client",
-      `${count} article(s)`,
-      ""
-    );
-    setSelectedItemIds([]);
-    showToast(`${count} article(s) retiré(s) du catalogue client`, "success");
   }
 
   async function removeSelection(selection) {
@@ -829,9 +845,16 @@ export default function CatalogueClient({ data, setData, logActivity }) {
                 </span>
               </label>
               {selectedItemIds.length > 0 ? (
-                <button type="button" className="danger" onClick={removeSelectedCatalogItems}>
+                <button
+                  type="button"
+                  className="danger"
+                  onClick={removeSelectedCatalogItems}
+                  disabled={removingSelection}
+                >
                   <Trash2 size={14} />
-                  Supprimer la sélection ({selectedItemIds.length})
+                  {removingSelection
+                    ? "Suppression…"
+                    : `Supprimer la sélection (${selectedItemIds.length})`}
                 </button>
               ) : null}
             </div>
