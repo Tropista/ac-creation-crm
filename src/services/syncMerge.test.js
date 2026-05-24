@@ -301,6 +301,31 @@ describe("syncMerge", () => {
     ).toBe(1);
   });
 
+  it("mergeCatalogSelectionRecord préfère la suppression locale récente", () => {
+    const local = {
+      id: "sel1",
+      title: "Projet club",
+      status: "open",
+      updatedAt: "2026-05-24T13:00:00.000Z",
+    };
+    const cloud = {
+      id: "sel1",
+      title: "Projet club",
+      status: "submitted",
+      updatedAt: "2026-05-24T11:00:00.000Z",
+      clientSubmission: {
+        clientName: "AS Sportive",
+        choices: [{ productId: "p1", quantity: 10 }],
+        submittedAt: "2026-05-24T11:00:00.000Z",
+      },
+    };
+
+    const merged = mergeCatalogSelectionRecord(local, cloud);
+
+    expect(merged.status).toBe("open");
+    expect(merged.clientSubmission).toBeUndefined();
+  });
+
   it("mergeCatalogSelectionsCollection fusionne les réponses client", () => {
     const merged = mergeCatalogSelectionsCollection(
       [{ id: "1", status: "open", updatedAt: "2026-05-24T10:00:00.000Z" }],
@@ -319,6 +344,32 @@ describe("syncMerge", () => {
 
     expect(merged[0].status).toBe("submitted");
     expect(merged[0].clientSubmission.submittedAt).toBe("2026-05-24T11:00:00.000Z");
+  });
+
+  it("mergeCatalogSelectionsCollection conserve la suppression locale au rafraîchissement", () => {
+    const merged = mergeCatalogSelectionsCollection(
+      [
+        {
+          id: "1",
+          status: "open",
+          updatedAt: "2026-05-24T13:00:00.000Z",
+        },
+      ],
+      [
+        {
+          id: "1",
+          status: "submitted",
+          updatedAt: "2026-05-24T11:00:00.000Z",
+          clientSubmission: {
+            submittedAt: "2026-05-24T11:00:00.000Z",
+            choices: [],
+          },
+        },
+      ]
+    );
+
+    expect(merged[0].status).toBe("open");
+    expect(merged[0].clientSubmission).toBeUndefined();
   });
 
   it("resolveCloudInitError marque récupéré si le catalogue cloud a été restauré", () => {

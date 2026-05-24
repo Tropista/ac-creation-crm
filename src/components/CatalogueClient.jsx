@@ -744,7 +744,7 @@ export default function CatalogueClient({ data, setData, logActivity }) {
 
     try {
       const updated = await clearCatalogSelectionSubmission(selection);
-      setData((prev) => ({
+      await setData((prev) => ({
         ...prev,
         catalogSelections: (prev.catalogSelections || []).map((item) =>
           item.id === selection.id ? updated : item

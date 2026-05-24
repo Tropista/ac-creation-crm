@@ -110,6 +110,11 @@ export function mergeCatalogSelectionRecord(local, cloud) {
   const cloudSubmitted = hasCatalogClientSubmission(cloud);
 
   if (cloudSubmitted && !localSubmitted) {
+    const localAt = parseUpdatedAt(local);
+    const cloudAt = parseUpdatedAt(cloud);
+    if (localAt > cloudAt) {
+      return local;
+    }
     return {
       ...local,
       ...cloud,
