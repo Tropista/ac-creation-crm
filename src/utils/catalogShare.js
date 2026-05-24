@@ -1,5 +1,6 @@
 import { isHashRouterMode, pageToPath } from "./routes";
 import { openQuoteFromCalculator } from "./quoteDraft";
+import { nextDocumentNumber, today, uid } from "./documents";
 import { stripSourceFromDescription } from "./catalogDescription";
 import {
   enrichCatalogColors,
@@ -444,6 +445,93 @@ export function openQuoteFromCatalogSelection(navigate, selection, products) {
   const productsById = new Map((products || []).map((product) => [product.id, product]));
   const draft = buildCatalogQuoteDraft(selection, productsById);
   openQuoteFromCalculator(navigate, draft);
+}
+
+function computeQuoteTotals(lines = [], { globalDiscount = 0, taxRate = 17 } = {}) {
+  const normalizedLines = (lines || []).map((line) => {
+    const subtotal = Number(line.quantity || 0) * Number(line.price || 0);
+    const discountAmount = subtotal * (Number(line.discount || 0) / 100);
+    const totalHT = subtotal - discountAmount;
+    return { subtotal, discountAmount, totalHT };
+  });
+
+  const subtotal = normalizedLines.reduce((sum, line) => sum + line.subtotal, 0);
+  const lineDiscountAmount = normalizedLines.reduce(
+    (sum, line) => sum + line.discountAmount,
+    0
+  );
+  const totalBeforeGlobalDiscount = normalizedLines.reduce(
+    (sum, line) => sum + line.totalHT,
+    0
+  );
+  const globalDiscountRate = Math.min(100, Math.max(0, Number(globalDiscount || 0)));
+  const globalDiscountAmount = totalBeforeGlobalDiscount * (globalDiscountRate / 100);
+  const discountAmount = lineDiscountAmount + globalDiscountAmount;
+  const totalHT = Math.max(0, totalBeforeGlobalDiscount - globalDiscountAmount);
+  const taxAmount = totalHT * (Number(taxRate || 0) / 100);
+  const totalTTC = totalHT + taxAmount;
+
+  return {
+    subtotal,
+    lineDiscountAmount,
+    globalDiscountRate,
+    globalDiscountAmount,
+    discountAmount,
+    totalHT,
+    taxAmount,
+    totalTTC,
+  };
+}
+
+export function buildAtelierQuoteFromCatalogSelection(
+  selection,
+  productsById,
+  { quotes = [], taxRate = 17 } = {}
+) {
+  const draft = buildCatalogQuoteDraft(selection, productsById);
+  const lines = (draft.lines || []).map((line) => ({
+    ...line,
+    quantity: Number(line.quantity) || 1,
+    price: Number(line.price) || 0,
+    discount: Number(line.discount) || 0,
+  }));
+  const submission = selection?.clientSubmission || {};
+  const clientLabel =
+    submission.clientName || selection.clientName || "Client catalogue";
+  const shareUrl = getCatalogShareUrl(selection.shareId || selection.id);
+  const totals = computeQuoteTotals(lines, { taxRate });
+  const description =
+    lines.length === 1
+      ? `${selection.title || "Sélection catalogue"} — ${clientLabel}`
+      : `${selection.title || "Sélection catalogue"} — ${clientLabel} (${lines.length} articles)`;
+
+  return {
+    id: uid(),
+    number: nextDocumentNumber(quotes, "DEV"),
+    date: today(),
+    taxRate: Number(taxRate) || 17,
+    clientId: selection.clientId || "",
+    status: "Accepté",
+    globalDiscount: 0,
+    description,
+    lines,
+    source: "demande catalogue",
+    catalogSelectionId: selection.id,
+    catalogSelectionTitle: selection.title || "",
+    catalogShareUrl: shareUrl,
+    notes: [
+      `Sélection : ${selection.title || "—"}`,
+      `Lien catalogue : ${shareUrl}`,
+      submission.clientName ? `Contact : ${submission.clientName}` : "",
+      submission.clientEmail ? `Email : ${submission.clientEmail}` : "",
+      submission.clientPhone ? `Téléphone : ${submission.clientPhone}` : "",
+      submission.notes || "",
+    ]
+      .filter(Boolean)
+      .join("\n"),
+    stockAdjusted: false,
+    ...totals,
+  };
 }
 
 export function catalogSelectionPath(shareId) {

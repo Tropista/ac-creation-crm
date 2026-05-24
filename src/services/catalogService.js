@@ -384,6 +384,37 @@ export async function upsertCatalogSelection(selection) {
   return savePublicCatalogCache(selection, { omitSnapshots: isSupabaseConfigured });
 }
 
+export async function clearCatalogSelectionSubmission(selection) {
+  if (!selection?.id) {
+    throw new Error("Sélection introuvable.");
+  }
+
+  const { clientSubmission: _removed, ...rest } = selection;
+  const nextSelection = {
+    ...rest,
+    status: "open",
+    updatedAt: new Date().toISOString(),
+  };
+
+  patchLocalCatalogSelection(nextSelection);
+  savePublicCatalogCache(nextSelection, { omitSnapshots: isSupabaseConfigured });
+
+  if (isSupabaseConfigured) {
+    const supabase = await getSupabase();
+    const { error } = await supabase.from("catalog_selections").upsert(
+      {
+        id: selection.id,
+        data: nextSelection,
+      },
+      { onConflict: "id" }
+    );
+
+    if (error) throw normalizePublicError(error);
+  }
+
+  return nextSelection;
+}
+
 export async function deleteCatalogSelection(shareId) {
   if (typeof window !== "undefined") {
     localStorage.removeItem(`crm_catalog_public_${shareId}`);

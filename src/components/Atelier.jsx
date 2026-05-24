@@ -12,6 +12,7 @@ import { pageToPath } from "../utils/routes";
 import { showToast } from "../utils/toast";
 
 const PROCESS_ICONS = {
+  catalog: "📬",
   laser: "🔥",
   dtf: "👕",
   uvdtf: "📱",
@@ -58,6 +59,24 @@ function AtelierCard({ data, quote, onOpen, onAdvance, onStatusChange }) {
       </div>
 
       <p className="atelier-card__client">{clientName(data, quote.clientId)}</p>
+
+      {quote.catalogSelectionTitle ? (
+        <p className="atelier-card__catalog-title muted">
+          {quote.catalogSelectionTitle}
+        </p>
+      ) : null}
+
+      {quote.catalogShareUrl ? (
+        <a
+          className="atelier-card__catalog-link"
+          href={quote.catalogShareUrl}
+          target="_blank"
+          rel="noreferrer"
+          onClick={(event) => event.stopPropagation()}
+        >
+          Voir la sélection catalogue
+        </a>
+      ) : null}
 
       <div className="atelier-card__meta">
         <span className="atelier-process-badge">

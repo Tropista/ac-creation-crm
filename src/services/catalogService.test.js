@@ -22,6 +22,7 @@ vi.mock("../utils/catalogShare.js", async (importOriginal) => {
 import { getSupabase } from "../supabase.js";
 import {
   chunkIds,
+  clearCatalogSelectionSubmission,
   fetchPublicCatalogProducts,
   isRetryableSupabaseError,
   submitPublicCatalogSelection,
@@ -177,6 +178,45 @@ describe("catalogService", () => {
             clientName: "Client Test",
             submittedAt: expect.any(String),
           }),
+        }),
+      }),
+      { onConflict: "id" }
+    );
+    expect(savePublicCatalogCache).toHaveBeenCalled();
+  });
+
+  it("clearCatalogSelectionSubmission retire clientSubmission et repasse en open", async () => {
+    const upsert = vi.fn().mockResolvedValue({ error: null });
+    const shareId = "share-clear";
+    const submittedSelection = {
+      id: shareId,
+      shareId,
+      title: "Sélection AS Sportive",
+      status: "submitted",
+      productIds: ["p1"],
+      clientSubmission: {
+        clientName: "AS Sportive",
+        submittedAt: "2026-05-24T12:00:00.000Z",
+        choices: [{ productId: "p1", quantity: 5, color: "Noir", size: "M" }],
+      },
+      updatedAt: "2026-05-24T12:00:00.000Z",
+    };
+
+    getSupabase.mockResolvedValue({
+      from: () => ({
+        upsert,
+      }),
+    });
+
+    const result = await clearCatalogSelectionSubmission(submittedSelection);
+
+    expect(result.status).toBe("open");
+    expect(result.clientSubmission).toBeUndefined();
+    expect(upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: shareId,
+        data: expect.objectContaining({
+          status: "open",
         }),
       }),
       { onConflict: "id" }

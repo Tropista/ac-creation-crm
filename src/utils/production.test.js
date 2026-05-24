@@ -7,6 +7,7 @@ import {
   getProductionQueue,
   inferProcessType,
   isAtelierPipelineQuote,
+  isCatalogAtelierQuote,
   isProductionStatus,
   isQuoteInProductionQueue,
 } from "./production.js";
@@ -101,6 +102,24 @@ describe("production atelier helpers", () => {
     expect(board.total).toBe(2);
     expect(board.byStatus.find((column) => column.status === "Accepté")?.items).toHaveLength(1);
     expect(board.byStatus.find((column) => column.status === "En production")?.items).toHaveLength(1);
+  });
+
+  it("classe les demandes catalogue dans le processus dédié", () => {
+    const quote = {
+      id: "cat-1",
+      status: "Accepté",
+      source: "demande catalogue",
+      catalogSelectionId: "sel-1",
+      lines: [{ description: "T-shirt Regent (Noir · M)" }],
+    };
+
+    expect(isCatalogAtelierQuote(quote)).toBe(true);
+    expect(inferProcessType(quote).key).toBe("catalog");
+
+    const board = getAtelierBoard([quote]);
+    const catalogGroup = board.byProcess.find((group) => group.key === "catalog");
+    expect(catalogGroup?.items).toHaveLength(1);
+    expect(catalogGroup?.label).toBe("Demande catalogue");
   });
 });
 

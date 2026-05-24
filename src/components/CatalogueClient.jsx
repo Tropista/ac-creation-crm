@@ -1,9 +1,10 @@
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Copy, Link2, RefreshCw, Trash2 } from "lucide-react";
+import { Copy, Link2, RefreshCw, Trash2, Wrench } from "lucide-react";
 import { isSupabaseConfigured } from "../supabase";
 import {
   deleteCatalogSelection,
+  clearCatalogSelectionSubmission,
   fetchCatalogSelectionsFromCloud,
   upsertCatalogSelection,
 } from "../services/catalogService";
@@ -11,9 +12,11 @@ import { loadData, normalizeData } from "../services/dataService";
 import { formatCatalogSyncMessage } from "../services/supabaseSync";
 import {
   createCatalogSelectionPayload,
+  buildAtelierQuoteFromCatalogSelection,
   getCatalogShareUrl,
   openQuoteFromCatalogSelection,
 } from "../utils/catalogShare";
+import { pageToPath } from "../utils/routes";
 import { resolveActiveCatalogItems } from "../utils/catalogCollections";
 import {
   countCatalogSubmissionsReceived,
@@ -726,6 +729,107 @@ export default function CatalogueClient({ data, setData, logActivity }) {
     openQuoteFromCatalogSelection(navigate, selection, items);
   }
 
+  async function clearClientSubmission(selection) {
+    if (
+      !confirm(
+        `Supprimer la réponse client pour « ${selection.title} » ?\n\nLe lien catalogue sera conservé. Le client pourra soumettre une nouvelle réponse.`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const updated = await clearCatalogSelectionSubmission(selection);
+      setData((prev) => ({
+        ...prev,
+        catalogSelections: (prev.catalogSelections || []).map((item) =>
+          item.id === selection.id ? updated : item
+        ),
+      }));
+      logActivity?.(
+        "Suppression réponse catalogue",
+        selection.title,
+        selection.id
+      );
+      showToast("Réponse client supprimée — le lien catalogue reste actif.", "success");
+    } catch (error) {
+      showToast(error.message || "Suppression de la réponse impossible.", "error");
+    }
+  }
+
+  async function sendToAtelier(selection) {
+    const submission = selection.clientSubmission;
+    if (!submission) {
+      showToast("Aucune réponse client à envoyer.", "warning");
+      return;
+    }
+
+    const existingQuote = (data.quotes || []).find(
+      (quote) => quote.catalogSelectionId === selection.id
+    );
+    if (existingQuote) {
+      if (
+        !confirm(
+          `Cette sélection est déjà dans l'atelier (${existingQuote.number}). Ouvrir l'atelier ?`
+        )
+      ) {
+        return;
+      }
+      navigate(pageToPath("atelier"));
+      return;
+    }
+
+    const productsById = new Map(
+      (selection.productIds || [])
+        .map((id) => findCatalogItem(id, selection))
+        .filter(Boolean)
+        .map((product) => [product.id, product])
+    );
+
+    const quote = buildAtelierQuoteFromCatalogSelection(selection, productsById, {
+      quotes: data.quotes || [],
+      taxRate: data.settings?.taxRate ?? 17,
+    });
+
+    const contactName = submission.clientName || selection.clientName || "";
+    const matchedClient = (data.clients || []).find(
+      (client) =>
+        contactName &&
+        String(client.name || "").trim().toLowerCase() === contactName.trim().toLowerCase()
+    );
+    if (matchedClient) {
+      quote.clientId = matchedClient.id;
+    } else if (selection.clientId) {
+      quote.clientId = selection.clientId;
+    }
+
+    const nextSelection = {
+      ...selection,
+      atelierQuoteId: quote.id,
+      updatedAt: new Date().toISOString(),
+    };
+
+    try {
+      await setData((prev) => ({
+        ...prev,
+        quotes: [...(prev.quotes || []), quote],
+        catalogSelections: (prev.catalogSelections || []).map((item) =>
+          item.id === selection.id ? nextSelection : item
+        ),
+      }));
+
+      if (isSupabaseConfigured) {
+        await upsertCatalogSelection(nextSelection);
+      }
+
+      logActivity?.("Envoi atelier catalogue", selection.title, quote.number);
+      showToast(`Demande envoyée dans l'atelier (${quote.number}).`, "success");
+      navigate(pageToPath("atelier"));
+    } catch (error) {
+      showToast(error.message || "Envoi dans l'atelier impossible.", "error");
+    }
+  }
+
   async function updateCatalogItemImage(itemId, imageUrl) {
     await setData((prev) => patchClientCatalogItemImage(prev, itemId, imageUrl));
     setSelectedItem((current) =>
@@ -1265,6 +1369,24 @@ export default function CatalogueClient({ data, setData, logActivity }) {
                         <pre>{submission.productSheet}</pre>
                       </details>
                     ) : null}
+                    <div className="catalog-submission-actions">
+                      <button
+                        type="button"
+                        className="primary"
+                        onClick={() => sendToAtelier(selection)}
+                      >
+                        <Wrench size={16} />
+                        Envoyer dans l&apos;atelier
+                      </button>
+                      <button
+                        type="button"
+                        className="danger"
+                        onClick={() => clearClientSubmission(selection)}
+                      >
+                        <Trash2 size={16} />
+                        Supprimer la réponse client
+                      </button>
+                    </div>
                   </div>
                 ) : null}
               </article>

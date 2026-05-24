@@ -202,6 +202,19 @@
   border-top: 1px solid #e2e8f0;
 }
 
+.catalog-submission-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.catalog-submission-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .status-pill {
   display: inline-block;
   padding: 2px 8px;

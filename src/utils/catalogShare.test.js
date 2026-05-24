@@ -4,6 +4,7 @@ import {
   LEGACY_CATALOG_RECIPIENT_EMAIL,
   buildCatalogMailtoUrl,
   buildCatalogProductSheet,
+  buildAtelierQuoteFromCatalogSelection,
   buildProductSnapshots,
   catalogProductsNeedLiveImageMerge,
   compactSelectionForPublicCache,
@@ -395,5 +396,54 @@ describe("catalogShare product sheet", () => {
 
     expect(payload.settings.companyEmail).toBe(DEFAULT_CATALOG_RECIPIENT_EMAIL);
     expect(payload.settings.email).toBe(DEFAULT_CATALOG_RECIPIENT_EMAIL);
+  });
+});
+
+describe("buildAtelierQuoteFromCatalogSelection", () => {
+  it("crée un devis Accepté avec lien sélection et lignes client", () => {
+    const selection = {
+      id: "sel-atelier",
+      shareId: "sel-atelier",
+      title: "Maillots club",
+      clientName: "AS Sportive",
+      clientSubmission: {
+        clientName: "Jean Dupont",
+        clientEmail: "jean@example.com",
+        choices: [
+          { productId: "p1", quantity: 10, color: "Bleu", size: "L" },
+        ],
+        notes: "Logo poitrine",
+      },
+    };
+    const productsById = new Map([
+      [
+        "p1",
+        {
+          id: "p1",
+          name: "T-shirt Regent",
+          sku: "REG-001",
+          price: 12.5,
+          category: "Textile",
+        },
+      ],
+    ]);
+
+    const quote = buildAtelierQuoteFromCatalogSelection(selection, productsById, {
+      quotes: [{ number: "DEV-2026-0001" }],
+      taxRate: 17,
+    });
+
+    expect(quote.status).toBe("Accepté");
+    expect(quote.source).toBe("demande catalogue");
+    expect(quote.catalogSelectionId).toBe("sel-atelier");
+    expect(quote.catalogSelectionTitle).toBe("Maillots club");
+    expect(quote.catalogShareUrl).toContain("/catalogue/sel-atelier");
+    expect(quote.lines).toHaveLength(1);
+    expect(quote.lines[0].description).toContain("T-shirt Regent");
+    expect(quote.lines[0].description).toContain("Bleu");
+    expect(quote.lines[0].quantity).toBe(10);
+    expect(quote.notes).toContain("Jean Dupont");
+    expect(quote.notes).toContain("Logo poitrine");
+    expect(quote.number).toMatch(/^DEV-\d{4}-\d{4}$/);
   });
 });
