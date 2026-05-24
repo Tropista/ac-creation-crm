@@ -980,7 +980,7 @@ export default function ClientCatalog() {
             onClick={() => setShowFicheModal(false)}
           >
             <div
-              className="client-catalog-modal card"
+              className="client-catalog-modal client-catalog-sheet-modal card"
               role="dialog"
               aria-modal="true"
               aria-labelledby="client-catalog-fiche-title"
@@ -997,7 +997,9 @@ export default function ClientCatalog() {
                   <X size={18} />
                 </button>
               </div>
-              <pre className="client-catalog-fiche-text">{ficheText}</pre>
+              <pre className="client-catalog-fiche-text" aria-label="Contenu de la fiche produit">
+                {ficheText}
+              </pre>
               <div className="client-catalog-modal-actions">
                 <button type="button" className="primary" onClick={sendFicheByEmail}>
                   <Mail size={16} />

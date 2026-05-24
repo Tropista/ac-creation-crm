@@ -328,8 +328,8 @@
   margin: 0;
 }
 
-/* Override global .card light theme inside public catalog */
-.client-catalog .card {
+/* Override global .card light theme inside public catalog (not sheet modal / cart drawer) */
+.client-catalog .card:not(.client-catalog-sheet-modal):not(.client-catalog-cart-drawer) {
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.12);
   color: #fff;
@@ -337,12 +337,12 @@
   backdrop-filter: none;
 }
 
-.client-catalog .card h1,
-.client-catalog .card h2,
-.client-catalog .card h3,
-.client-catalog .card strong,
-.client-catalog .card label,
-.client-catalog .card p {
+.client-catalog .card:not(.client-catalog-sheet-modal):not(.client-catalog-cart-drawer) h1,
+.client-catalog .card:not(.client-catalog-sheet-modal):not(.client-catalog-cart-drawer) h2,
+.client-catalog .card:not(.client-catalog-sheet-modal):not(.client-catalog-cart-drawer) h3,
+.client-catalog .card:not(.client-catalog-sheet-modal):not(.client-catalog-cart-drawer) strong,
+.client-catalog .card:not(.client-catalog-sheet-modal):not(.client-catalog-cart-drawer) label,
+.client-catalog .card:not(.client-catalog-sheet-modal):not(.client-catalog-cart-drawer) p {
   color: #fff;
 }
 
@@ -819,17 +819,26 @@
   padding: 16px;
 }
 
-.client-catalog-modal {
+.client-catalog-modal,
+.client-catalog-sheet-modal {
   width: min(720px, 100%);
   max-height: min(90vh, 860px);
   overflow: auto;
   background: #fff;
   color: #0f172a;
+  border: 1px solid #e2e8f0;
   border-radius: 16px;
   padding: 18px;
   display: flex;
   flex-direction: column;
   gap: 14px;
+  box-shadow: 0 24px 48px rgba(8, 27, 75, 0.28);
+  backdrop-filter: none;
+}
+
+.client-catalog .client-catalog-sheet-modal {
+  background: #fff;
+  color: #0f172a;
 }
 
 .client-catalog-modal-header {
@@ -851,16 +860,36 @@
 
 .client-catalog-fiche-text {
   margin: 0;
+  flex: 1;
+  min-height: 120px;
   white-space: pre-wrap;
+  word-break: break-word;
   font-family: inherit;
   font-size: 14px;
   line-height: 1.5;
+  color: #0f172a;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
   padding: 14px;
   max-height: 50vh;
   overflow: auto;
+}
+
+.client-catalog-sheet-modal .client-catalog-fiche-text {
+  color: #0f172a;
+  background: #f8fafc;
+}
+
+.client-catalog-sheet-modal .client-catalog-secondary-btn {
+  border-color: #cbd5e1;
+  color: #334155;
+  background: #fff;
+}
+
+.client-catalog-sheet-modal .client-catalog-secondary-btn:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #94a3b8;
 }
 
 .client-catalog-modal-actions .primary,
