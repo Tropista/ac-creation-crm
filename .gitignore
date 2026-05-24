@@ -27,3 +27,18 @@ public/uploads
 *.gltf
 
 .DS_Store
+# Electron / electron-builder
+release-*/
+release-101/
+*.exe
+*.blockmap
+win-unpacked/
+builder-debug.yml
+latest.yml
+
+# Playwright
+test-results/
+
+# Local scratch files
+temp_import.txt
+tmp-*.html
