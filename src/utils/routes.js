@@ -1,11 +1,9 @@
 export const PUBLIC_TSHIRT_PATH = "/configurateur-tshirt";
-export const PUBLIC_CATALOG_PATH = "/catalogue";
 
 export const PAGE_PATHS = {
   dashboard: "/dashboard",
   clients: "/clients",
   products: "/produits",
-  catalogSelections: "/catalogues-client",
   suppliers: "/fournisseurs",
   expenses: "/depenses",
   labels: "/etiquettes",
@@ -26,6 +24,9 @@ export const PAGE_PATHS = {
   vue3d: "/vue-3d",
   tshirt3d: "/t-shirt-3d",
   banque: "/banque",
+  importFournisseur: "/import-fournisseur",
+  catalogueClient: "/catalogue-client",
+  catalogueInterne: "/catalogue-interne",
 };
 
 const PATH_TO_PAGE = Object.fromEntries(

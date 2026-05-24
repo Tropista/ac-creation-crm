@@ -11,13 +11,6 @@ import "../styles/client-catalog.css";
 
 const SIZE_OPTIONS = ["XS", "S", "M", "L", "XL", "2XL", "3XL", "4XL", "5XL"];
 
-function money(value) {
-  return Number(value || 0).toLocaleString("fr-FR", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-}
-
 export default function ClientCatalog() {
   const { shareId } = useParams();
   const [loading, setLoading] = useState(true);
@@ -213,7 +206,6 @@ export default function ClientCatalog() {
                     <div className="client-catalog-card-body">
                       <h3>{product.name}</h3>
                       <p>{product.category}</p>
-                      <p>{money(product.price)} € HT</p>
                       {product.description ? (
                         <p className="client-catalog-description">{product.description.split("\n")[0]}</p>
                       ) : null}

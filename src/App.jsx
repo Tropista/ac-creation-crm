@@ -15,10 +15,10 @@ import {
 import { getSupabase, isSupabaseConfigured } from "./supabase";
 import {
   PUBLIC_TSHIRT_PATH,
-  PUBLIC_CATALOG_PATH,
   pageToPath,
   pathToPage,
 } from "./utils/routes";
+import { PUBLIC_CATALOG_PATH } from "./utils/catalogShare";
 import "./App.css";
 
 import Sidebar from "./components/Sidebar";
@@ -70,9 +70,14 @@ import {
   logActivity
 } from "./services/logService";
 import {
+  finalizeDataWithCatalogCleanup,
+} from "./utils/cleanupCatalogData";
+import {
   mergeCloudWithLocal,
+  resolveCloudInitError,
   setLastSyncAt,
   stampDataChanges,
+  SYNC_STATUS,
 } from "./services/syncMerge";
 import "./styles/sidebar.css";
 import "./styles/dashboard.css";
@@ -124,8 +129,16 @@ const UvDtfCalculator = lazy(() =>
   import("./components/UvDtfCalculator")
 );
 
-const CatalogSelections = lazy(() =>
-  import("./components/CatalogSelections")
+const ImportFournisseur = lazy(() =>
+  import("./components/ImportFournisseur")
+);
+
+const CatalogueClient = lazy(() =>
+  import("./components/CatalogueClient")
+);
+
+const CatalogueInterne = lazy(() =>
+  import("./components/CatalogueInterne")
 );
 
 const ClientCatalog = lazy(() =>
@@ -142,6 +155,29 @@ function getInitialAuthState() {
 
 async function loadSupabaseSyncModule() {
   return import("./services/supabaseSync");
+}
+
+function prepareAppData(raw, { notify = false } = {}) {
+  const { data, applied, stats } = finalizeDataWithCatalogCleanup(raw, normalizeData);
+  const prepared = normalizeData({
+    ...data,
+    users: dedupeItemsById(data.users || []),
+    backups: dedupeItemsById(data.backups || []),
+    logs: dedupeItemsById(data.logs || []),
+  });
+
+  if (notify && stats && (stats.removedProducts > 0 || stats.removedCatalogItems > 0 || stats.removedCatalogSelections > 0)) {
+    const parts = [];
+    if (stats.removedProducts > 0) {
+      parts.push(`${stats.removedProducts} produit(s) importés retirés`);
+    }
+    if (stats.removedCatalogItems > 0 || stats.removedCatalogSelections > 0) {
+      parts.push("données catalogue client effacées");
+    }
+    showToast(`Nettoyage catalogue : ${parts.join(", ")}`, "info");
+  }
+
+  return { data: prepared, applied, stats };
 }
 
 function LoadingScreen({ message = "Chargement...", status = "" }) {
@@ -177,18 +213,14 @@ export default function App() {
       />
       <Route
         path={`${PUBLIC_CATALOG_PATH}/:shareId`}
-        element={<PublicClientCatalog />}
+        element={
+          <Suspense fallback={<LoadingScreen message="Chargement du catalogue..." />}>
+            <ClientCatalog />
+          </Suspense>
+        }
       />
       <Route path="/*" element={<CrmApp />} />
     </Routes>
-  );
-}
-
-function PublicClientCatalog() {
-  return (
-    <Suspense fallback={<ContentLoading message="Chargement du catalogue..." />}>
-      <ClientCatalog />
-    </Suspense>
   );
 }
 
@@ -212,6 +244,8 @@ function CrmApp() {
   };
 
   const [data, setData] = useState(loadData);
+  const dataRef = useRef(data);
+  dataRef.current = data;
   const initialAuth = getInitialAuthState();
   const [currentUser, setCurrentUser] = useState(initialAuth.user);
   const [authNotice, setAuthNotice] = useState(initialAuth.notice);
@@ -233,8 +267,10 @@ function CrmApp() {
   }, [navigate]);
   const [loading, setLoading] = useState(true);
   const [cloudAvailable, setCloudAvailable] = useState(false);
-  const [syncStatus, setSyncStatus] = useState("Connexion à Supabase...");
+  const [syncStatus, setSyncStatus] = useState(SYNC_STATUS.CONNECTING);
   const autoBackupStarted = useRef(false);
+  const cloudInitPromise = useRef(null);
+  const cloudSyncSucceeded = useRef(false);
 
   const currentRole = userRole(currentUser?.email, data.users);
   const permissions = getPermissions(currentRole);
@@ -302,90 +338,129 @@ function CrmApp() {
 
   useEffect(() => {
     if (page === "invoices") {
-      initializeCloudData();
+      initializeCloudData({ silent: true });
     }
   }, [page]);
 
-  async function initializeCloudData() {
-    try {
-      if (!isSupabaseConfigured) {
-        setSyncStatus("Mode local (cloud non configuré)");
-        return;
-      }
-
-      const localData = normalizeData(loadData());
-      const { loadSupabaseData, syncSupabaseData } =
-        await loadSupabaseSyncModule();
-      const cloud = await loadSupabaseData({
-        normalizeData,
-        emptyData
-      });
-
-      if (cloud.hasCloudData) {
-        const conflictLabels = {
-          clients: "client",
-          quotes: "devis",
-          invoices: "facture",
-          settings: "paramètres",
-        };
-        let conflictCount = 0;
-
-        const mergedRaw = mergeCloudWithLocal(localData, cloud.data, {
-          onConflict: ({ entityLabel }) => {
-            conflictCount += 1;
-            const label = conflictLabels[entityLabel] || entityLabel;
-            showToast(
-              `Conflit détecté — version locale conservée (${label})`,
-              "warning"
-            );
-          },
-        });
-
-        const mergedData = normalizeData({
-          ...mergedRaw,
-          users: dedupeItemsById(mergedRaw.users || []),
-          backups: dedupeItemsById(mergedRaw.backups || []),
-          logs: dedupeItemsById(mergedRaw.logs || []),
-        });
-
-        setData(mergedData);
-        flushSaveData();
-        setLastSyncAt();
-        setSyncStatus("Synchronisé avec Supabase");
-        showToast(
-          conflictCount
-            ? "Données fusionnées — conflits résolus localement"
-            : "Données chargées depuis Supabase",
-          conflictCount ? "info" : "success"
-        );
-      } else if (hasLocalBusinessData(localData)) {
-        await syncSupabaseData(localData, emptyData);
-        setData(localData);
-        flushSaveData();
-        setLastSyncAt();
-        setSyncStatus("Données locales envoyées vers Supabase");
-        showToast("Données locales synchronisées vers Supabase", "success");
-      } else {
-        await syncSupabaseData(emptyData, emptyData);
-        setData(emptyData);
-        flushSaveData();
-        setLastSyncAt();
-        setSyncStatus("Supabase prêt");
-      }
-
-      setCloudAvailable(true);
-    } catch (error) {
-      console.error(error);
-      setCloudAvailable(false);
-      setSyncStatus("Mode local (cloud indisponible)");
-      showToast("Sync cloud indisponible — données locales utilisées", "info");
-    } finally {
-      setLoading(false);
+  async function initializeCloudData({ silent = false } = {}) {
+    if (cloudInitPromise.current) {
+      return cloudInitPromise.current;
     }
+
+    const task = (async () => {
+      try {
+        const localData = normalizeData(loadData());
+
+        if (!isSupabaseConfigured) {
+          const { data: prepared } = prepareAppData(localData, { notify: !silent });
+          setData(prepared);
+          saveData(prepared);
+          flushSaveData();
+          setSyncStatus(SYNC_STATUS.LOCAL_NO_CONFIG);
+          return;
+        }
+
+        const { loadSupabaseData, syncSupabaseData } =
+          await loadSupabaseSyncModule();
+        const cloud = await loadSupabaseData({
+          normalizeData,
+          emptyData
+        });
+
+        if (cloud.hasCloudData) {
+          const conflictLabels = {
+            clients: "client",
+            quotes: "devis",
+            invoices: "facture",
+            settings: "paramètres",
+          };
+          let conflictCount = 0;
+
+          const mergedRaw = mergeCloudWithLocal(localData, cloud.data, {
+            onConflict: ({ entityLabel }) => {
+              conflictCount += 1;
+              const label = conflictLabels[entityLabel] || entityLabel;
+              showToast(
+                `Conflit détecté — version locale conservée (${label})`,
+                "warning"
+              );
+            },
+          });
+
+          const { data: prepared, applied } = prepareAppData(mergedRaw, { notify: !silent });
+          setData(prepared);
+          saveData(prepared);
+          flushSaveData();
+
+          if (applied) {
+            await syncSupabaseData(prepared, cloud.data);
+            flushSaveData();
+          }
+
+          setLastSyncAt();
+          cloudSyncSucceeded.current = true;
+          setSyncStatus(SYNC_STATUS.SYNCED);
+          if (!silent) {
+            showToast(
+              conflictCount
+                ? "Données fusionnées — conflits résolus localement"
+                : "Données chargées depuis Supabase",
+              conflictCount ? "info" : "success"
+            );
+          }
+        } else if (hasLocalBusinessData(localData)) {
+          const { data: prepared } = prepareAppData(localData, { notify: !silent });
+          await syncSupabaseData(prepared, emptyData);
+          setData(prepared);
+          saveData(prepared);
+          flushSaveData();
+          setLastSyncAt();
+          cloudSyncSucceeded.current = true;
+          setSyncStatus(SYNC_STATUS.LOCAL_PUSHED);
+          if (!silent) {
+            showToast("Données locales synchronisées vers Supabase", "success");
+          }
+        } else {
+          const { data: prepared } = prepareAppData(emptyData, { notify: !silent });
+          await syncSupabaseData(prepared, emptyData);
+          setData(prepared);
+          saveData(prepared);
+          flushSaveData();
+          setLastSyncAt();
+          cloudSyncSucceeded.current = true;
+          setSyncStatus(SYNC_STATUS.READY);
+        }
+
+        setCloudAvailable(true);
+      } catch (error) {
+        console.error(error);
+        const outcome = resolveCloudInitError({
+          cloudAlreadySynced: cloudSyncSucceeded.current,
+        });
+        setCloudAvailable(outcome.cloudAvailable);
+        setSyncStatus(outcome.syncStatus);
+        if (!silent && outcome.toast) {
+          showToast(outcome.toast.message, outcome.toast.type);
+        }
+
+        const { data: prepared } = prepareAppData(normalizeData(loadData()), { notify: !silent });
+        setData(prepared);
+        saveData(prepared);
+        flushSaveData();
+      } finally {
+        setLoading(false);
+        cloudInitPromise.current = null;
+      }
+    })();
+
+    cloudInitPromise.current = task;
+    return task;
   }
 
   async function updateData(next) {
-    const stamped = stampDataChanges(data, next);
+    const current = dataRef.current;
+    const resolved = typeof next === "function" ? next(current) : next;
+    const stamped = stampDataChanges(current, resolved);
     const normalized = normalizeData({
       ...stamped,
       users: dedupeItemsById(stamped.users || []),
@@ -393,26 +468,36 @@ function CrmApp() {
       logs: dedupeItemsById(stamped.logs || []),
     });
 
-    const previous = data;
+    const previous = current;
 
+    dataRef.current = normalized;
     setData(normalized);
+    saveData(normalized);
     flushSaveData();
 
     if (!isSupabaseConfigured) {
-      setSyncStatus("Mode local (cloud non configuré)");
+      setSyncStatus(SYNC_STATUS.LOCAL_NO_CONFIG);
       return;
     }
 
     try {
-      setSyncStatus("Sauvegarde Supabase...");
+      setSyncStatus(SYNC_STATUS.SAVING);
       const { syncSupabaseData } = await loadSupabaseSyncModule();
       await syncSupabaseData(normalized, previous);
       flushSaveData();
       setLastSyncAt();
-      setSyncStatus("Synchronisé avec Supabase");
+      cloudSyncSucceeded.current = true;
+      setCloudAvailable(true);
+      setSyncStatus(SYNC_STATUS.SYNCED);
     } catch (error) {
       console.error(error);
-      setSyncStatus("Erreur de sauvegarde Supabase");
+      if (cloudSyncSucceeded.current) {
+        setCloudAvailable(true);
+        setSyncStatus(SYNC_STATUS.SAVE_ERROR);
+      } else {
+        setCloudAvailable(false);
+        setSyncStatus(SYNC_STATUS.LOCAL_UNAVAILABLE);
+      }
       showToast("Erreur de sauvegarde Supabase", "error");
     }
   }
@@ -572,22 +657,6 @@ function CrmApp() {
                   />
                 ) : null
               }
-            />
-            <Route
-              path={pageToPath("catalogSelections")}
-              element={
-                canAccessPage(currentRole, "catalogSelections") ? (
-                  <CatalogSelections
-                    data={data}
-                    setData={updateData}
-                    logActivity={handleLogActivity}
-                  />
-                ) : null
-              }
-            />
-            <Route
-              path="/import-catalogue"
-              element={<Navigate to={pageToPath("catalogSelections")} replace />}
             />
             <Route
               path={pageToPath("suppliers")}
@@ -821,6 +890,42 @@ function CrmApp() {
               element={
                 canAccessPage(currentRole, "banque") ? (
                   <Banque
+                    data={data}
+                    setData={updateData}
+                    logActivity={handleLogActivity}
+                  />
+                ) : null
+              }
+            />
+            <Route
+              path={pageToPath("importFournisseur")}
+              element={
+                canAccessPage(currentRole, "importFournisseur") ? (
+                  <ImportFournisseur
+                    data={data}
+                    setData={updateData}
+                    logActivity={handleLogActivity}
+                  />
+                ) : null
+              }
+            />
+            <Route
+              path={pageToPath("catalogueClient")}
+              element={
+                canAccessPage(currentRole, "catalogueClient") ? (
+                  <CatalogueClient
+                    data={data}
+                    setData={updateData}
+                    logActivity={handleLogActivity}
+                  />
+                ) : null
+              }
+            />
+            <Route
+              path={pageToPath("catalogueInterne")}
+              element={
+                canAccessPage(currentRole, "catalogueInterne") ? (
+                  <CatalogueInterne
                     data={data}
                     setData={updateData}
                     logActivity={handleLogActivity}

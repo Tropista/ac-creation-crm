@@ -38,8 +38,17 @@ function getBankApiUrl() {
 async function waitForBankServer(url, attempts = 40, delayMs = 250) {
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
-      const response = await fetch(`${url}/api/bank/status`);
-      if (response.ok) return true;
+      const [bankResponse, catalogResponse] = await Promise.all([
+        fetch(`${url}/api/bank/status`),
+        fetch(`${url}/api/catalog/health`),
+      ]);
+      if (bankResponse.ok && catalogResponse.ok) return true;
+      if (bankResponse.ok && catalogResponse.status === 404) {
+        console.warn(
+          `Bank API active on ${url} but catalog routes are missing — restart the backend.`
+        );
+        return true;
+      }
     } catch {
       // Server still starting or already running elsewhere.
     }

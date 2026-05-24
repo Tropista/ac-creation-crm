@@ -1,12 +1,44 @@
 export const LAST_SYNC_AT_KEY = "crm_last_sync_at";
 
+export const SYNC_STATUS = {
+  CONNECTING: "Connexion à Supabase...",
+  SYNCED: "Synchronisé avec Supabase",
+  LOCAL_NO_CONFIG: "Mode local (cloud non configuré)",
+  LOCAL_UNAVAILABLE: "Mode local (cloud indisponible)",
+  LOCAL_PUSHED: "Données locales envoyées vers Supabase",
+  READY: "Supabase prêt",
+  SAVING: "Sauvegarde Supabase...",
+  SAVE_ERROR: "Erreur de sauvegarde Supabase",
+};
+
+export function resolveCloudInitError({ cloudAlreadySynced }) {
+  if (cloudAlreadySynced) {
+    return {
+      cloudAvailable: true,
+      syncStatus: SYNC_STATUS.SYNCED,
+      toast: null,
+    };
+  }
+
+  return {
+    cloudAvailable: false,
+    syncStatus: SYNC_STATUS.LOCAL_UNAVAILABLE,
+    toast: {
+      message: "Sync cloud indisponible — données locales utilisées",
+      type: "info",
+    },
+  };
+}
+
 export const SYNC_COLLECTIONS = [
   "clients",
   "quotes",
   "invoices",
   "products",
   "categories",
-  "catalogItems",
+  "supplierCatalogItems",
+  "clientCatalogItems",
+  "internalCatalogItems",
   "catalogSelections",
   "suppliers",
   "expenses",

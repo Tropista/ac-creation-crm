@@ -74,32 +74,43 @@ export function mapScrapedToCatalogItem(scraped, existingItems = []) {
   };
 }
 
-/** Import web vers le catalogue client (pas les produits internes du CRM). */
-export function importScrapedCatalogItems(data, scrapedProducts = []) {
+import { SUPPLIER_CATALOG_KEY } from "./catalogCollections";
+
+/** Import web vers une collection catalogue (jamais products[]). */
+export function importScrapedToCollection(
+  data,
+  scrapedProducts = [],
+  collectionKey = SUPPLIER_CATALOG_KEY
+) {
   let created = 0;
   let updated = 0;
-  const catalogItems = [...(data.catalogItems || [])];
+  const items = [...(data[collectionKey] || [])];
 
   for (const scraped of scrapedProducts) {
-    const mapped = mapScrapedToCatalogItem(scraped, catalogItems);
+    const mapped = mapScrapedToCatalogItem(scraped, items);
     if (mapped.action === "update") {
       updated += 1;
-      const index = catalogItems.findIndex((item) => item.id === mapped.item.id);
-      catalogItems[index] = mapped.item;
+      const index = items.findIndex((item) => item.id === mapped.item.id);
+      items[index] = mapped.item;
     } else {
       created += 1;
-      catalogItems.push(mapped.item);
+      items.push(mapped.item);
     }
   }
 
   return {
     nextData: {
       ...data,
-      catalogItems,
+      [collectionKey]: items,
     },
     created,
     updated,
   };
+}
+
+/** Import web vers le pool fournisseur (staging). */
+export function importScrapedCatalogItems(data, scrapedProducts = []) {
+  return importScrapedToCollection(data, scrapedProducts, SUPPLIER_CATALOG_KEY);
 }
 
 /** @deprecated Utiliser importScrapedCatalogItems */

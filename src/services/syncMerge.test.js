@@ -5,9 +5,11 @@ import {
   mergeCloudWithLocal,
   mergeCollection,
   parseUpdatedAt,
+  resolveCloudInitError,
   setLastSyncAt,
   stampCollectionChanges,
   stampDataChanges,
+  SYNC_STATUS,
 } from "./syncMerge.js";
 
 function createStorage() {
@@ -118,5 +120,19 @@ describe("syncMerge", () => {
   it("setLastSyncAt persiste dans localStorage", () => {
     setLastSyncAt(1234567890);
     expect(localStorage.getItem(LAST_SYNC_AT_KEY)).toBe("1234567890");
+  });
+
+  it("resolveCloudInitError conserve le statut sync si le cloud a déjà réussi", () => {
+    const outcome = resolveCloudInitError({ cloudAlreadySynced: true });
+    expect(outcome.cloudAvailable).toBe(true);
+    expect(outcome.syncStatus).toBe(SYNC_STATUS.SYNCED);
+    expect(outcome.toast).toBeNull();
+  });
+
+  it("resolveCloudInitError signale l'indisponibilité cloud sans sync préalable", () => {
+    const outcome = resolveCloudInitError({ cloudAlreadySynced: false });
+    expect(outcome.cloudAvailable).toBe(false);
+    expect(outcome.syncStatus).toBe(SYNC_STATUS.LOCAL_UNAVAILABLE);
+    expect(outcome.toast?.message).toContain("Sync cloud indisponible");
   });
 });

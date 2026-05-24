@@ -1,15 +1,16 @@
 import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
+  Archive,
   Banknote,
   BarChart3,
   Box,
+  BookOpen,
   Calculator,
   ChevronDown,
   ChevronRight,
   Cloud,
   Coffee,
-  ShoppingBag,
   Download,
   Factory,
   FileSpreadsheet,
@@ -45,7 +46,9 @@ const pageIcons = {
   invoices: Receipt,
   atelier: Wrench,
   products: Box,
-  catalogSelections: ShoppingBag,
+  importFournisseur: Download,
+  catalogueClient: BookOpen,
+  catalogueInterne: Archive,
   categories: FolderTree,
   suppliers: Factory,
   expenses: FileSpreadsheet,
@@ -78,11 +81,19 @@ const menuGroups = [
     ],
   },
   {
+    id: "catalogues",
+    label: "Catalogues",
+    items: [
+      { page: "importFournisseur", label: "Import fournisseur", type: "page" },
+      { page: "catalogueClient", label: "Catalogue client", type: "page" },
+      { page: "catalogueInterne", label: "Catalogue interne", type: "page" },
+    ],
+  },
+  {
     id: "catalogue",
     label: "Catalogue",
     items: [
       { page: "products", label: "Produits", type: "page" },
-      { page: "catalogSelections", label: "Catalogues client", type: "page" },
       { page: "categories", label: "Catégories", type: "page" },
       { page: "suppliers", label: "Fournisseurs", type: "page" },
       { page: "expenses", label: "Dépenses", type: "page" },

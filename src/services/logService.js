@@ -1,9 +1,5 @@
 import { getSupabase, isSupabaseConfigured } from "../supabase";
 import { uid } from "../utils/documents";
-import {
-  normalizeData,
-  saveData
-} from "./dataService";
 
 export function addLog(
   data,
@@ -91,33 +87,10 @@ export async function logActivity({
     details,
   };
 
-  setData(
-    (
-      currentData
-    ) => {
-      const normalized =
-        normalizeData({
-          ...currentData,
-
-          logs: [
-            log,
-            ...(
-              currentData.logs ||
-              []
-            )
-          ].slice(
-            0,
-            500
-          ),
-        });
-
-      saveData(
-        normalized
-      );
-
-      return normalized;
-    }
-  );
+  await setData((currentData) => ({
+    ...currentData,
+    logs: [log, ...(currentData.logs || [])].slice(0, 500),
+  }));
 
   if (!isSupabaseConfigured) {
     return;

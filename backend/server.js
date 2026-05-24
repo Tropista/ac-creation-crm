@@ -280,9 +280,19 @@ app.post("/api/catalog/scrape", async (req, res) => {
   }
 });
 
-app.listen(PORT, HOST, () => {
+const server = app.listen(PORT, HOST, () => {
   console.log(`CRM API OK sur http://${HOST}:${PORT}`);
   if (!tinkConfigured()) {
     console.warn("TINK_CLIENT_ID absent — mode saisie manuelle uniquement.");
   }
+});
+
+server.on("error", (error) => {
+  if (error.code === "EADDRINUSE") {
+    console.error(
+      `Port ${PORT} déjà utilisé sur ${HOST}. Arrêtez l'ancien serveur (Ctrl+C ou fermez le terminal npm run bank) puis relancez.`
+    );
+    process.exit(1);
+  }
+  throw error;
 });

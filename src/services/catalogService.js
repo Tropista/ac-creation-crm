@@ -1,5 +1,27 @@
 import { getSupabase, isSupabaseConfigured } from "../supabase";
+import { loadData, saveData } from "./dataService";
 import { loadPublicCatalogCache, savePublicCatalogCache } from "../utils/catalogShare";
+
+function findLocalCatalogSelection(shareId) {
+  const selections = loadData().catalogSelections || [];
+  return (
+    selections.find((item) => item.id === shareId || item.shareId === shareId) || null
+  );
+}
+
+function patchLocalCatalogSelection(selection) {
+  const data = loadData();
+  const selections = [...(data.catalogSelections || [])];
+  const index = selections.findIndex(
+    (item) => item.id === selection.id || item.shareId === selection.shareId
+  );
+  if (index >= 0) {
+    selections[index] = selection;
+  } else {
+    selections.unshift(selection);
+  }
+  saveData({ ...data, catalogSelections: selections });
+}
 
 function rowToSelection(row) {
   if (!row) return null;
@@ -26,6 +48,11 @@ export async function fetchPublicCatalogSelection(shareId) {
 
   if (!isSupabaseConfigured) {
     if (cached) return cached;
+    const local = findLocalCatalogSelection(shareId);
+    if (local) {
+      savePublicCatalogCache(local);
+      return local;
+    }
     throw new Error(
       "Catalogue indisponible en ligne. Configurez Supabase ou ouvrez le lien sur le même appareil que le CRM."
     );
@@ -60,18 +87,26 @@ export async function fetchPublicCatalogProducts(selection, productIds = []) {
   if (!productIds.length) return [];
 
   if (!isSupabaseConfigured) {
-    return [];
+    const catalogItems = loadData().clientCatalogItems || [];
+    return catalogItems.filter((item) => productIds.includes(item.id));
   }
 
   try {
     const supabase = await getSupabase();
     const { data, error } = await supabase
-      .from("products")
+      .from("client_catalog_items")
       .select("id,data")
       .in("id", productIds);
 
     if (error) {
-      if (isMissingTableError(error)) return [];
+      if (isMissingTableError(error)) {
+        const fallback = await supabase
+          .from("catalog_items")
+          .select("id,data")
+          .in("id", productIds);
+        if (fallback.error) return [];
+        return (fallback.data || []).map((row) => ({ id: row.id, ...(row.data || {}) }));
+      }
       throw error;
     }
 
@@ -103,6 +138,7 @@ export async function submitPublicCatalogSelection(shareId, submission) {
   savePublicCatalogCache(nextSelection);
 
   if (!isSupabaseConfigured) {
+    patchLocalCatalogSelection(nextSelection);
     return nextSelection;
   }
 

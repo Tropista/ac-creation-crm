@@ -29,9 +29,9 @@ describe("lmdtImport", () => {
     expect(mapped.item.stock).toBeUndefined();
   });
 
-  it("imports into catalogItems without touching products or categories", () => {
+  it("imports into supplierCatalogItems without touching products or categories", () => {
     const { nextData, created, updated } = importScrapedCatalogItems(
-      { products: [], categories: [], catalogItems: [] },
+      { products: [], categories: [], supplierCatalogItems: [] },
       [
         {
           name: "Sol's Regent",
@@ -45,8 +45,9 @@ describe("lmdtImport", () => {
 
     expect(created).toBe(1);
     expect(updated).toBe(0);
-    expect(nextData.catalogItems).toHaveLength(1);
+    expect(nextData.supplierCatalogItems).toHaveLength(1);
     expect(nextData.products).toHaveLength(0);
     expect(nextData.categories).toHaveLength(0);
+    expect(nextData.products).not.toContainEqual(expect.objectContaining({ sku: "SO-11380" }));
   });
 });

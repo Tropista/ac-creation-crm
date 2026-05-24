@@ -41,6 +41,24 @@ CREATE TABLE IF NOT EXISTS catalog_items (
   created_at timestamptz DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS supplier_catalog_items (
+  id text PRIMARY KEY,
+  data jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS client_catalog_items (
+  id text PRIMARY KEY,
+  data jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS internal_catalog_items (
+  id text PRIMARY KEY,
+  data jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS catalog_selections (
   id text PRIMARY KEY,
   data jsonb NOT NULL DEFAULT '{}'::jsonb,
@@ -118,6 +136,9 @@ ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE catalog_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE supplier_catalog_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE client_catalog_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE internal_catalog_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE catalog_selections ENABLE ROW LEVEL SECURITY;
 ALTER TABLE suppliers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
@@ -148,6 +169,18 @@ CREATE POLICY "crm_full_access" ON categories
 
 DROP POLICY IF EXISTS "crm_full_access" ON catalog_items;
 CREATE POLICY "crm_full_access" ON catalog_items
+  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "crm_full_access" ON supplier_catalog_items;
+CREATE POLICY "crm_full_access" ON supplier_catalog_items
+  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "crm_full_access" ON client_catalog_items;
+CREATE POLICY "crm_full_access" ON client_catalog_items
+  FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "crm_full_access" ON internal_catalog_items;
+CREATE POLICY "crm_full_access" ON internal_catalog_items
   FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
 DROP POLICY IF EXISTS "crm_full_access" ON catalog_selections;

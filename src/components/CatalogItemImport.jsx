@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Download, Globe, RefreshCw } from "lucide-react";
-import { fetchCatalogApiHealth, scrapeCatalogUrl } from "../utils/catalogApi";
-import { importScrapedCatalogItems } from "../utils/lmdtImport";
+import { getCatalogApiUrl, probeCatalogApi, scrapeCatalogUrl } from "../utils/catalogApi";
+import { importScrapedToCollection } from "../utils/lmdtImport";
+import { SUPPLIER_CATALOG_KEY } from "../utils/catalogCollections";
 import { showToast } from "../utils/toast";
 
 function money(value) {
@@ -11,13 +12,26 @@ function money(value) {
   });
 }
 
-export default function CatalogItemImport({ data, setData, logActivity }) {
+export default function CatalogItemImport({
+  data,
+  setData,
+  logActivity,
+  targetCollection = SUPPLIER_CATALOG_KEY,
+  saveLabel = "Ajouter au pool fournisseur",
+  logAction = "Import fournisseur",
+  successMessage = "pool fournisseur",
+  secondaryTargetCollection = null,
+  secondarySaveLabel = "Ajouter au catalogue client",
+  secondaryLogAction = "Import catalogue client",
+  secondarySuccessMessage = "catalogue client",
+}) {
   const [url, setUrl] = useState("https://www.lamaisonduteeshirt.com/c-24-tee-shirts");
   const [importAll, setImportAll] = useState(true);
   const [maxPages, setMaxPages] = useState(5);
   const [maxProducts, setMaxProducts] = useState(200);
   const [loading, setLoading] = useState(false);
   const [apiReady, setApiReady] = useState(null);
+  const [apiMessage, setApiMessage] = useState("");
   const [products, setProducts] = useState([]);
   const [meta, setMeta] = useState(null);
   const [selectedUrls, setSelectedUrls] = useState([]);
@@ -29,19 +43,32 @@ export default function CatalogItemImport({ data, setData, logActivity }) {
     [products, selectedUrls]
   );
 
-  async function checkApi() {
-    try {
-      await fetchCatalogApiHealth();
+  async function checkApi({ silent = false } = {}) {
+    const probe = await probeCatalogApi();
+    setApiMessage(probe.message || "");
+
+    if (probe.status === "ok") {
       setApiReady(true);
-      showToast("API catalogue disponible.", "success");
-    } catch {
-      setApiReady(false);
+      if (!silent) {
+        showToast("API catalogue disponible.", "success");
+      }
+      return probe;
+    }
+
+    setApiReady(false);
+    if (!silent) {
       showToast(
-        "Lancez l'API locale avec npm run bank (port 3001) pour importer depuis le web.",
-        "warning"
+        probe.message ||
+          `Lancez l'API locale avec npm run bank (${getCatalogApiUrl()}) pour importer depuis le web.`,
+        probe.status === "outdated" ? "error" : "warning"
       );
     }
+    return probe;
   }
+
+  useEffect(() => {
+    checkApi({ silent: true });
+  }, []);
 
   async function handlePreview(event) {
     event.preventDefault();
@@ -83,26 +110,47 @@ export default function CatalogItemImport({ data, setData, logActivity }) {
     );
   }
 
-  function handleImport() {
+  async function importToCollection(collectionKey, actionLabel, messageLabel) {
     if (!selectedProducts.length) {
       showToast("Sélectionnez au moins un article.", "warning");
       return;
     }
 
-    const { nextData, created, updated } = importScrapedCatalogItems(data, selectedProducts);
-    setData(nextData);
-    logActivity?.(
-      "Import catalogue client",
+    let created = 0;
+    let updated = 0;
+
+    await setData((current) => {
+      const result = importScrapedToCollection(current, selectedProducts, collectionKey);
+      created = result.created;
+      updated = result.updated;
+      return result.nextData;
+    });
+
+    await logActivity?.(
+      actionLabel,
       url,
       `${created} créé(s), ${updated} mis à jour`
     );
     showToast(
-      `${created} créé(s), ${updated} mis à jour dans le catalogue client.`,
+      `${created} créé(s), ${updated} mis à jour dans le ${messageLabel}.`,
       "success"
     );
     setProducts([]);
     setMeta(null);
     setSelectedUrls([]);
+  }
+
+  function handleImport() {
+    return importToCollection(targetCollection, logAction, successMessage);
+  }
+
+  function handleSecondaryImport() {
+    if (!secondaryTargetCollection) return;
+    return importToCollection(
+      secondaryTargetCollection,
+      secondaryLogAction,
+      secondarySuccessMessage
+    );
   }
 
   return (
@@ -116,10 +164,11 @@ export default function CatalogItemImport({ data, setData, logActivity }) {
         <Globe size={18} />
         <span>
           {apiReady === null
-            ? "Le site affiche 16 articles par page. Cochez « Importer toute la catégorie » pour tout récupérer."
+            ? `Vérification de l'API locale (${getCatalogApiUrl()})…`
             : apiReady
-              ? "API catalogue connectée (npm run bank)."
-              : "API indisponible — lancez npm run bank."}
+              ? `API catalogue connectée (${getCatalogApiUrl()}).`
+              : apiMessage ||
+                `API indisponible sur ${getCatalogApiUrl()} — lancez npm run bank dans un autre terminal.`}
         </span>
         <button type="button" className="primary" onClick={checkApi}>
           <RefreshCw size={16} />
@@ -192,10 +241,18 @@ export default function CatalogItemImport({ data, setData, logActivity }) {
               <input type="checkbox" checked={allSelected} onChange={toggleAll} />
               Tout sélectionner
             </label>
-            <button type="button" className="primary" onClick={handleImport}>
-              <Download size={16} />
-              Ajouter au catalogue ({selectedProducts.length})
-            </button>
+            <div className="catalog-import-actions">
+              <button type="button" className="primary" onClick={handleImport}>
+                <Download size={16} />
+                {saveLabel} ({selectedProducts.length})
+              </button>
+              {secondaryTargetCollection ? (
+                <button type="button" className="primary" onClick={handleSecondaryImport}>
+                  <Download size={16} />
+                  {secondarySaveLabel} ({selectedProducts.length})
+                </button>
+              ) : null}
+            </div>
           </div>
 
           <div className="catalog-import-grid">

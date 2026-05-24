@@ -1,7 +1,7 @@
-import { isHashRouterMode, pageToPath, PUBLIC_CATALOG_PATH } from "./routes";
+import { isHashRouterMode, pageToPath } from "./routes";
 import { openQuoteFromCalculator } from "./quoteDraft";
 
-export { PUBLIC_CATALOG_PATH };
+export const PUBLIC_CATALOG_PATH = "/catalogue";
 
 export const PUBLIC_CATALOG_CACHE_PREFIX = "crm_catalog_public_";
 
@@ -106,6 +106,7 @@ export function catalogSelectionPath(shareId) {
 }
 
 export function pageToPathWithCatalog(page) {
-  if (page === "catalogSelections") return "/catalogues-client";
+  if (page === "catalogueClient") return "/catalogue-client";
+  if (page === "catalogSelections") return "/catalogue-client";
   return pageToPath(page);
 }

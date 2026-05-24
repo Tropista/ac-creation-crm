@@ -1,5 +1,6 @@
 import { dedupeDocuments } from "../utils/documents";
 import { debounce } from "../utils/debounce";
+import { migrateLegacyCatalogData } from "../utils/catalogCollections";
 
 export const STORAGE_KEY = "crm_local_data_v2";
 export const SAVE_DEBOUNCE_MS = 400;
@@ -35,6 +36,9 @@ export const emptyData = {
   invoices: [],
   products: [],
   categories: [],
+  supplierCatalogItems: [],
+  clientCatalogItems: [],
+  internalCatalogItems: [],
   catalogItems: [],
   catalogSelections: [],
   suppliers: [],
@@ -65,9 +69,12 @@ export function dedupeItemsById(items = []) {
 }
 
 export function normalizeData(data) {
+  const migrated = migrateLegacyCatalogData(data);
+
   return {
     ...emptyData,
     ...data,
+    ...migrated,
 
     settings: {
       ...emptyData.settings,
@@ -93,9 +100,19 @@ export function normalizeData(data) {
       data?.categories || []
     ),
 
-    catalogItems: dedupeItemsById(
-      data?.catalogItems || []
+    supplierCatalogItems: dedupeItemsById(
+      migrated.supplierCatalogItems || []
     ),
+
+    clientCatalogItems: dedupeItemsById(
+      migrated.clientCatalogItems || []
+    ),
+
+    internalCatalogItems: dedupeItemsById(
+      migrated.internalCatalogItems || []
+    ),
+
+    catalogItems: [],
 
     catalogSelections: dedupeItemsById(
       data?.catalogSelections || []
@@ -150,6 +167,10 @@ export function hasLocalBusinessData(data) {
     data.clients?.length ||
     data.products?.length ||
     data.categories?.length ||
+    data.supplierCatalogItems?.length ||
+    data.clientCatalogItems?.length ||
+    data.internalCatalogItems?.length ||
+    data.catalogSelections?.length ||
     data.suppliers?.length ||
     data.expenses?.length ||
     data.quotes?.length ||

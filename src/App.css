@@ -470,7 +470,7 @@ tbody tr:hover td { background: var(--table-hover); }
   font-size: 46px;
   font-weight: 950;
 }
-.product-visual img { width: 100%; height: 100%; object-fit: cover; }
+.product-visual img { width: 100%; height: 100%; object-fit: contain; object-position: center; }
 .product-premium-body { padding: 16px; }
 .product-premium-body h3 { margin: 0 0 12px; }
 .product-tags-row { display: flex; flex-wrap: wrap; gap: 8px; }
