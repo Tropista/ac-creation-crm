@@ -93,7 +93,7 @@ describe("lmdtParser", () => {
   });
 
   it("live Regent detail page swatches include per-color imageUrl", () => {
-    const productHtml = readFileSync("tmp-lmdt-regent-live.html", "utf8");
+    const productHtml = readFileSync("scripts/lmdt-regent-live.html", "utf8");
     const colors = parseColorItemsFromHtml(productHtml);
     const blanc = colors.find((color) => typeof color === "object" && color.name === "blanc");
 
@@ -273,7 +273,7 @@ describe("lmdtParser", () => {
   });
 
   it("live Regent: gallery index 0 is packshot, index 1 is model worn shot", () => {
-    const productHtml = readFileSync("tmp-lmdt-regent-live.html", "utf8");
+    const productHtml = readFileSync("scripts/lmdt-regent-live.html", "utf8");
     const gallery = collectProductGalleryImageUrls(productHtml);
 
     expect(decodeLmdtMediaPath(gallery[0])).toContain("/p-blank-TH/1780.webp");
@@ -283,7 +283,7 @@ describe("lmdtParser", () => {
   });
 
   it("live Regent: always picks #photo_produit packshot, not gallery model slide", () => {
-    const productHtml = readFileSync("tmp-lmdt-regent-live.html", "utf8");
+    const productHtml = readFileSync("scripts/lmdt-regent-live.html", "utf8");
     const heroImage = parseProductDetailHeroImageUrl(productHtml);
     const imageUrl = pickProductDetailImageUrl(productHtml);
     const gallery = collectProductGalleryImageUrls(productHtml);

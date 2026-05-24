@@ -14,7 +14,7 @@ describe("catalogScraper", () => {
   });
 
   it("refreshLmdtProductColors returns imageUrl per color from detail HTML", async () => {
-    const productHtml = readFileSync("tmp-lmdt-regent-live.html", "utf8");
+    const productHtml = readFileSync("scripts/lmdt-regent-live.html", "utf8");
     axios.get.mockResolvedValue({ data: productHtml });
 
     const results = await refreshLmdtProductColors([
