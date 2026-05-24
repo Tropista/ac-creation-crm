@@ -261,3 +261,20 @@ CREATE POLICY "bank_transactions_update" ON bank_transactions
 DROP POLICY IF EXISTS "bank_transactions_delete" ON bank_transactions;
 CREATE POLICY "bank_transactions_delete" ON bank_transactions
   FOR DELETE TO anon, authenticated USING (true);
+
+-- ---------------------------------------------------------------------------
+-- Index pagination catalogue (ORDER BY created_at, id — évite statement timeout)
+-- Voir aussi supabase/migrations/20260524100000_catalog_fetch_indexes.sql
+-- ---------------------------------------------------------------------------
+
+CREATE INDEX IF NOT EXISTS idx_supplier_catalog_items_created_at_id
+  ON public.supplier_catalog_items (created_at ASC NULLS FIRST, id ASC);
+
+CREATE INDEX IF NOT EXISTS idx_client_catalog_items_created_at_id
+  ON public.client_catalog_items (created_at ASC NULLS FIRST, id ASC);
+
+CREATE INDEX IF NOT EXISTS idx_catalog_items_created_at_id
+  ON public.catalog_items (created_at ASC NULLS FIRST, id ASC);
+
+CREATE INDEX IF NOT EXISTS idx_catalog_selections_created_at_id
+  ON public.catalog_selections (created_at ASC NULLS FIRST, id ASC);

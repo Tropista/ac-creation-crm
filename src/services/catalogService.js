@@ -1,5 +1,6 @@
 import { getSupabase, isSupabaseConfigured } from "../supabase";
 import { loadData, saveData } from "./dataService";
+import { fetchCollectionRows } from "./supabaseSync";
 import {
   catalogProductsNeedLiveImageMerge,
   loadPublicCatalogCache,
@@ -7,9 +8,12 @@ import {
   savePublicCatalogCache,
 } from "../utils/catalogShare";
 
-const SUPABASE_ID_BATCH_SIZE = 100;
+const SUPABASE_ID_BATCH_SIZE = 50;
 const PUBLIC_FETCH_TIMEOUT_MS = 12000;
+/** Chargement CRM staff (catalogue complet paginé) — peut prendre plusieurs minutes. */
+export const CRM_CATALOG_FETCH_TIMEOUT_MS = 180000;
 const PUBLIC_FETCH_MAX_RETRIES = 2;
+const CRM_CATALOG_FETCH_MAX_RETRIES = 3;
 const PUBLIC_FETCH_RETRY_BASE_MS = 400;
 
 function findLocalCatalogSelection(shareId) {
@@ -312,12 +316,12 @@ export async function fetchCatalogSelectionsFromCloud() {
 
   const supabase = await getSupabase();
   const rows = await fetchWithRetry(
-    async () => {
-      const { data, error } = await supabase.from("catalog_selections").select("id,data");
-      if (error) throw error;
-      return data || [];
-    },
-    { label: "Chargement des sélections catalogue" }
+    async () => fetchCollectionRows(supabase, "catalog_selections"),
+    {
+      label: "Chargement des sélections catalogue",
+      timeoutMs: CRM_CATALOG_FETCH_TIMEOUT_MS,
+      maxRetries: CRM_CATALOG_FETCH_MAX_RETRIES,
+    }
   );
 
   return rows.map((row) => rowToSelection(row)).filter(Boolean);

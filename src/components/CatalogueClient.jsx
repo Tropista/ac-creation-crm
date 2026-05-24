@@ -440,8 +440,13 @@ export default function CatalogueClient({ data, setData, logActivity }) {
       const { loadSupabaseCatalogRecovery } = await import("../services/supabaseSync");
       const recovery = await loadSupabaseCatalogRecovery();
 
-      if (!recovery.hasCatalogData) {
+      if (!recovery.hasCatalogData && !recovery.fetchErrorMessage) {
         showToast("Aucun article catalogue trouvé dans Supabase.", "warning");
+        return;
+      }
+
+      if (!recovery.hasCatalogData && recovery.fetchErrorMessage) {
+        showToast(recovery.fetchErrorMessage, "error");
         return;
       }
 
@@ -467,10 +472,14 @@ export default function CatalogueClient({ data, setData, logActivity }) {
         `[Supabase] Sync cloud manuel — ${count} client, ${supplierCount} fournisseur, ${selectionsCount} sélection(s), ${submissionsCount} réponse(s).`
       );
       showToast(
-        submissionsCount > 0
-          ? `${formatCatalogSyncMessage(count, supplierCount, selectionsCount)} · ${submissionsCount} réponse(s) client`
-          : formatCatalogSyncMessage(count, supplierCount, selectionsCount),
-        "success"
+        recovery.fetchErrorMessage
+          ? recovery.partial
+            ? `${recovery.fetchErrorMessage} · ${formatCatalogSyncMessage(count, supplierCount, selectionsCount)}`
+            : recovery.fetchErrorMessage
+          : submissionsCount > 0
+            ? `${formatCatalogSyncMessage(count, supplierCount, selectionsCount)} · ${submissionsCount} réponse(s) client`
+            : formatCatalogSyncMessage(count, supplierCount, selectionsCount),
+        recovery.fetchErrorMessage ? (recovery.partial ? "warning" : "error") : "success"
       );
     } catch (error) {
       showToast(error.message || "Synchronisation impossible.", "error");

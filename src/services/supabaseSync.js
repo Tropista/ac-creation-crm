@@ -93,11 +93,86 @@ function resolveOptionalResult(res, tableName) {
 }
 
 export const COLLECTION_PAGE_SIZE = 1000;
+/** Pages plus petites pour les tables catalogue (JSONB lourd : couleurs, images, descriptions). */
+export const CATALOG_PAGE_SIZE = 150;
+export const CATALOG_PAGE_SIZE_MIN = 50;
+export const COLLECTION_SELECT = "id,data,created_at";
 
-export function formatCatalogFetchLog(tableName, count, pageCount = 1) {
+const CATALOG_TABLE_NAMES = new Set([
+  ...Object.values(CATALOG_TABLES),
+  "catalog_items",
+]);
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export function isCatalogTable(tableName) {
+  return CATALOG_TABLE_NAMES.has(tableName);
+}
+
+export function resolveFetchPageSize(tableName, override) {
+  if (override != null) return override;
+  return isCatalogTable(tableName) ? CATALOG_PAGE_SIZE : COLLECTION_PAGE_SIZE;
+}
+
+export function isStatementTimeoutError(error) {
+  if (!error) return false;
+  const code = String(error.code || "");
+  const message = String(error.message || "").toLowerCase();
+  return (
+    code === "57014" ||
+    message.includes("statement timeout") ||
+    message.includes("canceling statement")
+  );
+}
+
+export function isRetryableFetchError(error) {
+  if (!error) return false;
+  if (isStatementTimeoutError(error)) return true;
+  const status = Number(error.status ?? error.code);
+  if ([500, 502, 503, 504, 429].includes(status)) return true;
+  const message = String(error.message || "").toLowerCase();
+  return (
+    message.includes("internal server error") ||
+    message.includes("service unavailable") ||
+    message.includes("too many requests") ||
+    message.includes("timeout") ||
+    message.includes("timed out")
+  );
+}
+
+export function formatCatalogFetchLog(tableName, count, pageCount = 1, pageSize = COLLECTION_PAGE_SIZE) {
   const pages =
-    pageCount > 1 ? ` (${pageCount} pages)` : count > COLLECTION_PAGE_SIZE ? "" : "";
-  return `${count} article(s) chargé(s) depuis Supabase « ${tableName} »${pages}`;
+    pageCount > 1 ? ` (${pageCount} pages × ${pageSize})` : count > pageSize ? "" : "";
+  const partialSuffix = "";
+  return `${count} article(s) chargé(s) depuis Supabase « ${tableName} »${pages}${partialSuffix}`;
+}
+
+export function formatCatalogPartialFetchError(tableName, loadedCount = 0, error = null) {
+  const base = String(error?.message || error || "erreur inconnue").trim();
+  if (loadedCount > 0) {
+    return (
+      `Chargement partiel de « ${tableName} » : ${loadedCount} ligne(s) récupérée(s) avant expiration ` +
+      `(timeout Supabase). ${base}`
+    );
+  }
+  return `Impossible de charger « ${tableName} » depuis Supabase : ${base}`;
+}
+
+export function formatCatalogRecoveryErrors(fetchResults = []) {
+  const failures = (fetchResults || []).filter((result) => result.error);
+  if (!failures.length) return null;
+
+  const parts = failures.map((result) => {
+    const count = (result.rows || []).length;
+    if (count > 0) {
+      return formatCatalogPartialFetchError(result.tableName, count, result.error);
+    }
+    return formatCatalogPartialFetchError(result.tableName, 0, result.error);
+  });
+
+  return parts.join(" · ");
 }
 
 export function formatCatalogSyncMessage(
@@ -158,71 +233,136 @@ async function protectCatalogSelectionsDelta(supabase, delta = []) {
 }
 
 /** Paginate with .range() until all rows are loaded (PostgREST default cap: 1000/request). */
-export async function fetchCollectionRows(supabase, tableName) {
+export async function fetchCollectionRowsDetailed(
+  supabase,
+  tableName,
+  {
+    pageSize: initialPageSize,
+    minPageSize = CATALOG_PAGE_SIZE_MIN,
+    select = COLLECTION_SELECT,
+    allowPartial = false,
+    maxPages = 5000,
+  } = {}
+) {
+  let pageSize = resolveFetchPageSize(tableName, initialPageSize);
   let from = 0;
   const rows = [];
   let pageCount = 0;
-  const maxPages = 500;
+  let partial = false;
+  let lastError = null;
 
   while (pageCount < maxPages) {
-    const res = await supabase
-      .from(tableName)
-      .select("id,data")
-      .order("created_at", { ascending: true, nullsFirst: true })
-      .order("id", { ascending: true })
-      .range(from, from + COLLECTION_PAGE_SIZE - 1);
+    let res;
+    let attemptPageSize = pageSize;
+    let pageLoaded = false;
 
-    if (res.error) {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      res = await supabase
+        .from(tableName)
+        .select(select)
+        .order("created_at", { ascending: true, nullsFirst: true })
+        .order("id", { ascending: true })
+        .range(from, from + attemptPageSize - 1);
+
+      if (!res.error) {
+        pageSize = attemptPageSize;
+        pageLoaded = true;
+        break;
+      }
+
       if (isMissingTableError(res.error)) {
         console.warn(
           `Table Supabase "${tableName}" introuvable — utilisation d'un tableau vide. Voir docs/SUPABASE.md.`,
           res.error
         );
-        return [];
+        return { rows: [], partial: false, error: null, pageCount: 0, pageSize };
       }
-      throw formatSupabaseCollectionError(tableName, res.error);
-    }
 
-    const page = res.data || [];
-    for (const row of page) {
-      rows.push(row);
-    }
-    pageCount += 1;
+      lastError = res.error;
 
-    if (page.length < COLLECTION_PAGE_SIZE) {
+      if (isRetryableFetchError(res.error) && attemptPageSize > minPageSize) {
+        attemptPageSize = Math.max(minPageSize, Math.floor(attemptPageSize / 2));
+        console.warn(
+          `[Supabase] « ${tableName} » — ${res.error.message || res.error.code || "erreur"} ; ` +
+            `nouvel essai avec ${attemptPageSize} lignes/page (offset ${from}).`
+        );
+        await sleep(250 * (attempt + 1));
+        continue;
+      }
+
       break;
     }
 
-    from += COLLECTION_PAGE_SIZE;
+    if (!pageLoaded) {
+      if (allowPartial && rows.length > 0) {
+        partial = true;
+        break;
+      }
+      throw formatSupabaseCollectionError(tableName, lastError || res?.error);
+    }
+
+    const page = res.data || [];
+    rows.push(...page);
+    pageCount += 1;
+
+    if (page.length < pageSize) {
+      break;
+    }
+
+    from += pageSize;
   }
 
-  if (pageCount >= maxPages) {
+  if (pageCount >= maxPages && rows.length > 0) {
+    partial = true;
+    lastError =
+      lastError ||
+      new Error(
+        `Pagination Supabase interrompue sur « ${tableName} » après ${maxPages} pages — vérifiez le volume de données.`
+      );
+  } else if (pageCount >= maxPages) {
     throw new Error(
       `Pagination Supabase interrompue sur « ${tableName} » après ${maxPages} pages — vérifiez le volume de données.`
     );
   }
 
   if (rows.length > 0) {
-    console.info(`[Supabase] ${formatCatalogFetchLog(tableName, rows.length, pageCount)}`);
+    console.info(
+      `[Supabase] ${formatCatalogFetchLog(tableName, rows.length, pageCount, pageSize)}` +
+        (partial ? " (partiel)" : "")
+    );
   }
 
+  return {
+    rows,
+    partial,
+    error: partial && lastError ? formatSupabaseCollectionError(tableName, lastError) : null,
+    pageCount,
+    pageSize,
+  };
+}
+
+export async function fetchCollectionRows(supabase, tableName, options = {}) {
+  const { rows } = await fetchCollectionRowsDetailed(supabase, tableName, options);
   return rows;
 }
 
 async function fetchCatalogCollectionRows(supabase, tableName) {
-  try {
-    return await fetchCollectionRows(supabase, tableName);
-  } catch (error) {
-    if (isMissingTableError(error)) {
-      console.warn(
-        `Table Supabase "${tableName}" introuvable — utilisation d'un tableau vide. Voir docs/SUPABASE.md.`,
-        error
-      );
-      return [];
-    }
-    console.warn(`Lecture Supabase "${tableName}" impossible — collection ignorée.`, error);
-    return [];
+  const result = await fetchCollectionRowsDetailed(supabase, tableName, {
+    allowPartial: true,
+  });
+
+  if (result.error) {
+    console.error(
+      `[Supabase] ${formatCatalogPartialFetchError(tableName, result.rows.length, result.error)}`
+    );
   }
+
+  return {
+    tableName,
+    rows: result.rows,
+    partial: result.partial,
+    error: result.error,
+  };
 }
 
 /** Écriture catalogue : ne jamais avaler les erreurs (table absente, RLS, quota). */
@@ -443,26 +583,22 @@ export async function syncSupabaseData(nextData, previousData = {}) {
 export async function loadSupabaseCatalogRecovery() {
   const supabase = await getSupabase();
 
-  const [
-    supplierCatalogItems,
-    clientCatalogItems,
-    legacyCatalogItems,
-    catalogSelections,
-  ] = await Promise.all([
-    fetchCatalogCollectionRows(supabase, "supplier_catalog_items"),
-    fetchCatalogCollectionRows(supabase, "client_catalog_items"),
-    fetchCatalogCollectionRows(supabase, "catalog_items"),
-    fetchCatalogCollectionRows(supabase, "catalog_selections"),
-  ]);
+  // Séquentiel : évite 4 requêtes lourdes en parallèle (timeouts statement_timeout).
+  const supplierResult = await fetchCatalogCollectionRows(supabase, "supplier_catalog_items");
+  const clientResult = await fetchCatalogCollectionRows(supabase, "client_catalog_items");
+  const legacyResult = await fetchCatalogCollectionRows(supabase, "catalog_items");
+  const selectionsResult = await fetchCatalogCollectionRows(supabase, "catalog_selections");
 
-  const clientItems = rowsToItems(clientCatalogItems);
+  const fetchResults = [supplierResult, clientResult, legacyResult, selectionsResult];
+
+  const clientItems = rowsToItems(clientResult.rows);
   const mergedClientCatalogItems = clientItems.length
     ? clientItems
-    : rowsToItems(legacyCatalogItems);
+    : rowsToItems(legacyResult.rows);
 
-  const supplierItems = rowsToItems(supplierCatalogItems);
+  const supplierItems = rowsToItems(supplierResult.rows);
   const clientItemsOut = mergedClientCatalogItems;
-  const selectionItems = rowsToItems(catalogSelections);
+  const selectionItems = rowsToItems(selectionsResult.rows);
 
   const counts = {
     supplier: supplierItems.length,
@@ -471,10 +607,26 @@ export async function loadSupabaseCatalogRecovery() {
     total: supplierItems.length + clientItemsOut.length + selectionItems.length,
   };
 
+  const partial = fetchResults.some((result) => result.partial);
+  const errors = fetchResults
+    .filter((result) => result.error)
+    .map((result) => ({
+      tableName: result.tableName,
+      error: result.error,
+      loadedCount: result.rows.length,
+    }));
+  const fetchErrorMessage = formatCatalogRecoveryErrors(fetchResults);
+
   if (counts.total > 0) {
     console.info(
-      `[Supabase] Catalogue récupéré — ${counts.client} client, ${counts.supplier} fournisseur, ${counts.selections} sélection(s).`
+      `[Supabase] Catalogue récupéré — ${counts.client} client, ${counts.supplier} fournisseur, ${counts.selections} sélection(s)` +
+        (partial ? " (chargement partiel)" : "") +
+        "."
     );
+  }
+
+  if (fetchErrorMessage) {
+    console.error(`[Supabase] ${fetchErrorMessage}`);
   }
 
   return {
@@ -483,6 +635,9 @@ export async function loadSupabaseCatalogRecovery() {
     catalogSelections: selectionItems,
     counts,
     hasCatalogData: counts.total > 0,
+    partial,
+    errors,
+    fetchErrorMessage,
   };
 }
 
@@ -515,25 +670,48 @@ export async function loadSupabaseData({ normalizeData, emptyData }) {
     fetchCollectionRows(supabase, "clients").then((data) => ({ data, error: null })),
     fetchCollectionRows(supabase, "products").then((data) => ({ data, error: null })),
     fetchCollectionRows(supabase, "categories").then((data) => ({ data, error: null })),
-    fetchCatalogCollectionRows(supabase, "catalog_items").then((data) => ({ data, error: null })),
-    fetchCatalogCollectionRows(supabase, "supplier_catalog_items").then((data) => ({
-      data,
-      error: null,
+    fetchCatalogCollectionRows(supabase, "catalog_items").then((result) => ({
+      data: result.rows,
+      error: result.error,
+      partial: result.partial,
     })),
-    fetchCatalogCollectionRows(supabase, "client_catalog_items").then((data) => ({
-      data,
-      error: null,
+    fetchCatalogCollectionRows(supabase, "supplier_catalog_items").then((result) => ({
+      data: result.rows,
+      error: result.error,
+      partial: result.partial,
     })),
-    fetchCatalogCollectionRows(supabase, "catalog_selections").then((data) => ({
-      data,
-      error: null,
+    fetchCatalogCollectionRows(supabase, "client_catalog_items").then((result) => ({
+      data: result.rows,
+      error: result.error,
+      partial: result.partial,
     })),
-    fetchCatalogCollectionRows(supabase, "suppliers").then((data) => ({ data, error: null })),
-    fetchCatalogCollectionRows(supabase, "expenses").then((data) => ({ data, error: null })),
+    fetchCatalogCollectionRows(supabase, "catalog_selections").then((result) => ({
+      data: result.rows,
+      error: result.error,
+      partial: result.partial,
+    })),
+    fetchCollectionRows(supabase, "suppliers").then((data) => ({ data, error: null })),
+    fetchCollectionRows(supabase, "expenses").then((data) => ({ data, error: null })),
     fetchCollectionRows(supabase, "quotes").then((data) => ({ data, error: null })),
     fetchCollectionRows(supabase, "invoices").then((data) => ({ data, error: null })),
     fetchCollectionRows(supabase, "crm_logs").then((data) => ({ data, error: null })),
   ]);
+
+  const catalogTableResults = [
+    { tableName: "supplier_catalog_items", res: supplierCatalogItemsRes },
+    { tableName: "client_catalog_items", res: clientCatalogItemsRes },
+    { tableName: "catalog_items", res: catalogItemsRes },
+    { tableName: "catalog_selections", res: catalogSelectionsRes },
+  ];
+
+  const catalogFetchErrorMessage = formatCatalogRecoveryErrors(
+    catalogTableResults.map(({ tableName, res }) => ({
+      tableName,
+      rows: res.data || [],
+      error: res.error,
+      partial: res.partial,
+    }))
+  );
 
   const resolvedSupplierCatalogItemsRes = resolveCollectionResult(
     supplierCatalogItemsRes,
@@ -585,9 +763,15 @@ export async function loadSupabaseData({ normalizeData, emptyData }) {
     );
   }
 
+  if (catalogFetchErrorMessage) {
+    console.error(`[Supabase] ${catalogFetchErrorMessage}`);
+  }
+
   return {
     data: cloudData,
     catalogCounts,
+    catalogFetchErrorMessage,
+    catalogFetchPartial: catalogTableResults.some(({ res }) => res.partial),
     hasCloudData: Boolean(
       settingsRes.data ||
         usersRes.data?.length ||

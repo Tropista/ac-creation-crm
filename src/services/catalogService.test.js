@@ -126,9 +126,9 @@ describe("catalogService", () => {
 
     await fetchPublicCatalogProducts({ productIds: ids }, ids);
 
-    expect(inCalls).toHaveLength(2);
+    expect(inCalls).toHaveLength(3);
     expect(inCalls.every((call) => call.table === "client_catalog_items")).toBe(true);
-    expect(inCalls.every((call) => call.batchIds.length <= 100)).toBe(true);
+    expect(inCalls.every((call) => call.batchIds.length <= 50)).toBe(true);
     expect(
       inCalls.every((call) => call.batchIds.every((id) => ids.includes(id)))
     ).toBe(true);
