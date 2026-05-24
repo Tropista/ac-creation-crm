@@ -328,6 +328,24 @@
   margin: 0;
 }
 
+/* Override global .card light theme inside public catalog */
+.client-catalog .card {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.client-catalog .card h1,
+.client-catalog .card h2,
+.client-catalog .card h3,
+.client-catalog .card strong,
+.client-catalog .card label,
+.client-catalog .card p {
+  color: #fff;
+}
+
 .client-catalog-cart {
   display: flex;
   flex-direction: column;
@@ -545,7 +563,29 @@
   gap: 8px;
 }
 
-.client-catalog-cart-item-fields label,
+.client-catalog-cart-item-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.client-catalog-cart-item-fields input,
+.client-catalog-cart-item-fields select {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  padding: 8px 10px;
+}
+
+.client-catalog-cart-item-fields select option {
+  background: #10265f;
+  color: #fff;
+}
+
 .client-catalog-cart-actions,
 .client-catalog-submit-row,
 .client-catalog-modal-actions {
@@ -576,6 +616,19 @@
 
 .client-catalog-color-picker {
   position: relative;
+}
+
+.client-catalog-color-picker > input {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  padding: 8px 10px;
+}
+
+.client-catalog-color-picker > input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
 }
 
 .client-catalog-color-trigger {
@@ -617,7 +670,7 @@
 
 .client-catalog-color-menu {
   position: absolute;
-  z-index: 20;
+  z-index: 30;
   top: calc(100% + 4px);
   left: 0;
   right: 0;
@@ -627,9 +680,9 @@
   padding: 4px;
   list-style: none;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: #10265f;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: #0a1a45;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
 }
 
 .client-catalog-color-option {
@@ -800,13 +853,17 @@
     bottom: 0;
     max-height: min(85vh, 720px);
     overflow-y: auto;
-    background: #10265f;
+    background: #0a1a45;
     color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-bottom: none;
     border-radius: 20px 20px 0 0;
     padding: 16px;
     display: flex;
     flex-direction: column;
     gap: 12px;
+    box-shadow: none;
+    backdrop-filter: none;
   }
 
   .client-catalog-cart-drawer-header {
