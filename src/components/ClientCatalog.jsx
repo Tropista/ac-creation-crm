@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { ChevronDown, Copy, Mail, Trash2, X } from "lucide-react";
+import { ChevronDown, Copy, Mail, ShoppingBag, Trash2, X } from "lucide-react";
 import {
   fetchPublicCatalogProducts,
   fetchPublicCatalogSelection,
@@ -21,6 +21,20 @@ import {
   resolveCatalogColorImageUrl,
   resolveCatalogColorLabel,
 } from "../utils/colorNameToHex";
+import {
+  CATALOG_CLIENT_FOLDERS,
+  CATALOG_FOLDER_ALL,
+  CATALOG_FOLDER_OTHER,
+  countItemsByFolder,
+  resolveCatalogFolder,
+} from "../utils/catalogCategoryFolders";
+import {
+  buildPageNumbers,
+  CLIENT_CATALOG_PAGE_SIZE,
+  filterProductsByFolder,
+  getTotalPages,
+  paginateItems,
+} from "../utils/clientCatalogBrowse";
 import { showToast } from "../utils/toast";
 import "../styles/client-catalog.css";
 
@@ -140,6 +154,99 @@ function ClientColorPicker({ colors, value, onChange }) {
   );
 }
 
+function ClientCatalogCartPanel({
+  cart,
+  productsById,
+  onClear,
+  onRemoveLine,
+  onUpdateLine,
+  onGenerateFiche,
+}) {
+  return (
+    <>
+      <div className="client-catalog-cart-header">
+        <h2>Ma sélection ({cart.length})</h2>
+        {cart.length ? (
+          <button type="button" className="client-catalog-clear-btn" onClick={onClear}>
+            Tout effacer
+          </button>
+        ) : null}
+      </div>
+
+      {cart.length === 0 ? (
+        <p className="client-catalog-cart-empty">
+          Parcourez les articles et cliquez sur « Ajouter à ma sélection ».
+        </p>
+      ) : (
+        <ul className="client-catalog-cart-list">
+          {cart.map((line) => {
+            const product = productsById.get(line.productId);
+            const sizes = resolveProductSizeOptions(product);
+            const minQty = resolveProductMinQuantity(product);
+            return (
+              <li key={line.id} className="client-catalog-cart-item">
+                <div className="client-catalog-cart-item-head">
+                  <strong>{product?.name || "Article"}</strong>
+                  <button
+                    type="button"
+                    className="client-catalog-icon-btn"
+                    aria-label="Retirer"
+                    onClick={() => onRemoveLine(line.id)}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+                <div className="client-catalog-cart-item-fields">
+                  <label>
+                    Couleur
+                    <ClientColorPicker
+                      colors={product?.colors}
+                      value={line.color}
+                      onChange={(color) => onUpdateLine(line.id, { color })}
+                    />
+                  </label>
+                  <label>
+                    Taille
+                    <select
+                      value={line.size || sizes[0]}
+                      onChange={(event) => onUpdateLine(line.id, { size: event.target.value })}
+                    >
+                      {sizes.map((size) => (
+                        <option key={size} value={size}>
+                          {size}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Qté
+                    <input
+                      type="number"
+                      min={minQty}
+                      value={line.quantity || minQty}
+                      onChange={(event) =>
+                        onUpdateLine(line.id, {
+                          quantity: Math.max(minQty, Number(event.target.value) || minQty),
+                        })
+                      }
+                    />
+                  </label>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <div className="client-catalog-cart-actions">
+        <button type="button" className="primary" disabled={!cart.length} onClick={onGenerateFiche}>
+          Générer ma fiche produit
+        </button>
+      </div>
+    </>
+  );
+}
+
 export default function ClientCatalog() {
   const { shareId } = useParams();
   const [loading, setLoading] = useState(true);
@@ -151,7 +258,10 @@ export default function ClientCatalog() {
   const [cart, setCart] = useState([]);
   const [drafts, setDrafts] = useState({});
   const [showFicheModal, setShowFicheModal] = useState(false);
+  const [showCartDrawer, setShowCartDrawer] = useState(false);
   const [ficheText, setFicheText] = useState("");
+  const [folderFilter, setFolderFilter] = useState(CATALOG_FOLDER_ALL);
+  const [currentPage, setCurrentPage] = useState(1);
   const [contact, setContact] = useState({
     clientName: "",
     clientEmail: "",
@@ -230,10 +340,54 @@ export default function ClientCatalog() {
     };
   }, [shareId]);
 
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [folderFilter]);
+
+  useEffect(() => {
+    if (!showCartDrawer) return undefined;
+
+    function handleEscape(event) {
+      if (event.key === "Escape") setShowCartDrawer(false);
+    }
+
+    document.addEventListener("keydown", handleEscape);
+    return () => document.removeEventListener("keydown", handleEscape);
+  }, [showCartDrawer]);
+
   const productsById = useMemo(
     () => new Map(products.map((product) => [product.id, product])),
     [products]
   );
+
+  const folderCounts = useMemo(() => countItemsByFolder(products), [products]);
+
+  const filteredProducts = useMemo(
+    () => filterProductsByFolder(products, folderFilter, resolveCatalogFolder),
+    [products, folderFilter]
+  );
+
+  const totalPages = useMemo(
+    () => getTotalPages(filteredProducts.length, CLIENT_CATALOG_PAGE_SIZE),
+    [filteredProducts.length]
+  );
+
+  const paginatedProducts = useMemo(() => {
+    const safePage = Math.min(currentPage, totalPages);
+    return paginateItems(filteredProducts, safePage, CLIENT_CATALOG_PAGE_SIZE);
+  }, [filteredProducts, currentPage, totalPages]);
+
+  const pageNumbers = useMemo(
+    () => buildPageNumbers(currentPage, totalPages),
+    [currentPage, totalPages]
+  );
+
+  const paginationFrom = filteredProducts.length
+    ? (Math.min(currentPage, totalPages) - 1) * CLIENT_CATALOG_PAGE_SIZE + 1
+    : 0;
+  const paginationTo = filteredProducts.length
+    ? Math.min(Math.min(currentPage, totalPages) * CLIENT_CATALOG_PAGE_SIZE, filteredProducts.length)
+    : 0;
 
   const recipientEmail = useMemo(
     () => resolveCatalogRecipientEmail(selection),
@@ -311,6 +465,7 @@ export default function ClientCatalog() {
     }
     setFicheText(buildSheetText());
     setShowFicheModal(true);
+    setShowCartDrawer(false);
   }
 
   async function copyFicheText(text = ficheText) {
@@ -363,6 +518,7 @@ export default function ClientCatalog() {
         productSheet: buildSheetText(),
       });
       setSubmitted(true);
+      setShowCartDrawer(false);
       showToast("Votre sélection a été enregistrée. Merci !", "success");
     } catch (submitError) {
       showToast(submitError.message || "Envoi impossible.", "error");
@@ -370,6 +526,181 @@ export default function ClientCatalog() {
       setSubmitting(false);
     }
   }
+
+  function renderProductCard(product) {
+    const draft = drafts[product.id] || createDraftForProduct(product);
+    const sizes = resolveProductSizeOptions(product);
+    const minQty = resolveProductMinQuantity(product);
+    const description = product.description
+      ? stripSourceFromDescription(product.description).split("\n")[0]
+      : "";
+    const displayImage = resolveProductDisplayImage(product, draft.color);
+    const itemFolder = resolveCatalogFolder(product);
+
+    return (
+      <article key={product.id} className="client-catalog-card">
+        <div className="client-catalog-card-media">
+          {displayImage ? (
+            <img src={displayImage} alt={product.name} loading="lazy" />
+          ) : (
+            <div className="catalog-import-placeholder">Sans image</div>
+          )}
+        </div>
+        <div className="client-catalog-card-body">
+          <h3>{product.name}</h3>
+          <p className="client-catalog-category">{itemFolder}</p>
+          {product.sku ? <p className="client-catalog-sku">Réf. {product.sku}</p> : null}
+          {description ? <p className="client-catalog-description">{description}</p> : null}
+          {product.minOrderQty ? (
+            <p className="client-catalog-min-qty">Commande minimum : x{product.minOrderQty}</p>
+          ) : null}
+
+          <div className="client-catalog-fields">
+            <label>
+              Couleur
+              <ClientColorPicker
+                colors={product.colors}
+                value={draft.color}
+                onChange={(color) => updateDraft(product.id, { color })}
+              />
+            </label>
+            <label>
+              Taille
+              <select
+                value={draft.size || sizes[0]}
+                onChange={(event) => updateDraft(product.id, { size: event.target.value })}
+              >
+                {sizes.map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Quantité
+              <input
+                type="number"
+                min={minQty}
+                value={draft.quantity || minQty}
+                onChange={(event) =>
+                  updateDraft(product.id, {
+                    quantity: Math.max(minQty, Number(event.target.value) || minQty),
+                  })
+                }
+              />
+            </label>
+          </div>
+
+          <button
+            type="button"
+            className="primary client-catalog-add-btn"
+            onClick={() => addToCart(product.id)}
+          >
+            Ajouter à ma sélection
+          </button>
+        </div>
+      </article>
+    );
+  }
+
+  function renderFolderNav() {
+    return (
+      <nav className="client-catalog-folder-nav" aria-label="Catégories produits">
+        <div className="client-catalog-folder-nav-header">
+          <strong>Catégories</strong>
+          <span>{products.length} article(s)</span>
+        </div>
+        <div className="client-catalog-folder-nav-list">
+          <button
+            type="button"
+            className={`client-catalog-folder-btn ${folderFilter === CATALOG_FOLDER_ALL ? "is-active" : ""}`}
+            onClick={() => setFolderFilter(CATALOG_FOLDER_ALL)}
+          >
+            <span>Tous</span>
+            <span className="client-catalog-folder-count">{products.length}</span>
+          </button>
+          {CATALOG_CLIENT_FOLDERS.map((folder) => (
+            <button
+              key={folder}
+              type="button"
+              className={`client-catalog-folder-btn ${folderFilter === folder ? "is-active" : ""}`}
+              onClick={() => setFolderFilter(folder)}
+            >
+              <span>{folder}</span>
+              <span className="client-catalog-folder-count">{folderCounts[folder] || 0}</span>
+            </button>
+          ))}
+          {(folderCounts[CATALOG_FOLDER_OTHER] || 0) > 0 ? (
+            <button
+              type="button"
+              className={`client-catalog-folder-btn ${folderFilter === CATALOG_FOLDER_OTHER ? "is-active" : ""}`}
+              onClick={() => setFolderFilter(CATALOG_FOLDER_OTHER)}
+            >
+              <span>{CATALOG_FOLDER_OTHER}</span>
+              <span className="client-catalog-folder-count">
+                {folderCounts[CATALOG_FOLDER_OTHER] || 0}
+              </span>
+            </button>
+          ) : null}
+        </div>
+      </nav>
+    );
+  }
+
+  function renderPagination() {
+    if (filteredProducts.length <= CLIENT_CATALOG_PAGE_SIZE) return null;
+
+    const safePage = Math.min(currentPage, totalPages);
+
+    return (
+      <nav className="client-catalog-pagination" aria-label="Pagination des produits">
+        <p className="client-catalog-pagination-summary">
+          {paginationFrom}–{paginationTo} sur {filteredProducts.length} article(s)
+        </p>
+        <div className="client-catalog-pagination-controls">
+          <button
+            type="button"
+            className="client-catalog-pagination-btn"
+            disabled={safePage <= 1}
+            onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+          >
+            Précédent
+          </button>
+          {pageNumbers.map((page) => (
+            <button
+              key={page}
+              type="button"
+              className={`client-catalog-pagination-btn client-catalog-pagination-page${
+                page === safePage ? " is-active" : ""
+              }`}
+              aria-current={page === safePage ? "page" : undefined}
+              onClick={() => setCurrentPage(page)}
+            >
+              {page}
+            </button>
+          ))}
+          <button
+            type="button"
+            className="client-catalog-pagination-btn"
+            disabled={safePage >= totalPages}
+            onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+          >
+            Suivant
+          </button>
+        </div>
+      </nav>
+    );
+  }
+
+  const cartPanelProps = {
+    cart,
+    productsById,
+    onClear: () => setCart([]),
+    onRemoveLine: removeCartLine,
+    onUpdateLine: updateCartLine,
+    onGenerateFiche: openFicheModal,
+  };
 
   if (loading) {
     return (
@@ -417,188 +748,77 @@ export default function ClientCatalog() {
           </div>
         ) : (
           <form className="client-catalog-form" onSubmit={handleSubmit}>
-            <div className="client-catalog-grid">
-              {products.map((product) => {
-                const draft = drafts[product.id] || createDraftForProduct(product);
-                const sizes = resolveProductSizeOptions(product);
-                const minQty = resolveProductMinQuantity(product);
-                const description = product.description
-                  ? stripSourceFromDescription(product.description).split("\n")[0]
-                  : "";
-                const displayImage = resolveProductDisplayImage(product, draft.color);
+            <div className="client-catalog-layout">
+              <div className="client-catalog-main">
+                {renderFolderNav()}
 
-                return (
-                  <article key={product.id} className="client-catalog-card">
-                    <div className="client-catalog-card-media">
-                      {displayImage ? (
-                        <img src={displayImage} alt={product.name} loading="lazy" />
-                      ) : (
-                        <div className="catalog-import-placeholder">Sans image</div>
-                      )}
+                {filteredProducts.length === 0 ? (
+                  <div className="client-catalog-empty-folder card">
+                    <strong>Aucun article dans cette catégorie</strong>
+                    <span>Essayez une autre catégorie ou « Tous ».</span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="client-catalog-grid">
+                      {paginatedProducts.map((product) => renderProductCard(product))}
                     </div>
-                    <div className="client-catalog-card-body">
-                      <h3>{product.name}</h3>
-                      <p>{product.category}</p>
-                      {product.sku ? <p className="client-catalog-sku">Réf. {product.sku}</p> : null}
-                      {description ? (
-                        <p className="client-catalog-description">{description}</p>
-                      ) : null}
-                      {product.minOrderQty ? (
-                        <p className="client-catalog-min-qty">
-                          Commande minimum : x{product.minOrderQty}
-                        </p>
-                      ) : null}
+                    {renderPagination()}
+                  </>
+                )}
+              </div>
 
-                      <div className="client-catalog-fields">
-                        <label>
-                          Couleur
-                          <ClientColorPicker
-                            colors={product.colors}
-                            value={draft.color}
-                            onChange={(color) => updateDraft(product.id, { color })}
-                          />
-                        </label>
-                        <label>
-                          Taille
-                          <select
-                            value={draft.size || sizes[0]}
-                            onChange={(event) =>
-                              updateDraft(product.id, { size: event.target.value })
-                            }
-                          >
-                            {sizes.map((size) => (
-                              <option key={size} value={size}>
-                                {size}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                        <label>
-                          Quantité
-                          <input
-                            type="number"
-                            min={minQty}
-                            value={draft.quantity || minQty}
-                            onChange={(event) =>
-                              updateDraft(product.id, {
-                                quantity: Math.max(
-                                  minQty,
-                                  Number(event.target.value) || minQty
-                                ),
-                              })
-                            }
-                          />
-                        </label>
-                      </div>
-
-                      <button
-                        type="button"
-                        className="primary client-catalog-add-btn"
-                        onClick={() => addToCart(product.id)}
-                      >
-                        Ajouter à ma sélection
-                      </button>
-                    </div>
-                  </article>
-                );
-              })}
+              <aside className="client-catalog-cart client-catalog-cart--sidebar card">
+                <ClientCatalogCartPanel {...cartPanelProps} />
+              </aside>
             </div>
 
-            <aside className="client-catalog-cart card">
-              <div className="client-catalog-cart-header">
-                <h2>Ma sélection ({cart.length})</h2>
-                {cart.length ? (
-                  <button
-                    type="button"
-                    className="client-catalog-clear-btn"
-                    onClick={() => setCart([])}
-                  >
-                    Tout effacer
-                  </button>
-                ) : null}
-              </div>
+            <div className="client-catalog-cart-bar" aria-live="polite">
+              <button
+                type="button"
+                className="client-catalog-cart-bar-open"
+                onClick={() => setShowCartDrawer(true)}
+              >
+                <ShoppingBag size={18} aria-hidden="true" />
+                <span>Ma sélection ({cart.length})</span>
+              </button>
+              <button
+                type="button"
+                className="primary client-catalog-cart-bar-fiche"
+                disabled={!cart.length}
+                onClick={openFicheModal}
+              >
+                Générer fiche
+              </button>
+            </div>
 
-              {cart.length === 0 ? (
-                <p className="client-catalog-cart-empty">
-                  Parcourez les articles et cliquez sur « Ajouter à ma sélection ».
-                </p>
-              ) : (
-                <ul className="client-catalog-cart-list">
-                  {cart.map((line) => {
-                    const product = productsById.get(line.productId);
-                    const sizes = resolveProductSizeOptions(product);
-                    const minQty = resolveProductMinQuantity(product);
-                    return (
-                      <li key={line.id} className="client-catalog-cart-item">
-                        <div className="client-catalog-cart-item-head">
-                          <strong>{product?.name || "Article"}</strong>
-                          <button
-                            type="button"
-                            className="client-catalog-icon-btn"
-                            aria-label="Retirer"
-                            onClick={() => removeCartLine(line.id)}
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                        <div className="client-catalog-cart-item-fields">
-                          <label>
-                            Couleur
-                            <ClientColorPicker
-                              colors={product?.colors}
-                              value={line.color}
-                              onChange={(color) => updateCartLine(line.id, { color })}
-                            />
-                          </label>
-                          <label>
-                            Taille
-                            <select
-                              value={line.size || sizes[0]}
-                              onChange={(event) =>
-                                updateCartLine(line.id, { size: event.target.value })
-                              }
-                            >
-                              {sizes.map((size) => (
-                                <option key={size} value={size}>
-                                  {size}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <label>
-                            Qté
-                            <input
-                              type="number"
-                              min={minQty}
-                              value={line.quantity || minQty}
-                              onChange={(event) =>
-                                updateCartLine(line.id, {
-                                  quantity: Math.max(
-                                    minQty,
-                                    Number(event.target.value) || minQty
-                                  ),
-                                })
-                              }
-                            />
-                          </label>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-
-              <div className="client-catalog-cart-actions">
-                <button
-                  type="button"
-                  className="primary"
-                  disabled={!cart.length}
-                  onClick={openFicheModal}
+            {showCartDrawer ? (
+              <div
+                className="client-catalog-cart-drawer-overlay"
+                role="presentation"
+                onClick={() => setShowCartDrawer(false)}
+              >
+                <aside
+                  className="client-catalog-cart-drawer card"
+                  role="dialog"
+                  aria-modal="true"
+                  aria-labelledby="client-catalog-drawer-title"
+                  onClick={(event) => event.stopPropagation()}
                 >
-                  Générer ma fiche produit
-                </button>
+                  <div className="client-catalog-cart-drawer-header">
+                    <h2 id="client-catalog-drawer-title">Ma sélection</h2>
+                    <button
+                      type="button"
+                      className="client-catalog-icon-btn"
+                      aria-label="Fermer"
+                      onClick={() => setShowCartDrawer(false)}
+                    >
+                      <X size={18} />
+                    </button>
+                  </div>
+                  <ClientCatalogCartPanel {...cartPanelProps} />
+                </aside>
               </div>
-            </aside>
+            ) : null}
 
             <section className="client-catalog-contact card">
               <h2>Vos coordonnées</h2>

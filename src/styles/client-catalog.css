@@ -208,11 +208,30 @@
   opacity: 0.8;
 }
 
+.client-catalog-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.client-catalog-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 18px;
+  align-items: start;
+}
+
+.client-catalog-main {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
 .client-catalog-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 16px;
-  margin-bottom: 18px;
 }
 
 .client-catalog-card {
@@ -303,10 +322,171 @@
   margin-top: 4px;
 }
 
+.client-catalog-category {
+  font-size: 12px;
+  opacity: 0.75;
+  margin: 0;
+}
+
 .client-catalog-cart {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.client-catalog-cart--sidebar {
   position: sticky;
   top: 12px;
-  margin-bottom: 18px;
+  max-height: calc(100vh - 24px);
+  overflow-y: auto;
+}
+
+.client-catalog-cart-bar {
+  display: none;
+}
+
+.client-catalog-cart-drawer-overlay {
+  display: none;
+}
+
+.client-catalog-folder-nav {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  padding: 14px;
+}
+
+.client-catalog-folder-nav-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.client-catalog-folder-nav-header strong {
+  font-size: 14px;
+}
+
+.client-catalog-folder-nav-header span {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.client-catalog-folder-nav-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.client-catalog-folder-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.client-catalog-folder-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+.client-catalog-folder-btn.is-active {
+  background: rgba(56, 189, 248, 0.2);
+  border-color: #38bdf8;
+  color: #e0f2fe;
+}
+
+.client-catalog-folder-count {
+  min-width: 22px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.client-catalog-folder-btn.is-active .client-catalog-folder-count {
+  background: rgba(56, 189, 248, 0.35);
+}
+
+.client-catalog-pagination {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0 4px;
+}
+
+.client-catalog-pagination-summary {
+  margin: 0;
+  font-size: 13px;
+  opacity: 0.85;
+}
+
+.client-catalog-pagination-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.client-catalog-pagination-btn {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.client-catalog-pagination-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.client-catalog-pagination-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.client-catalog-pagination-page {
+  min-width: 40px;
+  text-align: center;
+}
+
+.client-catalog-pagination-page.is-active {
+  background: rgba(56, 189, 248, 0.25);
+  border-color: #38bdf8;
+}
+
+.client-catalog-empty-folder {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 24px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+}
+
+.client-catalog-empty-folder span {
+  opacity: 0.8;
+  font-size: 14px;
 }
 
 .client-catalog-cart-header {
@@ -556,9 +736,95 @@
   color: #64748b;
 }
 
+@media (max-width: 900px) {
+  .client-catalog-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .client-catalog-cart--sidebar {
+    display: none;
+  }
+
+  .client-catalog {
+    padding-bottom: 88px;
+  }
+
+  .client-catalog-cart-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 900;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+    background: rgba(8, 27, 75, 0.96);
+    border-top: 1px solid rgba(255, 255, 255, 0.16);
+    backdrop-filter: blur(8px);
+  }
+
+  .client-catalog-cart-bar-open {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.24);
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .client-catalog-cart-bar-fiche {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .client-catalog-cart-drawer-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 950;
+    background: rgba(8, 27, 75, 0.72);
+  }
+
+  .client-catalog-cart-drawer {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-height: min(85vh, 720px);
+    overflow-y: auto;
+    background: #10265f;
+    color: #fff;
+    border-radius: 20px 20px 0 0;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .client-catalog-cart-drawer-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .client-catalog-cart-drawer-header h2 {
+    margin: 0;
+  }
+}
+
 @media (max-width: 720px) {
   .client-catalog {
     padding: 12px;
+    padding-bottom: 88px;
   }
 
   .client-catalog-header {
@@ -568,10 +834,6 @@
 
   .client-catalog-grid {
     grid-template-columns: 1fr;
-  }
-
-  .client-catalog-cart {
-    position: static;
   }
 
   .client-catalog-submit-row {
