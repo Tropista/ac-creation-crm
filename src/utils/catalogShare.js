@@ -1,6 +1,10 @@
 import { isHashRouterMode, pageToPath } from "./routes";
 import { openQuoteFromCalculator } from "./quoteDraft";
 import { stripSourceFromDescription } from "./catalogDescription";
+import {
+  resolveCatalogColorImageUrl,
+  resolveCatalogColorLabel,
+} from "./colorNameToHex";
 
 export const PUBLIC_CATALOG_PATH = "/catalogue";
 
@@ -26,9 +30,42 @@ export function sanitizeColorForSnapshot(color) {
 
   const name = String(color.name || color.label || "").trim();
   const hex = String(color.hex || color.value || color.color || "").trim();
-  if (name && hex) return { name, hex };
-  if (name) return name;
-  return "";
+  const imageUrl = sanitizeImageUrlForCache(color.imageUrl);
+  if (!name) return "";
+  if (hex || imageUrl) {
+    return {
+      name,
+      ...(hex ? { hex } : {}),
+      ...(imageUrl ? { imageUrl } : {}),
+    };
+  }
+  return name;
+}
+
+function mergeColorImageUrls(snapshotColors = [], liveColors = []) {
+  if (!Array.isArray(snapshotColors) || !snapshotColors.length) return snapshotColors;
+  if (!Array.isArray(liveColors) || !liveColors.length) return snapshotColors;
+
+  const liveByLabel = new Map();
+  for (const color of liveColors) {
+    const label = resolveCatalogColorLabel(color);
+    if (label) liveByLabel.set(label, color);
+  }
+
+  return snapshotColors.map((color) => {
+    const label = resolveCatalogColorLabel(color);
+    const live = liveByLabel.get(label);
+    if (!live) return color;
+
+    const liveImageUrl = sanitizeImageUrlForCache(resolveCatalogColorImageUrl(live));
+    if (!liveImageUrl) return color;
+
+    if (typeof color === "string") {
+      return { name: label, imageUrl: liveImageUrl };
+    }
+    if (!color || typeof color !== "object") return color;
+    return { ...color, imageUrl: liveImageUrl };
+  });
 }
 
 function truncateSnapshotDescription(description) {
@@ -237,8 +274,19 @@ export function mergeLiveCatalogImages(products = [], liveItems = []) {
 
   return products.map((product) => {
     const live = liveById.get(product.id);
-    if (!live?.imageUrl) return product;
-    return { ...product, imageUrl: live.imageUrl };
+    if (!live) return product;
+
+    let merged = product;
+    if (live.imageUrl) {
+      merged = { ...merged, imageUrl: live.imageUrl };
+    }
+    if (live.colors?.length) {
+      merged = {
+        ...merged,
+        colors: mergeColorImageUrls(merged.colors, live.colors),
+      };
+    }
+    return merged;
   });
 }
 

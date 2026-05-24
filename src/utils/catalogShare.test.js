@@ -5,6 +5,7 @@ import {
   buildProductSnapshots,
   compactSelectionForPublicCache,
   createCatalogSelectionPayload,
+  mergeLiveCatalogImages,
   pruneOldPublicCatalogCaches,
   PUBLIC_CATALOG_CACHE_PREFIX,
   resolveCatalogRecipientEmail,
@@ -52,7 +53,7 @@ describe("catalogShare product sheet", () => {
     expect(snapshot.minOrderQty).toBe(10);
   });
 
-  it("strips base64 images and color image urls from snapshots", () => {
+  it("strips base64 product images but keeps http color image urls in snapshots", () => {
     const [snapshot] = buildProductSnapshots([
       {
         ...product,
@@ -62,7 +63,49 @@ describe("catalogShare product sheet", () => {
     ]);
 
     expect(snapshot.imageUrl).toBe("");
-    expect(snapshot.colors).toEqual([{ name: "Noir", hex: "#000" }]);
+    expect(snapshot.colors).toEqual([
+      { name: "Noir", hex: "#000", imageUrl: "https://example.com/swatch.jpg" },
+    ]);
+  });
+
+  it("strips base64 color image urls from snapshots", () => {
+    const [snapshot] = buildProductSnapshots([
+      {
+        ...product,
+        colors: [{ name: "Blanc", hex: "#fff", imageUrl: "data:image/jpeg;base64,abc123" }],
+      },
+    ]);
+
+    expect(snapshot.colors).toEqual([{ name: "Blanc", hex: "#fff" }]);
+  });
+
+  it("merges per-color image urls from live catalog items", () => {
+    const [merged] = mergeLiveCatalogImages(
+      [
+        {
+          id: "p1",
+          name: "T-shirt",
+          imageUrl: "https://example.com/default.jpg",
+          colors: [{ name: "Noir", hex: "#000" }, { name: "Blanc", hex: "#fff" }],
+        },
+      ],
+      [
+        {
+          id: "p1",
+          imageUrl: "https://example.com/live-default.jpg",
+          colors: [
+            { name: "Noir", hex: "#000", imageUrl: "https://example.com/noir.jpg" },
+            { name: "Blanc", hex: "#fff", imageUrl: "https://example.com/blanc.jpg" },
+          ],
+        },
+      ]
+    );
+
+    expect(merged.imageUrl).toBe("https://example.com/live-default.jpg");
+    expect(merged.colors).toEqual([
+      { name: "Noir", hex: "#000", imageUrl: "https://example.com/noir.jpg" },
+      { name: "Blanc", hex: "#fff", imageUrl: "https://example.com/blanc.jpg" },
+    ]);
   });
 
   it("compacts public cache without snapshots when requested", () => {
