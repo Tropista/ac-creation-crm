@@ -8,6 +8,9 @@ import {
 } from "../utils/catalogShare";
 
 const SUPABASE_ID_BATCH_SIZE = 100;
+const PUBLIC_FETCH_TIMEOUT_MS = 12000;
+const PUBLIC_FETCH_MAX_RETRIES = 2;
+const PUBLIC_FETCH_RETRY_BASE_MS = 400;
 
 function findLocalCatalogSelection(shareId) {
   const selections = loadData().catalogSelections || [];
@@ -50,6 +53,85 @@ function normalizePublicError(error) {
   return error;
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export function isRetryableSupabaseError(error) {
+  if (!error) return false;
+  const status = Number(error.status ?? error.code);
+  if ([429, 502, 503, 504].includes(status)) return true;
+  const message = String(error.message || error.details || "").toLowerCase();
+  return (
+    message.includes("503") ||
+    message.includes("502") ||
+    message.includes("504") ||
+    message.includes("429") ||
+    message.includes("service unavailable") ||
+    message.includes("too many requests") ||
+    message.includes("timeout") ||
+    message.includes("timed out")
+  );
+}
+
+function normalizePublicFetchError(error) {
+  if (isMissingTableError(error)) {
+    return normalizePublicError(error);
+  }
+  if (String(error?.message || "").includes("délai dépassé")) {
+    return error;
+  }
+  if (isRetryableSupabaseError(error)) {
+    return new Error(
+      "Serveur catalogue temporairement indisponible. Réessayez dans quelques instants."
+    );
+  }
+  return error instanceof Error ? error : new Error("Impossible de charger le catalogue.");
+}
+
+async function withTimeout(promise, ms, label) {
+  let timeoutId;
+  const timeout = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(
+        new Error(
+          `${label} — délai dépassé (${Math.round(ms / 1000)} s). Réessayez dans un instant.`
+        )
+      );
+    }, ms);
+  });
+
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function fetchWithRetry(operation, options = {}) {
+  const {
+    label = "Requête Supabase",
+    maxRetries = PUBLIC_FETCH_MAX_RETRIES,
+    timeoutMs = PUBLIC_FETCH_TIMEOUT_MS,
+  } = options;
+  let lastError;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    try {
+      return await withTimeout(operation(), timeoutMs, label);
+    } catch (error) {
+      lastError = error;
+      if (attempt < maxRetries && isRetryableSupabaseError(error)) {
+        await sleep(PUBLIC_FETCH_RETRY_BASE_MS * 2 ** attempt);
+        continue;
+      }
+      throw normalizePublicFetchError(error);
+    }
+  }
+
+  throw normalizePublicFetchError(lastError);
+}
+
 export function chunkIds(ids = [], batchSize = SUPABASE_ID_BATCH_SIZE) {
   const unique = [...new Set((ids || []).filter(Boolean))];
   const chunks = [];
@@ -64,9 +146,19 @@ function rowsToCatalogItems(rows = []) {
 }
 
 async function fetchCatalogItemsBatch(supabase, tableName, ids) {
-  const { data, error } = await supabase.from(tableName).select("id,data").in("id", ids);
-  if (error) throw error;
-  return data || [];
+  if (!ids?.length) return [];
+  if (ids.length > SUPABASE_ID_BATCH_SIZE) {
+    throw new Error("fetchCatalogItemsBatch: utilisez fetchCatalogItemsByIds pour de gros lots.");
+  }
+
+  return fetchWithRetry(
+    async () => {
+      const { data, error } = await supabase.from(tableName).select("id,data").in("id", ids);
+      if (error) throw error;
+      return data || [];
+    },
+    { label: "Chargement des produits catalogue" }
+  );
 }
 
 async function fetchCatalogItemsByIds(supabase, productIds) {
@@ -104,13 +196,19 @@ export async function fetchPublicCatalogSelection(shareId) {
 
   try {
     const supabase = await getSupabase();
-    const { data, error } = await supabase
-      .from("catalog_selections")
-      .select("id,data")
-      .eq("id", shareId)
-      .maybeSingle();
+    const data = await fetchWithRetry(
+      async () => {
+        const { data: row, error } = await supabase
+          .from("catalog_selections")
+          .select("id,data")
+          .eq("id", shareId)
+          .maybeSingle();
+        if (error) throw error;
+        return row;
+      },
+      { label: "Chargement de la sélection catalogue" }
+    );
 
-    if (error) throw normalizePublicError(error);
     const selection = rowToSelection(data);
     if (selection) {
       savePublicCatalogCache(selection, { omitSnapshots: true });
@@ -119,7 +217,7 @@ export async function fetchPublicCatalogSelection(shareId) {
     return cached;
   } catch (error) {
     if (cached) return cached;
-    throw normalizePublicError(error);
+    throw normalizePublicFetchError(error);
   }
 }
 
@@ -152,11 +250,10 @@ export async function fetchPublicCatalogProducts(selection, productIds = []) {
     }
   }
 
-  if (!products.length) return [];
+  if (!products.length) return products;
 
-  const shouldFetchLive =
-    ids.length && (isSupabaseConfigured || catalogProductsNeedLiveImageMerge(products));
-  if (!shouldFetchLive) return products;
+  const needsLiveMerge = catalogProductsNeedLiveImageMerge(products);
+  if (!needsLiveMerge || !ids.length) return products;
 
   let liveItems = [];
   if (!isSupabaseConfigured) {
@@ -166,7 +263,7 @@ export async function fetchPublicCatalogProducts(selection, productIds = []) {
       const supabase = await getSupabase();
       liveItems = await fetchCatalogItemsByIds(supabase, ids);
     } catch {
-      liveItems = [];
+      return products;
     }
   }
 

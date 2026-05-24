@@ -43,6 +43,8 @@ import {
 import { showToast } from "../utils/toast";
 import "../styles/client-catalog.css";
 
+const CATALOG_LOAD_TIMEOUT_MS = 45000;
+
 function createLineId() {
   return `line-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 }
@@ -354,6 +356,16 @@ export default function ClientCatalog() {
 
   useEffect(() => {
     let active = true;
+    let timedOut = false;
+
+    const timeoutId = window.setTimeout(() => {
+      if (!active) return;
+      timedOut = true;
+      setError(
+        "Le chargement du catalogue a pris trop de temps. Le serveur est peut-être surchargé — réessayez dans un instant."
+      );
+      setLoading(false);
+    }, CATALOG_LOAD_TIMEOUT_MS);
 
     async function load() {
       setLoading(true);
@@ -361,7 +373,7 @@ export default function ClientCatalog() {
 
       try {
         const loadedSelection = await fetchPublicCatalogSelection(shareId);
-        if (!active) return;
+        if (!active || timedOut) return;
 
         if (!loadedSelection) {
           setError("Ce catalogue n'existe pas ou n'est plus disponible.");
@@ -374,7 +386,7 @@ export default function ClientCatalog() {
           loadedSelection,
           loadedSelection.productIds || []
         );
-        if (!active) return;
+        if (!active || timedOut) return;
 
         const visibleProducts = loadedProducts.filter((product) => product && !product.archived);
         setSelection(loadedSelection);
@@ -404,16 +416,17 @@ export default function ClientCatalog() {
           }));
         }
       } catch (loadError) {
-        if (!active) return;
+        if (!active || timedOut) return;
         setError(loadError.message || "Impossible de charger le catalogue.");
       } finally {
-        if (active) setLoading(false);
+        if (active && !timedOut) setLoading(false);
       }
     }
 
     load();
     return () => {
       active = false;
+      window.clearTimeout(timeoutId);
     };
   }, [shareId]);
 
