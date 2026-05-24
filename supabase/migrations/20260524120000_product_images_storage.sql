@@ -36,7 +36,8 @@ SET
   file_size_limit = EXCLUDED.file_size_limit,
   allowed_mime_types = EXCLUDED.allowed_mime_types;
 
-ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
+-- RLS déjà activé sur storage.objects par Supabase (owner: supabase_storage_admin).
+-- Ne pas exécuter ALTER TABLE storage.objects — refusé dans le SQL Editor (42501).
 
 DROP POLICY IF EXISTS "ac_creation_products_public_read" ON storage.objects;
 DROP POLICY IF EXISTS "ac_creation_products_authenticated_insert" ON storage.objects;

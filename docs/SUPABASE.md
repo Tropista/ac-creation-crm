@@ -278,9 +278,12 @@ Formats autorisés : JPEG, PNG, WebP — taille max 5 Mo par fichier.
 
 Si l’import d’image produit échoue avec *« new row violates row-level security policy »*, le bucket ou ses politiques RLS ne sont pas configurés. Coller et exécuter **en une fois** :
 
+> **Note :** ne pas exécuter `ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY` — la table appartient à `supabase_storage_admin` et le SQL Editor renvoie `42501: must be owner of table objects`. RLS est **déjà activé** par Supabase sur `storage.objects` ; seules les politiques ci-dessous sont nécessaires.
+
 ```sql
 -- AC Creation CRM — Storage images produits (correction RLS upload)
 -- Idempotent : safe to re-run
+-- Ne PAS inclure ALTER TABLE storage.objects (RLS déjà actif côté Supabase)
 
 CREATE OR REPLACE FUNCTION public.crm_user_is_active()
 RETURNS boolean
@@ -313,8 +316,6 @@ SET
   public = EXCLUDED.public,
   file_size_limit = EXCLUDED.file_size_limit,
   allowed_mime_types = EXCLUDED.allowed_mime_types;
-
-ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "ac_creation_products_public_read" ON storage.objects;
 DROP POLICY IF EXISTS "ac_creation_products_authenticated_insert" ON storage.objects;
@@ -365,5 +366,25 @@ Puis vérifier :
 2. **Table `users`** : même email, statut **Actif** (pas « Désactivé »).
 3. **Storage → Buckets** : `ac-creation-products` est **public** (lecture).
 4. Reconnectez-vous au CRM et réessayez l’import d’image.
+
+### Alternative : politiques via l’interface Storage
+
+Si le SQL Editor refuse encore la création de politiques (`CREATE POLICY` sur `storage.objects`), configurez-les dans le tableau de bord Supabase :
+
+1. Ouvrir **Storage** → **Buckets**.
+2. Si `ac-creation-products` n’existe pas : **New bucket** → nom `ac-creation-products`, cocher **Public bucket**, limites optionnelles (5 Mo, JPEG/PNG/WebP).
+3. Cliquer sur **`ac-creation-products`** → onglet **Policies** → **New policy**.
+
+Créer **quatre politiques** (bouton *For full customization* ou équivalent) :
+
+| Nom suggéré | Opération | Rôles cibles | Expression |
+|-------------|-----------|--------------|------------|
+| Lecture publique | **SELECT** | `public` (ou anon + authenticated) | `bucket_id = 'ac-creation-products'` |
+| Upload CRM | **INSERT** | `authenticated` | `bucket_id = 'ac-creation-products' AND public.crm_user_is_active()` |
+| Mise à jour CRM | **UPDATE** | `authenticated` | `bucket_id = 'ac-creation-products' AND public.crm_user_is_active()` (USING et WITH CHECK) |
+| Suppression CRM | **DELETE** | `authenticated` | `bucket_id = 'ac-creation-products' AND public.crm_user_is_active()` |
+
+4. Exécuter d’abord la partie **fonction** `crm_user_is_active()` du bloc SQL ci-dessus (ou `20260524100000_secure_rls.sql`) — l’interface Storage ne la crée pas.
+5. Vérifier que votre email est **Actif** dans la table `users`, reconnectez-vous au CRM, puis retestez le drag-drop d’image.
 
 Source versionnée : [`supabase/migrations/20260524120000_product_images_storage.sql`](../supabase/migrations/20260524120000_product_images_storage.sql)
