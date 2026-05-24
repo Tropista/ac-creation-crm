@@ -18,7 +18,6 @@ import {
   pageToPath,
   pathToPage,
 } from "./utils/routes";
-import { PUBLIC_CATALOG_PATH } from "./utils/catalogShare";
 import "./App.css";
 
 import Sidebar from "./components/Sidebar";
@@ -70,10 +69,6 @@ import {
   logActivity
 } from "./services/logService";
 import {
-  finalizeDataWithCatalogCleanup,
-} from "./utils/cleanupCatalogData";
-import {
-  hasUnsyncedCatalogChanges,
   mergeCloudWithLocal,
   resolveCloudInitError,
   setLastSyncAt,
@@ -86,7 +81,6 @@ import "./styles/clients.css";
 import "./styles/documents.css";
 import "./styles/atelier.css";
 import "./styles/products-erp.css";
-import "./styles/client-catalog.css";
 import "./styles/suppliers.css";
 import "./styles/expenses.css";
 import "./styles/labels.css";
@@ -130,18 +124,6 @@ const UvDtfCalculator = lazy(() =>
   import("./components/UvDtfCalculator")
 );
 
-const ImportFournisseur = lazy(() =>
-  import("./components/ImportFournisseur")
-);
-
-const CatalogueClient = lazy(() =>
-  import("./components/CatalogueClient")
-);
-
-const ClientCatalog = lazy(() =>
-  import("./components/ClientCatalog")
-);
-
 function getInitialAuthState() {
   const session = loadSession();
   if (session?.expired) {
@@ -154,27 +136,13 @@ async function loadSupabaseSyncModule() {
   return import("./services/supabaseSync");
 }
 
-function prepareAppData(raw, { notify = false } = {}) {
-  const { data, applied, stats } = finalizeDataWithCatalogCleanup(raw, normalizeData);
-  const prepared = normalizeData({
-    ...data,
-    users: dedupeItemsById(data.users || []),
-    backups: dedupeItemsById(data.backups || []),
-    logs: dedupeItemsById(data.logs || []),
+function prepareAppData(raw) {
+  return normalizeData({
+    ...raw,
+    users: dedupeItemsById(raw.users || []),
+    backups: dedupeItemsById(raw.backups || []),
+    logs: dedupeItemsById(raw.logs || []),
   });
-
-  if (notify && stats && (stats.removedProducts > 0 || stats.removedCatalogItems > 0)) {
-    const parts = [];
-    if (stats.removedProducts > 0) {
-      parts.push(`${stats.removedProducts} produit(s) importés retirés du stock ERP`);
-    }
-    if (stats.removedCatalogItems > 0) {
-      parts.push(`${stats.removedCatalogItems} article(s) legacy retirés`);
-    }
-    showToast(`Nettoyage catalogue : ${parts.join(", ")}`, "info");
-  }
-
-  return { data: prepared, applied, stats };
 }
 
 function LoadingScreen({ message = "Chargement...", status = "" }) {
@@ -207,14 +175,6 @@ export default function App() {
       <Route
         path={PUBLIC_TSHIRT_PATH}
         element={<PublicTshirtConfigurator />}
-      />
-      <Route
-        path={`${PUBLIC_CATALOG_PATH}/:shareId`}
-        element={
-          <Suspense fallback={<LoadingScreen message="Chargement du catalogue..." />}>
-            <ClientCatalog />
-          </Suspense>
-        }
       />
       <Route path="/*" element={<CrmApp />} />
     </Routes>
@@ -353,7 +313,7 @@ function CrmApp() {
         const localData = normalizeData(loadData());
 
         if (!isSupabaseConfigured) {
-          const { data: prepared } = prepareAppData(localData, { notify: !silent });
+          const prepared = prepareAppData(localData);
           setData(prepared);
           saveData(prepared);
           flushSaveData();
@@ -365,7 +325,6 @@ function CrmApp() {
         const cloud = await loadSupabaseData({
           normalizeData,
           emptyData,
-          skipCatalog: true,
         });
 
         if (cloud.hasCloudData) {
@@ -389,14 +348,9 @@ function CrmApp() {
             },
           });
 
-          const { data: prepared, applied } = prepareAppData(mergedRaw, { notify: !silent });
+          const prepared = prepareAppData(mergedRaw);
           setData(prepared);
-
-          const needsCatalogPush =
-            !cloud.catalogSkipped && hasUnsyncedCatalogChanges(prepared, cloud.data);
-          if (applied || needsCatalogPush) {
-            await syncSupabaseData(prepared, cloud.data);
-          }
+          await syncSupabaseData(prepared, cloud.data);
 
           saveData(prepared);
           flushSaveData();
@@ -408,7 +362,7 @@ function CrmApp() {
             showToast("Données fusionnées — conflits résolus localement", "info");
           }
         } else if (hasLocalBusinessData(localData)) {
-          const { data: prepared } = prepareAppData(localData, { notify: !silent });
+          const prepared = prepareAppData(localData);
           await syncSupabaseData(prepared, emptyData);
           setData(prepared);
           setLastSyncAt();
@@ -420,7 +374,7 @@ function CrmApp() {
             showToast("Données locales synchronisées vers Supabase", "success");
           }
         } else {
-          const { data: prepared } = prepareAppData(emptyData, { notify: !silent });
+          const prepared = prepareAppData(emptyData);
           await syncSupabaseData(prepared, emptyData);
           setData(prepared);
           saveData(prepared);
@@ -437,7 +391,6 @@ function CrmApp() {
 
         const outcome = resolveCloudInitError({
           cloudAlreadySynced: cloudSyncSucceeded.current,
-          catalogRecovered: false,
           error,
         });
         setCloudAvailable(outcome.cloudAvailable);
@@ -446,7 +399,7 @@ function CrmApp() {
           showToast(outcome.toast.message, outcome.toast.type);
         }
 
-        const { data: prepared } = prepareAppData(recoveredData, { notify: !silent });
+        const prepared = prepareAppData(recoveredData);
         setData(prepared);
         saveData(prepared);
         flushSaveData();
@@ -483,10 +436,7 @@ function CrmApp() {
         try {
           setSyncStatus(SYNC_STATUS.SAVING);
           const { syncSupabaseData } = await loadSupabaseSyncModule();
-          const syncResult = await syncSupabaseData(normalized, previous);
-          if (syncResult?.catalogWrites?.length) {
-            console.info("[CRM sync catalogue]", syncResult.catalogWrites.join(" · "));
-          }
+          await syncSupabaseData(normalized, previous);
           setLastSyncAt();
           cloudSyncSucceeded.current = true;
           cloudSaved = true;
@@ -923,30 +873,6 @@ function CrmApp() {
               element={
                 canAccessPage(currentRole, "banque") ? (
                   <Banque
-                    data={data}
-                    setData={updateData}
-                    logActivity={handleLogActivity}
-                  />
-                ) : null
-              }
-            />
-            <Route
-              path={pageToPath("importFournisseur")}
-              element={
-                canAccessPage(currentRole, "importFournisseur") ? (
-                  <ImportFournisseur
-                    data={data}
-                    setData={updateData}
-                    logActivity={handleLogActivity}
-                  />
-                ) : null
-              }
-            />
-            <Route
-              path={pageToPath("catalogueClient")}
-              element={
-                canAccessPage(currentRole, "catalogueClient") ? (
-                  <CatalogueClient
                     data={data}
                     setData={updateData}
                     logActivity={handleLogActivity}

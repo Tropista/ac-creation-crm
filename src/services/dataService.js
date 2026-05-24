@@ -1,17 +1,11 @@
 import { dedupeDocuments } from "../utils/documents";
 import { debounce } from "../utils/debounce";
-import { migrateLegacyCatalogData } from "../utils/catalogCollections";
-import {
-  DEFAULT_CATALOG_RECIPIENT_EMAIL,
-  LEGACY_CATALOG_RECIPIENT_EMAIL,
-  sanitizeImageUrlForCache,
-  compactSelectionForPublicCache,
-} from "../utils/catalogShare";
-import { isSupabaseConfigured } from "../supabase";
 
 export const STORAGE_KEY = "crm_local_data_v2";
-export const LOCAL_CATALOG_META_KEY = "_localCatalogMeta";
 export const SAVE_DEBOUNCE_MS = 400;
+
+export const DEFAULT_COMPANY_EMAIL = "ac.creation.officiel@gmail.com";
+export const LEGACY_PLACEHOLDER_EMAIL = "contact@monentreprise.com";
 
 let pendingData = null;
 let lastSaveError = null;
@@ -21,96 +15,14 @@ export function isQuotaExceededError(error) {
   return error.name === "QuotaExceededError" || error.code === 22;
 }
 
-export function stripBase64FromCatalogItem(item) {
-  if (!item || typeof item !== "object") return item;
-
-  const next = { ...item };
-
-  if (next.imageUrl) {
-    next.imageUrl = sanitizeImageUrlForCache(next.imageUrl);
-  }
-
-  if (Array.isArray(next.colors)) {
-    next.colors = next.colors.map((color) => {
-      if (typeof color === "string") return color;
-      if (!color || typeof color !== "object") return color;
-      return {
-        ...color,
-        imageUrl: sanitizeImageUrlForCache(color.imageUrl),
-      };
-    });
-  }
-
-  return next;
-}
-
-export function stripBase64FromCatalogItems(items = []) {
-  return (items || []).map(stripBase64FromCatalogItem);
-}
-
-export function stripBase64FromCatalogSelections(selections = []) {
-  return (selections || []).map((selection) =>
-    compactSelectionForPublicCache(selection, { omitSnapshots: false })
-  );
-}
-
-export function buildLocalCatalogMeta(data = {}) {
-  return {
-    supplierCount: (data.supplierCatalogItems || []).length,
-    clientCount: (data.clientCatalogItems || []).length,
-    selectionsCount: (data.catalogSelections || []).length,
-    excludedFromLocal: true,
-    savedAt: new Date().toISOString(),
-  };
-}
-
-export function prepareDataForLocalStorage(data, { cloudEnabled = isSupabaseConfigured } = {}) {
-  const stripped = {
-    ...data,
-    supplierCatalogItems: stripBase64FromCatalogItems(data.supplierCatalogItems),
-    clientCatalogItems: stripBase64FromCatalogItems(data.clientCatalogItems),
-    catalogSelections: stripBase64FromCatalogSelections(data.catalogSelections),
-    catalogItems: [],
-  };
-
-  if (!cloudEnabled) {
-    return stripped;
-  }
-
-  return {
-    ...stripped,
-    supplierCatalogItems: [],
-    clientCatalogItems: [],
-    catalogSelections: [],
-    [LOCAL_CATALOG_META_KEY]: buildLocalCatalogMeta(data),
-  };
-}
-
-function writeDataImmediate(data, options = {}) {
-  const payload = prepareDataForLocalStorage(data, options);
-
+function writeDataImmediate(data) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     lastSaveError = null;
     pendingData = null;
     return { ok: true, quotaExceeded: false, recovered: false };
   } catch (error) {
     lastSaveError = error;
-
-    if (isQuotaExceededError(error) && !options.retried) {
-      console.warn("Quota localStorage dépassé — nouvel essai avec cache allégé.", error);
-      try {
-        const minimal = prepareDataForLocalStorage(data, { cloudEnabled: true });
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(minimal));
-        lastSaveError = null;
-        pendingData = null;
-        return { ok: true, quotaExceeded: true, recovered: true };
-      } catch (retryError) {
-        lastSaveError = retryError;
-        console.warn("Impossible d'enregistrer les données localement (quota) :", retryError);
-        return { ok: false, quotaExceeded: true, recovered: false };
-      }
-    }
 
     if (isQuotaExceededError(error)) {
       console.warn("Impossible d'enregistrer les données localement (quota) :", error);
@@ -134,7 +46,7 @@ export const emptyData = {
   users: [],
   settings: {
     companyName: "Mon Entreprise",
-    companyEmail: DEFAULT_CATALOG_RECIPIENT_EMAIL,
+    companyEmail: DEFAULT_COMPANY_EMAIL,
     companyPhone: "+352 00 00 00 00",
     companyAddress: "Adresse de l'entreprise",
     vatNumber: "LU00000000",
@@ -144,17 +56,12 @@ export const emptyData = {
     bankInfo:
       "Informations bancaires : Tout paiement au nom de votre entreprise\nNom de la banque : BCEE\nBIC : BCEELULL\nIBAN : LU00 0000 0000 0000 0000\nVeuillez indiquer le numéro de facture dans votre communication",
     taxRate: 17,
-    hideCatalogMenu: false,
   },
   clients: [],
   quotes: [],
   invoices: [],
   products: [],
   categories: [],
-  supplierCatalogItems: [],
-  clientCatalogItems: [],
-  catalogItems: [],
-  catalogSelections: [],
   suppliers: [],
   expenses: [],
   backups: [],
@@ -183,18 +90,23 @@ export function dedupeItemsById(items = []) {
 }
 
 export function normalizeData(data) {
-  const { [LOCAL_CATALOG_META_KEY]: _localCatalogMeta, ...rest } = data || {};
-  const migrated = migrateLegacyCatalogData(rest);
+  const {
+    supplierCatalogItems: _supplierCatalogItems,
+    clientCatalogItems: _clientCatalogItems,
+    catalogItems: _catalogItems,
+    catalogSelections: _catalogSelections,
+    _localCatalogMeta: _localCatalogMeta,
+    ...rest
+  } = data || {};
 
   return {
     ...emptyData,
     ...rest,
-    ...migrated,
 
     settings: (() => {
       const stored = rest?.settings || {};
       const companyEmail =
-        !stored.companyEmail || stored.companyEmail === LEGACY_CATALOG_RECIPIENT_EMAIL
+        !stored.companyEmail || stored.companyEmail === LEGACY_PLACEHOLDER_EMAIL
           ? emptyData.settings.companyEmail
           : stored.companyEmail;
       return {
@@ -221,20 +133,6 @@ export function normalizeData(data) {
 
     categories: dedupeItemsById(
       rest?.categories || []
-    ),
-
-    supplierCatalogItems: dedupeItemsById(
-      migrated.supplierCatalogItems || []
-    ),
-
-    clientCatalogItems: dedupeItemsById(
-      migrated.clientCatalogItems || []
-    ),
-
-    catalogItems: [],
-
-    catalogSelections: dedupeItemsById(
-      rest?.catalogSelections || []
     ),
 
     suppliers: dedupeItemsById(
@@ -280,30 +178,13 @@ export function flushSaveData() {
   return null;
 }
 
-export function getLocalCatalogMeta() {
-  try {
-    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null");
-    return raw?.[LOCAL_CATALOG_META_KEY] || null;
-  } catch {
-    return null;
-  }
-}
-
 export function hasLocalBusinessData(data) {
-  const meta = data?.[LOCAL_CATALOG_META_KEY] || getLocalCatalogMeta();
-
   return Boolean(
     data.users?.length ||
     data.backups?.length ||
     data.clients?.length ||
     data.products?.length ||
     data.categories?.length ||
-    data.supplierCatalogItems?.length ||
-    data.clientCatalogItems?.length ||
-    data.catalogSelections?.length ||
-    meta?.supplierCount ||
-    meta?.clientCount ||
-    meta?.selectionsCount ||
     data.suppliers?.length ||
     data.expenses?.length ||
     data.quotes?.length ||

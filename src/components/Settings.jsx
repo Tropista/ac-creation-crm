@@ -20,13 +20,6 @@ export default function Settings({
 
   const [theme, setThemeState] = useState(getStoredTheme);
 
-  useEffect(() => {
-    setForm((current) => ({
-      ...current,
-      hideCatalogMenu: Boolean(data.settings?.hideCatalogMenu),
-    }));
-  }, [data.settings?.hideCatalogMenu]);
-
   const [updateInfo, setUpdateInfo] = useState(null);
   const [updateReady, setUpdateReady] = useState(null);
   const [downloadPercent, setDownloadPercent] = useState(null);
@@ -66,31 +59,6 @@ export default function Settings({
     setThemeState(nextTheme);
     setTheme(nextTheme);
     showToast(`Thème : ${THEME_LABELS[nextTheme]}`, "info");
-  }
-
-  function handleHideCatalogMenuChange(checked) {
-    setForm((current) => ({
-      ...current,
-      hideCatalogMenu: checked,
-    }));
-
-    setData({
-      ...data,
-      settings: {
-        ...data.settings,
-        hideCatalogMenu: checked,
-      },
-    });
-
-    logActivity?.(
-      checked ? "Masquage menu Catalogues" : "Affichage menu Catalogues",
-      "Navigation"
-    );
-
-    showToast(
-      checked ? "Menu Catalogues masqué" : "Menu Catalogues affiché",
-      "success"
-    );
   }
 
   function submit(e) {
@@ -161,27 +129,6 @@ Version installée : <strong>{APP_VERSION}</strong>
   )}
 </div>
 ) : null}
-
-<div className="card">
-  <h3>Navigation</h3>
-  <label className="theme-field" style={{ flexDirection: "row", alignItems: "flex-start", gap: "0.75rem" }}>
-    <input
-      type="checkbox"
-      data-testid="hide-catalog-menu"
-      checked={Boolean(form.hideCatalogMenu)}
-      onChange={(e) => handleHideCatalogMenuChange(e.target.checked)}
-      style={{ marginTop: "0.25rem" }}
-    />
-    <span>
-      <strong>Masquer le menu Catalogues</strong>
-      <p className="page-subtitle" style={{ margin: "0.35rem 0 0" }}>
-        Retire immédiatement la section « Catalogues » du menu latéral (Import fournisseur,
-        Catalogue client). Les liens publics de catalogue client partagés avec vos clients (Vercel)
-        restent actifs et indépendants de ce réglage.
-      </p>
-    </span>
-  </label>
-</div>
 
 <div className="card theme-settings-card">
   <h3>Apparence</h3>

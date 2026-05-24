@@ -13,21 +13,13 @@ export const SYNC_STATUS = {
 
 export function resolveCloudInitError({
   cloudAlreadySynced,
-  catalogRecovered = false,
   error = null,
 } = {}) {
-  if (cloudAlreadySynced || catalogRecovered) {
+  if (cloudAlreadySynced) {
     return {
       cloudAvailable: true,
-      syncStatus: catalogRecovered && !cloudAlreadySynced
-        ? SYNC_STATUS.SYNCED
-        : SYNC_STATUS.SYNCED,
-      toast: catalogRecovered && !cloudAlreadySynced
-        ? {
-            message: "Catalogue récupéré depuis Supabase (sync partielle)",
-            type: "success",
-          }
-        : null,
+      syncStatus: SYNC_STATUS.SYNCED,
+      toast: null,
     };
   }
 
@@ -52,9 +44,6 @@ export const SYNC_COLLECTIONS = [
   "invoices",
   "products",
   "categories",
-  "supplierCatalogItems",
-  "clientCatalogItems",
-  "catalogSelections",
   "suppliers",
   "expenses",
   "users",
@@ -68,15 +57,6 @@ export const CRITICAL_SYNC_COLLECTIONS = new Set([
   "invoices",
 ]);
 
-export const CATALOG_SYNC_COLLECTIONS = new Set([
-  "supplierCatalogItems",
-  "clientCatalogItems",
-  "catalogSelections",
-]);
-
-/** Ne pas remplacer un catalogue local volumineux par un snapshot cloud vide. */
-export const EMPTY_CLOUD_CATALOG_GUARD_MIN = 50;
-
 export function getLastSyncAt() {
   const raw = localStorage.getItem(LAST_SYNC_AT_KEY);
   const parsed = Number(raw);
@@ -88,77 +68,10 @@ export function setLastSyncAt(timestamp = Date.now()) {
 }
 
 export function parseUpdatedAt(item) {
-  const raw = item?.updatedAt || item?.clientSubmission?.submittedAt;
+  const raw = item?.updatedAt;
   if (!raw) return 0;
   const parsed = Date.parse(String(raw));
   return Number.isFinite(parsed) ? parsed : 0;
-}
-
-export function hasCatalogClientSubmission(selection) {
-  return Boolean(
-    selection?.clientSubmission &&
-      (selection.status === "submitted" || selection.clientSubmission.submittedAt)
-  );
-}
-
-/** Préserve les réponses client cloud lors d'une fusion ou d'un push CRM. */
-export function mergeCatalogSelectionRecord(local, cloud) {
-  if (!local) return cloud;
-  if (!cloud) return local;
-
-  const localSubmitted = hasCatalogClientSubmission(local);
-  const cloudSubmitted = hasCatalogClientSubmission(cloud);
-
-  if (cloudSubmitted && !localSubmitted) {
-    const localAt = parseUpdatedAt(local);
-    const cloudAt = parseUpdatedAt(cloud);
-    if (localAt > cloudAt) {
-      return local;
-    }
-    return {
-      ...local,
-      ...cloud,
-      clientSubmission: cloud.clientSubmission,
-      status: cloud.status,
-      updatedAt: cloud.updatedAt || local.updatedAt,
-    };
-  }
-
-  if (localSubmitted && !cloudSubmitted) {
-    return local;
-  }
-
-  if (localSubmitted && cloudSubmitted) {
-    const localAt = parseUpdatedAt(local.clientSubmission);
-    const cloudAt = parseUpdatedAt(cloud.clientSubmission);
-    return cloudAt >= localAt ? cloud : local;
-  }
-
-  const localAt = parseUpdatedAt(local);
-  const cloudAt = parseUpdatedAt(cloud);
-  return cloudAt > localAt ? { ...local, ...cloud } : local;
-}
-
-export function mergeCatalogSelectionsCollection(localItems = [], cloudItems = []) {
-  const localMap = new Map(
-    (localItems || []).filter((item) => item?.id).map((item) => [String(item.id), item])
-  );
-  const cloudMap = new Map(
-    (cloudItems || []).filter((item) => item?.id).map((item) => [String(item.id), item])
-  );
-
-  const ids = new Set([...localMap.keys(), ...cloudMap.keys()]);
-  const merged = [];
-
-  for (const id of ids) {
-    merged.push(mergeCatalogSelectionRecord(localMap.get(id), cloudMap.get(id)));
-  }
-
-  return merged;
-}
-
-export function countCatalogSubmissionsReceived(selections = []) {
-  return (selections || []).filter((selection) => hasCatalogClientSubmission(selection)).length;
 }
 
 function stableSerialize(value) {
@@ -259,55 +172,6 @@ export function mergeCollection(
   return merged;
 }
 
-export function hasLocalCatalogChangesSinceSync(localItems = [], lastSyncAt = 0) {
-  const since = lastSyncAt || 0;
-  return (localItems || []).some((item) => parseUpdatedAt(item) > since);
-}
-
-export function shouldPreferCloudCatalog(
-  localItems = [],
-  cloudItems = [],
-  lastSyncAt = 0
-) {
-  const localCount = (localItems || []).length;
-  const cloudCount = (cloudItems || []).length;
-  if (!cloudCount) return false;
-  if (!localCount) return true;
-  if (hasLocalCatalogChangesSinceSync(localItems, lastSyncAt)) return false;
-  return (
-    localCount < EMPTY_CLOUD_CATALOG_GUARD_MIN &&
-    cloudCount >= EMPTY_CLOUD_CATALOG_GUARD_MIN
-  );
-}
-
-export function shouldKeepLocalCatalogOverEmptyCloud(localItems = [], cloudItems = []) {
-  return (localItems || []).length > 0 && (cloudItems || []).length === 0;
-}
-
-export function hasUnsyncedCatalogChanges(
-  localData = {},
-  cloudData = {},
-  lastSyncAt = getLastSyncAt()
-) {
-  for (const key of CATALOG_SYNC_COLLECTIONS) {
-    const localItems = localData[key] || [];
-    const cloudItems = cloudData[key] || [];
-
-    if (hasLocalCatalogChangesSinceSync(localItems, lastSyncAt)) {
-      return true;
-    }
-
-    const cloudIds = new Set(
-      (cloudItems || []).filter((item) => item?.id).map((item) => String(item.id))
-    );
-    if ((localItems || []).some((item) => item?.id && !cloudIds.has(String(item.id)))) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
 export function mergeCloudWithLocal(localData = {}, cloudData = {}, { onConflict } = {}) {
   const lastSyncAt = getLastSyncAt();
   const merged = {
@@ -316,29 +180,7 @@ export function mergeCloudWithLocal(localData = {}, cloudData = {}, { onConflict
   };
 
   for (const key of SYNC_COLLECTIONS) {
-    const localItems = localData[key] || [];
-    const cloudItems = cloudData[key] || [];
-
-    if (key === "catalogSelections") {
-      merged[key] = mergeCatalogSelectionsCollection(localItems, cloudItems, {
-        lastSyncAt,
-        onConflict,
-      });
-      continue;
-    }
-
-    if (CATALOG_SYNC_COLLECTIONS.has(key)) {
-      if (shouldKeepLocalCatalogOverEmptyCloud(localItems, cloudItems)) {
-        merged[key] = localItems;
-        continue;
-      }
-      if (shouldPreferCloudCatalog(localItems, cloudItems, lastSyncAt)) {
-        merged[key] = cloudItems;
-        continue;
-      }
-    }
-
-    merged[key] = mergeCollection(localItems, cloudItems, {
+    merged[key] = mergeCollection(localData[key] || [], cloudData[key] || [], {
       lastSyncAt,
       critical: CRITICAL_SYNC_COLLECTIONS.has(key),
       onConflict,

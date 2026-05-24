@@ -1,10 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   Banknote,
   BarChart3,
   Box,
-  BookOpen,
   Calculator,
   ChevronDown,
   ChevronRight,
@@ -35,8 +34,6 @@ import {
 import { APP_LOGO_URL } from "../utils/assets";
 import { APP_VERSION } from "../utils/appVersion";
 import { pageToPath } from "../utils/routes";
-import { countCatalogSubmissionsReceived } from "../services/syncMerge";
-import { filterMenuGroupsBySettings } from "../utils/sidebarMenu";
 
 const SECTIONS_STORAGE_KEY = "crm_sidebar_sections_v1";
 
@@ -47,8 +44,6 @@ const pageIcons = {
   invoices: Receipt,
   atelier: Wrench,
   products: Box,
-  importFournisseur: Download,
-  catalogueClient: BookOpen,
   categories: FolderTree,
   suppliers: Factory,
   expenses: FileSpreadsheet,
@@ -78,14 +73,6 @@ const menuGroups = [
       { page: "quotes", label: "Devis", type: "page" },
       { page: "invoices", label: "Factures", type: "page" },
       { page: "atelier", label: "Atelier", type: "page" },
-    ],
-  },
-  {
-    id: "catalogues",
-    label: "Catalogues",
-    items: [
-      { page: "importFournisseur", label: "Import fournisseur", type: "page" },
-      { page: "catalogueClient", label: "Catalogue client", type: "page" },
     ],
   },
   {
@@ -185,17 +172,12 @@ export default function Sidebar({
     return () => document.body.classList.remove("sidebar-drawer-open");
   }, [mobileOpen]);
 
-  const visibleGroups = filterMenuGroupsBySettings(menuGroups, data?.settings)
+  const visibleGroups = menuGroups
     .map((group) => ({
       ...group,
       items: group.items.filter(canShow),
     }))
     .filter((group) => group.items.length > 0);
-
-  const catalogSubmissionCount = useMemo(
-    () => countCatalogSubmissionsReceived(data?.catalogSelections),
-    [data?.catalogSelections]
-  );
 
   return (
     <>
@@ -279,14 +261,6 @@ export default function Sidebar({
                         >
                           <NavIcon page={item.page} />
                           {item.label}
-                          {item.page === "catalogueClient" && catalogSubmissionCount > 0 ? (
-                            <span
-                              className="sidebar-nav-badge"
-                              aria-label={`${catalogSubmissionCount} réponse(s) client reçue(s)`}
-                            >
-                              {catalogSubmissionCount}
-                            </span>
-                          ) : null}
                         </NavLink>
                       ))}
                     </div>

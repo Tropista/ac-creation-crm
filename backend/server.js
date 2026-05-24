@@ -6,8 +6,6 @@ import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { scrapeLmdtListing, refreshLmdtProductColors, refreshLmdtProductImages } from "./catalogScraper.js";
-import { LMDT_PARSER_VERSION } from "./lmdtParser.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -278,70 +276,6 @@ app.get("/api/bank/transactions", async (req, res) => {
     res.status(502).json({
       error: err.response?.data?.message || err.message,
       manualFallback: true,
-    });
-  }
-});
-
-app.get("/api/catalog/health", (req, res) => {
-  res.json({ ok: true, provider: "lamaisonduteeshirt", parserVersion: LMDT_PARSER_VERSION });
-});
-
-app.post("/api/catalog/scrape", async (req, res) => {
-  const { url, maxPages, maxProducts, importAll } = req.body || {};
-
-  if (!url) {
-    return res.status(400).json({ error: "URL requise." });
-  }
-
-  try {
-    const result = await scrapeLmdtListing(url, { maxPages, maxProducts, importAll });
-    res.json(result);
-  } catch (error) {
-    console.error(error);
-    res.status(502).json({
-      error: error.message || "Import catalogue impossible.",
-    });
-  }
-});
-
-app.post("/api/catalog/refresh-colors", async (req, res) => {
-  const { sourceUrls } = req.body || {};
-
-  if (!Array.isArray(sourceUrls) || !sourceUrls.length) {
-    return res.status(400).json({ error: "sourceUrls[] requis." });
-  }
-
-  try {
-    const results = await refreshLmdtProductColors(sourceUrls);
-    res.json({
-      results,
-      parserVersion: LMDT_PARSER_VERSION,
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(502).json({
-      error: error.message || "Rafraîchissement des couleurs impossible.",
-    });
-  }
-});
-
-app.post("/api/catalog/refresh-images", async (req, res) => {
-  const { sourceUrls } = req.body || {};
-
-  if (!Array.isArray(sourceUrls) || !sourceUrls.length) {
-    return res.status(400).json({ error: "sourceUrls[] requis." });
-  }
-
-  try {
-    const results = await refreshLmdtProductImages(sourceUrls);
-    res.json({
-      results,
-      parserVersion: LMDT_PARSER_VERSION,
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(502).json({
-      error: error.message || "Rafraîchissement des images impossible.",
     });
   }
 });

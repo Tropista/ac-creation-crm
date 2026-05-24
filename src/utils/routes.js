@@ -24,8 +24,6 @@ export const PAGE_PATHS = {
   vue3d: "/vue-3d",
   tshirt3d: "/t-shirt-3d",
   banque: "/banque",
-  importFournisseur: "/import-fournisseur",
-  catalogueClient: "/catalogue-client",
 };
 
 const PATH_TO_PAGE = Object.fromEntries(

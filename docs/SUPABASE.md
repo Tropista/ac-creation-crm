@@ -28,17 +28,7 @@ La plupart des entités métier utilisent le même schéma : **`id`** (texte, cl
 | `backups` | id document | Snapshot backup |
 | `crm_logs` | id document | Entrée journal d’activité |
 
-### Tables catalogue
-
-| Table | Clé CRM locale | Contenu `data` (exemples) |
-|-------|----------------|---------------------------|
-| `supplier_catalog_items` | `supplierCatalogItems` | Articles import fournisseur : `name`, `sku`, `price`, `sourceUrl`, `colors`, … |
-| `client_catalog_items` | `clientCatalogItems` | Articles catalogue client : `supplierItemId`, `name`, `sku`, `price`, … |
-| `catalog_items` | *(legacy)* | Alias historique ; sync miroir de `clientCatalogItems` |
-| `catalog_selections` | `catalogSelections` | Sélections partagées : `shareId`, `title`, `productSnapshots`, `submissions`, `status`, … |
-
-Migration catalogue : [`supabase/migrations/20260524000000_catalog_tables.sql`](../supabase/migrations/20260524000000_catalog_tables.sql).  
-Suppression catalogue interne : [`supabase/migrations/20260524000001_drop_internal_catalog.sql`](../supabase/migrations/20260524000001_drop_internal_catalog.sql).
+> **Module Catalogues retiré** — si les tables catalogue existent encore sur votre projet Supabase, exécutez [`supabase/migrations/DROP_CATALOG_TABLES.sql`](../supabase/migrations/DROP_CATALOG_TABLES.sql) pour supprimer `supplier_catalog_items`, `client_catalog_items`, `catalog_items` et `catalog_selections`.
 
 ### Exemple de création (collections CRM)
 
