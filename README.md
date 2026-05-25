@@ -115,7 +115,9 @@ Sans Supabase configuré, l’app fonctionne en mode local (localStorage) ; le r
 
 ## Déploiement web (Vercel)
 
-Le dépôt inclut `vercel.json` (rewrite SPA) et un job CI **`deploy-vercel`** déclenché à chaque push sur `main` (après lint, tests et build).
+Le dépôt inclut `vercel.json` (rewrite SPA, build Vite, **déploiements Git Vercel désactivés**) et un job CI **`deploy-vercel`** déclenché à chaque push sur `main` (après lint, tests et build).
+
+`git.deploymentEnabled: false` dans `vercel.json` empêche l’intégration Git Vercel de déployer en parallèle du job GitHub Actions (source fréquente de page blanche : `index.html` et chunks JS de builds différents). Seul le job CI publie la production via `vercel build` + `vercel deploy --prebuilt --prod`.
 
 ### Secrets GitHub à configurer
 
