@@ -7,13 +7,14 @@ export default function AccessDenied({ user, logout }) {
         <h2>Accès non autorisé</h2>
 
         <p className="auth-subtitle">
-          Le compte {user?.email} existe dans Supabase,
-          mais il n'est pas autorisé dans ce CRM.
+          Le compte {user?.email} est authentifié dans Supabase,
+          mais il n&apos;est pas autorisé dans ce CRM.
         </p>
 
         <p className="admin-help">
-          Un administrateur doit ajouter cet email
-          dans la page Utilisateurs.
+          Un administrateur doit ajouter cet email dans la page Utilisateurs
+          avec le statut <strong>Actif</strong>, ou réactiver le compte s&apos;il
+          est désactivé.
         </p>
 
         <button

@@ -18,19 +18,82 @@ export function findUserByEmail(email, users = []) {
   );
 }
 
-export function isAdminUser(email, users = []) {
+export function mergeUsersLists(...lists) {
+  const map = new Map();
+
+  for (const list of lists) {
+    for (const user of list || []) {
+      if (!user?.email) continue;
+      const key = normalizeEmail(user.email);
+      map.set(key, { ...map.get(key), ...user });
+    }
+  }
+
+  return Array.from(map.values());
+}
+
+export const AUTH_DENIED_NOT_REGISTERED =
+  "Compte non autorisé. Votre email n'est pas enregistré dans le CRM — contactez l'administrateur pour être ajouté à la liste des utilisateurs.";
+
+export const AUTH_DENIED_DISABLED =
+  "Compte désactivé. Contactez l'administrateur pour réactiver votre accès.";
+
+export function getAuthorizationErrorMessage(reason, email = "") {
+  const normalizedEmail = normalizeEmail(email);
+
+  if (reason === "disabled") {
+    return AUTH_DENIED_DISABLED;
+  }
+
+  if (reason === "not_registered") {
+    return normalizedEmail
+      ? `${AUTH_DENIED_NOT_REGISTERED} (${normalizedEmail})`
+      : AUTH_DENIED_NOT_REGISTERED;
+  }
+
+  return AUTH_DENIED_NOT_REGISTERED;
+}
+
+export function resolveUserAccess(email, users = []) {
   const found = findUserByEmail(email, users);
-  return found?.role === "Admin" && found?.status !== "Désactivé";
+
+  if (!found) {
+    return {
+      allowed: false,
+      reason: "not_registered",
+      role: "Utilisateur",
+      user: null,
+    };
+  }
+
+  if (found.status === "Désactivé") {
+    return {
+      allowed: false,
+      reason: "disabled",
+      role: found.role || "Utilisateur",
+      user: found,
+    };
+  }
+
+  return {
+    allowed: true,
+    reason: null,
+    role: found.role || "Utilisateur",
+    user: found,
+  };
+}
+
+export function isAdminUser(email, users = []) {
+  const access = resolveUserAccess(email, users);
+  return access.allowed && access.role === "Admin";
 }
 
 export function isAllowedUser(email, users = []) {
-  const found = findUserByEmail(email, users);
-  return Boolean(found && found.status !== "Désactivé");
+  return resolveUserAccess(email, users).allowed;
 }
 
 export function userRole(email, users = []) {
-  const found = findUserByEmail(email, users);
-  return found?.role || "Utilisateur";
+  return resolveUserAccess(email, users).role;
 }
 
 export function canAccessPage(role, page) {

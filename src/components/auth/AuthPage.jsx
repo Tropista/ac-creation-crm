@@ -3,9 +3,11 @@ import { getSupabase } from "../../supabase";
 import { APP_LOGO_URL } from "../../utils/assets";
 import { resetUrlAfterAuth } from "../../utils/routes";
 import {
-  isAllowedUser,
+  getAuthorizationErrorMessage,
+  mergeUsersLists,
+  normalizeEmail,
+  resolveUserAccess,
   saveSession,
-  userRole,
 } from "../../services/authService";
 
 function hasRecoveryHash() {
@@ -17,7 +19,7 @@ function hasRecoveryHash() {
 
 export default function AuthPage({
   data,
-  setData: _setData,
+  setData,
   setCurrentUser,
   initialNotice = "",
 }) {
@@ -89,9 +91,10 @@ export default function AuthPage({
       return;
     }
 
+    const email = normalizeEmail(form.email);
     const supabase = await getSupabase();
     const { data: authData, error: loginError } = await supabase.auth.signInWithPassword({
-      email: form.email.trim().toLowerCase(),
+      email,
       password: form.password,
     });
 
@@ -100,17 +103,42 @@ export default function AuthPage({
       return;
     }
 
-    if (!isAllowedUser(authData.user.email, data.users)) {
+    const authEmail = normalizeEmail(authData.user.email);
+
+    let users = data.users || [];
+    try {
+      const { fetchCollectionRows } = await import("../../services/supabaseSync");
+      const rows = await fetchCollectionRows(supabase, "users");
+      const cloudUsers = (rows || []).map((row) => ({
+        id: row.id,
+        ...(row.data || {}),
+      }));
+
+      if (cloudUsers.length) {
+        users = mergeUsersLists(users, cloudUsers);
+        if (typeof setData === "function") {
+          await setData((current) => ({
+            ...current,
+            users,
+          }));
+        }
+      }
+    } catch (fetchError) {
+      console.warn("Impossible de charger la liste des utilisateurs après connexion :", fetchError);
+    }
+
+    const access = resolveUserAccess(authEmail, users);
+    if (!access.allowed) {
       await supabase.auth.signOut();
-      setError("Compte non autorisé. Demande à l'administrateur d'ajouter ton email.");
+      setError(getAuthorizationErrorMessage(access.reason, authEmail));
       return;
     }
 
     const session = saveSession({
       id: authData.user.id,
       name: authData.user.user_metadata?.name || authData.user.email,
-      email: authData.user.email,
-      role: userRole(authData.user.email, data.users),
+      email: authEmail,
+      role: access.role,
     });
 
     setCurrentUser(session);

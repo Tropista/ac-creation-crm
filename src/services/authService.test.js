@@ -1,12 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  AUTH_DENIED_DISABLED,
+  AUTH_DENIED_NOT_REGISTERED,
   SESSION_KEY,
   SESSION_EXPIRED_MESSAGE,
   clearSession,
   findUserByEmail,
+  getAuthorizationErrorMessage,
   isAdminUser,
   isAllowedUser,
   loadSession,
+  mergeUsersLists,
+  resolveUserAccess,
   saveSession,
   touchSession,
   userRole,
@@ -74,6 +79,43 @@ describe("authService — rôles depuis users", () => {
 
   it("findUserByEmail normalise l'email", () => {
     expect(findUserByEmail("  ADMIN@Example.COM ", sampleUsers)?.role).toBe("Admin");
+  });
+
+  it("resolveUserAccess distingue absent et désactivé", () => {
+    expect(resolveUserAccess("unknown@example.com", sampleUsers)).toMatchObject({
+      allowed: false,
+      reason: "not_registered",
+    });
+    expect(resolveUserAccess("disabled@example.com", sampleUsers)).toMatchObject({
+      allowed: false,
+      reason: "disabled",
+    });
+    expect(resolveUserAccess("admin@example.com", sampleUsers)).toMatchObject({
+      allowed: true,
+      reason: null,
+      role: "Admin",
+    });
+  });
+
+  it("mergeUsersLists fusionne sans doublons (email normalisé)", () => {
+    const merged = mergeUsersLists(
+      [{ id: "1", email: "Admin@Example.com", role: "Admin", status: "Actif" }],
+      [{ id: "1", email: "admin@example.com", name: "Admin CRM", status: "Actif" }]
+    );
+    expect(merged).toHaveLength(1);
+    expect(merged[0].name).toBe("Admin CRM");
+    expect(merged[0].role).toBe("Admin");
+  });
+
+  it("getAuthorizationErrorMessage est explicite en français", () => {
+    expect(getAuthorizationErrorMessage("not_registered", "test@example.com")).toContain(
+      "contactez l'administrateur"
+    );
+    expect(getAuthorizationErrorMessage("not_registered", "test@example.com")).toContain(
+      "test@example.com"
+    );
+    expect(getAuthorizationErrorMessage("disabled")).toBe(AUTH_DENIED_DISABLED);
+    expect(AUTH_DENIED_NOT_REGISTERED).toMatch(/non autorisé/i);
   });
 });
 
