@@ -47,17 +47,12 @@ import {
 import { getPermissions } from "./utils/permissions";
 
 import {
-  emptyData,
-  normalizeData,
   loadData,
   saveData,
   flushSaveData,
-  dedupeItemsById,
-  hasLocalBusinessData
 } from "./services/dataService";
 
 import { APP_LOGO_URL } from "./utils/assets";
-import { showToast } from "./utils/toast";
 
 import {
   isAllowedUser,
@@ -72,18 +67,7 @@ import {
 import {
   logActivity
 } from "./services/logService";
-import {
-  formatSyncConflictMessage,
-  getLastSyncAt,
-  getLastSyncConflictCount,
-  mergeCloudWithLocal,
-  resolveCloudInitError,
-  setLastSyncAt,
-  setLastSyncConflictCount,
-  stampDataChanges,
-  SYNC_STATUS,
-} from "./services/syncMerge";
-import { mergePublicLeadsIntoData } from "./services/leadsService";
+import { useCloudSync } from "./hooks/useCloudSync";
 import "./styles/sidebar.css";
 import "./styles/dashboard.css";
 import "./styles/clients.css";
@@ -140,20 +124,6 @@ function getInitialAuthState() {
     return { user: null, notice: SESSION_EXPIRED_MESSAGE };
   }
   return { user: session, notice: "" };
-}
-
-async function loadSupabaseSyncModule() {
-  return import("./services/supabaseSync");
-}
-
-function prepareAppData(raw) {
-  const withLeads = mergePublicLeadsIntoData(raw);
-  return normalizeData({
-    ...withLeads,
-    users: dedupeItemsById(withLeads.users || []),
-    backups: dedupeItemsById(withLeads.backups || []),
-    logs: dedupeItemsById(withLeads.logs || []),
-  });
 }
 
 function LoadingScreen({ message = "Chargement...", status = "" }) {
@@ -234,17 +204,30 @@ function CrmApp() {
     return () => window.removeEventListener("crm-open-page", handleOpenPage);
   }, [navigate]);
   const [loading, setLoading] = useState(true);
-  const [cloudAvailable, setCloudAvailable] = useState(false);
-  const [syncStatus, setSyncStatus] = useState(SYNC_STATUS.CONNECTING);
-  const [lastSyncAt, setLastSyncAtState] = useState(() => getLastSyncAt());
-  const [syncConflictCount, setSyncConflictCountState] = useState(() =>
-    getLastSyncConflictCount()
-  );
-  const [resyncing, setResyncing] = useState(false);
   const autoBackupStarted = useRef(false);
-  const cloudInitPromise = useRef(null);
-  const cloudSyncSucceeded = useRef(false);
-  const saveQueueRef = useRef(Promise.resolve());
+
+  const {
+    cloudAvailable,
+    syncStatus,
+    setSyncStatus,
+    lastSyncAt,
+    syncConflictCount,
+    resyncing,
+    initializeCloudData,
+    resyncFromCloud,
+    updateDataWithCloudSync,
+    bindDataRef,
+  } = useCloudSync({
+    currentUserEmail: currentUser?.email,
+    setData,
+    setLoading,
+  });
+
+  useEffect(() => {
+    bindDataRef(data);
+  }, [data, bindDataRef]);
+
+  const updateData = updateDataWithCloudSync;
 
   const currentRole = userRole(currentUser?.email, data.users);
   const permissions = getPermissions(currentRole);
@@ -277,11 +260,6 @@ function CrmApp() {
       cancelled = true;
     };
   }, []);
-
-  useEffect(() => {
-    cloudInitPromise.current = null;
-    initializeCloudData();
-  }, [currentUser?.email]);
 
   useEffect(() => {
     if (!currentUser) return undefined;
@@ -342,222 +320,6 @@ function CrmApp() {
       initializeCloudData({ silent: true });
     }
   }, [page]);
-
-  function markSyncSuccess(timestamp = Date.now()) {
-    setLastSyncAt(timestamp);
-    setLastSyncAtState(timestamp);
-  }
-
-  async function resyncFromCloud() {
-    if (resyncing) return;
-
-    setResyncing(true);
-    cloudInitPromise.current = null;
-
-    try {
-      await initializeCloudData({ silent: false });
-      showToast("Resynchronisation terminée", "success");
-    } catch (error) {
-      console.error("Échec resynchronisation :", error);
-    } finally {
-      setResyncing(false);
-      setLastSyncAtState(getLastSyncAt());
-      setSyncConflictCountState(getLastSyncConflictCount());
-    }
-  }
-
-  async function initializeCloudData({ silent = false } = {}) {
-    if (cloudInitPromise.current) {
-      return cloudInitPromise.current;
-    }
-
-    const task = (async () => {
-      try {
-        const localData = normalizeData(loadData());
-
-        if (!isSupabaseConfigured) {
-          const prepared = prepareAppData(localData);
-          setData(prepared);
-          saveData(prepared);
-          flushSaveData();
-          setSyncStatus(SYNC_STATUS.LOCAL_NO_CONFIG);
-          return;
-        }
-
-        const hasAuth = await hasSupabaseAuthSession();
-        if (!hasAuth) {
-          const prepared = prepareAppData(localData);
-          setData(prepared);
-          saveData(prepared);
-          flushSaveData();
-          setSyncStatus(SYNC_STATUS.LOCAL_UNAVAILABLE);
-          setCloudAvailable(false);
-          return;
-        }
-
-        const { loadSupabaseData, syncSupabaseData } = await loadSupabaseSyncModule();
-        const cloud = await loadSupabaseData({
-          normalizeData,
-          emptyData,
-        });
-
-        if (cloud.hasCloudData) {
-          let conflictCount = 0;
-
-          const freshLocal = normalizeData(loadData());
-          const mergedRaw = mergeCloudWithLocal(freshLocal, cloud.data, {
-            onConflict: (payload) => {
-              conflictCount += 1;
-              const message = formatSyncConflictMessage(payload);
-              if (silent) {
-                console.warn("[Sync]", message);
-              } else {
-                showToast(message, "warning");
-              }
-            },
-          });
-
-          const prepared = prepareAppData(mergedRaw);
-          setData(prepared);
-          await syncSupabaseData(prepared, cloud.data);
-
-          saveData(prepared);
-          flushSaveData();
-
-          markSyncSuccess();
-          cloudSyncSucceeded.current = true;
-          setSyncStatus(SYNC_STATUS.SYNCED);
-          setLastSyncConflictCount(conflictCount);
-          setSyncConflictCountState(conflictCount);
-          if (!silent && conflictCount) {
-            showToast(
-              `${conflictCount} conflit(s) — versions locales conservées. Vérifiez vos données ou resynchronisez.`,
-              "info"
-            );
-          }
-        } else if (hasLocalBusinessData(localData)) {
-          const prepared = prepareAppData(localData);
-          await syncSupabaseData(prepared, emptyData);
-          setData(prepared);
-          markSyncSuccess();
-          cloudSyncSucceeded.current = true;
-          setSyncStatus(SYNC_STATUS.LOCAL_PUSHED);
-          saveData(prepared);
-          flushSaveData();
-          if (!silent) {
-            showToast("Données locales synchronisées vers Supabase", "success");
-          }
-        } else {
-          const prepared = prepareAppData(emptyData);
-          await syncSupabaseData(prepared, emptyData);
-          setData(prepared);
-          saveData(prepared);
-          flushSaveData();
-          markSyncSuccess();
-          cloudSyncSucceeded.current = true;
-          setSyncStatus(SYNC_STATUS.READY);
-        }
-
-        setCloudAvailable(true);
-      } catch (error) {
-        console.error(error);
-        const recoveredData = normalizeData(loadData());
-
-        const outcome = resolveCloudInitError({
-          cloudAlreadySynced: cloudSyncSucceeded.current,
-          error,
-        });
-        setCloudAvailable(outcome.cloudAvailable);
-        setSyncStatus(outcome.syncStatus);
-        if (!silent && outcome.toast) {
-          showToast(outcome.toast.message, outcome.toast.type);
-        }
-
-        const prepared = prepareAppData(recoveredData);
-        setData(prepared);
-        saveData(prepared);
-        flushSaveData();
-      } finally {
-        setLoading(false);
-        cloudInitPromise.current = null;
-      }
-    })();
-
-    cloudInitPromise.current = task;
-    return task;
-  }
-
-  async function updateData(next) {
-    const task = saveQueueRef.current.then(async () => {
-      const current = dataRef.current;
-      const resolved = typeof next === "function" ? next(current) : next;
-      const stamped = stampDataChanges(current, resolved);
-      const normalized = normalizeData({
-        ...stamped,
-        users: dedupeItemsById(stamped.users || []),
-        backups: dedupeItemsById(stamped.backups || []),
-        logs: dedupeItemsById(stamped.logs || []),
-      });
-
-      const previous = current;
-
-      dataRef.current = normalized;
-      setData(normalized);
-
-      let cloudSaved = false;
-
-      if (isSupabaseConfigured && (await hasSupabaseAuthSession())) {
-        try {
-          setSyncStatus(SYNC_STATUS.SAVING);
-          const { syncSupabaseData } = await loadSupabaseSyncModule();
-          await syncSupabaseData(normalized, previous);
-          markSyncSuccess();
-          cloudSyncSucceeded.current = true;
-          cloudSaved = true;
-          setCloudAvailable(true);
-          setSyncStatus(SYNC_STATUS.SYNCED);
-        } catch (error) {
-          console.error("Échec sync Supabase :", error);
-          if (cloudSyncSucceeded.current) {
-            setCloudAvailable(true);
-            setSyncStatus(SYNC_STATUS.SAVE_ERROR);
-          } else {
-            setCloudAvailable(false);
-            setSyncStatus(SYNC_STATUS.LOCAL_UNAVAILABLE);
-          }
-          showToast(
-            error?.message
-              ? `Erreur de sauvegarde Supabase : ${error.message}`
-              : "Erreur de sauvegarde Supabase — données conservées localement",
-            "error"
-          );
-          throw error;
-        }
-      } else {
-        setSyncStatus(SYNC_STATUS.LOCAL_NO_CONFIG);
-      }
-
-      saveData(normalized);
-      const localSaveResult = flushSaveData();
-
-      if (localSaveResult?.quotaExceeded && cloudSaved) {
-        showToast(
-          "Cache local plein — vos données sont bien enregistrées dans le cloud.",
-          "warning"
-        );
-      } else if (localSaveResult?.quotaExceeded && !cloudSaved) {
-        showToast(
-          "Quota localStorage dépassé — les données risquent de ne pas survivre au rechargement.",
-          "error"
-        );
-      }
-
-      return normalized;
-    });
-
-    saveQueueRef.current = task.catch(() => {});
-    return task;
-  }
 
   function handleLogActivity(payloadOrAction, target = "", details = "") {
     if (typeof payloadOrAction === "object" && payloadOrAction !== null) {
@@ -803,6 +565,8 @@ function CrmApp() {
                     setData={updateData}
                     currentRole={currentRole}
                     logActivity={handleLogActivity}
+                    cloudAvailable={cloudAvailable}
+                    onCloudResync={initializeCloudData}
                   />
                 ) : null
               }

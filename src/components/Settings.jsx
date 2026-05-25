@@ -7,6 +7,7 @@ import {
 } from "../utils/invoiceReminders";
 import { showToast } from "../utils/toast";
 import { getStoredTheme, setTheme, THEMES } from "../utils/theme";
+import { downloadInvoiceUblStub } from "../utils/peppolUbl";
 
 const THEME_LABELS = {
   light: "Clair",
@@ -64,6 +65,19 @@ export default function Settings({
     setThemeState(nextTheme);
     setTheme(nextTheme);
     showToast(`Thème : ${THEME_LABELS[nextTheme]}`, "info");
+  }
+
+  function handleExportUblStub() {
+    const invoice = (data.invoices || [])[0];
+    if (!invoice) {
+      showToast("Aucune facture — créez une facture pour tester l'export UBL.", "info");
+      return;
+    }
+    const client = (data.clients || []).find(
+      (entry) => String(entry.id) === String(invoice.clientId)
+    );
+    downloadInvoiceUblStub(invoice, { client, settings: data.settings || form });
+    showToast("Export UBL stub téléchargé (non Peppol)", "success");
   }
 
   function submit(e) {
@@ -165,6 +179,18 @@ Version installée : <strong>{APP_VERSION}</strong>
       ))}
     </select>
   </label>
+</div>
+
+<div className="card" style={{ marginBottom: "1rem" }}>
+  <h3>E-facturation Luxembourg (Peppol)</h3>
+  <p className="muted" style={{ lineHeight: 1.5 }}>
+    L&apos;envoi via le réseau Peppol et la conformité e-facturation LU ne sont pas
+    encore intégrés. Cette version propose un export <strong>UBL 2.1 stub</strong>{" "}
+    (usage interne, non certifié) pour préparer une évolution future.
+  </p>
+  <button type="button" className="ghost" onClick={handleExportUblStub}>
+    Exporter UBL stub (1ère facture)
+  </button>
 </div>
 
 <form

@@ -1,0 +1,19 @@
+{
+  "name": "AC Creation CRM",
+  "short_name": "AC CRM",
+  "description": "CRM interne AC Creation — clients, devis, factures, atelier",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#081b4b",
+  "theme_color": "#081b4b",
+  "lang": "fr",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

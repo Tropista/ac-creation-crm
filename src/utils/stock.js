@@ -30,6 +30,35 @@ export function getLowStockProducts(products = [], limit = 8) {
     .slice(0, limit);
 }
 
+/** Résout le fournisseur d'un produit (nom texte ou lien catalogue). */
+export function resolveProductSupplier(product, suppliers = []) {
+  if (!product) return null;
+
+  const supplierName = String(product.supplier || "").trim().toLowerCase();
+  if (supplierName) {
+    const byName = suppliers.find(
+      (entry) => String(entry.name || "").trim().toLowerCase() === supplierName
+    );
+    if (byName) return byName;
+  }
+
+  return (
+    suppliers.find((entry) =>
+      (entry.productLinks || []).some(
+        (link) => String(link.productId) === String(product.id)
+      )
+    ) || null
+  );
+}
+
+/** Quantité suggérée pour réassort (écart jusqu'au double du seuil min). */
+export function suggestedReorderQty(product) {
+  const stock = getStock(product);
+  const minStock = getMinStock(product);
+  if (minStock <= 0) return 1;
+  return Math.max(1, minStock * 2 - stock);
+}
+
 function movementAction(type, quantityDelta) {
   const isIn = quantityDelta >= 0;
   switch (type) {

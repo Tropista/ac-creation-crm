@@ -16,6 +16,7 @@ import { summarizeQuoteProductionLines } from "../utils/quoteLines";
 import { pageToPath } from "../utils/routes";
 import { showToast } from "../utils/toast";
 import { canDeleteData } from "../services/authService";
+import { useAtelierRealtime } from "../hooks/useAtelierRealtime";
 
 const PROCESS_ICONS = {
   laser: "🔥",
@@ -294,7 +295,14 @@ function AtelierListSection({ title, count, icon, children, testId }) {
 
 import DocumentPreview from "./DocumentPreview";
 
-export default function Atelier({ data, setData, logActivity, currentRole = "Admin" }) {
+export default function Atelier({
+  data,
+  setData,
+  logActivity,
+  currentRole = "Admin",
+  onCloudResync,
+  cloudAvailable = false,
+}) {
   const navigate = useNavigate();
   const isCompact = useMediaQuery(MOBILE_ATELIER_QUERY);
   const [viewMode, setViewMode] = useState("status");
@@ -307,6 +315,11 @@ export default function Atelier({ data, setData, logActivity, currentRole = "Adm
   const board = viewMode === "status" ? statusBoard : processBoard;
   const showListLayout = isCompact && layoutMode === "list";
   const overdueDeliveries = quotes.filter(isQuoteDeliveryOverdue);
+
+  useAtelierRealtime({
+    enabled: cloudAvailable && typeof onCloudResync === "function",
+    onRefresh: onCloudResync,
+  });
 
   useEffect(() => {
     if (isCompact) {

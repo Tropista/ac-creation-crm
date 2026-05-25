@@ -1,3 +1,9 @@
+import {
+  getLowStockProducts,
+  resolveProductSupplier,
+  suggestedReorderQty,
+} from "./stock";
+
 function escapeCsvCell(value) {
   const str = String(value ?? "");
   if (/[";\r\n]/.test(str)) {
@@ -221,4 +227,81 @@ export function exportAccountingLuxCsv(data, { year, month } = {}) {
   anchor.download = filename;
   anchor.click();
   URL.revokeObjectURL(url);
+}
+
+function formatPoDate() {
+  return new Date().toLocaleDateString("fr-FR");
+}
+
+/** Bon de commande fournisseur CSV — produits en stock bas (audit #19). */
+export function exportLowStockPurchaseOrderCsv(products, suppliers, settings, filename) {
+  const lowStock = getLowStockProducts(products, 999);
+  const company = settings?.companyName || "AC Creation";
+
+  const headers = [
+    "Fournisseur",
+    "Email fournisseur",
+    "Produit",
+    "SKU",
+    "Stock actuel",
+    "Seuil min",
+    "Qté commandée",
+    "Notes",
+  ];
+
+  const rows = lowStock.map((product) => {
+    const supplier = resolveProductSupplier(product, suppliers);
+    return [
+      supplier?.name || product.supplier || "—",
+      supplier?.email || "",
+      product.name || "",
+      product.sku || "",
+      String(product.stock ?? 0),
+      String(product.stockMin || product.minStock || 0),
+      String(suggestedReorderQty(product)),
+      supplier?.notes || "",
+    ];
+  });
+
+  downloadCsv(
+    filename ||
+      `bon-commande-fournisseur-${new Date().toISOString().slice(0, 10)}.csv`,
+    headers,
+    rows.length
+      ? rows
+      : [["—", "", "Aucun produit en stock bas", "", "", "", "", company]]
+  );
+}
+
+/** Texte bon de commande fournisseur (copie / impression). */
+export function buildPurchaseOrderText(products, suppliers, settings) {
+  const lowStock = getLowStockProducts(products, 999);
+  const company = settings?.companyName || "AC Creation";
+  const lines = [
+    `BON DE COMMANDE FOURNISSEUR — ${company}`,
+    `Date : ${formatPoDate()}`,
+    "",
+    "Produits en stock bas :",
+    "",
+  ];
+
+  if (lowStock.length === 0) {
+    lines.push("Aucun produit sous le seuil minimum.");
+    return lines.join("\n");
+  }
+
+  lowStock.forEach((product, index) => {
+    const supplier = resolveProductSupplier(product, suppliers);
+    lines.push(
+      `${index + 1}. ${product.name || "Produit"} (SKU: ${product.sku || "—"})`,
+      `   Fournisseur : ${supplier?.name || product.supplier || "À définir"}`,
+      `   Stock : ${product.stock ?? 0} / seuil ${product.stockMin || product.minStock || 0}`,
+      `   Qté commandée suggérée : ${suggestedReorderQty(product)}`,
+      supplier?.email ? `   Contact : ${supplier.email}` : "",
+      ""
+    );
+  });
+
+  lines.push("—", "Document interne CRM — non envoyé automatiquement.");
+  return lines.filter(Boolean).join("\n");
 }

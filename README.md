@@ -47,10 +47,56 @@ Créer les tables Supabase : coller [`docs/supabase-migration.sql`](docs/supabas
 ### API banque (optionnel)
 
 ```bash
-node backend/server.js
+npm run bank
 ```
 
-Le serveur écoute sur le port `3001` par défaut. Variables : `TINK_CLIENT_ID`, `PORT` (voir `.env.example`).
+Le serveur écoute sur **`127.0.0.1:3001`** par défaut (`BANK_HOST=127.0.0.1`). Variables : `TINK_CLIENT_ID`, `PORT` (voir `.env.example`).
+
+**Important :** l’API Tink n’est pas conçue pour un déploiement cloud public — réservée à Electron ou au poste local (`npm run bank`). Le frontend web (Vercel) peut afficher la page Banque avec saisie manuelle si Supabase est configuré, mais la connexion Tink automatique requiert le backend local.
+
+## Publication automatique (tags `v*`)
+
+Le workflow [`.github/workflows/release.yml`](.github/workflows/release.yml) se déclenche sur un tag `vX.Y.Z` :
+
+1. lint + tests + build Vite
+2. `electron-builder --win --publish always` → GitHub Release avec `.exe` et `latest.yml`
+
+Secrets recommandés dans **Settings → Secrets → Actions** :
+
+| Secret | Usage |
+|--------|--------|
+| `GITHUB_TOKEN` | Fourni automatiquement (permissions `contents: write`) |
+| `VITE_SUPABASE_URL` | Build installeur avec sync cloud |
+| `VITE_SUPABASE_ANON_KEY` | Idem |
+
+Alternative manuelle : `GH_TOKEN=<token repo> npm run dist:win -- --publish always`
+
+## RLS Supabase par rôle
+
+Migration optionnelle : [`supabase/migrations/20260525180000_role_based_rls.sql`](supabase/migrations/20260525180000_role_based_rls.sql)
+
+- **Comptable** : lecture factures, dépenses, banque
+- **Employé** : pas de DELETE sur `users` / `settings`
+- **Admin** : accès complet
+
+Les permissions UI (`src/utils/permissions.js`) restent la première barrière.
+
+## PWA / tablette
+
+- `public/manifest.json` + service worker minimal (`public/sw.js`) — installable en navigateur
+- Electron : `minWidth` 768 px pour usage atelier tablette
+
+## Realtime Supabase (atelier)
+
+L’Atelier s’abonne aux changements `quotes` / `invoices` si Supabase est configuré. Activer la réplication Realtime sur ces tables dans le dashboard Supabase (Database → Replication). Sinon, la resync manuelle reste disponible.
+
+## E-facturation LU (Peppol)
+
+Export **UBL stub** depuis Paramètres (non certifié Peppol). Intégration réseau Peppol : évolution future.
+
+## Commandes fournisseur (réassort)
+
+Dashboard → alertes stock : bouton **Commander** par produit, export CSV bon de commande.
 
 ## Variables d’environnement
 
@@ -63,6 +109,7 @@ Copier `.env.example` vers `.env`. Ne jamais committer le fichier `.env`.
 | `VITE_BANK_API_URL` | Non | URL API banque (défaut : `http://localhost:3001`) |
 | `TINK_CLIENT_ID` | Non | Connexion bancaire Tink (backend) |
 | `PORT` | Non | Port du serveur banque (défaut : 3001) |
+| `BANK_HOST` | Non | Hôte d'écoute (défaut : `127.0.0.1` — ne pas changer en prod cloud) |
 
 Sans Supabase configuré, l’app fonctionne en mode local (localStorage) ; le rapprochement bancaire reste désactivé.
 

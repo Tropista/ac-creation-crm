@@ -8,6 +8,14 @@ import ToastContainer from './components/ToastContainer.jsx'
 
 initTheme()
 
+if (import.meta.env.PROD && typeof window !== "undefined" && !window.electronAPI?.isElectron) {
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {});
+    });
+  }
+}
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <AppRouter>

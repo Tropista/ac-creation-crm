@@ -27,8 +27,8 @@ function createWindow() {
   const window = new BrowserWindow({
     width: 1700,
     height: 1000,
-    minWidth: 1200,
-    minHeight: 800,
+    minWidth: 768,
+    minHeight: 600,
     autoHideMenuBar: false,
     title: "AC Creation CRM",
     ...(iconPath ? { icon: iconPath } : {}),

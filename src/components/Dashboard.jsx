@@ -19,7 +19,7 @@ import { money } from "../utils/money";
 import { pageToPath } from "../utils/routes";
 import { getPermissions } from "../utils/permissions";
 import { isExpenseInMonth } from "../utils/expenseSuppliers";
-import { exportInvoicesCsv } from "../utils/exportCsv";
+import { exportInvoicesCsv, exportLowStockPurchaseOrderCsv, buildPurchaseOrderText } from "../utils/exportCsv";
 import { getStaleDraftQuotes, markDocumentReminder } from "../utils/documentTracking";
 import { countUnreadLeads, markLeadRead } from "../services/leadsService";
 import { showToast } from "../utils/toast";
@@ -29,6 +29,8 @@ import {
   getMinStock,
   getStock,
   isOutOfStock,
+  resolveProductSupplier,
+  suggestedReorderQty,
 } from "../utils/stock";
 
 export default function Dashboard({
@@ -51,6 +53,7 @@ export default function Dashboard({
   const categories = data.categories || [];
   const expenses = data.expenses || [];
   const leads = data.leads || [];
+  const suppliers = data.suppliers || [];
 
   const now = new Date();
   const currentMonth = now.getMonth();
@@ -258,6 +261,63 @@ export default function Dashboard({
 
   function goToProducts() {
     navigate(pageToPath("products"));
+  }
+
+  function goToSupplier(supplierId) {
+    if (supplierId) {
+      localStorage.setItem("crm_open_supplier_id", String(supplierId));
+    }
+    navigate(pageToPath("suppliers"));
+  }
+
+  function handleOrderProduct(product) {
+    const supplier = resolveProductSupplier(product, suppliers);
+    const qty = suggestedReorderQty(product);
+
+    if (supplier?.email) {
+      const subject = encodeURIComponent(
+        `Commande réassort — ${product.name || product.sku || "produit"}`
+      );
+      const body = encodeURIComponent(
+        `Bonjour,\n\nMerci de nous approvisionner :\n- ${product.name || "Produit"} (SKU: ${product.sku || "—"})\n- Quantité : ${qty}\n\nStock actuel : ${getStock(product)} / seuil ${getMinStock(product)}\n\n${data.settings?.companyName || "AC Creation"}`
+      );
+      window.open(`mailto:${supplier.email}?subject=${subject}&body=${body}`, "_blank");
+      showToast(`Brouillon email pour ${supplier.name}`, "info");
+      return;
+    }
+
+    if (supplier?.id) {
+      goToSupplier(supplier.id);
+      showToast(`Fournisseur ${supplier.name} — complétez la commande`, "info");
+      return;
+    }
+
+    const note = `Commande ${product.name || product.sku} — qté ${qty} — fournisseur à définir`;
+    const nextProducts = products.map((entry) =>
+      String(entry.id) === String(product.id)
+        ? { ...entry, reorderNote: note, reorderNoteAt: new Date().toISOString() }
+        : entry
+    );
+    setData?.({ ...data, products: nextProducts });
+    showToast("Note de commande enregistrée sur le produit", "success");
+  }
+
+  function handleExportPurchaseOrder() {
+    if (lowStockCount === 0) {
+      showToast("Aucun produit en stock bas à commander.", "info");
+      return;
+    }
+    exportLowStockPurchaseOrderCsv(products, suppliers, data.settings || {});
+    logActivity?.("Export bon de commande fournisseur", `${lowStockCount} produit(s)`);
+    showToast(`Bon de commande CSV (${lowStockCount} ligne(s))`, "success");
+  }
+
+  function handleCopyPurchaseOrderText() {
+    const text = buildPurchaseOrderText(products, suppliers, data.settings || {});
+    navigator.clipboard?.writeText(text).then(
+      () => showToast("Bon de commande copié dans le presse-papiers", "success"),
+      () => showToast("Copie impossible — exportez le CSV", "warning")
+    );
   }
 
   function handleConvertQuote(quote) {
@@ -812,9 +872,17 @@ export default function Dashboard({
                 </p>
               </div>
               {(lowStockCount > 0 || outOfStockCount > 0) && (
-                <button type="button" className="ghost" onClick={goToProducts}>
-                  Voir stock →
-                </button>
+                <div className="dashboard-action-card__actions">
+                  <button type="button" className="ghost" onClick={goToProducts}>
+                    Voir stock →
+                  </button>
+                  <button type="button" className="ghost" onClick={handleExportPurchaseOrder}>
+                    Exporter bon de commande CSV
+                  </button>
+                  <button type="button" className="ghost" onClick={handleCopyPurchaseOrderText}>
+                    Copier bon de commande
+                  </button>
+                </div>
               )}
             </div>
             {lowStockProducts.length === 0 ? (
@@ -829,6 +897,7 @@ export default function Dashboard({
                         <th>SKU</th>
                         <th>Stock</th>
                         <th>Seuil</th>
+                        <th></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -840,6 +909,15 @@ export default function Dashboard({
                             <strong>{getStock(product)}</strong>
                           </td>
                           <td>{getMinStock(product)}</td>
+                          <td>
+                            <button
+                              type="button"
+                              className="ghost"
+                              onClick={() => handleOrderProduct(product)}
+                            >
+                              Commander
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>

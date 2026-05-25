@@ -548,6 +548,10 @@ export default function Banque({ data, setData, logActivity }) {
 
       <div className="card" style={{ marginBottom: "16px" }}>
         <h3>Connexion bancaire</h3>
+        <p className="muted" style={{ fontSize: "13px", lineHeight: 1.5 }}>
+          <strong>Sécurité :</strong> API locale uniquement (<code>127.0.0.1</code>) — Electron
+          ou <code>npm run bank</code>. Ne pas déployer ce backend en cloud public.
+        </p>
         <p className="muted">
           {bankStatus?.message ||
             "Chargement du statut banque…"}
