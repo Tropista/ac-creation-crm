@@ -35,6 +35,11 @@ import {
 } from "../utils/invoices";
 import { computeDueDate, openInvoiceReminderMailto } from "../utils/invoiceReminders";
 import { consumeQuoteDraft } from "../utils/quoteDraft";
+import {
+  copyQuoteShareLink,
+  getQuoteIdFromLocation,
+  openQuoteWhatsAppShare,
+} from "../utils/quoteShare";
 import { PRODUCTION_STATUSES } from "../utils/production";
 import { downloadProductionSheetPdf } from "../utils/productionPdf";
 import { fromDateInputValue, toDateInputValue } from "../utils/quoteDelivery";
@@ -160,6 +165,22 @@ const [form, setForm] = useState({
       "success"
     );
   }, [isQuote, location.key]);
+
+  useEffect(() => {
+    if (!isQuote) return;
+    const quoteId = getQuoteIdFromLocation(location);
+    if (!quoteId) return;
+
+    const quote = documents.find(
+      (entry) =>
+        String(entry.id) === String(quoteId) ||
+        String(entry.number) === String(quoteId)
+    );
+    if (quote) {
+      setPreviewDoc(quote);
+      setPreviewType("quote");
+    }
+  }, [isQuote, location.search, documents]);
 
   useEffect(() => {
     if (isQuote) return;
@@ -693,7 +714,24 @@ useEffect(() => {
     );
     setData({ ...data, invoices: nextInvoices });
     logActivity?.("Relance facture", invoice.number, client?.name || "");
-    showToast(`Relance préparée pour ${invoice.number}.`, "success");
+    showToast(`Relance n°${result.reminderNumber || 1} préparée pour ${invoice.number}.`, "success");
+  }
+
+  async function handleCopyQuoteLink(quote) {
+    const result = await copyQuoteShareLink(quote);
+    if (result.ok) {
+      showToast("Lien devis copié dans le presse-papiers.", "success");
+      logActivity?.("Partage lien devis", quote.number);
+      return;
+    }
+    showToast("Copie impossible — copiez l'URL manuellement.", "warning");
+  }
+
+  function handleShareQuoteWhatsApp(quote) {
+    const client = (data.clients || []).find((c) => c.id === quote.clientId);
+    openQuoteWhatsAppShare(quote, data.settings || {}, client);
+    logActivity?.("Partage WhatsApp devis", quote.number, client?.name || "");
+    showToast("WhatsApp ouvert avec le message pré-rempli.", "info");
   }
 
   function openPreview(doc, docType = isQuote ? "quote" : "invoice") {
@@ -1049,6 +1087,8 @@ useEffect(() => {
         onUpdateStatus={updateStatus}
         onSendReminder={sendInvoiceReminder}
         onConvertQuote={convertQuoteToInvoice}
+        onCopyQuoteLink={isQuote ? handleCopyQuoteLink : undefined}
+        onShareQuoteWhatsApp={isQuote ? handleShareQuoteWhatsApp : undefined}
         onGenerateDeliveryNote={generateDeliveryNote}
         onPreviewDeliveryNote={previewDeliveryNote}
         onDownloadProductionSheet={downloadProductionSheet}

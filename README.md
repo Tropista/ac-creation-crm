@@ -145,6 +145,10 @@ Le build Vite utilise `base: "/"` lorsque `VERCEL=1` (défini dans le job CI). E
 
 Premier déploiement manuel possible avec `npx vercel link` puis `npx vercel --prod` depuis la racine du projet.
 
+### Domaine personnalisé (ex. crm.ac-creation.lu)
+
+Voir le guide détaillé [docs/DEPLOOIEMENT.md](docs/DEPLOOIEMENT.md) : ajout du domaine dans Vercel → **Settings → Domains**, enregistrement DNS CNAME `crm` → `cname.vercel-dns.com`, vérification HTTPS et routes SPA (`/devis`, `/factures`, etc.). Aucun achat de domaine côté code — configuration dans le tableau de bord Vercel et chez votre registrar.
+
 **Page blanche après déploiement ?** Vérifier dans [Vercel → Deployments](https://vercel.com/dashboard) que la production pointe bien sur le dernier commit (`main`). Puis vider le cache navigateur (**Ctrl+Shift+R**) ou DevTools → Application → Service Workers → *Unregister* (l’ancien SW pouvait servir un `index.html` obsolète référençant des chunks JS supprimés).
 
 ## Electron (atelier)

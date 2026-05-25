@@ -348,6 +348,25 @@ e.target.value
 </label>
 
 <label className="theme-field">
+  <span>Note de relance (optionnelle)</span>
+  <textarea
+    placeholder="Phrase ajoutée à tous les emails de relance (ex. merci de mentionner le n° de facture)."
+    value={form.invoiceReminderNote || ""}
+    onChange={(e) =>
+      setForm({
+        ...form,
+        invoiceReminderNote: e.target.value,
+      })
+    }
+    rows={3}
+  />
+  <p className="muted" style={{ margin: 0, fontSize: "12px", lineHeight: 1.4 }}>
+    Les modèles 1ère, 2e et 3e relance sont appliqués automatiquement selon le
+    compteur « Relance n°X » sur chaque facture.
+  </p>
+</label>
+
+<label className="theme-field">
   <span>Préfixe numérotation factures</span>
   <input
     placeholder="FAC"

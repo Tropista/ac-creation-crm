@@ -7,6 +7,10 @@ import { getInvoicePaidAmount, getInvoiceRemaining } from "../utils/invoices";
 import { getInvoiceStyleClass } from "../utils/invoiceStyles";
 import { formatLineProductionLabel, lineHasProductionDetails } from "../utils/quoteLines";
 import { money } from "../utils/money";
+import {
+  copyQuoteShareLink,
+  openQuoteWhatsAppShare,
+} from "../utils/quoteShare";
 import { showToast } from "../utils/toast";
 
 function IconUser() {
@@ -230,11 +234,35 @@ ${data.settings.companyEmail || ""}`;
     onDocumentSent?.(doc);
   }
 
+  async function copyQuoteLink() {
+    const result = await copyQuoteShareLink(doc);
+    if (result.ok) {
+      showToast("Lien devis copié dans le presse-papiers.", "success");
+      return;
+    }
+    showToast("Copie impossible.", "warning");
+  }
+
+  function shareQuoteWhatsApp() {
+    openQuoteWhatsAppShare(doc, data.settings || {}, client);
+    showToast("WhatsApp ouvert avec le message pré-rempli.", "info");
+  }
+
   return (
     <div className="modal ac-invoice-modal-wrap document-preview-overlay">
       <div className="modal-content invoice-modal ac-invoice-modal">
         <div className="no-print modal-actions ac-invoice-actions">
           <button onClick={onClose}>Fermer</button>
+          {isQuote && (
+            <>
+              <button type="button" onClick={copyQuoteLink}>
+                Copier le lien
+              </button>
+              <button type="button" onClick={shareQuoteWhatsApp}>
+                WhatsApp
+              </button>
+            </>
+          )}
           <button onClick={sendEmail}>Envoyer par email</button>
           <button onClick={() => window.print()}>Imprimer</button>
           <button className="primary" onClick={downloadPdfNative}>

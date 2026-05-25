@@ -31,8 +31,8 @@ import { getStaleDraftQuotes, markDocumentReminder } from "../utils/documentTrac
 import { countUnreadLeads, markLeadRead } from "../services/leadsService";
 import { showToast } from "../utils/toast";
 import {
-  countLowStockProducts,
-  getLowStockProducts,
+  countLowStockByKind,
+  getLowStockProductsByKind,
   getMinStock,
   getStock,
   isOutOfStock,
@@ -106,8 +106,20 @@ export default function Dashboard({
     0
   );
 
-  const lowStockProducts = getLowStockProducts(products, 8);
-  const lowStockCount = countLowStockProducts(products);
+  const settings = data.settings || {};
+  const lowStockProducts = getLowStockProductsByKind(products, "blank", 8, settings);
+  const lowStockCount = countLowStockByKind(products, "blank", settings);
+  const lowStockConsumables = getLowStockProductsByKind(
+    products,
+    "consumable",
+    8,
+    settings
+  );
+  const lowStockConsumablesCount = countLowStockByKind(
+    products,
+    "consumable",
+    settings
+  );
   const outOfStockCount = products.filter(isOutOfStock).length;
 
   const convertibleQuotes = quotes
@@ -391,7 +403,7 @@ export default function Dashboard({
     );
     setData({ ...data, invoices: nextInvoices });
     logActivity?.("Relance facture", invoice.number, client?.name || "");
-    showToast(`Relance préparée pour ${invoice.number}.`, "success");
+    showToast(`Relance n°${result.reminderNumber || 1} préparée pour ${invoice.number}.`, "success");
   }
 
   return (
@@ -575,8 +587,16 @@ export default function Dashboard({
         </div>
         {canManageProducts && (
           <div className={`card stat ${lowStockCount > 0 ? "stat--danger" : ""}`}>
-            <span>Stock bas</span>
+            <span>Stock bas (produits)</span>
             <strong>{lowStockCount}</strong>
+          </div>
+        )}
+        {canManageProducts && (
+          <div
+            className={`card stat ${lowStockConsumablesCount > 0 ? "stat--danger" : ""}`}
+          >
+            <span>Consommables bas</span>
+            <strong>{lowStockConsumablesCount}</strong>
           </div>
         )}
         {canManageProducts && outOfStockCount > 0 && (
@@ -659,11 +679,13 @@ export default function Dashboard({
                             onClick={() => sendInvoiceReminder(invoice)}
                             title={
                               invoice.lastReminderDate
-                                ? `Dernière relance : ${invoice.lastReminderDate}`
-                                : "Préparer un email de relance"
+                                ? `Dernière relance : ${invoice.lastReminderDate} · Relance n°${Number(invoice.reminderCount || 0) + 1}`
+                                : "Préparer un email de relance (relance n°1)"
                             }
                           >
-                            Relancer
+                            {Number(invoice.reminderCount || 0) > 0
+                              ? `Relance n°${Number(invoice.reminderCount || 0) + 1}`
+                              : "Relancer"}
                           </button>
                         </td>
                       </tr>
@@ -957,10 +979,10 @@ export default function Dashboard({
           <div className="card dashboard-action-card">
             <div className="dashboard-action-card__header">
               <div>
-                <h3>Alertes stock</h3>
+                <h3>Alertes stock — produits</h3>
                 <p className="muted">
                   {lowStockCount === 0
-                    ? "Aucun produit sous le seuil minimum."
+                    ? "Aucun produit fini sous le seuil minimum."
                     : `${lowStockCount} produit(s) en stock bas${outOfStockCount > 0 ? ` · ${outOfStockCount} en rupture` : ""}`}
                 </p>
               </div>
@@ -1020,6 +1042,68 @@ export default function Dashboard({
                   Voir stock →
                 </button>
               </>
+            )}
+          </div>
+        )}
+
+        {canManageProducts && (
+          <div className="card dashboard-action-card">
+            <div className="dashboard-action-card__header">
+              <div>
+                <h3>Consommables (encre, films, vinyle)</h3>
+                <p className="muted">
+                  {lowStockConsumablesCount === 0
+                    ? "Tous les consommables sont au-dessus du seuil."
+                    : `${lowStockConsumablesCount} consommable(s) à réapprovisionner.`}
+                </p>
+              </div>
+              {lowStockConsumablesCount > 0 && (
+                <div className="dashboard-action-card__actions">
+                  <button type="button" className="ghost" onClick={goToProducts}>
+                    Voir stock →
+                  </button>
+                </div>
+              )}
+            </div>
+            {lowStockConsumables.length === 0 ? (
+              <p className="muted">
+                Catégorie « Consommable » ou liste dans Paramètres.
+              </p>
+            ) : (
+              <div className="table compact-table">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Consommable</th>
+                      <th>SKU</th>
+                      <th>Stock</th>
+                      <th>Seuil</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lowStockConsumables.map((product) => (
+                      <tr key={product.id}>
+                        <td>{product.name}</td>
+                        <td>{product.sku || "—"}</td>
+                        <td>
+                          <strong>{getStock(product)}</strong>
+                        </td>
+                        <td>{getMinStock(product)}</td>
+                        <td>
+                          <button
+                            type="button"
+                            className="ghost"
+                            onClick={() => handleOrderProduct(product)}
+                          >
+                            Commander
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
         )}

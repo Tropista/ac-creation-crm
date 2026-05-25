@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { applyStockByLines } from "./stock.js";
+import {
+  applyStockByLines,
+  countLowStockByKind,
+  getLowStockProductsByKind,
+  isBlankProduct,
+  isConsumableProduct,
+} from "./stock.js";
 
 const products = () => [
   { id: "p1", name: "Filament PLA", stock: 20 },
@@ -89,5 +95,27 @@ describe("applyStockByLines", () => {
     );
 
     expect(result[0].stock).toBe(7);
+  });
+});
+
+describe("stock consommables", () => {
+  const settings = { consumablesStock: ["film-1"] };
+  const products = [
+    { id: "p1", name: "T-shirt", category: "Textile", stock: 5, stockMin: 10 },
+    { id: "film-1", name: "Film DTF", category: "Autre", stock: 2, stockMin: 5 },
+    { id: "c1", name: "Encre DTF", category: "Consommable", stock: 1, stockMin: 3 },
+  ];
+
+  it("détecte les consommables par catégorie ou liste paramètres", () => {
+    expect(isConsumableProduct(products[0], settings)).toBe(false);
+    expect(isConsumableProduct(products[1], settings)).toBe(true);
+    expect(isConsumableProduct(products[2], settings)).toBe(true);
+    expect(isBlankProduct(products[0], settings)).toBe(true);
+  });
+
+  it("filtre les alertes stock par type", () => {
+    expect(countLowStockByKind(products, "blank", settings)).toBe(1);
+    expect(countLowStockByKind(products, "consumable", settings)).toBe(2);
+    expect(getLowStockProductsByKind(products, "consumable", 8, settings)).toHaveLength(2);
   });
 });

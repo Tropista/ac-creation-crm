@@ -1,5 +1,36 @@
 import { uid, today } from "./documents";
 
+/** Noms de catégorie reconnus comme consommables (encre DTF, films, vinyle…). */
+export const CONSUMABLE_CATEGORY_NAMES = ["consommable", "consommables"];
+
+export function isConsumableProduct(product, settings = {}) {
+  if (!product || product.archived) return false;
+
+  const trackedIds = settings.consumablesStock || [];
+  if (
+    trackedIds.some((id) => String(id) === String(product.id))
+  ) {
+    return true;
+  }
+
+  const category = String(product.category || "").trim().toLowerCase();
+  return CONSUMABLE_CATEGORY_NAMES.includes(category);
+}
+
+export function isBlankProduct(product, settings = {}) {
+  return !isConsumableProduct(product, settings);
+}
+
+export function filterProductsByStockKind(products = [], kind = "all", settings = {}) {
+  if (kind === "consumable") {
+    return products.filter((product) => isConsumableProduct(product, settings));
+  }
+  if (kind === "blank") {
+    return products.filter((product) => isBlankProduct(product, settings));
+  }
+  return products;
+}
+
 export function getMinStock(product) {
   return Number(product?.stockMin || product?.minStock || 0);
 }
@@ -23,8 +54,25 @@ export function countLowStockProducts(products = []) {
   return products.filter(isLowStock).length;
 }
 
+export function countLowStockByKind(products = [], kind = "all", settings = {}) {
+  return filterProductsByStockKind(products, kind, settings).filter(isLowStock)
+    .length;
+}
+
 export function getLowStockProducts(products = [], limit = 8) {
   return products
+    .filter(isLowStock)
+    .sort((a, b) => getStock(a) - getStock(b))
+    .slice(0, limit);
+}
+
+export function getLowStockProductsByKind(
+  products = [],
+  kind = "all",
+  limit = 8,
+  settings = {}
+) {
+  return filterProductsByStockKind(products, kind, settings)
     .filter(isLowStock)
     .sort((a, b) => getStock(a) - getStock(b))
     .slice(0, limit);

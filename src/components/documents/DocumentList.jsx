@@ -24,6 +24,8 @@ export default function DocumentList({
   onUpdateStatus,
   onSendReminder,
   onConvertQuote,
+  onCopyQuoteLink,
+  onShareQuoteWhatsApp,
   onGenerateDeliveryNote,
   onPreviewDeliveryNote,
   onDownloadProductionSheet,
@@ -209,7 +211,7 @@ export default function DocumentList({
                       )}
                       {!isQuote && Number(d.reminderCount || 0) > 0 && (
                         <span className="documents-reminder-count" title={`Dernière relance : ${formatTrackingDate(d.lastReminderAt || d.lastReminderDate)}`}>
-                          Relances : {d.reminderCount}
+                          Relance n°{d.reminderCount}
                         </span>
                       )}
                     </td>
@@ -312,6 +314,26 @@ export default function DocumentList({
                           Paiement
                         </button>
                       )}
+                      {isQuote && (
+                        <>
+                          <button
+                            type="button"
+                            className="compact documents-share-btn"
+                            onClick={() => onCopyQuoteLink?.(d)}
+                            title="Copier le lien pour ouvrir ce devis dans le CRM"
+                          >
+                            Lien
+                          </button>
+                          <button
+                            type="button"
+                            className="compact documents-whatsapp-btn"
+                            onClick={() => onShareQuoteWhatsApp?.(d)}
+                            title="Partager via WhatsApp avec message pré-rempli"
+                          >
+                            WhatsApp
+                          </button>
+                        </>
+                      )}
                       {!isQuote && overdue && (
                         <button
                           type="button"
@@ -319,11 +341,13 @@ export default function DocumentList({
                           onClick={() => onSendReminder(d)}
                           title={
                             d.lastReminderAt || d.lastReminderDate
-                              ? `Dernière relance : ${formatTrackingDate(d.lastReminderAt || d.lastReminderDate)} (${d.reminderCount || 0})`
-                              : "Préparer un email de relance"
+                              ? `Dernière relance : ${formatTrackingDate(d.lastReminderAt || d.lastReminderDate)} · Relance n°${Number(d.reminderCount || 0) + 1}`
+                              : "Préparer un email de relance (relance n°1)"
                           }
                         >
-                          Relancer
+                          {Number(d.reminderCount || 0) > 0
+                            ? `Relance n°${Number(d.reminderCount || 0) + 1}`
+                            : "Relancer"}
                         </button>
                       )}
                       {canDelete && (
