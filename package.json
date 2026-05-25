@@ -1,7 +1,7 @@
 {
   "name": "ac-creation-crm",
   "private": true,
-  "version": "1.0.3",
+  "version": "1.0.4",
   "productName": "AC Creation CRM",
   "main": "electron.cjs",
   "type": "module",
@@ -64,6 +64,7 @@
   "build": {
     "appId": "com.accreation.crm",
     "productName": "AC Creation CRM",
+    "artifactName": "AC-Creation-CRM-Setup-${version}.${ext}",
     "directories": {
       "output": "release"
     },
@@ -93,7 +94,8 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
+      "allowToChangeInstallationDirectory": false,
+      "allowElevation": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "AC Creation CRM"

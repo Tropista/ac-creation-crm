@@ -1,5 +1,6 @@
 const { autoUpdater } = require("electron-updater");
 const { ipcMain } = require("electron");
+const { stopBankServer } = require("./electron-bank.cjs");
 
 let mainWindow = null;
 let ipcRegistered = false;
@@ -15,7 +16,8 @@ function registerIpcHandlers() {
   ipcRegistered = true;
 
   ipcMain.handle("updater:restart", () => {
-    autoUpdater.quitAndInstall(false, true);
+    stopBankServer();
+    autoUpdater.quitAndInstall(true, true);
   });
 }
 
@@ -73,6 +75,7 @@ function setupAutoUpdater(win, { isPackaged }) {
       return;
     }
     console.error("[autoUpdater] Erreur :", error.message);
+    notifyRenderer("update-error", { message: error.message });
   });
 
   setTimeout(() => {

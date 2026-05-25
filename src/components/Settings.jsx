@@ -34,6 +34,7 @@ export default function Settings({
 
   const [updateInfo, setUpdateInfo] = useState(null);
   const [updateReady, setUpdateReady] = useState(null);
+  const [updateError, setUpdateError] = useState(null);
   const [downloadPercent, setDownloadPercent] = useState(null);
 
   useEffect(() => {
@@ -44,6 +45,7 @@ export default function Settings({
       api.onUpdateAvailable((info) => {
         setUpdateInfo(info);
         setUpdateReady(null);
+        setUpdateError(null);
         setDownloadPercent(null);
       }),
       api.onUpdateDownloadProgress?.((progress) => {
@@ -52,7 +54,13 @@ export default function Settings({
       api.onUpdateDownloaded((info) => {
         setUpdateReady(info);
         setDownloadPercent(null);
+        setUpdateError(null);
         showToast("Mise à jour prête — redémarrez pour installer", "info");
+      }),
+      api.onUpdateError?.((info) => {
+        setUpdateError(info?.message || "Erreur de mise à jour");
+        setDownloadPercent(null);
+        showToast("Échec du téléchargement de la mise à jour", "error");
       }),
     ].filter(Boolean);
 
@@ -162,7 +170,7 @@ Version installée : <strong>{APP_VERSION}</strong>
 
 </div>
 
-{(updateInfo || updateReady) && window.electronAPI?.isElectron ? (
+{(updateInfo || updateReady || updateError) && window.electronAPI?.isElectron ? (
 <div className="card" style={{ marginBottom: "1rem", borderColor: "#3b82f6" }}>
   <h3 style={{ marginTop: 0 }}>Mise à jour de l’application</h3>
   {updateReady ? (
@@ -176,11 +184,22 @@ Version installée : <strong>{APP_VERSION}</strong>
         Redémarrer pour mettre à jour
       </button>
     </>
+  ) : updateError ? (
+    <>
+      <p className="muted" style={{ lineHeight: 1.5 }}>
+        La mise à jour automatique a échoué. Téléchargez l’installateur depuis GitHub
+        (release AC Creation CRM) et réinstallez par-dessus la version actuelle.
+      </p>
+      <p className="muted" style={{ fontSize: "12px", marginBottom: 0 }}>
+        Détail : {updateError}
+      </p>
+    </>
   ) : (
     <p>
       Téléchargement de la mise à jour
       {updateInfo?.version ? ` v${updateInfo.version}` : ""}
       {downloadPercent != null ? `… ${downloadPercent} %` : "…"}
+      {" "}(≈ 2 min, laissez l’application ouverte)
     </p>
   )}
 </div>

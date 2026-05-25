@@ -60,17 +60,28 @@ describe("supabaseSync tombstones", () => {
       from() {
         const chain = {
           delete() {
+            chain._mode = "delete";
             return chain;
           },
           in(_column, ids) {
             chain._ids = ids;
+            if (chain._mode === "select") {
+              return Promise.resolve({
+                data: chain._ids.map((id) => ({ id })),
+                error: null,
+              });
+            }
             return chain;
           },
           select() {
-            return Promise.resolve({
-              data: [{ id: chain._ids[0] }],
-              error: null,
-            });
+            if (chain._mode === "delete") {
+              return Promise.resolve({
+                data: [{ id: chain._ids[0] }],
+                error: null,
+              });
+            }
+            chain._mode = "select";
+            return chain;
           },
         };
         return chain;
@@ -80,6 +91,34 @@ describe("supabaseSync tombstones", () => {
     await expect(
       deleteSupabaseRowsByIds(supabase, "clients", ["c1", "c2"])
     ).rejects.toThrow(/Suppression Supabase incomplète/);
+  });
+
+  it("deleteSupabaseRowsByIds traite les ids déjà absents comme confirmés", async () => {
+    const supabase = {
+      from() {
+        const chain = {
+          delete() {
+            return chain;
+          },
+          in(_column, ids) {
+            chain._ids = ids;
+            chain._mode = "delete";
+            return chain;
+          },
+          select() {
+            if (chain._mode === "delete") {
+              return Promise.resolve({ data: [], error: null });
+            }
+            chain._mode = "select";
+            return chain;
+          },
+        };
+        return chain;
+      },
+    };
+
+    const confirmed = await deleteSupabaseRowsByIds(supabase, "clients", ["c1", "c2"]);
+    expect(confirmed).toEqual(["c1", "c2"]);
   });
 
   it("filterCollectionByTombstones est réutilisable pour le chargement cloud", () => {

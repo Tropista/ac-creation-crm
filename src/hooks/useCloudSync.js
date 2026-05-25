@@ -93,15 +93,16 @@ export function useCloudSync({ currentUserEmail, setData, setLoading }) {
         }
 
         const { loadSupabaseData, syncSupabaseData } = await loadSupabaseSyncModule();
+        const freshLocal = normalizeData(loadData());
         const cloud = await loadSupabaseData({
           normalizeData,
           emptyData,
+          localTombstones: freshLocal.settings?.deletionTombstones,
         });
 
         if (cloud.hasCloudData) {
           let conflictCount = 0;
 
-          const freshLocal = normalizeData(loadData());
           const mergedRaw = mergeCloudWithLocal(freshLocal, cloud.data, {
             onConflict: (payload) => {
               conflictCount += 1;
@@ -116,6 +117,8 @@ export function useCloudSync({ currentUserEmail, setData, setLoading }) {
 
           const prepared = prepareAppData(mergedRaw);
           setData(prepared);
+          saveData(prepared);
+          flushSaveData();
           const synced = await syncSupabaseData(prepared, cloud.data);
           const syncedPrepared = prepareAppData(synced);
 
@@ -220,6 +223,8 @@ export function useCloudSync({ currentUserEmail, setData, setLoading }) {
 
       dataRef.current = normalized;
       setData(normalized);
+      saveData(normalized);
+      flushSaveData();
 
       let cloudSaved = false;
 

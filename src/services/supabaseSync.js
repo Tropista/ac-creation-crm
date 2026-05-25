@@ -3,6 +3,7 @@ import { sanitizeProductsForPersistence } from "../utils/productImages";
 import {
   clearSyncedDeletionTombstones,
   filterCollectionByTombstones,
+  mergeDeletionTombstones,
 } from "./syncMerge";
 
 /** Refuse de pousser une suppression massive vers le cloud (ex. migration ou snapshot vide). */
@@ -322,14 +323,36 @@ export async function deleteSupabaseRowsByIds(supabase, table, ids = []) {
   }
 
   const confirmedSet = new Set(confirmed.map((id) => String(id)));
-  const missing = uniqueIds.filter((id) => !confirmedSet.has(String(id)));
+  let missing = uniqueIds.filter((id) => !confirmedSet.has(String(id)));
 
   if (missing.length) {
-    throw new Error(
-      `Suppression Supabase incomplète sur « ${table} » : ${missing.length} enregistrement(s) encore présents ` +
-        `(id ${missing.slice(0, 3).join(", ")}${missing.length > 3 ? "…" : ""}). ` +
-        "Vérifiez que votre compte a le rôle Admin dans Supabase."
-    );
+    const stillPresent = [];
+
+    for (let offset = 0; offset < missing.length; offset += DELETE_CHUNK_SIZE) {
+      const chunk = missing.slice(offset, offset + DELETE_CHUNK_SIZE);
+      const { data, error } = await supabase.from(table).select("id").in("id", chunk);
+
+      if (error) throw formatSupabaseCollectionError(table, error);
+
+      for (const row of data || []) {
+        if (row?.id) stillPresent.push(row.id);
+      }
+    }
+
+    const stillPresentSet = new Set(stillPresent.map((id) => String(id)));
+    const blocked = missing.filter((id) => stillPresentSet.has(String(id)));
+
+    if (blocked.length) {
+      throw new Error(
+        `Suppression Supabase incomplète sur « ${table} » : ${blocked.length} enregistrement(s) encore présents ` +
+          `(id ${blocked.slice(0, 3).join(", ")}${blocked.length > 3 ? "…" : ""}). ` +
+          "Vérifiez que votre compte a le rôle Admin dans Supabase."
+      );
+    }
+
+    for (const id of missing) {
+      confirmed.push(id);
+    }
   }
 
   return confirmed;
@@ -535,7 +558,11 @@ export async function syncSupabaseData(nextData, previousData = {}) {
   return syncedData;
 }
 
-export async function loadSupabaseData({ normalizeData, emptyData } = {}) {
+export async function loadSupabaseData({
+  normalizeData,
+  emptyData,
+  localTombstones = {},
+} = {}) {
   const supabase = await getSupabase();
 
   const settingsRes = resolveOptionalResult(
@@ -577,10 +604,17 @@ export async function loadSupabaseData({ normalizeData, emptyData } = {}) {
   const resolvedDeliveryNotesRes = resolveCollectionResult(deliveryNotesRes, "delivery_notes");
 
   const cloudSettings = settingsRes.data?.data || emptyData.settings;
-  const tombstones = cloudSettings.deletionTombstones || {};
+  const tombstones = mergeDeletionTombstones(
+    localTombstones,
+    cloudSettings.deletionTombstones || {}
+  );
+  const settingsWithTombstones =
+    Object.keys(tombstones).length > 0
+      ? { ...cloudSettings, deletionTombstones: tombstones }
+      : cloudSettings;
 
   const cloudData = normalizeData({
-    settings: cloudSettings,
+    settings: settingsWithTombstones,
     users: filterCollectionByTombstones(rowsToItems(usersRes.data), tombstones.users),
     backups: filterCollectionByTombstones(rowsToItems(backupsRes.data), tombstones.backups),
     clients: filterCollectionByTombstones(rowsToItems(clientsRes.data), tombstones.clients),
