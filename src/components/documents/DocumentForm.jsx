@@ -1,5 +1,10 @@
+import { useRef, useState } from "react";
 import { money } from "../../utils/money";
 import { QUOTE_STATUSES } from "../../utils/production";
+import { uploadQuoteAttachmentFileWithLocalFallback } from "../../services/quoteAttachmentStorage";
+import { isPreviewableAttachment } from "../../utils/quoteAttachments";
+import { uid } from "../../utils/documents";
+import { showToast } from "../../utils/toast";
 
 export default function DocumentForm({
   isQuote,
@@ -17,7 +22,68 @@ export default function DocumentForm({
   onAddLine,
   onRemoveLine,
   lineTotal,
+  attachments = [],
+  onAttachmentsChange,
 }) {
+  const fileInputRef = useRef(null);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+
+  async function handleAttachmentUpload(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || !onAttachmentsChange) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      showToast("Fichier trop volumineux (max 10 Mo).", "error");
+      return;
+    }
+
+    setUploadingAttachment(true);
+    try {
+      const quoteId = editingId || "draft";
+      const uploaded = await uploadQuoteAttachmentFileWithLocalFallback(file, { quoteId });
+      const { url, storagePath, source } = uploaded;
+      showToast(
+        source === "storage"
+          ? "Fichier enregistré sur Supabase Storage."
+          : "Fichier enregistré localement (bucket Storage absent ou hors ligne).",
+        source === "storage" ? "success" : "warning"
+      );
+
+      onAttachmentsChange([
+        ...(attachments || []),
+        {
+          id: uid(),
+          name: file.name,
+          mimeType: file.type || "application/octet-stream",
+          url,
+          storagePath: storagePath || "",
+          uploadedAt: new Date().toISOString(),
+        },
+      ]);
+    } catch (error) {
+      console.error(error);
+      showToast(error.message || "Impossible d'ajouter le fichier.", "error");
+    } finally {
+      setUploadingAttachment(false);
+    }
+  }
+
+  function removeAttachment(attachmentId) {
+    if (!onAttachmentsChange) return;
+    onAttachmentsChange(
+      (attachments || []).filter((entry) => String(entry.id) !== String(attachmentId))
+    );
+  }
+
+  function openAttachment(attachment) {
+    if (!attachment?.url) {
+      showToast("Fichier indisponible (trop lourd ou supprimé).", "error");
+      return;
+    }
+    window.open(attachment.url, "_blank", "noopener,noreferrer");
+  }
+
   return (
     <form
       className="card documents-form-card"
@@ -36,7 +102,7 @@ export default function DocumentForm({
         </div>
       </div>
 
-      <div className="documents-form-header">
+      <div className={`documents-form-header${isQuote ? " documents-form-header--quote" : ""}`}>
         <label className="documents-field">
           <span>Client</span>
           <select
@@ -59,10 +125,12 @@ export default function DocumentForm({
             onChange={(e) => setForm({ ...form, status: e.target.value })}
           >
             {isQuote ? (
-              QUOTE_STATUSES.map((status) => <option key={status}>{status}</option>)
+              QUOTE_STATUSES.map((status) => <option key={status}>{status}</option>
+              )
             ) : (
               <>
                 <option>Non payée</option>
+                <option>Partiellement payée</option>
                 <option>Payée</option>
                 <option>En retard</option>
                 <option>Annulée</option>
@@ -70,6 +138,22 @@ export default function DocumentForm({
             )}
           </select>
         </label>
+
+        {isQuote && (
+          <label className="documents-field">
+            <span>Date de livraison prévue</span>
+            <input
+              type="date"
+              value={form.promisedDeliveryDateInput || ""}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  promisedDeliveryDateInput: e.target.value,
+                })
+              }
+            />
+          </label>
+        )}
       </div>
 
       <div className="documents-lines-wrap">
@@ -87,59 +171,159 @@ export default function DocumentForm({
           {(form.lines || []).map((line, index) => {
             const total = lineTotal(line).totalHT;
             return (
-              <div className="document-line" key={index}>
-                <select
-                  value={line.productId || ""}
-                  onChange={(e) => onSelectProduct(index, e.target.value)}
-                >
-                  <option value="">Produit libre</option>
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.category ? `${p.category} — ` : ""}
-                      {p.name} - {money(p.price)}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  placeholder="Produit / prestation"
-                  value={line.description}
-                  onChange={(e) => onUpdateLine(index, { description: e.target.value })}
-                />
-                <input
-                  type="number"
-                  min="1"
-                  value={line.quantity}
-                  onChange={(e) => onUpdateLine(index, { quantity: e.target.value })}
-                />
-                <input
-                  type="number"
-                  min="0"
-                  step="0.0001"
-                  value={line.price}
-                  onChange={(e) => onUpdateLine(index, { price: e.target.value })}
-                />
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={line.discount}
-                  onChange={(e) => onUpdateLine(index, { discount: e.target.value })}
-                />
-                <strong className="documents-line-total">{money(total)}</strong>
-                <button
-                  type="button"
-                  className="danger documents-line-remove"
-                  onClick={() => onRemoveLine(index)}
-                  title="Supprimer la ligne"
-                  aria-label="Supprimer la ligne"
-                >
-                  ✕
-                </button>
+              <div className="document-line-group" key={index}>
+                <div className="document-line">
+                  <select
+                    value={line.productId || ""}
+                    onChange={(e) => onSelectProduct(index, e.target.value)}
+                  >
+                    <option value="">Produit libre</option>
+                    {products.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.category ? `${p.category} — ` : ""}
+                        {p.name} - {money(p.price)}
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    placeholder="Produit / prestation"
+                    value={line.description}
+                    onChange={(e) => onUpdateLine(index, { description: e.target.value })}
+                  />
+                  <input
+                    type="number"
+                    min="1"
+                    value={line.quantity}
+                    onChange={(e) => onUpdateLine(index, { quantity: e.target.value })}
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.0001"
+                    value={line.price}
+                    onChange={(e) => onUpdateLine(index, { price: e.target.value })}
+                  />
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={line.discount}
+                    onChange={(e) => onUpdateLine(index, { discount: e.target.value })}
+                  />
+                  <strong className="documents-line-total">{money(total)}</strong>
+                  <button
+                    type="button"
+                    className="danger documents-line-remove"
+                    onClick={() => onRemoveLine(index)}
+                    title="Supprimer la ligne"
+                    aria-label="Supprimer la ligne"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                {isQuote && (
+                  <div className="document-line-production">
+                    <label className="documents-field documents-field--compact">
+                      <span>Taille</span>
+                      <input
+                        placeholder="ex. M, L, XL"
+                        value={line.taille || ""}
+                        onChange={(e) => onUpdateLine(index, { taille: e.target.value })}
+                      />
+                    </label>
+                    <label className="documents-field documents-field--compact">
+                      <span>Couleur</span>
+                      <input
+                        placeholder="ex. Noir, Blanc"
+                        value={line.couleur || ""}
+                        onChange={(e) => onUpdateLine(index, { couleur: e.target.value })}
+                      />
+                    </label>
+                    <label className="documents-field documents-field--compact">
+                      <span>Emplacement marquage</span>
+                      <input
+                        placeholder="ex. Poitrine, Dos"
+                        value={line.emplacementMarquage || ""}
+                        onChange={(e) =>
+                          onUpdateLine(index, { emplacementMarquage: e.target.value })
+                        }
+                      />
+                    </label>
+                    <label className="documents-field documents-field--compact">
+                      <span>Technique</span>
+                      <input
+                        placeholder="ex. DTF, Sérigraphie"
+                        value={line.technique || ""}
+                        onChange={(e) => onUpdateLine(index, { technique: e.target.value })}
+                      />
+                    </label>
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
       </div>
+
+      {isQuote && onAttachmentsChange && (
+        <div className="quote-attachments-section">
+          <div className="quote-attachments-head">
+            <strong>Pièces jointes</strong>
+            <span className="muted">BAT, visuel client, DST, PNG…</span>
+          </div>
+
+          {(attachments || []).length > 0 && (
+            <ul className="quote-attachments-list">
+              {(attachments || []).map((attachment) => (
+                <li key={attachment.id} className="quote-attachment-item">
+                  <div className="quote-attachment-info">
+                    <strong>{attachment.name || "Fichier"}</strong>
+                    <span className="muted">
+                      {attachment.mimeType || "—"}
+                      {!attachment.url ? " · indisponible localement" : ""}
+                    </span>
+                  </div>
+                  <div className="quote-attachment-actions">
+                    <button
+                      type="button"
+                      className="compact"
+                      disabled={!attachment.url}
+                      onClick={() => openAttachment(attachment)}
+                    >
+                      {isPreviewableAttachment(attachment) ? "Aperçu" : "Télécharger"}
+                    </button>
+                    <button
+                      type="button"
+                      className="danger compact"
+                      onClick={() => removeAttachment(attachment.id)}
+                      aria-label={`Supprimer ${attachment.name}`}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*,.pdf,.dst,.png,.jpg,.jpeg,.webp"
+            hidden
+            onChange={handleAttachmentUpload}
+          />
+          <button
+            type="button"
+            className="quote-attachments-add"
+            disabled={uploadingAttachment}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {uploadingAttachment ? "Import en cours…" : "Ajouter un fichier"}
+          </button>
+        </div>
+      )}
 
       <div className="documents-form-footer">
         <div className="documents-form-footer-left">

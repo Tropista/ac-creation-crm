@@ -1023,4 +1023,127 @@
     flex-direction: column;
     align-items: stretch;
   }
+
+  .documents-form-header--quote,
+  .document-line-production {
+    grid-template-columns: 1fr;
+  }
+}
+
+.documents-payment-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+}
+
+.documents-paid-full {
+  color: #059669;
+  font-weight: 800;
+}
+
+.documents-paid-partial {
+  color: #059669;
+  font-weight: 800;
+}
+
+.documents-remaining {
+  font-size: 11px;
+}
+
+.documents-deposit-tag,
+.documents-converted-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  background: #fdf4ff;
+  color: #a21caf;
+  border: 1px solid #f5d0fe;
+}
+
+.documents-deposit-btn,
+.documents-bl-btn,
+.documents-payment-btn {
+  font-size: 11px !important;
+}
+
+.documents-form-header--quote {
+  grid-template-columns: 1fr 220px 220px;
+}
+
+.document-line-group {
+  display: grid;
+  gap: 8px;
+}
+
+.document-line-production {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0 8px 8px;
+}
+
+.documents-field--compact span {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.quote-attachments-section {
+  margin: 16px 0;
+  padding: 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  background: #f8fafc;
+}
+
+.quote-attachments-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.quote-attachments-list {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.quote-attachment-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid #edf2f7;
+}
+
+.quote-attachment-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.quote-attachment-info strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quote-attachment-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.quote-attachments-add {
+  width: 100%;
 }

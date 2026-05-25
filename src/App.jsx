@@ -85,6 +85,7 @@ import "./styles/sidebar.css";
 import "./styles/dashboard.css";
 import "./styles/clients.css";
 import "./styles/documents.css";
+import "./styles/invoice-styles.css";
 import "./styles/atelier.css";
 import "./styles/products-erp.css";
 import "./styles/suppliers.css";

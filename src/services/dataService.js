@@ -1,7 +1,9 @@
 import { dedupeDocuments } from "../utils/documents";
 import { debounce } from "../utils/debounce";
 import { normalizePaymentDays } from "../utils/invoiceReminders";
+import { normalizeInvoiceStyle } from "../utils/invoiceStyles";
 import { sanitizeProductsForPersistence } from "../utils/productImages";
+import { sanitizeQuotesForPersistence } from "../utils/quoteAttachments";
 
 export const STORAGE_KEY = "crm_local_data_v2";
 export const SAVE_DEBOUNCE_MS = 400;
@@ -18,11 +20,21 @@ export function isQuotaExceededError(error) {
 }
 
 function prepareDataForLocalStorage(data) {
-  if (!data?.products?.length) return data;
-  return {
-    ...data,
-    products: sanitizeProductsForPersistence(data.products),
-  };
+  const next = { ...data };
+
+  if (data?.products?.length) {
+    next.products = sanitizeProductsForPersistence(data.products);
+  }
+
+  if (data?.quotes?.length) {
+    next.quotes = sanitizeQuotesForPersistence(data.quotes);
+  }
+
+  if (next === data && !data?.products?.length && !data?.quotes?.length) {
+    return data;
+  }
+
+  return next;
 }
 
 function writeDataImmediate(data) {
@@ -67,10 +79,12 @@ export const emptyData = {
       "Informations bancaires : Tout paiement au nom de votre entreprise\nNom de la banque : BCEE\nBIC : BCEELULL\nIBAN : LU00 0000 0000 0000 0000\nVeuillez indiquer le numéro de facture dans votre communication",
     taxRate: 17,
     paymentDays: 30,
+    invoiceStyle: "a",
   },
   clients: [],
   quotes: [],
   invoices: [],
+  deliveryNotes: [],
   products: [],
   categories: [],
   suppliers: [],
@@ -118,6 +132,7 @@ export function normalizeData(data) {
         ...stored,
         companyEmail,
         paymentDays: normalizePaymentDays(stored.paymentDays),
+        invoiceStyle: normalizeInvoiceStyle(),
       };
     })(),
 
@@ -130,6 +145,10 @@ export function normalizeData(data) {
 
     invoices: dedupeDocuments(
       rest?.invoices || []
+    ),
+
+    deliveryNotes: dedupeDocuments(
+      rest?.deliveryNotes || []
     ),
 
     products: dedupeItemsById(
@@ -193,6 +212,7 @@ export function hasLocalBusinessData(data) {
     data.suppliers?.length ||
     data.expenses?.length ||
     data.quotes?.length ||
-    data.invoices?.length
+    data.invoices?.length ||
+    data.deliveryNotes?.length
   );
 }

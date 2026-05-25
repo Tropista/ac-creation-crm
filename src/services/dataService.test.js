@@ -45,6 +45,7 @@ describe("dataService", () => {
   it("hasLocalBusinessData détecte les collections métier", () => {
     expect(hasLocalBusinessData(emptyData)).toBe(false);
     expect(emptyData.settings.paymentDays).toBe(30);
+    expect(emptyData.settings.invoiceStyle).toBe("a");
     expect(
       hasLocalBusinessData({
         ...emptyData,

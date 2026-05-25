@@ -1,0 +1,682 @@
+/* AC Creation — invoice preview styles (Style A — Minimal pro) */
+
+.ac-doc-pdf-root .ac-invoice-v2 {
+  box-shadow: none;
+  height: auto;
+  min-height: 297mm;
+}
+
+.ac-invoice-modal-wrap {
+  background: rgba(15, 23, 42, 0.7);
+  overflow: auto;
+}
+
+.ac-invoice-modal {
+  max-width: 1000px !important;
+  background: #f8fafc !important;
+}
+
+.ac-invoice-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+/* ── Base (shared) ── */
+.ac-invoice-v2 {
+  width: 210mm;
+  margin: 0 auto;
+  padding: 7mm;
+  background: #fff;
+  color: #111827;
+  box-sizing: border-box;
+  font-family: Inter, Arial, sans-serif;
+  font-size: 10.5px;
+  line-height: 1.35;
+  box-shadow: 0 20px 70px rgba(15, 23, 42, 0.22);
+  display: flex;
+  flex-direction: column;
+  min-height: 297mm;
+}
+
+.ac-invoice-top {
+  flex: 0 0 auto;
+}
+
+.ac-invoice-bottom {
+  margin-top: auto;
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.ac-invoice-head {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 4mm;
+  align-items: stretch;
+  margin-bottom: 4mm;
+}
+
+.ac-company-box,
+.ac-title-box,
+.ac-info-card,
+.ac-payment-card,
+.ac-totals-card,
+.ac-mentions,
+.ac-thanks {
+  border: 1px solid #f5d0e5;
+  border-radius: 9px;
+  overflow: hidden;
+}
+
+.ac-company-box {
+  padding: 3mm 3.5mm;
+  background: linear-gradient(135deg, #fff1f7, #fdf2ff);
+}
+
+.ac-company-inner {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 3mm;
+}
+
+.ac-company-logo {
+  flex-shrink: 0;
+}
+
+.ac-company-logo img {
+  width: 14mm;
+  max-height: 14mm;
+  object-fit: contain;
+  display: block;
+}
+
+.ac-company-text {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
+.ac-company-box h1 {
+  margin: 0 0 1.5mm;
+  font-size: 13px;
+  line-height: 1.15;
+  color: #111827;
+}
+
+.ac-company-box p {
+  margin: 0.8mm 0;
+  color: #334155;
+  font-size: 9.5px;
+  line-height: 1.3;
+}
+
+.ac-title-box {
+  padding: 3mm 3.5mm;
+  color: #fff;
+  background: linear-gradient(135deg, #f472b6, #ec4899, #db2777);
+  box-shadow: 0 8px 20px rgba(236, 72, 153, 0.18);
+}
+
+.ac-title-box h2 {
+  margin: 0 0 3mm;
+  color: #fff;
+  text-align: right;
+  font-size: 18px;
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
+
+.ac-title-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 1.5mm 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.ac-title-line span {
+  opacity: 0.85;
+  font-size: 8.5px;
+  text-transform: uppercase;
+}
+
+.ac-title-line strong {
+  color: #fff;
+  font-size: 10.5px;
+}
+
+.ac-info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4mm;
+  margin-bottom: 4mm;
+}
+
+.ac-info-card {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 12px;
+  padding: 4mm;
+  background: #f8fafc;
+  min-height: 24mm;
+}
+
+.ac-icon {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  color: #fff;
+  background: linear-gradient(135deg, #f472b6, #ec4899);
+  font-weight: 900;
+}
+
+.ac-icon svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.ac-info-card h3 {
+  margin: 0 0 3mm;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: #111827;
+}
+
+.ac-info-card strong {
+  display: block;
+  margin-bottom: 2mm;
+}
+
+.ac-info-card p {
+  margin: 1.2mm 0;
+  color: #475569;
+}
+
+.ac-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid #f5d0e5;
+  margin-bottom: 4mm;
+}
+
+.ac-table th {
+  padding: 2.5mm 2mm;
+  background: linear-gradient(135deg, #f472b6, #ec4899, #db2777);
+  color: #fff;
+  text-align: left;
+  font-size: 9.5px;
+  text-transform: uppercase;
+}
+
+.ac-table td {
+  padding: 2.5mm 2mm;
+  border-bottom: 1px solid #fce7f3;
+  background: #fff;
+  font-size: 10px;
+}
+
+.ac-table tbody tr:nth-child(even) td {
+  background: #fdf4ff;
+}
+
+.ac-table th:first-child,
+.ac-table td:first-child {
+  width: 16mm;
+  max-width: 16mm;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 9px;
+}
+
+.ac-table th:nth-child(2),
+.ac-table td:nth-child(2) {
+  width: auto;
+}
+
+.ac-table th:nth-child(n + 3),
+.ac-table td:nth-child(n + 3) {
+  text-align: right;
+}
+
+.ac-table th:nth-child(3),
+.ac-table td:nth-child(3) {
+  width: 22mm;
+}
+
+.ac-table th:nth-child(4),
+.ac-table td:nth-child(4) {
+  width: 14mm;
+}
+
+.ac-table th:nth-child(5),
+.ac-table td:nth-child(5) {
+  width: 14mm;
+}
+
+.ac-table th:nth-child(6),
+.ac-table td:nth-child(6) {
+  width: 22mm;
+}
+
+.ac-after-table {
+  display: flex;
+  align-items: flex-start;
+  gap: 4mm;
+  margin-bottom: 0;
+}
+
+.ac-after-table-left {
+  flex: 1 1 60%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2mm;
+}
+
+.ac-after-table-left > .ac-payment-card,
+.ac-after-table-left > .ac-mentions {
+  margin-bottom: 0;
+}
+
+.ac-totals-wrap {
+  flex: 0 0 38%;
+  max-width: 72mm;
+  align-self: flex-start;
+}
+
+.ac-totals-wrap .ac-totals-card {
+  width: 100%;
+}
+
+.ac-payment-card {
+  padding: 3mm 3.5mm;
+  background: #f8fafc;
+  text-align: left;
+}
+
+.ac-payment-card h3 {
+  margin: 0 0 2mm;
+  font-size: 10px;
+  text-align: left;
+  color: #db2777;
+}
+
+.ac-payment-card p {
+  margin: 1.2mm 0;
+  text-align: left;
+}
+
+.ac-payment-card pre {
+  white-space: pre-wrap;
+  font-family: inherit;
+  font-size: 10px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 9px;
+  padding: 2.5mm;
+  margin: 2mm 0 0;
+  text-align: left;
+}
+
+.ac-totals-card {
+  background: white;
+}
+
+.ac-total-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 2.4mm 3.5mm;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.ac-total-line span {
+  color: #475569;
+}
+
+.ac-total-line strong {
+  color: #111827;
+}
+
+.ac-total-final {
+  color: #fff;
+  background: linear-gradient(135deg, #f472b6, #ec4899, #db2777);
+  border-bottom: 0;
+  font-size: 13px;
+  justify-content: center;
+  gap: 6mm;
+  text-align: center;
+}
+
+.ac-total-final span,
+.ac-total-final strong {
+  color: #fff !important;
+}
+
+.ac-mentions {
+  padding: 2.5mm 3mm;
+  background: #fff1f7;
+  border-color: #f5d0e5;
+}
+
+.ac-mentions strong {
+  color: #db2777;
+}
+
+.ac-mentions p {
+  margin: 2mm 0 0;
+  color: #475569;
+  font-size: 10px;
+}
+
+.ac-thanks {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 2mm;
+  display: grid;
+  grid-template-columns: 34px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 2.5mm 3mm;
+  background: linear-gradient(135deg, #fff1f7, #fdf2ff);
+}
+
+.ac-thanks strong {
+  display: block;
+}
+
+.ac-thanks p {
+  margin: 1mm 0 0;
+  color: #64748b;
+}
+
+.ac-signature {
+  font-size: 22px;
+  font-weight: 900;
+  color: #111827;
+  font-family: "Segoe Script", "Brush Script MT", cursive;
+}
+
+.ac-company-box,
+.ac-title-box,
+.ac-info-card,
+.ac-table,
+.ac-after-table,
+.ac-totals-wrap,
+.ac-mentions,
+.ac-thanks,
+.ac-footer {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.ac-footer {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 2mm;
+  border-top: 1px solid #e5e7eb;
+  padding-top: 2mm;
+  text-align: center;
+  font-size: 9.5px;
+  color: #64748b;
+}
+
+.ac-footer strong {
+  display: block;
+  color: #111827;
+  margin-bottom: 1mm;
+}
+
+.ac-line-production {
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 9px;
+}
+
+/* ── Style A — Minimal pro ── */
+.ac-invoice-style-a {
+  font-size: 11px;
+}
+
+.ac-invoice-style-a .ac-company-box,
+.ac-invoice-style-a .ac-title-box,
+.ac-invoice-style-a .ac-info-card,
+.ac-invoice-style-a .ac-payment-card,
+.ac-invoice-style-a .ac-totals-card,
+.ac-invoice-style-a .ac-mentions,
+.ac-invoice-style-a .ac-thanks,
+.ac-invoice-style-a .ac-table {
+  border-radius: 2px;
+  box-shadow: none;
+}
+
+.ac-invoice-style-a .ac-company-box {
+  background: #fff;
+  border-left: 3px solid #ec4899;
+}
+
+.ac-invoice-style-a .ac-company-logo img {
+  width: 20mm;
+  max-height: 20mm;
+}
+
+.ac-invoice-style-a .ac-company-box h1 {
+  font-size: 15px;
+}
+
+.ac-invoice-style-a .ac-company-box p {
+  font-size: 10px;
+}
+
+.ac-invoice-style-a .ac-title-box {
+  background: #ec4899;
+  box-shadow: none;
+}
+
+.ac-invoice-style-a .ac-title-box h2 {
+  font-size: 16px;
+  text-align: left;
+}
+
+.ac-invoice-style-a .ac-info-card {
+  background: #fff;
+  grid-template-columns: 1fr;
+  gap: 0;
+  padding: 3mm;
+}
+
+.ac-invoice-style-a .ac-info-card .ac-icon {
+  display: none;
+}
+
+.ac-invoice-style-a .ac-info-card h3 {
+  color: #db2777;
+  border-bottom: 1px solid #fce7f3;
+  padding-bottom: 2mm;
+  margin-bottom: 2mm;
+}
+
+.ac-invoice-style-a .ac-table {
+  border-radius: 0;
+}
+
+.ac-invoice-style-a .ac-table th {
+  background: #ec4899;
+}
+
+.ac-invoice-style-a .ac-table tbody tr:nth-child(even) td {
+  background: #fff;
+}
+
+.ac-invoice-style-a .ac-total-final {
+  background: #ec4899;
+  border-radius: 0;
+}
+
+.ac-invoice-style-a .ac-thanks {
+  background: #fff;
+  grid-template-columns: 1fr;
+  text-align: center;
+}
+
+.ac-invoice-style-a .ac-thanks .ac-icon,
+.ac-invoice-style-a .ac-signature {
+  display: none;
+}
+
+.ac-invoice-style-a .ac-payment-card,
+.ac-invoice-style-a .ac-mentions {
+  background: #fff;
+  text-align: center;
+}
+
+.ac-invoice-style-a .ac-payment-card h3,
+.ac-invoice-style-a .ac-payment-card p,
+.ac-invoice-style-a .ac-payment-card pre {
+  text-align: center;
+}
+
+/* ── Print ── */
+@media print {
+  @page {
+    size: A4;
+    margin: 8mm;
+  }
+
+  html:has(.document-preview-overlay),
+  body:has(.document-preview-overlay),
+  #root:has(.document-preview-overlay),
+  .app:has(.document-preview-overlay),
+  .content:has(.document-preview-overlay),
+  section:has(.document-preview-overlay) {
+    width: auto !important;
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  body:has(.document-preview-overlay) .sidebar,
+  body:has(.document-preview-overlay) .content > section > *:not(.document-preview-overlay) {
+    display: none !important;
+  }
+
+  body:has(.document-preview-overlay) * {
+    visibility: hidden;
+  }
+
+  body:has(.document-preview-overlay) #document-preview,
+  body:has(.document-preview-overlay) #document-preview * {
+    visibility: visible !important;
+  }
+
+  .no-print,
+  .ac-invoice-actions,
+  .modal-actions {
+    display: none !important;
+  }
+
+  .document-preview-overlay,
+  .ac-invoice-modal-wrap,
+  .ac-invoice-modal,
+  .modal-content {
+    position: static !important;
+    inset: auto !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: none !important;
+    background: #ffffff !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  .document-preview-overlay .ac-invoice-modal,
+  .document-preview-overlay .modal-content {
+    max-width: none !important;
+    width: auto !important;
+  }
+
+  .document-preview-overlay .ac-invoice-v2,
+  #document-preview.ac-invoice-v2 {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    min-height: calc(297mm - 16mm) !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 5mm !important;
+    box-sizing: border-box !important;
+    box-shadow: none !important;
+    transform: none !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
+  .document-preview-overlay .ac-invoice-top {
+    flex: 0 0 auto !important;
+  }
+
+  .document-preview-overlay .ac-invoice-bottom {
+    margin-top: auto !important;
+    flex: 0 0 auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  .document-preview-overlay .ac-after-table {
+    gap: 2.5mm !important;
+    margin-bottom: 0 !important;
+  }
+
+  .document-preview-overlay .ac-after-table-left {
+    gap: 1.5mm !important;
+  }
+
+  .document-preview-overlay .ac-payment-card {
+    padding: 2.5mm 3mm !important;
+  }
+
+  .document-preview-overlay .ac-mentions {
+    padding: 2mm 2.5mm !important;
+  }
+
+  .document-preview-overlay .ac-thanks {
+    margin-top: 1.5mm !important;
+    padding: 2mm 2.5mm !important;
+  }
+
+  .document-preview-overlay .ac-footer {
+    margin-top: 1.5mm !important;
+    padding-top: 1.5mm !important;
+    margin-bottom: 0 !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .ac-invoice-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

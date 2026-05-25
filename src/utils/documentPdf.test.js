@@ -64,6 +64,9 @@ describe("documentPdf helpers", () => {
     expect(getDocumentFileName({ number: "DEV-2025-0002" }, "quote")).toBe(
       "devis-DEV-2025-0002.pdf"
     );
+    expect(getDocumentFileName({ number: "BL-2025-0001" }, "delivery")).toBe(
+      "bon-livraison-BL-2025-0001.pdf"
+    );
   });
 });
 
@@ -109,5 +112,68 @@ describe("buildDocumentPdf", () => {
     });
 
     expect(pdf.getNumberOfPages()).toBeGreaterThan(1);
+  });
+
+  it("produit un PDF bon de livraison", () => {
+    const pdf = buildDocumentPdf({
+      doc: {
+        number: "BL-2025-0001",
+        date: "23/05/2025",
+        clientId: "c1",
+        quoteNumber: "DEV-2025-0003",
+        status: "Livré",
+        lines: [{ sku: "TS-01", description: "T-shirt", quantity: 5 }],
+      },
+      type: "delivery",
+      data: sampleData,
+      logoDataUrl: null,
+    });
+
+    expect(pdf.getNumberOfPages()).toBeGreaterThanOrEqual(1);
+  });
+
+  it("produit un PDF avec le style A", () => {
+    const pdf = buildDocumentPdf({
+      doc: sampleInvoice,
+      type: "invoice",
+      data: sampleData,
+      logoDataUrl: null,
+    });
+    expect(pdf.getNumberOfPages()).toBeGreaterThanOrEqual(1);
+  });
+
+  it("garde une facture courte sur une page avec date d'émission", () => {
+    const pdf = buildDocumentPdf({
+      doc: {
+        ...sampleInvoice,
+        number: "N°61",
+        date: "30/04/2026",
+        status: "Payée",
+        dueDate: "30/05/2026",
+        subtotal: 17.09,
+        totalHT: 17.09,
+        taxAmount: 2.91,
+        totalTTC: 20,
+        paidAmount: 20,
+        remaining: 0,
+        lines: [
+          {
+            sku: "DIV-0019",
+            description: "Bouteille personalisé",
+            quantity: 1,
+            price: 17.09,
+            discount: 0,
+            totalHT: 17.09,
+          },
+        ],
+      },
+      type: "invoice",
+      data: sampleData,
+      logoDataUrl: null,
+    });
+
+    expect(pdf.getNumberOfPages()).toBe(1);
+    const pdfText = pdf.output("arraybuffer");
+    expect(pdfText.byteLength).toBeGreaterThan(1000);
   });
 });

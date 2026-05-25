@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { clientName, statusClass } from "../utils/documents";
+import { clientName, statusClass, createDeliveryNoteFromQuote, getDeliveryNoteForQuote, isQuoteDeliveryNoteEligible } from "../utils/documents";
 import {
   ATELIER_PIPELINE_STATUSES,
   advanceProductionStatus,
@@ -9,6 +9,8 @@ import {
   getAtelierStatusBoard,
   inferProcessType,
 } from "../utils/production";
+import { isQuoteDeliveryOverdue } from "../utils/quoteDelivery";
+import { summarizeQuoteProductionLines } from "../utils/quoteLines";
 import { pageToPath } from "../utils/routes";
 import { showToast } from "../utils/toast";
 
@@ -55,11 +57,17 @@ function AtelierCard({
   onAdvance,
   onStatusChange,
   onDelete,
+  onGenerateBl,
+  onPreviewBl,
   variant = "kanban",
 }) {
   const process = inferProcessType(quote);
   const nextLabel = advanceLabel(quote.status);
   const isList = variant === "list";
+  const blEligible = isQuoteDeliveryNoteEligible(quote);
+  const hasBl = Boolean(getDeliveryNoteForQuote(data, quote));
+  const productionLines = summarizeQuoteProductionLines(quote.lines);
+  const deliveryOverdue = isQuoteDeliveryOverdue(quote);
 
   return (
     <article
@@ -113,7 +121,31 @@ function AtelierCard({
           {PROCESS_ICONS[process.key] || "📋"} {process.label}
         </span>
         <span className="muted atelier-card__date">{quote.date || "—"}</span>
+        {quote.promisedDeliveryDate && (
+          <span
+            className={`atelier-card__delivery${deliveryOverdue ? " atelier-card__delivery--overdue" : ""}`}
+            title={
+              deliveryOverdue
+                ? "Date de livraison dépassée"
+                : "Date de livraison prévue"
+            }
+          >
+            Livraison : {quote.promisedDeliveryDate}
+            {deliveryOverdue ? " · en retard" : ""}
+          </span>
+        )}
       </div>
+
+      {productionLines.length > 0 && (
+        <ul className="atelier-card__lines">
+          {productionLines.slice(0, 3).map((line, index) => (
+            <li key={index}>{line}</li>
+          ))}
+          {productionLines.length > 3 && (
+            <li className="muted">+ {productionLines.length - 3} ligne(s)</li>
+          )}
+        </ul>
+      )}
 
       <div className={`atelier-card__actions${isList ? " atelier-card__actions--list" : ""}`}>
         {nextLabel ? (
@@ -143,6 +175,30 @@ function AtelierCard({
             </option>
           ))}
         </select>
+
+        {blEligible && (
+          <>
+            <button
+              type="button"
+              className="atelier-bl-btn"
+              data-testid={`atelier-bl-${quote.id}`}
+              onClick={() => onGenerateBl(quote)}
+              title="Générer le bon de livraison"
+            >
+              {hasBl ? "BL ↻" : "BL"}
+            </button>
+            {hasBl && (
+              <button
+                type="button"
+                className="atelier-bl-preview-btn"
+                onClick={() => onPreviewBl(quote)}
+                title="Voir le bon de livraison"
+              >
+                Voir BL
+              </button>
+            )}
+          </>
+        )}
       </div>
     </article>
   );
@@ -167,17 +223,21 @@ function AtelierListSection({ title, count, icon, children, testId }) {
   );
 }
 
+import DocumentPreview from "./DocumentPreview";
+
 export default function Atelier({ data, setData, logActivity }) {
   const navigate = useNavigate();
   const isCompact = useMediaQuery(MOBILE_ATELIER_QUERY);
   const [viewMode, setViewMode] = useState("status");
   const [layoutMode, setLayoutMode] = useState("list");
   const [dragOverStatus, setDragOverStatus] = useState("");
+  const [previewBl, setPreviewBl] = useState(null);
   const quotes = data.quotes || [];
   const statusBoard = getAtelierStatusBoard(quotes);
   const processBoard = getAtelierBoard(quotes);
   const board = viewMode === "status" ? statusBoard : processBoard;
   const showListLayout = isCompact && layoutMode === "list";
+  const overdueDeliveries = quotes.filter(isQuoteDeliveryOverdue);
 
   useEffect(() => {
     if (isCompact) {
@@ -234,6 +294,45 @@ export default function Atelier({ data, setData, logActivity }) {
     setData({ ...data, quotes: nextQuotes });
     logActivity?.("Suppression devis atelier", quote.number, quote.status);
     showToast(`${quote.number} supprimé de l'atelier`, "success");
+  }
+
+  function handleGenerateBl(quote) {
+    try {
+      const deliveryInfo = window.prompt(
+        "Informations de livraison (optionnel) :",
+        getDeliveryNoteForQuote(data, quote)?.deliveryInfo || ""
+      );
+      if (deliveryInfo === null) return;
+
+      const result = createDeliveryNoteFromQuote(data, quote, {
+        deliveryInfo: deliveryInfo.trim(),
+      });
+      setData(result);
+      logActivity?.(
+        result.created ? "Création bon de livraison" : "Mise à jour bon de livraison",
+        result.deliveryNote.number,
+        quote.number
+      );
+      showToast(
+        result.created
+          ? `Bon de livraison ${result.deliveryNote.number} créé.`
+          : `Bon de livraison ${result.deliveryNote.number} mis à jour.`,
+        "success"
+      );
+      setPreviewBl(result.deliveryNote);
+    } catch (error) {
+      console.error(error);
+      showToast(error.message || "Impossible de générer le bon de livraison.", "error");
+    }
+  }
+
+  function handlePreviewBl(quote) {
+    const note = getDeliveryNoteForQuote(data, quote);
+    if (!note) {
+      showToast("Aucun bon de livraison. Cliquez sur BL pour en créer un.", "info");
+      return;
+    }
+    setPreviewBl(note);
   }
 
   function handleDropOnStatus(event, status) {
@@ -310,6 +409,24 @@ export default function Atelier({ data, setData, logActivity }) {
         </div>
       </div>
 
+      {overdueDeliveries.length > 0 && (
+        <div className="card atelier-overdue-alert" data-testid="atelier-overdue-alert">
+          <strong>Livraisons en retard ({overdueDeliveries.length})</strong>
+          <ul>
+            {overdueDeliveries.slice(0, 6).map((quote) => (
+              <li key={quote.id}>
+                <button type="button" className="atelier-card__number" onClick={() => openQuote(quote)}>
+                  {quote.number}
+                </button>
+                <span>{clientName(data, quote.clientId)}</span>
+                <em>{quote.promisedDeliveryDate}</em>
+                <span className={statusClass(quote.status)}>{quote.status}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div className="atelier-stats">
         {ATELIER_PIPELINE_STATUSES.map((status) => (
           <div key={status} className="card stat atelier-stat">
@@ -350,6 +467,8 @@ export default function Atelier({ data, setData, logActivity }) {
                       onAdvance={handleAdvance}
                       onStatusChange={updateQuoteStatus}
                       onDelete={handleDelete}
+                      onGenerateBl={handleGenerateBl}
+                      onPreviewBl={handlePreviewBl}
                     />
                   ))}
                 </AtelierListSection>
@@ -372,6 +491,8 @@ export default function Atelier({ data, setData, logActivity }) {
                       onAdvance={handleAdvance}
                       onStatusChange={updateQuoteStatus}
                       onDelete={handleDelete}
+                      onGenerateBl={handleGenerateBl}
+                      onPreviewBl={handlePreviewBl}
                     />
                   ))}
                 </AtelierListSection>
@@ -415,6 +536,8 @@ export default function Atelier({ data, setData, logActivity }) {
                       onAdvance={handleAdvance}
                       onStatusChange={updateQuoteStatus}
                       onDelete={handleDelete}
+                      onGenerateBl={handleGenerateBl}
+                      onPreviewBl={handlePreviewBl}
                     />
                   ))}
                 </div>
@@ -447,6 +570,8 @@ export default function Atelier({ data, setData, logActivity }) {
                       onAdvance={handleAdvance}
                       onStatusChange={updateQuoteStatus}
                       onDelete={handleDelete}
+                      onGenerateBl={handleGenerateBl}
+                      onPreviewBl={handlePreviewBl}
                     />
                   ))}
                 </div>
@@ -454,6 +579,15 @@ export default function Atelier({ data, setData, logActivity }) {
             </div>
           ))}
         </div>
+      )}
+
+      {previewBl && (
+        <DocumentPreview
+          doc={previewBl}
+          type="delivery"
+          data={data}
+          onClose={() => setPreviewBl(null)}
+        />
       )}
     </section>
   );

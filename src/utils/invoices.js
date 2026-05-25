@@ -19,7 +19,14 @@ function startOfDay(date) {
 }
 
 export function isPaidInvoice(invoice) {
-  const status = String(invoice?.status || "").toLowerCase();
+  const status = String(invoice?.status || "").toLowerCase().trim();
+  if (
+    status === "non payée" ||
+    status === "non payee" ||
+    status.includes("partiellement")
+  ) {
+    return false;
+  }
   if (status.includes("payée") || status.includes("payee") || status.includes("payé") || status.includes("paye")) {
     return true;
   }
@@ -61,3 +68,67 @@ export function sortOverdueInvoices(invoices) {
     return Number(b.totalTTC || 0) - Number(a.totalTTC || 0);
   });
 }
+
+export function getInvoicePaidAmount(invoice) {
+  if (isPaidInvoice(invoice)) {
+    return Number(invoice?.totalTTC || 0);
+  }
+  const paid = Number(invoice?.paidAmount);
+  if (!Number.isNaN(paid) && paid >= 0) return paid;
+  return 0;
+}
+
+export function getInvoiceRemaining(invoice) {
+  if (isPaidInvoice(invoice)) return 0;
+  const remaining = Number(invoice?.remaining);
+  if (!Number.isNaN(remaining) && remaining >= 0) return remaining;
+  const total = Number(invoice?.totalTTC || 0);
+  return Math.max(0, total - getInvoicePaidAmount(invoice));
+}
+
+export function isPartiallyPaidInvoice(invoice) {
+  if (!invoice || isPaidInvoice(invoice) || isCancelledInvoice(invoice)) {
+    return false;
+  }
+  const paid = getInvoicePaidAmount(invoice);
+  const total = Number(invoice?.totalTTC || 0);
+  return paid > 0.01 && paid < total - 0.01;
+}
+
+export function deriveInvoiceStatus(invoice) {
+  if (isCancelledInvoice(invoice)) return "Annulée";
+  if (isPaidInvoice(invoice)) return "Payée";
+  if (isPartiallyPaidInvoice(invoice)) return "Partiellement payée";
+  if (isInvoiceOverdue(invoice)) return "En retard";
+  return invoice?.status || "Non payée";
+}
+
+export function applyPartialPayment(invoice, paymentAmount) {
+  const total = Number(invoice?.totalTTC || 0);
+  const currentPaid = getInvoicePaidAmount(invoice);
+  const amount = Math.max(0, Number(paymentAmount) || 0);
+  const nextPaid = Math.min(total, currentPaid + amount);
+  const remaining = Math.max(0, total - nextPaid);
+
+  const status =
+    remaining <= 0.01
+      ? "Payée"
+      : nextPaid > 0.01
+        ? "Partiellement payée"
+        : "Non payée";
+
+  return {
+    ...invoice,
+    paidAmount: nextPaid,
+    remaining,
+    status,
+  };
+}
+
+export function computeDepositAmounts(quoteTotalTTC, percent) {
+  const rate = Math.min(100, Math.max(0, Number(percent) || 0)) / 100;
+  const totalTTC = Math.round(Number(quoteTotalTTC || 0) * rate * 100) / 100;
+  return { percent: rate * 100, totalTTC };
+}
+
+export const DEPOSIT_PRESETS = [30, 50, 70];

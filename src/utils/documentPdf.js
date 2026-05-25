@@ -1,16 +1,56 @@
 import { jsPDF } from "jspdf";
 import { APP_LOGO_URL } from "./assets";
 import { clientName } from "./documents";
+import { formatLineDescriptionWithProduction } from "./quoteLines";
 
 const PAGE_WIDTH = 210;
 const PAGE_HEIGHT = 297;
-const MARGIN = 14;
+const MARGIN = 7;
+const GAP = 4;
 const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
-const FOOTER_RESERVE = 22;
+const FOOTER_RESERVE = 20;
 const BOX_PADDING = 3;
-const TEXT_LINE_HEIGHT = 4.2;
+const TEXT_LINE_HEIGHT = 4;
+
+const STYLE_A = {
+  logoSize: 20,
+  logoGap: 3,
+  cardRadius: 0,
+  rose: [236, 72, 153],
+  roseDark: [219, 39, 119],
+  roseLight: [244, 114, 182],
+  border: [245, 208, 229],
+  rowBorder: [252, 231, 243],
+  textPrimary: [17, 24, 39],
+  textSecondary: [51, 65, 85],
+  textMuted: [71, 85, 105],
+  white: [255, 255, 255],
+  companyNameSize: 11,
+  companyBodySize: 7.5,
+  titleSize: 12,
+  titleLabelSize: 6.5,
+  titleValueSize: 8,
+  infoTitleSize: 7.5,
+  infoBodySize: 8,
+  tableHeaderSize: 7,
+  tableBodySize: 7.5,
+  paymentTitleSize: 7.5,
+  paymentBodySize: 7.5,
+  mentionsBodySize: 7.5,
+  totalsLabelSize: 8,
+  totalsFinalSize: 10,
+  thanksSize: 8,
+  footerSize: 7,
+};
+
+function getPdfStyleConfig() {
+  return STYLE_A;
+}
 
 export function getDocumentFileName(doc, type) {
+  if (type === "delivery") {
+    return `bon-livraison-${String(doc.number || "document").replace(/[^\w.-]+/g, "_")}.pdf`;
+  }
   const isQuote = type === "quote";
   return `${isQuote ? "devis" : "facture"}-${String(doc.number || "document").replace(/[^\w.-]+/g, "_")}.pdf`;
 }
@@ -43,6 +83,11 @@ function normalizeLines(doc) {
   ];
 }
 
+function getLineDescriptionForPdf(line, isQuote) {
+  if (!isQuote) return line.description || "—";
+  return formatLineDescriptionWithProduction(line);
+}
+
 function getLineSku(line, products = []) {
   if (line.sku) return line.sku;
   const product = products.find((p) => String(p.id) === String(line.productId));
@@ -53,55 +98,24 @@ function wrapText(pdf, text, maxWidth) {
   return pdf.splitTextToSize(String(text || ""), maxWidth);
 }
 
-function drawCenteredLines(pdf, lines, centerX, startY, lineHeight = TEXT_LINE_HEIGHT) {
-  lines.forEach((line, index) => {
-    pdf.text(line, centerX, startY + index * lineHeight, { align: "center" });
-  });
+function headColumnWidths() {
+  const inner = CONTENT_WIDTH - GAP;
+  return {
+    company: inner * (1.15 / 2),
+    title: inner * (0.85 / 2),
+  };
 }
 
-function drawBorderedTextBox(
-  pdf,
-  {
-    x,
-    y,
-    width,
-    lines,
-    padding = BOX_PADDING,
-    lineHeight = TEXT_LINE_HEIGHT,
-    title = null,
-    titleFontSize = 8.5,
-    bodyFontSize = 8,
-    fillColor,
-    drawColor,
-    titleColor,
-    bodyColor,
+function drawFlatRect(pdf, x, y, width, height, { fill, stroke, lineWidth = 0.2 } = {}) {
+  if (fill) {
+    pdf.setFillColor(...fill);
   }
-) {
-  const titleBlockHeight = title ? lineHeight + 1.5 : 0;
-  const bodyHeight = lines.length * lineHeight;
-  const boxHeight = padding * 2 + titleBlockHeight + bodyHeight;
-  const centerX = x + width / 2;
-
-  pdf.setDrawColor(...drawColor);
-  pdf.setFillColor(...fillColor);
-  pdf.roundedRect(x, y, width, boxHeight, 2, 2, "FD");
-
-  let textY = y + padding + lineHeight * 0.75;
-
-  if (title) {
-    pdf.setFont("helvetica", "bold");
-    pdf.setFontSize(titleFontSize);
-    pdf.setTextColor(...titleColor);
-    pdf.text(title, centerX, textY, { align: "center" });
-    textY += titleBlockHeight;
+  if (stroke) {
+    pdf.setDrawColor(...stroke);
+    pdf.setLineWidth(lineWidth);
   }
-
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(bodyFontSize);
-  pdf.setTextColor(...bodyColor);
-  drawCenteredLines(pdf, lines, centerX, textY, lineHeight);
-
-  return y + boxHeight;
+  const mode = fill && stroke ? "FD" : fill ? "F" : "D";
+  pdf.rect(x, y, width, height, mode);
 }
 
 function ensurePageSpace(pdf, y, neededHeight) {
@@ -112,171 +126,470 @@ function ensurePageSpace(pdf, y, neededHeight) {
   return y;
 }
 
-function drawSectionTitle(pdf, title, y, width = CONTENT_WIDTH) {
-  pdf.setFillColor(244, 114, 182);
-  pdf.setTextColor(255, 255, 255);
-  pdf.roundedRect(MARGIN, y, width, 8, 2, 2, "F");
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(10);
-  pdf.text(title, MARGIN + 3, y + 5.5);
-  pdf.setTextColor(17, 24, 39);
-  return y + 12;
-}
+function drawCompanyBox(pdf, settings, logoUrl, x, y, width, style) {
+  const padding = BOX_PADDING;
+  const logoX = x + padding;
+  const textX = logoX + style.logoSize + style.logoGap;
+  const textWidth = width - padding * 2 - style.logoSize - style.logoGap;
 
-function drawKeyValue(pdf, label, value, x, y, width) {
+  const companyLines = [
+    settings.companyAddress,
+    settings.companyPhone,
+    settings.companyEmail,
+  ].filter(Boolean);
+
+  const lineHeight = 3.8;
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(style.companyNameSize);
+  const nameLines = wrapText(pdf, settings.companyName || "AC Creation", textWidth);
+  const textHeight =
+    nameLines.length * 4.2 +
+    1 +
+    companyLines.length * lineHeight +
+    lineHeight;
+  const boxHeight = Math.max(style.logoSize, textHeight) + padding * 2;
+
+  drawFlatRect(pdf, x, y, width, boxHeight, { fill: style.white, stroke: style.border });
+  pdf.setFillColor(...style.rose);
+  pdf.rect(x, y, 0.8, boxHeight, "F");
+
+  const logoY = y + padding;
+  try {
+    pdf.addImage(logoUrl, "PNG", logoX, logoY, style.logoSize, style.logoSize, undefined, "FAST");
+  } catch {
+    // Logo optional
+  }
+
+  let contentY = y + padding;
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(style.companyNameSize);
+  pdf.setTextColor(...style.textPrimary);
+  nameLines.forEach((line, index) => {
+    pdf.text(line, textX, contentY + index * 4.2);
+  });
+  contentY += nameLines.length * 4.2 + 1;
+
   pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(8);
-  pdf.setTextColor(100, 116, 139);
-  if (label) pdf.text(label, x, y);
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(9.5);
-  pdf.setTextColor(17, 24, 39);
-  const lines = wrapText(pdf, value, width);
-  pdf.text(lines, x, y + (label ? 4.5 : 0));
-  return y + (label ? 4.5 : 0) + lines.length * 4.2;
+  pdf.setFontSize(style.companyBodySize);
+  pdf.setTextColor(...style.textSecondary);
+  companyLines.forEach((line) => {
+    pdf.text(String(line), textX, contentY);
+    contentY += lineHeight;
+  });
+
+  pdf.text(`N° TVA : ${settings.vatNumber || "-"}`, textX, contentY);
+
+  return y + boxHeight;
 }
 
-function drawTotalsBlock(pdf, totals, x, y, width = 62) {
+const TITLE_LINE_BLOCK = 7.5;
+
+function drawTitleBox(pdf, documentTitle, doc, x, y, width, style, { isQuote, isDelivery } = {}) {
+  const padding = BOX_PADDING;
+  const titleLines = [
+    { label: `N° ${documentTitle}`, value: doc.number || "—" },
+    { label: "Date d'émission", value: doc.date || "—" },
+  ];
+  if (isQuote && doc.promisedDeliveryDate) {
+    titleLines.push({ label: "Livraison prévue", value: doc.promisedDeliveryDate });
+  }
+  if (isDelivery && doc.quoteNumber) {
+    titleLines.push({ label: "Devis", value: doc.quoteNumber });
+  }
+
+  const boxHeight = padding * 2 + 9 + titleLines.length * TITLE_LINE_BLOCK;
+
+  drawFlatRect(pdf, x, y, width, boxHeight, { fill: style.rose });
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(style.titleSize);
+  pdf.setTextColor(...style.white);
+  pdf.text(documentTitle, x + padding, y + padding + 5);
+
+  let lineY = y + padding + 9;
+  titleLines.forEach(({ label, value }) => {
+    pdf.setDrawColor(255, 255, 255);
+    pdf.setLineWidth(0.1);
+    pdf.line(x + padding, lineY, x + width - padding, lineY);
+    lineY += 2;
+
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(style.titleLabelSize);
+    pdf.setTextColor(255, 255, 255);
+    pdf.text(label.toUpperCase(), x + padding, lineY + 3);
+
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(style.titleValueSize);
+    pdf.text(String(value), x + width - padding, lineY + 3, { align: "right" });
+
+    lineY += TITLE_LINE_BLOCK;
+  });
+
+  return y + boxHeight;
+}
+
+function measureInfoCardHeight(pdf, title, entries, width, style) {
+  const innerWidth = width - BOX_PADDING * 2;
+  let height = BOX_PADDING * 2 + 6;
+  entries.forEach(({ label, value, bold }) => {
+    if (label) height += 4.5;
+    const lines = wrapText(pdf, bold ? value : value, innerWidth);
+    height += Math.max(4, lines.length * TEXT_LINE_HEIGHT);
+    if (bold && !label) height += 1;
+  });
+  return Math.max(height, 24);
+}
+
+function drawInfoCard(pdf, title, entries, x, y, width, height, style) {
+  const padding = BOX_PADDING;
+  const innerX = x + padding;
+  const innerWidth = width - padding * 2;
+
+  drawFlatRect(pdf, x, y, width, height, { fill: style.white, stroke: style.border });
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(style.infoTitleSize);
+  pdf.setTextColor(...style.roseDark);
+  pdf.text(title, innerX, y + padding + 4);
+
+  pdf.setDrawColor(...style.rowBorder);
+  pdf.setLineWidth(0.2);
+  pdf.line(innerX, y + padding + 6.5, innerX + innerWidth, y + padding + 6.5);
+
+  let cursor = y + padding + 11;
+  entries.forEach(({ label, value, bold }) => {
+    if (label) {
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(style.infoBodySize - 0.5);
+      pdf.setTextColor(...style.textMuted);
+      pdf.text(`${label} :`, innerX, cursor);
+      cursor += 4.5;
+    }
+
+    const color = bold ? style.textPrimary : style.textMuted;
+    pdf.setFont("helvetica", bold ? "bold" : "normal");
+    pdf.setFontSize(style.infoBodySize);
+    pdf.setTextColor(...color);
+    const lines = wrapText(pdf, value, innerWidth);
+    lines.forEach((line) => {
+      pdf.text(line, innerX, cursor);
+      cursor += TEXT_LINE_HEIGHT;
+    });
+    if (bold && !label) cursor += 1;
+  });
+}
+
+function drawInvoiceTable(pdf, lines, y, style, { isQuote, products, isDelivery }) {
+  const tableX = MARGIN;
+  const tableTop = y;
+  const headers = isDelivery
+    ? ["Réf.", "Désignation", "Quantité"]
+    : ["Réf.", "Désignation", "Prix unitaire HT", "Quantité", "Remise", "Montant total"];
+  const colWidths = isDelivery
+    ? [16, CONTENT_WIDTH - 16 - 22, 22]
+    : [16, CONTENT_WIDTH - 16 - 22 - 14 - 14 - 22, 22, 14, 14, 22];
+  const headerHeight = 7;
+
+  drawFlatRect(pdf, tableX, y, CONTENT_WIDTH, headerHeight, { fill: style.rose });
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(style.tableHeaderSize);
+  pdf.setTextColor(...style.white);
+
+  let headerX = tableX + 2;
+  headers.forEach((header, index) => {
+    const align = index >= (isDelivery ? 2 : 2) ? "right" : "left";
+    const cellX = align === "right" ? headerX + colWidths[index] - 2 : headerX;
+    pdf.text(header.toUpperCase(), cellX, y + 4.8, { align });
+    headerX += colWidths[index];
+  });
+
+  y += headerHeight;
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(style.tableBodySize);
+  pdf.setTextColor(...style.textPrimary);
+
+  lines.forEach((line, rowIndex) => {
+    const descriptionText = isDelivery ? line.description || "—" : getLineDescriptionForPdf(line, isQuote);
+    const descriptionLines = wrapText(pdf, descriptionText, colWidths[1] - 4);
+    const rowHeight = Math.max(7.5, descriptionLines.length * 3.8 + 3);
+
+    y = ensurePageSpace(pdf, y, rowHeight + 2);
+
+    if (rowIndex > 0) {
+      pdf.setDrawColor(...style.rowBorder);
+      pdf.line(tableX, y, tableX + CONTENT_WIDTH, y);
+    }
+
+    pdf.setFillColor(...style.white);
+    pdf.rect(tableX, y, CONTENT_WIDTH, rowHeight, "F");
+
+    let cellX = tableX + 2;
+    const sku = getLineSku(line, products);
+    pdf.text(String(sku), cellX, y + 5);
+    cellX += colWidths[0];
+
+    descriptionLines.forEach((textLine, lineIndex) => {
+      pdf.text(textLine, cellX, y + 4.5 + lineIndex * 3.8);
+    });
+    cellX += colWidths[1];
+
+    if (isDelivery) {
+      pdf.text(formatPdfQuantity(line.quantity), cellX + colWidths[2] - 2, y + 5, { align: "right" });
+    } else {
+      const cells = [
+        `${formatPdfMoney(line.price)} €`,
+        formatPdfQuantity(line.quantity),
+        `${line.discount || 0}%`,
+        `${formatPdfMoney(line.totalHT || line.subtotal)} €`,
+      ];
+      cells.forEach((cell, index) => {
+        pdf.text(cell, cellX + colWidths[index + 2] - 2, y + 5, { align: "right" });
+        cellX += colWidths[index + 2];
+      });
+    }
+
+    y += rowHeight;
+  });
+
+  pdf.setDrawColor(...style.border);
+  pdf.setLineWidth(0.2);
+  pdf.rect(tableX, tableTop, CONTENT_WIDTH, y - tableTop, "D");
+
+  return y + GAP;
+}
+
+function drawPaymentCard(pdf, settings, x, y, width, style) {
+  const padding = BOX_PADDING;
+  let cursor = y + padding;
+  let contentHeight = padding * 2 + 6;
+
+  if (settings.paymentTerms) {
+    const paymentLines = wrapText(pdf, settings.paymentTerms, width - padding * 2);
+    contentHeight += paymentLines.length * TEXT_LINE_HEIGHT + 2;
+  }
+  if (settings.bankInfo) {
+    const bankLines = wrapText(pdf, settings.bankInfo, width - padding * 2 - 4);
+    contentHeight += bankLines.length * TEXT_LINE_HEIGHT + 10;
+  }
+
+  drawFlatRect(pdf, x, y, width, contentHeight, { fill: style.white, stroke: style.border });
+
+  const centerX = x + width / 2;
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(style.paymentTitleSize);
+  pdf.setTextColor(...style.roseDark);
+  pdf.text("CONDITIONS DE PAIEMENT", centerX, cursor + 3, { align: "center" });
+  cursor += 7;
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(style.paymentBodySize);
+  pdf.setTextColor(...style.textSecondary);
+
+  if (settings.paymentTerms) {
+    const paymentText = `Échéance de paiement : ${settings.paymentTerms}`;
+    const paymentLines = wrapText(pdf, paymentText, width - padding * 2);
+    paymentLines.forEach((line, index) => {
+      pdf.text(line, centerX, cursor + 3 + index * TEXT_LINE_HEIGHT, { align: "center" });
+    });
+    cursor += paymentLines.length * TEXT_LINE_HEIGHT + 2;
+  }
+
+  if (settings.bankInfo) {
+    const bankBoxX = x + padding;
+    const bankBoxWidth = width - padding * 2;
+    const bankLines = wrapText(pdf, settings.bankInfo, bankBoxWidth - 4);
+    const bankBoxHeight = bankLines.length * TEXT_LINE_HEIGHT + 4;
+    drawFlatRect(pdf, bankBoxX, cursor, bankBoxWidth, bankBoxHeight, {
+      fill: style.white,
+      stroke: [229, 231, 235],
+    });
+    bankLines.forEach((line, index) => {
+      pdf.text(line, bankBoxX + bankBoxWidth / 2, cursor + 4 + index * TEXT_LINE_HEIGHT, {
+        align: "center",
+      });
+    });
+    cursor += bankBoxHeight + 2;
+  }
+
+  return y + contentHeight;
+}
+
+const DEFAULT_MENTIONS_BODY =
+  "Document généré électroniquement. Aucun escompte accordé sauf indication contraire. En cas de retard de paiement, des pénalités peuvent être appliquées selon les conditions convenues.";
+
+function measurePaymentCardHeight(pdf, settings, width) {
+  const padding = BOX_PADDING;
+  let contentHeight = padding * 2 + 6;
+
+  if (settings.paymentTerms) {
+    const paymentLines = wrapText(pdf, settings.paymentTerms, width - padding * 2);
+    contentHeight += paymentLines.length * TEXT_LINE_HEIGHT + 2;
+  }
+  if (settings.bankInfo) {
+    const bankLines = wrapText(pdf, settings.bankInfo, width - padding * 2 - 4);
+    contentHeight += bankLines.length * TEXT_LINE_HEIGHT + 10;
+  }
+
+  return contentHeight;
+}
+
+function measureMentionsCardHeight(pdf, width, body = DEFAULT_MENTIONS_BODY) {
+  const padding = BOX_PADDING;
+  const bodyLines = wrapText(pdf, body, width - padding * 2);
+  return padding * 2 + 5 + bodyLines.length * TEXT_LINE_HEIGHT + 2;
+}
+
+function measureTotalsCardHeight(totals) {
+  return (totals.length - 1) * 7 + 10;
+}
+
+function measureThanksBlockHeight() {
+  return BOX_PADDING * 2 + TEXT_LINE_HEIGHT * 2 + 1 + 2;
+}
+
+function measureDocumentFooterHeight(settings) {
+  let height = 3.5 + 4 + 3.5;
+  const contactParts = [
+    settings.companyAddress,
+    settings.companyPhone,
+    settings.companyEmail,
+  ].filter(Boolean);
+  if (contactParts.length) height += 3.5;
+  return height + 3.5 + 3.5;
+}
+
+function measureInvoiceBottomBlockHeight(pdf, settings, style, totals, leftColumnWidth) {
+  const paymentHeight = measurePaymentCardHeight(pdf, settings, leftColumnWidth);
+  const mentionsHeight = measureMentionsCardHeight(pdf, leftColumnWidth);
+  const leftColumnHeight = paymentHeight + 2 + mentionsHeight;
+  const totalsHeight = measureTotalsCardHeight(totals);
+  const afterTableHeight = Math.max(leftColumnHeight, totalsHeight);
+  return afterTableHeight + GAP + measureThanksBlockHeight() + measureDocumentFooterHeight(settings);
+}
+
+function layoutBottomAtPageFoot(pdf, contentStartY, blockHeight) {
+  const pageBottom = PAGE_HEIGHT - MARGIN;
+  const pageTop = MARGIN;
+
+  if (blockHeight > pageBottom - pageTop) {
+    pdf.addPage();
+    contentStartY = pageTop;
+  } else {
+    const availableHeight = pageBottom - contentStartY;
+    if (blockHeight > availableHeight) {
+      pdf.addPage();
+      contentStartY = pageTop;
+    }
+  }
+
+  const minStartY = contentStartY === pageTop ? pageTop : contentStartY + GAP;
+  const bottomAlignedStartY = pageBottom - blockHeight;
+  return Math.max(minStartY, bottomAlignedStartY);
+}
+
+function drawMentionsCard(pdf, x, y, width, style, body = DEFAULT_MENTIONS_BODY) {
+  const padding = BOX_PADDING;
+  const bodyLines = wrapText(pdf, body, width - padding * 2);
+  const boxHeight = measureMentionsCardHeight(pdf, width, body);
+
+  drawFlatRect(pdf, x, y, width, boxHeight, { fill: style.white, stroke: style.border });
+
+  const centerX = x + width / 2;
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(style.paymentTitleSize);
+  pdf.setTextColor(...style.roseDark);
+  pdf.text("Mentions", centerX, y + padding + 3.5, { align: "center" });
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(style.mentionsBodySize);
+  pdf.setTextColor(...style.textMuted);
+  bodyLines.forEach((line, index) => {
+    pdf.text(line, centerX, y + padding + 9 + index * TEXT_LINE_HEIGHT, { align: "center" });
+  });
+
+  return y + boxHeight;
+}
+
+function drawTotalsCard(pdf, totals, x, y, width, style) {
   let cursor = y;
+  const rowHeight = 7;
+  const finalHeight = 10;
+  const cardHeight = (totals.length - 1) * rowHeight + finalHeight;
+
+  drawFlatRect(pdf, x, cursor, width, cardHeight, { fill: style.white, stroke: style.border });
 
   totals.forEach(([label, value], index) => {
     const isFinal = index === totals.length - 1;
     if (isFinal) {
-      pdf.setFillColor(236, 72, 153);
-      pdf.roundedRect(x, cursor, width, 9, 2, 2, "F");
-      pdf.setTextColor(255, 255, 255);
+      pdf.setFillColor(...style.rose);
+      pdf.rect(x, cursor, width, finalHeight, "F");
       pdf.setFont("helvetica", "bold");
-      pdf.setFontSize(10);
-      pdf.text(label, x + 3, cursor + 6);
-      pdf.text(value, x + width - 3, cursor + 6, { align: "right" });
-      cursor += 10;
+      pdf.setFontSize(style.totalsFinalSize);
+      pdf.setTextColor(...style.white);
+      const labelWidth = pdf.getTextWidth(label);
+      const valueWidth = pdf.getTextWidth(value);
+      const gap = 6;
+      const totalTextWidth = labelWidth + gap + valueWidth;
+      const startX = x + (width - totalTextWidth) / 2;
+      pdf.text(label, startX, cursor + 6.5);
+      pdf.text(value, startX + labelWidth + gap, cursor + 6.5);
+      cursor += finalHeight;
       return;
     }
 
-    pdf.setTextColor(71, 85, 105);
     pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(8.5);
-    pdf.text(label, x + 3, cursor + 4);
+    pdf.setFontSize(style.totalsLabelSize);
+    pdf.setTextColor(...style.textMuted);
+    pdf.text(label, x + BOX_PADDING, cursor + 4.5);
     pdf.setFont("helvetica", "bold");
-    pdf.setTextColor(17, 24, 39);
-    pdf.text(value, x + width - 3, cursor + 4, { align: "right" });
+    pdf.setTextColor(...style.textPrimary);
+    pdf.text(value, x + width - BOX_PADDING, cursor + 4.5, { align: "right" });
+
     pdf.setDrawColor(241, 245, 249);
-    pdf.line(x, cursor + 6, x + width, cursor + 6);
-    cursor += 7;
+    pdf.line(x, cursor + rowHeight - 0.5, x + width, cursor + rowHeight - 0.5);
+    cursor += rowHeight;
   });
 
-  return cursor;
+  return y + cardHeight;
 }
 
-function drawPaymentAndMentions(pdf, settings, y, width) {
-  let cursor = y;
-  const columnCenterX = MARGIN + width / 2;
-  const innerBoxWidth = width - 4;
-  const innerBoxX = MARGIN + 2;
-  const innerTextWidth = innerBoxWidth - BOX_PADDING * 2;
-
-  if (settings.paymentTerms || settings.bankInfo) {
-    cursor = drawSectionTitle(pdf, "CONDITIONS DE PAIEMENT", cursor, width);
-    pdf.setFont("helvetica", "normal");
-    pdf.setFontSize(8.5);
-    pdf.setTextColor(51, 65, 85);
-
-    if (settings.paymentTerms) {
-      const paymentLines = wrapText(
-        pdf,
-        `Échéance de paiement : ${settings.paymentTerms}`,
-        width - BOX_PADDING * 2
-      );
-      paymentLines.forEach((line) => {
-        pdf.text(line, columnCenterX, cursor + TEXT_LINE_HEIGHT * 0.75, { align: "center" });
-        cursor += TEXT_LINE_HEIGHT;
-      });
-      cursor += 1;
-    }
-
-    if (settings.bankInfo) {
-      pdf.setFontSize(8.5);
-      const bankLines = wrapText(pdf, settings.bankInfo, innerTextWidth);
-      cursor =
-        drawBorderedTextBox(pdf, {
-          x: innerBoxX,
-          y: cursor,
-          width: innerBoxWidth,
-          lines: bankLines,
-          bodyFontSize: 8.5,
-          fillColor: [255, 255, 255],
-          drawColor: [229, 231, 235],
-          bodyColor: [51, 65, 85],
-        }) + 3;
-      pdf.setFont("helvetica", "normal");
-      pdf.setFontSize(8.5);
-      pdf.setTextColor(51, 65, 85);
-    }
-  }
-
-  const mentionsBody =
-    "Document généré électroniquement. Aucun escompte accordé sauf indication contraire. En cas de retard de paiement, des pénalités peuvent être appliquées selon les conditions convenues.";
-  pdf.setFontSize(8);
-  const mentionsLines = wrapText(pdf, mentionsBody, innerTextWidth);
-  cursor =
-    drawBorderedTextBox(pdf, {
-      x: innerBoxX,
-      y: cursor,
-      width: innerBoxWidth,
-      lines: mentionsLines,
-      title: "Mentions",
-      fillColor: [255, 247, 237],
-      drawColor: [254, 215, 170],
-      titleColor: [124, 45, 18],
-      bodyColor: [124, 45, 18],
-    }) + 4;
-
-  return cursor;
-}
-
-function drawThanksBlock(pdf, y) {
+function drawThanksBlock(pdf, y, style) {
   const padding = BOX_PADDING;
-  const lineGap = 1;
-  const line1Height = TEXT_LINE_HEIGHT;
-  const line2Height = TEXT_LINE_HEIGHT;
-  const blockHeight = padding * 2 + line1Height + lineGap + line2Height;
+  const boxHeight = padding * 2 + TEXT_LINE_HEIGHT * 2 + 1;
+
+  drawFlatRect(pdf, MARGIN, y, CONTENT_WIDTH, boxHeight, { fill: style.white, stroke: style.border });
+
   const centerX = MARGIN + CONTENT_WIDTH / 2;
-
-  pdf.setDrawColor(245, 208, 229);
-  pdf.setFillColor(255, 241, 247);
-  pdf.roundedRect(MARGIN, y, CONTENT_WIDTH, blockHeight, 2, 2, "FD");
-
-  const line1Y = y + padding + line1Height * 0.75;
   pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(9);
-  pdf.setTextColor(17, 24, 39);
-  pdf.text("Merci pour votre confiance.", centerX, line1Y, { align: "center" });
+  pdf.setFontSize(style.thanksSize);
+  pdf.setTextColor(...style.textPrimary);
+  pdf.text("Merci pour votre confiance.", centerX, y + padding + 3.5, { align: "center" });
 
   pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(8);
   pdf.setTextColor(100, 116, 139);
-  pdf.text("Pour toute question, n'hésitez pas à nous contacter.", centerX, line1Y + line1Height + lineGap, {
+  pdf.text("Pour toute question, n'hésitez pas à nous contacter.", centerX, y + padding + 3.5 + TEXT_LINE_HEIGHT + 1, {
     align: "center",
   });
 
-  return y + blockHeight + 4;
+  return y + boxHeight + 2;
 }
 
-function drawDocumentFooter(pdf, settings, y) {
+function drawDocumentFooter(pdf, settings, y, style) {
   pdf.setDrawColor(229, 231, 235);
   pdf.line(MARGIN, y, PAGE_WIDTH - MARGIN, y);
-  y += 4;
+  y += 3.5;
 
   pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(8.8);
-  pdf.setTextColor(17, 24, 39);
+  pdf.setFontSize(style.footerSize);
+  pdf.setTextColor(...style.textPrimary);
   pdf.text(`${settings.companyName || "AC Creation"} — Personnalisation`, PAGE_WIDTH / 2, y, {
     align: "center",
   });
-  y += 4.5;
+  y += 4;
 
   pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(8);
   pdf.setTextColor(100, 116, 139);
   const contactParts = [
     settings.companyAddress,
@@ -285,178 +598,188 @@ function drawDocumentFooter(pdf, settings, y) {
   ].filter(Boolean);
   if (contactParts.length) {
     pdf.text(contactParts.join(" — "), PAGE_WIDTH / 2, y, { align: "center" });
-    y += 4;
+    y += 3.5;
   }
-  if (settings.vatNumber) {
-    pdf.text(`N° TVA : ${settings.vatNumber}`, PAGE_WIDTH / 2, y, { align: "center" });
-    y += 4;
+  pdf.text(`N° TVA : ${settings.vatNumber || "-"}`, PAGE_WIDTH / 2, y, { align: "center" });
+
+  return y + 3.5;
+}
+
+function drawDocumentHeader(pdf, settings, logoUrl, documentTitle, doc, style, options = {}) {
+  const { company: companyWidth, title: titleWidth } = headColumnWidths();
+  const companyX = MARGIN;
+  const titleX = MARGIN + companyWidth + GAP;
+
+  const companyBottom = drawCompanyBox(pdf, settings, logoUrl, companyX, MARGIN, companyWidth, style);
+  const titleBottom = drawTitleBox(
+    pdf,
+    documentTitle,
+    doc,
+    titleX,
+    MARGIN,
+    titleWidth,
+    style,
+    options
+  );
+
+  return Math.max(companyBottom, titleBottom) + GAP;
+}
+
+function drawClientInfoGrid(pdf, doc, data, y, style, { isQuote, isDelivery }) {
+  const cardWidth = (CONTENT_WIDTH - GAP) / 2;
+  const leftX = MARGIN;
+  const rightX = MARGIN + cardWidth + GAP;
+  const client = (data.clients || []).find((c) => c.id === doc.clientId);
+
+  const leftEntries = [{ value: client?.name || clientName(data, doc.clientId), bold: true }];
+  [client?.company, client?.address, client?.email, client?.phone]
+    .filter(Boolean)
+    .forEach((value) => leftEntries.push({ value }));
+
+  const rightEntries = [];
+  if (isDelivery) {
+    if (doc.deliveryAddress) rightEntries.push({ label: "Adresse", value: doc.deliveryAddress });
+    if (doc.deliveryInfo) rightEntries.push({ label: "Infos", value: doc.deliveryInfo });
+    rightEntries.push({ label: "Statut", value: doc.status || "—" });
+  } else {
+    rightEntries.push({ value: doc.convertedFrom || doc.number || "—", bold: true });
+    rightEntries.push({ label: "Statut", value: doc.status || "—" });
+    if (!isQuote && doc.invoiceType === "acompte" && doc.depositPercent) {
+      rightEntries.push({ label: "Acompte", value: `${doc.depositPercent}%` });
+    }
+    if (!isQuote && doc.dueDate) {
+      rightEntries.push({ label: "Échéance", value: doc.dueDate });
+    }
+    if (isQuote && doc.promisedDeliveryDate) {
+      rightEntries.push({ label: "Livraison prévue", value: doc.promisedDeliveryDate });
+    }
   }
 
-  return y;
+  const leftHeight = measureInfoCardHeight(
+    pdf,
+    isDelivery ? "LIVRÉ À" : "FACTURÉ À",
+    leftEntries,
+    cardWidth,
+    style
+  );
+  const rightHeight = measureInfoCardHeight(
+    pdf,
+    isDelivery ? "LIVRAISON" : "RÉFÉRENCE",
+    rightEntries,
+    cardWidth,
+    style
+  );
+  const cardHeight = Math.max(leftHeight, rightHeight, 24);
+
+  drawInfoCard(pdf, isDelivery ? "LIVRÉ À" : "FACTURÉ À", leftEntries, leftX, y, cardWidth, cardHeight, style);
+  drawInfoCard(
+    pdf,
+    isDelivery ? "LIVRAISON" : "RÉFÉRENCE",
+    rightEntries,
+    rightX,
+    y,
+    cardWidth,
+    cardHeight,
+    style
+  );
+
+  return y + cardHeight + GAP;
+}
+
+export function buildDeliveryNotePdf({ doc, data, logoDataUrl = null }) {
+  const settings = data.settings || {};
+  const style = getPdfStyleConfig();
+  const lines = doc.lines?.length ? doc.lines : [];
+  const documentTitle = "BON DE LIVRAISON";
+  const logoUrl =
+    logoDataUrl ||
+    (settings.logoUrl && settings.logoUrl.trim() !== "" ? settings.logoUrl : APP_LOGO_URL);
+
+  const pdf = new jsPDF("p", "mm", "a4");
+  let y = drawDocumentHeader(pdf, settings, logoUrl, documentTitle, doc, style, { isDelivery: true });
+  y = drawClientInfoGrid(pdf, doc, data, y, style, { isDelivery: true });
+  y = drawInvoiceTable(pdf, lines, y, style, { isDelivery: true, products: data.products });
+
+  const deliveryMentionsBody =
+    "Le client reconnaît avoir reçu les articles ci-dessus en bon état. Date et signature du client : _______________________________";
+  const mentionHeight = measureMentionsCardHeight(pdf, CONTENT_WIDTH, deliveryMentionsBody);
+  const notesHeight = doc.notes
+    ? wrapText(pdf, doc.notes, CONTENT_WIDTH - 8).length * TEXT_LINE_HEIGHT + 10
+    : 0;
+  const bottomBlockHeight =
+    mentionHeight +
+    GAP +
+    notesHeight +
+    measureThanksBlockHeight() +
+    measureDocumentFooterHeight(settings);
+  y = layoutBottomAtPageFoot(pdf, y, bottomBlockHeight);
+
+  const mentionLines = wrapText(pdf, deliveryMentionsBody, CONTENT_WIDTH - BOX_PADDING * 2);
+  drawFlatRect(pdf, MARGIN, y, CONTENT_WIDTH, mentionHeight, { fill: [255, 241, 247], stroke: style.border });
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(style.paymentTitleSize);
+  pdf.setTextColor(...style.roseDark);
+  const mentionCenterX = MARGIN + CONTENT_WIDTH / 2;
+  pdf.text("Réception", mentionCenterX, y + BOX_PADDING + 3.5, { align: "center" });
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(style.mentionsBodySize);
+  pdf.setTextColor(...style.textMuted);
+  mentionLines.forEach((line, index) => {
+    pdf.text(line, mentionCenterX, y + BOX_PADDING + 9 + index * TEXT_LINE_HEIGHT, { align: "center" });
+  });
+  y += mentionHeight + GAP;
+
+  if (doc.notes) {
+    pdf.setFontSize(style.mentionsBodySize);
+    pdf.setTextColor(...style.textMuted);
+    wrapText(pdf, doc.notes, CONTENT_WIDTH - 8).forEach((line, index) => {
+      pdf.text(line, MARGIN + 4, y + 4 + index * TEXT_LINE_HEIGHT);
+    });
+    y += notesHeight;
+  }
+
+  y = drawThanksBlock(pdf, y, style);
+  drawDocumentFooter(pdf, settings, y, style);
+
+  return pdf;
 }
 
 export function buildDocumentPdf({ doc, type, data, logoDataUrl = null }) {
+  if (type === "delivery") {
+    return buildDeliveryNotePdf({ doc, data, logoDataUrl });
+  }
+
   const isQuote = type === "quote";
   const settings = data.settings || {};
-  const client = (data.clients || []).find((c) => c.id === doc.clientId);
+  const style = getPdfStyleConfig();
   const lines = normalizeLines(doc);
-  const amountDue = doc.status === "Payée" ? 0 : doc.totalTTC || 0;
-  const documentTitle = isQuote ? "DEVIS" : "FACTURE";
-
-  const pdf = new jsPDF("p", "mm", "a4");
-  let y = MARGIN;
+  const paidAmount = Number(doc.paidAmount || 0);
+  const remaining = doc.remaining != null ? Number(doc.remaining) : null;
+  const amountDue =
+    doc.status === "Payée"
+      ? 0
+      : remaining != null && !Number.isNaN(remaining)
+        ? remaining
+        : doc.totalTTC || 0;
+  const documentTitle =
+    type === "invoice" && doc.invoiceType === "acompte"
+      ? "FACTURE D'ACOMPTE"
+      : isQuote
+        ? "DEVIS"
+        : "FACTURE";
 
   const logoUrl =
     logoDataUrl ||
     (settings.logoUrl && settings.logoUrl.trim() !== "" ? settings.logoUrl : APP_LOGO_URL);
 
-  try {
-    pdf.addImage(logoUrl, "PNG", MARGIN, y, 18, 18, undefined, "FAST");
-  } catch {
-    // Logo optional — continue without image
-  }
+  const pdf = new jsPDF("p", "mm", "a4");
+  let y = drawDocumentHeader(pdf, settings, logoUrl, documentTitle, doc, style, { isQuote });
+  y = drawClientInfoGrid(pdf, doc, data, y, style, { isQuote });
+  y = drawInvoiceTable(pdf, lines, y, style, { isQuote, products: data.products });
 
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(14);
-  pdf.setTextColor(17, 24, 39);
-  pdf.text(settings.companyName || "AC Creation", MARGIN + 22, y + 6);
-
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(8.5);
-  pdf.setTextColor(51, 65, 85);
-  const companyLines = [
-    settings.companyAddress,
-    settings.companyPhone,
-    settings.companyEmail,
-    settings.vatNumber ? `N° TVA : ${settings.vatNumber}` : null,
-  ].filter(Boolean);
-
-  let companyY = y + 11;
-  companyLines.forEach((line) => {
-    pdf.text(String(line), MARGIN + 22, companyY);
-    companyY += 4;
-  });
-
-  pdf.setFillColor(236, 72, 153);
-  pdf.roundedRect(PAGE_WIDTH - MARGIN - 58, y, 58, 28, 3, 3, "F");
-  pdf.setTextColor(255, 255, 255);
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(16);
-  pdf.text(documentTitle, PAGE_WIDTH - MARGIN - 31, y + 10, { align: "center" });
-  pdf.setFontSize(9);
-  pdf.text(`N° ${doc.number || "—"}`, PAGE_WIDTH - MARGIN - 31, y + 17, { align: "center" });
-  pdf.text(`Date : ${doc.date || "—"}`, PAGE_WIDTH - MARGIN - 31, y + 23, { align: "center" });
-
-  y = Math.max(companyY + 4, y + 32);
-
-  pdf.setDrawColor(245, 208, 229);
-  pdf.setFillColor(248, 250, 252);
-  pdf.roundedRect(MARGIN, y, CONTENT_WIDTH / 2 - 3, 34, 2, 2, "FD");
-  pdf.roundedRect(MARGIN + CONTENT_WIDTH / 2 + 3, y, CONTENT_WIDTH / 2 - 3, 34, 2, 2, "FD");
-
-  let leftBottom = drawKeyValue(
-    pdf,
-    "FACTURÉ À",
-    client?.name || clientName(data, doc.clientId),
-    MARGIN + 4,
-    y + 7,
-    CONTENT_WIDTH / 2 - 12
-  );
-  [client?.company, client?.address, client?.email, client?.phone]
-    .filter(Boolean)
-    .forEach((value) => {
-      leftBottom = drawKeyValue(pdf, "", value, MARGIN + 4, leftBottom + 1, CONTENT_WIDTH / 2 - 12);
-    });
-
-  drawKeyValue(
-    pdf,
-    "RÉFÉRENCE",
-    doc.convertedFrom || doc.number || "—",
-    MARGIN + CONTENT_WIDTH / 2 + 7,
-    y + 7,
-    CONTENT_WIDTH / 2 - 12
-  );
-  drawKeyValue(
-    pdf,
-    "Statut",
-    doc.status || "—",
-    MARGIN + CONTENT_WIDTH / 2 + 7,
-    y + 18,
-    CONTENT_WIDTH / 2 - 12
-  );
-  if (!isQuote && doc.dueDate) {
-    drawKeyValue(
-      pdf,
-      "Échéance",
-      doc.dueDate,
-      MARGIN + CONTENT_WIDTH / 2 + 7,
-      y + 27,
-      CONTENT_WIDTH / 2 - 12
-    );
-  }
-
-  y += 40;
-  y = drawSectionTitle(pdf, "DÉTAIL DES PRESTATIONS", y);
-
-  const colWidths = [18, 62, 24, 16, 16, 26];
-  const headers = ["Réf.", "Désignation", "P.U. HT", "Qté", "Rem.", "Total HT"];
-  const tableX = MARGIN;
-
-  pdf.setFillColor(249, 168, 212);
-  pdf.rect(tableX, y, CONTENT_WIDTH, 7, "F");
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(7.5);
-  pdf.setTextColor(17, 24, 39);
-
-  let x = tableX + 2;
-  headers.forEach((header, index) => {
-    pdf.text(header, x, y + 4.8);
-    x += colWidths[index];
-  });
-  y += 7;
-
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(8);
-
-  lines.forEach((line, rowIndex) => {
-    const descriptionLines = wrapText(pdf, line.description || "—", colWidths[1] - 2);
-    const rowHeight = Math.max(8, descriptionLines.length * 4 + 2);
-
-    y = ensurePageSpace(pdf, y, rowHeight + 4);
-
-    if (rowIndex % 2 === 0) {
-      pdf.setFillColor(253, 244, 255);
-      pdf.rect(tableX, y, CONTENT_WIDTH, rowHeight, "F");
-    }
-
-    const row = [
-      getLineSku(line, data.products),
-      line.description || "—",
-      `${formatPdfMoney(line.price)} €`,
-      formatPdfQuantity(line.quantity),
-      `${line.discount || 0}%`,
-      `${formatPdfMoney(line.totalHT || line.subtotal)} €`,
-    ];
-
-    x = tableX + 2;
-    row.forEach((cell, index) => {
-      if (index === 1) {
-        descriptionLines.forEach((textLine, lineIndex) => {
-          pdf.text(textLine, x, y + 5 + lineIndex * 4);
-        });
-      } else {
-        pdf.text(String(cell), x, y + 5.5);
-      }
-      x += colWidths[index];
-    });
-    y += rowHeight;
-  });
-
-  y += 4;
-
-  const totalsX = PAGE_WIDTH - MARGIN - 62;
-  const totalsWidth = 62;
-  const leftColumnWidth = CONTENT_WIDTH - totalsWidth - 6;
+  const totalsWidth = 72;
+  const leftColumnWidth = CONTENT_WIDTH - totalsWidth - GAP;
+  const totalsX = MARGIN + leftColumnWidth + GAP;
   const totals = [
     ["Sous-total HT", `${formatPdfMoney(doc.subtotal || doc.totalHT)} €`],
     ["Remise lignes", `${formatPdfMoney(doc.lineDiscountAmount || 0)} €`],
@@ -467,22 +790,29 @@ export function buildDocumentPdf({ doc, type, data, logoDataUrl = null }) {
     ["Total HT", `${formatPdfMoney(doc.totalHT)} €`],
     [`TVA à ${doc.taxRate || settings.taxRate || 0}%`, `${formatPdfMoney(doc.taxAmount)} €`],
     ["Total TTC", `${formatPdfMoney(doc.totalTTC)} €`],
-    ["À PAYER", `${formatPdfMoney(amountDue)} €`],
   ];
-  const totalsHeight = 7 * 6 + 10;
+  if (paidAmount > 0.01 && amountDue > 0.01) {
+    totals.push(["Déjà payé", `${formatPdfMoney(paidAmount)} €`]);
+  }
+  totals.push(["À PAYER", `${formatPdfMoney(amountDue)} €`]);
 
-  y = ensurePageSpace(pdf, y, totalsHeight + 40);
+  const bottomBlockHeight = measureInvoiceBottomBlockHeight(
+    pdf,
+    settings,
+    style,
+    totals,
+    leftColumnWidth
+  );
+  y = layoutBottomAtPageFoot(pdf, y, bottomBlockHeight);
 
   const blockStartY = y;
-  const leftEndY = drawPaymentAndMentions(pdf, settings, blockStartY, leftColumnWidth);
-  const rightEndY = drawTotalsBlock(pdf, totals, totalsX, blockStartY, totalsWidth);
-  y = Math.max(leftEndY, rightEndY) + 6;
+  const paymentEnd = drawPaymentCard(pdf, settings, MARGIN, blockStartY, leftColumnWidth, style);
+  const mentionsEnd = drawMentionsCard(pdf, MARGIN, paymentEnd + 2, leftColumnWidth, style);
+  const totalsEnd = drawTotalsCard(pdf, totals, totalsX, blockStartY, totalsWidth, style);
+  y = Math.max(mentionsEnd, totalsEnd) + GAP;
 
-  y = ensurePageSpace(pdf, y, 22);
-  y = drawThanksBlock(pdf, y);
-
-  y = ensurePageSpace(pdf, y, 18);
-  drawDocumentFooter(pdf, settings, y);
+  y = drawThanksBlock(pdf, y, style);
+  drawDocumentFooter(pdf, settings, y, style);
 
   return pdf;
 }

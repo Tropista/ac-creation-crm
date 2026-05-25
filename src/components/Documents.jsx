@@ -10,6 +10,10 @@ import {
   nextDocumentNumber,
   convertQuoteToInvoiceData,
   isQuoteConvertible,
+  createDeliveryNoteFromQuote,
+  getDeliveryNoteForQuote,
+  createDepositInvoiceFromQuote,
+  enrichInvoicePaymentFields,
   uid,
   today,
 } from "../utils/documents";
@@ -17,10 +21,14 @@ import { applyStockByLines, syncDocumentStock } from "../utils/stock";
 import {
   INVOICES_FILTER_KEY,
   isInvoiceOverdue,
+  applyPartialPayment,
+  getInvoiceRemaining,
+  DEPOSIT_PRESETS,
 } from "../utils/invoices";
 import { computeDueDate, openInvoiceReminderMailto } from "../utils/invoiceReminders";
 import { consumeQuoteDraft } from "../utils/quoteDraft";
 import { PRODUCTION_STATUSES } from "../utils/production";
+import { fromDateInputValue, toDateInputValue } from "../utils/quoteDelivery";
 import { exportInvoicesCsv } from "../utils/exportCsv";
 import { showToast } from "../utils/toast";
 
@@ -32,9 +40,21 @@ function Documents({ type, data, setData, currentRole = 'Admin', logActivity }) 
   const prefix = isQuote ? "DEV" : "FAC";
   const defaultStatus = isQuote ? "Brouillon" : "Non payée";
 
-  const emptyLine = { productId: "", sku: "", description: "", quantity: 1, price: 0, discount: 0 };
+  const emptyLine = {
+    productId: "",
+    sku: "",
+    description: "",
+    quantity: 1,
+    price: 0,
+    discount: 0,
+    taille: "",
+    couleur: "",
+    emplacementMarquage: "",
+    technique: "",
+  };
   const [editingId, setEditingId] = useState(null);
   const [previewDoc, setPreviewDoc] = useState(null);
+  const [previewType, setPreviewType] = useState(type);
   const [currentPage, setCurrentPage] = useState(1);
   const [sortBy, setSortBy] = useState("dateDesc");
   const [overdueOnly, setOverdueOnly] = useState(false);
@@ -46,8 +66,10 @@ const [form, setForm] = useState({
   clientId: prefilledClientId,
   status: defaultStatus,
   globalDiscount: 0,
-  lines: [{ ...emptyLine }]
+  promisedDeliveryDateInput: "",
+  lines: [{ ...emptyLine }],
 });
+  const [attachments, setAttachments] = useState([]);
 
   const itemsPerPage = 25;
   const documents = data[listKey] || [];
@@ -62,10 +84,12 @@ const [form, setForm] = useState({
     }
 
     setEditingId(null);
+    setAttachments([]);
     setForm({
       clientId: draft.clientId || prefilledClientId || "",
       status: "Brouillon",
       globalDiscount: 0,
+      promisedDeliveryDateInput: "",
       lines: draft.lines.map((line) => ({
         productId: line.productId || "",
         sku: line.sku || "",
@@ -75,6 +99,10 @@ const [form, setForm] = useState({
         quantity: Number(line.quantity || 1),
         price: Number(line.price || 0),
         discount: Number(line.discount || 0),
+        taille: line.taille || "",
+        couleur: line.couleur || "",
+        emplacementMarquage: line.emplacementMarquage || "",
+        technique: line.technique || "",
       })),
     });
     showToast(
@@ -223,7 +251,14 @@ const [form, setForm] = useState({
 
   function reset() {
     setEditingId(null);
-    setForm({ clientId: "", status: defaultStatus, globalDiscount: 0, lines: [{ ...emptyLine }] });
+    setAttachments([]);
+    setForm({
+      clientId: "",
+      status: defaultStatus,
+      globalDiscount: 0,
+      promisedDeliveryDateInput: "",
+      lines: [{ ...emptyLine }],
+    });
   }
 
   function submit(e) {
@@ -244,6 +279,12 @@ const [form, setForm] = useState({
           quantity: Number(line.quantity || 0),
           price: Number(line.price || 0),
           discount: Number(line.discount || 0),
+          ...(isQuote && {
+            taille: String(line.taille || "").trim(),
+            couleur: String(line.couleur || "").trim(),
+            emplacementMarquage: String(line.emplacementMarquage || "").trim(),
+            technique: String(line.technique || "").trim(),
+          }),
           ...lineTotal(line),
         };
       })
@@ -252,10 +293,19 @@ const [form, setForm] = useState({
     if (cleanLines.length === 0) return showToast("Ajoute au moins un produit ou une prestation.", "error");
 
     const firstDescription = cleanLines.length === 1 ? cleanLines[0].description : `${cleanLines.length} lignes`;
+    const promisedDeliveryDate = isQuote
+      ? fromDateInputValue(form.promisedDeliveryDateInput)
+      : "";
+    const quoteExtras = isQuote
+      ? {
+          promisedDeliveryDate,
+          attachments: attachments || [],
+        }
+      : {};
 
     if (editingId) {
       const existingDoc = documents.find((d) => d.id === editingId);
-      const updatedDoc = {
+      const updatedDoc = enrichInvoicePaymentFields({
         ...existingDoc,
         clientId: form.clientId,
         status: form.status,
@@ -264,8 +314,9 @@ const [form, setForm] = useState({
         lines: cleanLines,
         taxRate: data.settings.taxRate,
         stockAdjusted: !isQuote && form.status !== "Annulée",
+        ...quoteExtras,
         ...totals,
-      };
+      });
 
       const nextProducts = isQuote
         ? data.products || []
@@ -294,8 +345,11 @@ const [form, setForm] = useState({
         description: firstDescription,
         lines: cleanLines,
         stockAdjusted: !isQuote && form.status !== "Annulée",
+        ...quoteExtras,
         ...(!isQuote && {
           dueDate: computeDueDate(today(), data.settings.paymentDays),
+          paidAmount: 0,
+          remaining: totals.totalTTC,
         }),
         ...totals,
       };
@@ -331,6 +385,10 @@ reset();
           quantity: Number(line.quantity || 1),
           price: Number(line.price || 0),
           discount: Number(line.discount || 0),
+          taille: line.taille || "",
+          couleur: line.couleur || "",
+          emplacementMarquage: line.emplacementMarquage || "",
+          technique: line.technique || "",
         }))
       : [
           {
@@ -343,10 +401,12 @@ reset();
         ];
 
     setEditingId(doc.id);
+    setAttachments(doc.attachments || []);
     setForm({
       clientId: doc.clientId || "",
       status: doc.status || defaultStatus,
       globalDiscount: Number(doc.globalDiscount || 0),
+      promisedDeliveryDateInput: toDateInputValue(doc.promisedDeliveryDate),
       lines,
     });
   }
@@ -370,7 +430,8 @@ useEffect(() => {
 
   if (!doc) return;
 
-   setPreviewDoc(doc);
+  setPreviewDoc(doc);
+  setPreviewType(openDocumentType === "quote" ? "quote" : "invoice");
 
   localStorage.removeItem("crm_open_document_id");
   localStorage.removeItem("crm_open_document_type");
@@ -437,6 +498,103 @@ useEffect(() => {
     setData({ ...data, invoices: nextInvoices });
     logActivity?.("Relance facture", invoice.number, client?.name || "");
     showToast(`Relance préparée pour ${invoice.number}.`, "success");
+  }
+
+  function openPreview(doc, docType = isQuote ? "quote" : "invoice") {
+    setPreviewDoc(doc);
+    setPreviewType(docType);
+  }
+
+  function generateDeliveryNote(quote) {
+    try {
+      const deliveryInfo = window.prompt(
+        "Informations de livraison (optionnel) :",
+        getDeliveryNoteForQuote(data, quote)?.deliveryInfo || ""
+      );
+      if (deliveryInfo === null) return;
+
+      const result = createDeliveryNoteFromQuote(data, quote, {
+        deliveryInfo: deliveryInfo.trim(),
+      });
+      setData(result);
+      logActivity?.(
+        result.created ? "Création bon de livraison" : "Mise à jour bon de livraison",
+        result.deliveryNote.number,
+        quote.number
+      );
+      showToast(
+        result.created
+          ? `Bon de livraison ${result.deliveryNote.number} créé.`
+          : `Bon de livraison ${result.deliveryNote.number} mis à jour.`,
+        "success"
+      );
+      openPreview(result.deliveryNote, "delivery");
+    } catch (error) {
+      console.error(error);
+      showToast(error.message || "Impossible de générer le bon de livraison.", "error");
+    }
+  }
+
+  function previewDeliveryNote(quote) {
+    const note = getDeliveryNoteForQuote(data, quote);
+    if (!note) {
+      showToast("Aucun bon de livraison pour ce devis. Générez-le d'abord.", "info");
+      return;
+    }
+    openPreview(note, "delivery");
+  }
+
+  function createDepositInvoice(quote, percent) {
+    try {
+      const result = createDepositInvoiceFromQuote(data, quote, percent);
+      setData(result);
+      logActivity?.(
+        "Création facture d'acompte",
+        result.invoice.number,
+        `${percent}% — ${quote.number}`
+      );
+      showToast(
+        `Facture d'acompte ${result.invoice.number} (${percent}%) créée.`,
+        "success"
+      );
+    } catch (error) {
+      console.error(error);
+      showToast(error.message || "Impossible de créer la facture d'acompte.", "error");
+    }
+  }
+
+  function recordPartialPayment(invoice) {
+    const remaining = getInvoiceRemaining(invoice);
+    if (remaining <= 0.01) {
+      showToast("Cette facture est déjà réglée.", "info");
+      return;
+    }
+
+    const raw = window.prompt(
+      `Montant du paiement reçu (reste dû : ${money(remaining)})`,
+      String(remaining.toFixed(2)).replace(".", ",")
+    );
+    if (raw === null) return;
+
+    const normalized = String(raw).replace(",", ".").replace(/[^\d.]/g, "");
+    const amount = Number(normalized);
+    if (!amount || amount <= 0) {
+      showToast("Montant invalide.", "error");
+      return;
+    }
+
+    const updated = applyPartialPayment(invoice, amount);
+    const nextInvoices = documents.map((doc) =>
+      String(doc.id) === String(invoice.id) ? updated : doc
+    );
+    setData({ ...data, invoices: nextInvoices });
+    logActivity?.("Paiement partiel facture", invoice.number, money(amount));
+    showToast(
+      updated.status === "Payée"
+        ? `${invoice.number} entièrement payée.`
+        : `Paiement enregistré — reste ${money(getInvoiceRemaining(updated))}.`,
+      "success"
+    );
   }
 
   function convertQuoteToInvoice(doc) {
@@ -549,6 +707,8 @@ useEffect(() => {
         onAddLine={addLine}
         onRemoveLine={removeLine}
         lineTotal={lineTotal}
+        attachments={isQuote ? attachments : undefined}
+        onAttachmentsChange={isQuote ? setAttachments : undefined}
       />
 
       <DocumentList
@@ -571,20 +731,28 @@ useEffect(() => {
           setCurrentPage(1);
         }}
         onPageChange={setCurrentPage}
-        onPreview={setPreviewDoc}
+        onPreview={openPreview}
         onEdit={edit}
         onRemove={remove}
         onUpdateStatus={updateStatus}
         onSendReminder={sendInvoiceReminder}
         onConvertQuote={convertQuoteToInvoice}
+        onGenerateDeliveryNote={generateDeliveryNote}
+        onPreviewDeliveryNote={previewDeliveryNote}
+        onCreateDeposit={createDepositInvoice}
+        onRecordPayment={recordPartialPayment}
+        depositPresets={DEPOSIT_PRESETS}
       />
 
       {previewDoc && (
         <DocumentPreview
           doc={previewDoc}
-          type={type}
+          type={previewType}
           data={data}
-          onClose={() => setPreviewDoc(null)}
+          onClose={() => {
+            setPreviewDoc(null);
+            setPreviewType(type);
+          }}
         />
       )}
     </section>

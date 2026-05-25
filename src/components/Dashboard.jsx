@@ -14,6 +14,7 @@ import {
 } from "../utils/invoices";
 import { openInvoiceReminderMailto } from "../utils/invoiceReminders";
 import { getProductionQueue } from "../utils/production";
+import { getOverdueQuotes } from "../utils/quoteDelivery";
 import { money } from "../utils/money";
 import { pageToPath } from "../utils/routes";
 import { getPermissions } from "../utils/permissions";
@@ -102,6 +103,7 @@ export default function Dashboard({
     .slice(0, 8);
 
   const productionQueue = getProductionQueue(quotes);
+  const overdueDeliveries = getOverdueQuotes(quotes);
 
   const totalInvoices = invoices.reduce(
     (sum, inv) => sum + Number(inv.totalTTC || 0),
@@ -222,6 +224,10 @@ export default function Dashboard({
     ...productionQueue.byProcess.map((g) => g.items.length),
     1
   );
+
+  function goToAtelier() {
+    navigate(pageToPath("atelier"));
+  }
 
   function goToOverdueInvoices() {
     localStorage.setItem(INVOICES_FILTER_KEY, "overdue");
@@ -667,6 +673,46 @@ export default function Dashboard({
                   )}
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {canManageQuotes && overdueDeliveries.length > 0 && (
+          <div className="card dashboard-action-card dashboard-action-card--danger">
+            <div className="dashboard-action-card__header">
+              <div>
+                <h3>Livraisons en retard</h3>
+                <p className="muted">
+                  {overdueDeliveries.length} commande(s) dont la date de livraison prévue est dépassée.
+                </p>
+              </div>
+              <button type="button" className="ghost" onClick={goToAtelier}>
+                Ouvrir l&apos;atelier →
+              </button>
+            </div>
+            <div className="table compact-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>N°</th>
+                    <th>Client</th>
+                    <th>Livraison prévue</th>
+                    <th>Statut</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {overdueDeliveries.slice(0, 6).map((quote) => (
+                    <tr key={quote.id}>
+                      <td>{quote.number}</td>
+                      <td>{clientName(data, quote.clientId)}</td>
+                      <td>{quote.promisedDeliveryDate}</td>
+                      <td>
+                        <span className={statusClass(quote.status)}>{quote.status}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         )}

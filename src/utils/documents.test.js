@@ -4,6 +4,10 @@ import {
   quoteAlreadyConverted,
   isQuoteConvertible,
   convertQuoteToInvoiceData,
+  isQuoteDeliveryNoteEligible,
+  createDeliveryNoteFromQuote,
+  getDeliveryNoteForQuote,
+  createDepositInvoiceFromQuote,
 } from "./documents.js";
 
 const baseData = () => ({
@@ -137,6 +141,8 @@ describe("convertQuoteToInvoiceData", () => {
     expect(invoice.lines).toEqual(acceptedQuote.lines);
     expect(invoice.clientId).toBe("c1");
     expect(invoice.totalTTC).toBe(120);
+    expect(invoice.paidAmount).toBe(0);
+    expect(invoice.remaining).toBe(120);
   });
 
   it("n'altère pas les produits sans ligne correspondante", () => {
@@ -157,5 +163,66 @@ describe("convertQuoteToInvoiceData", () => {
 
     expect(p3.stock).toBe(20);
     expect(p3.stockMovements).toBeUndefined();
+  });
+});
+
+describe("bons de livraison", () => {
+  const readyQuote = {
+    id: "q-bl",
+    number: "DEV-2025-0100",
+    status: "Prêt",
+    clientId: "c1",
+    lines: [
+      { description: "T-shirt personnalisé", quantity: 10, sku: "TS-01" },
+    ],
+  };
+
+  const base = () => ({
+    ...baseData(),
+    clients: [{ id: "c1", name: "Client", address: "1 rue Test" }],
+    deliveryNotes: [],
+  });
+
+  it("autorise la génération pour Prêt ou Livré uniquement", () => {
+    expect(isQuoteDeliveryNoteEligible({ status: "Prêt" })).toBe(true);
+    expect(isQuoteDeliveryNoteEligible({ status: "Livré" })).toBe(true);
+    expect(isQuoteDeliveryNoteEligible({ status: "Accepté" })).toBe(false);
+  });
+
+  it("crée un BL numéroté BL-YYYY-NNNN", () => {
+    const year = new Date().getFullYear();
+    const result = createDeliveryNoteFromQuote(base(), readyQuote);
+    expect(result.created).toBe(true);
+    expect(result.deliveryNote.number).toBe(`BL-${year}-0001`);
+    expect(result.deliveryNote.quoteNumber).toBe("DEV-2025-0100");
+    expect(result.deliveryNote.lines).toHaveLength(1);
+    expect(getDeliveryNoteForQuote(result, readyQuote)?.id).toBe(result.deliveryNote.id);
+  });
+});
+
+describe("factures d'acompte", () => {
+  const quote = {
+    id: "q-dep",
+    number: "DEV-2025-0200",
+    status: "Accepté",
+    clientId: "c1",
+    totalHT: 100,
+    taxAmount: 17,
+    totalTTC: 117,
+    taxRate: 17,
+    lines: [{ description: "Commande textile", quantity: 1, price: 100, totalHT: 100 }],
+  };
+
+  it("crée une facture d'acompte au pourcentage demandé", () => {
+    const data = { ...baseData(), settings: { taxRate: 17, paymentDays: 30 } };
+    const result = createDepositInvoiceFromQuote(data, quote, 30);
+    const invoice = result.invoice;
+
+    expect(invoice.invoiceType).toBe("acompte");
+    expect(invoice.depositPercent).toBe(30);
+    expect(invoice.totalTTC).toBeCloseTo(35.1, 2);
+    expect(invoice.remaining).toBeCloseTo(35.1, 2);
+    expect(invoice.stockAdjusted).toBe(false);
+    expect(invoice.convertedFrom).toBe("DEV-2025-0200");
   });
 });

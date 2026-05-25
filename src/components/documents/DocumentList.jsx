@@ -1,5 +1,5 @@
-import { clientName, isQuoteConvertible, quoteAlreadyConverted, statusClass } from "../../utils/documents";
-import { isInvoiceOverdue } from "../../utils/invoices";
+import { clientName, isQuoteConvertible, quoteAlreadyConverted, statusClass, isQuoteDeliveryNoteEligible, quoteHasDeliveryNote } from "../../utils/documents";
+import { isInvoiceOverdue, getInvoicePaidAmount, getInvoiceRemaining, isPartiallyPaidInvoice } from "../../utils/invoices";
 import { money } from "../../utils/money";
 import { QUOTE_STATUSES } from "../../utils/production";
 
@@ -23,6 +23,11 @@ export default function DocumentList({
   onUpdateStatus,
   onSendReminder,
   onConvertQuote,
+  onGenerateDeliveryNote,
+  onPreviewDeliveryNote,
+  onCreateDeposit,
+  onRecordPayment,
+  depositPresets = [30, 50, 70],
 }) {
   return (
     <div className="card documents-list-card">
@@ -91,6 +96,7 @@ export default function DocumentList({
                 <th>Client</th>
                 <th>Lignes</th>
                 <th>Total TTC</th>
+                {!isQuote && <th>Paiement</th>}
                 <th>Statut</th>
                 <th>Actions</th>
               </tr>
@@ -100,6 +106,14 @@ export default function DocumentList({
                 const overdue = !isQuote && isInvoiceOverdue(d);
                 const convertible = isQuote && isQuoteConvertible(data, d);
                 const converted = isQuote && quoteAlreadyConverted(data, d);
+                const blEligible = isQuote && isQuoteDeliveryNoteEligible(d);
+                const hasBl = isQuote && quoteHasDeliveryNote(data, d);
+                const paid = !isQuote ? getInvoicePaidAmount(d) : 0;
+                const remaining = !isQuote ? getInvoiceRemaining(d) : 0;
+                const partial = !isQuote && isPartiallyPaidInvoice(d);
+                const depositEligible =
+                  isQuote &&
+                  ["Accepté", "En production", "Prêt", "Livré"].includes(d.status);
 
                 return (
                   <tr
@@ -116,7 +130,24 @@ export default function DocumentList({
                     </td>
                     <td>
                       <strong>{money(d.totalTTC)}</strong>
+                      {!isQuote && d.invoiceType === "acompte" && (
+                        <span className="documents-deposit-tag">Acompte</span>
+                      )}
                     </td>
+                    {!isQuote && (
+                      <td className="documents-payment-cell">
+                        {d.status === "Payée" ? (
+                          <span className="documents-paid-full">Payé</span>
+                        ) : partial || paid > 0 ? (
+                          <>
+                            <span className="documents-paid-partial">{money(paid)}</span>
+                            <span className="muted documents-remaining">Reste {money(remaining)}</span>
+                          </>
+                        ) : (
+                          <span className="muted">—</span>
+                        )}
+                      </td>
+                    )}
                     <td>
                       <div className="documents-status-cell">
                         <span className={statusClass(d.status)}>{d.status}</span>
@@ -133,6 +164,7 @@ export default function DocumentList({
                           ) : (
                             <>
                               <option>Non payée</option>
+                              <option>Partiellement payée</option>
                               <option>Payée</option>
                               <option>En retard</option>
                               <option>Annulée</option>
@@ -165,6 +197,50 @@ export default function DocumentList({
                             Convertir
                           </button>
                         ))}
+                      {blEligible && (
+                        <>
+                          <button
+                            type="button"
+                            className="compact documents-bl-btn"
+                            onClick={() => onGenerateDeliveryNote(d)}
+                            title="Générer ou mettre à jour le bon de livraison"
+                          >
+                            {hasBl ? "BL ↻" : "BL"}
+                          </button>
+                          {hasBl && (
+                            <button
+                              type="button"
+                              className="compact"
+                              onClick={() => onPreviewDeliveryNote(d)}
+                              title="Voir le bon de livraison"
+                            >
+                              Voir BL
+                            </button>
+                          )}
+                        </>
+                      )}
+                      {depositEligible &&
+                        depositPresets.map((percent) => (
+                          <button
+                            key={percent}
+                            type="button"
+                            className="compact documents-deposit-btn"
+                            onClick={() => onCreateDeposit(d, percent)}
+                            title={`Créer une facture d'acompte de ${percent}%`}
+                          >
+                            {percent}%
+                          </button>
+                        ))}
+                      {!isQuote && d.status !== "Payée" && d.status !== "Annulée" && (
+                        <button
+                          type="button"
+                          className="compact documents-payment-btn"
+                          onClick={() => onRecordPayment(d)}
+                          title="Enregistrer un paiement partiel ou total"
+                        >
+                          Paiement
+                        </button>
+                      )}
                       {!isQuote && overdue && (
                         <button
                           type="button"

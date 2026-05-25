@@ -110,6 +110,15 @@ margin-bottom:16px;
 margin:0 0 6px;
 }
 
+.dashboard-action-card--danger{
+border-color:#fecaca;
+background:linear-gradient(180deg,#fff5f5 0%,#ffffff 100%);
+}
+
+.dashboard-action-card--danger h3{
+color:#b91c1c;
+}
+
 .dashboard-kpis{
 margin-top:0;
 margin-bottom:8px;

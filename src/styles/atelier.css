@@ -225,6 +225,25 @@
   border-radius: 14px;
 }
 
+.atelier-bl-btn,
+.atelier-bl-preview-btn {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid #f5d0fe;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #fff1f7, #fdf4ff);
+  color: #be185d;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.atelier-bl-btn:hover,
+.atelier-bl-preview-btn:hover {
+  filter: brightness(0.98);
+}
+
 .atelier-card__actions--list {
   flex-direction: column;
   align-items: stretch;
@@ -326,10 +345,59 @@
 
 .atelier-card__meta {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   margin-bottom: 12px;
+}
+
+.atelier-card__delivery {
+  font-size: 12px;
+  color: #475569;
+}
+
+.atelier-card__delivery--overdue {
+  color: #b91c1c;
+  font-weight: 700;
+}
+
+.atelier-card__lines {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: #475569;
+}
+
+.atelier-overdue-alert {
+  margin-bottom: 16px;
+  border-color: #fecaca;
+  background: #fff5f5;
+}
+
+.atelier-overdue-alert ul {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.atelier-overdue-alert li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.atelier-overdue-alert em {
+  font-style: normal;
+  color: #b91c1c;
+  font-weight: 700;
 }
 
 .atelier-process-badge {

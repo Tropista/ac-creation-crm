@@ -5,6 +5,10 @@ import {
   isCancelledInvoice,
   isInvoiceOverdue,
   sortOverdueInvoices,
+  getInvoicePaidAmount,
+  getInvoiceRemaining,
+  isPartiallyPaidInvoice,
+  applyPartialPayment,
 } from "./invoices.js";
 
 describe("parseDocumentDate", () => {
@@ -35,7 +39,8 @@ describe("isPaidInvoice", () => {
     expect(isPaidInvoice({ status: "Payée" })).toBe(true);
     expect(isPaidInvoice({ status: "payee" })).toBe(true);
     expect(isPaidInvoice({ status: "Réglée" })).toBe(true);
-    expect(isPaidInvoice({ status: "Non payée" })).toBe(true);
+    expect(isPaidInvoice({ status: "Non payée" })).toBe(false);
+    expect(isPaidInvoice({ status: "Partiellement payée" })).toBe(false);
     expect(isPaidInvoice({ status: "En attente" })).toBe(false);
   });
 
@@ -123,6 +128,30 @@ describe("sortOverdueInvoices", () => {
   it("gère une liste vide ou undefined", () => {
     expect(sortOverdueInvoices([])).toEqual([]);
     expect(sortOverdueInvoices(undefined)).toEqual([]);
+  });
+});
+
+describe("paiements partiels", () => {
+  const invoice = { totalTTC: 100, status: "Non payée", paidAmount: 0, remaining: 100 };
+
+  it("calcule payé et reste dû", () => {
+    expect(getInvoicePaidAmount(invoice)).toBe(0);
+    expect(getInvoiceRemaining(invoice)).toBe(100);
+  });
+
+  it("applique un paiement partiel", () => {
+    const updated = applyPartialPayment(invoice, 30);
+    expect(updated.paidAmount).toBe(30);
+    expect(updated.remaining).toBe(70);
+    expect(updated.status).toBe("Partiellement payée");
+    expect(isPartiallyPaidInvoice(updated)).toBe(true);
+  });
+
+  it("marque payée quand le solde est couvert", () => {
+    const updated = applyPartialPayment(invoice, 100);
+    expect(updated.status).toBe("Payée");
+    expect(getInvoiceRemaining(updated)).toBe(0);
+    expect(isPaidInvoice(updated)).toBe(true);
   });
 });
 

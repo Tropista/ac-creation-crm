@@ -388,3 +388,164 @@ Créer **quatre politiques** (bouton *For full customization* ou équivalent) :
 5. Vérifier que votre email est **Actif** dans la table `users`, reconnectez-vous au CRM, puis retestez le drag-drop d’image.
 
 Source versionnée : [`supabase/migrations/20260524120000_product_images_storage.sql`](../supabase/migrations/20260524120000_product_images_storage.sql)
+
+## Storage — pièces jointes devis
+
+Bucket **`ac-creation-attachments`** : fichiers joints aux devis (images, PDF, etc.) uploadés via la page Documents.
+
+### Comportement app
+
+| Mode | Import pièce jointe |
+|------|---------------------|
+| Connecté + bucket configuré | Upload vers Storage → URL publique dans `quote.attachments` |
+| Connecté + bucket absent | Fallback base64 local si ≤ 500 Ko ; sinon message d'erreur |
+| Hors ligne / non connecté | Base64 compressé autorisé si ≤ 500 Ko |
+
+À la sauvegarde locale, les pièces jointes base64 **> 500 Ko** sont retirées automatiquement.
+
+### Setup Supabase
+
+1. Exécuter `supabase/migrations/20260524100000_secure_rls.sql` (fonction `crm_user_is_active()` requise).
+2. Exécuter `supabase/migrations/20260525120000_quote_attachments_storage.sql`.
+3. Vérifier dans **Storage → Buckets** que `ac-creation-attachments` existe et est **public** (lecture).
+4. Se connecter au CRM avec un utilisateur **Actif** dans la table `users`, puis tester l'import sur un devis.
+
+### Politiques Storage
+
+| Action | Rôle | Condition |
+|--------|------|-----------|
+| Lecture (SELECT) | `public` | Bucket `ac-creation-attachments` |
+| Upload / update / delete | `authenticated` | `crm_user_is_active()` |
+
+Formats autorisés : JPEG, PNG, WebP, GIF, PDF, octet-stream — taille max 10 Mo par fichier.
+
+### Diagnostic
+
+| Symptôme | Action |
+|----------|--------|
+| « Bucket « ac-creation-attachments » absent » | Exécuter le SQL ci-dessous |
+| Toast « new row violates row-level security policy » / `42501` | Politiques Storage absentes ou compte inactif — voir **SQL immédiat** ci-dessous |
+| Fichier trop lourd pour l'enregistrement local | Configurer le bucket Storage ou réduire la taille (≤ 500 Ko en local) |
+| Pièce jointe absente après rechargement | Base64 > 500 Ko retirée — re-uploader après configuration Storage |
+
+### SQL immédiat (SQL Editor Supabase)
+
+Si l'import de pièce jointe échoue avec *« Bucket ac-creation-attachments absent »* ou *« new row violates row-level security policy »*, coller et exécuter **en une fois** :
+
+> **Note :** ne pas exécuter `ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY` — la table appartient à `supabase_storage_admin` et le SQL Editor renvoie `42501: must be owner of table objects`. RLS est **déjà activé** par Supabase sur `storage.objects` ; seules les politiques ci-dessous sont nécessaires.
+
+```sql
+-- AC Creation CRM — Storage pièces jointes devis (correction bucket + RLS)
+-- Idempotent : safe to re-run
+-- Ne PAS inclure ALTER TABLE storage.objects (RLS déjà actif côté Supabase)
+
+CREATE OR REPLACE FUNCTION public.crm_user_is_active()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.users u
+    WHERE lower(u.data->>'email') = lower(coalesce(auth.jwt() ->> 'email', ''))
+      AND coalesce(u.data->>'status', 'Actif') <> 'Désactivé'
+  );
+$$;
+
+REVOKE ALL ON FUNCTION public.crm_user_is_active() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.crm_user_is_active() TO authenticated;
+
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+  'ac-creation-attachments',
+  'ac-creation-attachments',
+  true,
+  10485760,
+  ARRAY[
+    'image/jpeg',
+    'image/png',
+    'image/webp',
+    'image/gif',
+    'application/pdf',
+    'application/octet-stream'
+  ]::text[]
+)
+ON CONFLICT (id) DO UPDATE
+SET
+  public = EXCLUDED.public,
+  file_size_limit = EXCLUDED.file_size_limit,
+  allowed_mime_types = EXCLUDED.allowed_mime_types;
+
+DROP POLICY IF EXISTS "ac_creation_attachments_public_read" ON storage.objects;
+DROP POLICY IF EXISTS "ac_creation_attachments_authenticated_insert" ON storage.objects;
+DROP POLICY IF EXISTS "ac_creation_attachments_authenticated_update" ON storage.objects;
+DROP POLICY IF EXISTS "ac_creation_attachments_authenticated_delete" ON storage.objects;
+
+CREATE POLICY "ac_creation_attachments_public_read"
+ON storage.objects
+FOR SELECT
+TO public
+USING (bucket_id = 'ac-creation-attachments');
+
+CREATE POLICY "ac_creation_attachments_authenticated_insert"
+ON storage.objects
+FOR INSERT
+TO authenticated
+WITH CHECK (
+  bucket_id = 'ac-creation-attachments'
+  AND public.crm_user_is_active()
+);
+
+CREATE POLICY "ac_creation_attachments_authenticated_update"
+ON storage.objects
+FOR UPDATE
+TO authenticated
+USING (
+  bucket_id = 'ac-creation-attachments'
+  AND public.crm_user_is_active()
+)
+WITH CHECK (
+  bucket_id = 'ac-creation-attachments'
+  AND public.crm_user_is_active()
+);
+
+CREATE POLICY "ac_creation_attachments_authenticated_delete"
+ON storage.objects
+FOR DELETE
+TO authenticated
+USING (
+  bucket_id = 'ac-creation-attachments'
+  AND public.crm_user_is_active()
+);
+```
+
+Puis vérifier :
+
+1. **Authentication → Users** : votre email existe avec un mot de passe.
+2. **Table `users`** : même email, statut **Actif** (pas « Désactivé »).
+3. **Storage → Buckets** : `ac-creation-attachments` est **public** (lecture).
+4. Reconnectez-vous au CRM et réessayez l'import de pièce jointe sur un devis.
+
+### Alternative : politiques via l'interface Storage
+
+Si le SQL Editor refuse encore la création de politiques (`CREATE POLICY` sur `storage.objects`), configurez-les dans le tableau de bord Supabase :
+
+1. Ouvrir **Storage** → **Buckets**.
+2. Si `ac-creation-attachments` n'existe pas : **New bucket** → nom `ac-creation-attachments`, cocher **Public bucket**, limites optionnelles (10 Mo, JPEG/PNG/WebP/GIF/PDF).
+3. Cliquer sur **`ac-creation-attachments`** → onglet **Policies** → **New policy**.
+
+Créer **quatre politiques** (bouton *For full customization* ou équivalent) :
+
+| Nom suggéré | Opération | Rôles cibles | Expression |
+|-------------|-----------|--------------|------------|
+| Lecture publique | **SELECT** | `public` (ou anon + authenticated) | `bucket_id = 'ac-creation-attachments'` |
+| Upload CRM | **INSERT** | `authenticated` | `bucket_id = 'ac-creation-attachments' AND public.crm_user_is_active()` |
+| Mise à jour CRM | **UPDATE** | `authenticated` | `bucket_id = 'ac-creation-attachments' AND public.crm_user_is_active()` (USING et WITH CHECK) |
+| Suppression CRM | **DELETE** | `authenticated` | `bucket_id = 'ac-creation-attachments' AND public.crm_user_is_active()` |
+
+4. Exécuter d'abord la partie **fonction** `crm_user_is_active()` du bloc SQL ci-dessus (ou `20260524100000_secure_rls.sql`) — l'interface Storage ne la crée pas.
+5. Vérifier que votre email est **Actif** dans la table `users`, reconnectez-vous au CRM, puis retestez l'import de pièce jointe.
+
+Source versionnée : [`supabase/migrations/20260525120000_quote_attachments_storage.sql`](../supabase/migrations/20260525120000_quote_attachments_storage.sql)
