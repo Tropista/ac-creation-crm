@@ -2,6 +2,7 @@ import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { APP_LOGO_URL } from "../utils/assets";
 import { buildDocumentPdf, getDocumentFileName } from "../utils/documentPdf";
+import { computeDepositTotals } from "../utils/documents";
 import { getInvoicePaidAmount, getInvoiceRemaining } from "../utils/invoices";
 import { getInvoiceStyleClass } from "../utils/invoiceStyles";
 import { formatLineProductionLabel, lineHasProductionDetails } from "../utils/quoteLines";
@@ -46,7 +47,14 @@ export default function DocumentPreview({ doc, type, data, onClose }) {
   const client = (data.clients || []).find((c) => c.id === doc.clientId);
   const paidAmount = getInvoicePaidAmount(doc);
   const remaining = getInvoiceRemaining(doc);
-  const amountDue = isDelivery ? 0 : doc.status === "Payée" ? 0 : remaining;
+  const deposit = computeDepositTotals(doc.totalTTC, doc.depositPercent);
+  const amountDue = isDelivery
+    ? 0
+    : doc.status === "Payée"
+      ? 0
+      : isQuote && deposit.depositPercent > 0
+        ? deposit.depositAmount
+        : remaining;
 
   const lines = doc.lines?.length
     ? doc.lines
@@ -331,6 +339,16 @@ ${data.settings.companyEmail || ""}`;
                         <strong>Acompte :</strong> {doc.depositPercent}%
                       </p>
                     )}
+                    {!isQuote && doc.invoiceType !== "acompte" && deposit.depositPercent > 0 && (
+                      <p>
+                        <strong>Acompte :</strong> {deposit.depositPercent}% ({money(deposit.depositAmount)})
+                      </p>
+                    )}
+                    {isQuote && deposit.depositPercent > 0 && (
+                      <p>
+                        <strong>Acompte :</strong> {deposit.depositPercent}% ({money(deposit.depositAmount)})
+                      </p>
+                    )}
                     {!isQuote && doc.dueDate && (
                       <p>
                         <strong>Échéance :</strong> {doc.dueDate}
@@ -353,7 +371,6 @@ ${data.settings.companyEmail || ""}`;
                   <>
                     <th>Prix unitaire HT</th>
                     <th>Quantité</th>
-                    <th>Remise</th>
                     <th>Montant total</th>
                   </>
                 )}
@@ -387,7 +404,6 @@ ${data.settings.companyEmail || ""}`;
                           maximumFractionDigits: 2,
                         })}
                       </td>
-                      <td>{line.discount || 0}%</td>
                       <td>{money(line.totalHT || line.subtotal)}</td>
                     </>
                   )}
@@ -438,10 +454,6 @@ ${data.settings.companyEmail || ""}`;
                   <strong>{money(doc.subtotal || doc.totalHT)}</strong>
                 </div>
                 <div className="ac-total-line">
-                  <span>Remise lignes</span>
-                  <strong>{money(doc.lineDiscountAmount || 0)}</strong>
-                </div>
-                <div className="ac-total-line">
                   <span>
                     Remise globale {doc.globalDiscount ? `(${doc.globalDiscount}%)` : ""}
                   </span>
@@ -455,10 +467,27 @@ ${data.settings.companyEmail || ""}`;
                   <span>TVA à {doc.taxRate}%</span>
                   <strong>{money(doc.taxAmount)}</strong>
                 </div>
-                <div className="ac-total-line">
-                  <span>Total TTC</span>
-                  <strong>{money(doc.totalTTC)}</strong>
-                </div>
+                {deposit.depositPercent > 0 ? (
+                  <>
+                    <div className="ac-total-line">
+                      <span>Total TTC</span>
+                      <strong>{money(doc.totalTTC)}</strong>
+                    </div>
+                    <div className="ac-total-line">
+                      <span>Acompte ({deposit.depositPercent}%)</span>
+                      <strong>{money(deposit.depositAmount)}</strong>
+                    </div>
+                    <div className="ac-total-line">
+                      <span>Solde</span>
+                      <strong>{money(deposit.balanceAfterDeposit)}</strong>
+                    </div>
+                  </>
+                ) : (
+                  <div className="ac-total-line">
+                    <span>Total TTC</span>
+                    <strong>{money(doc.totalTTC)}</strong>
+                  </div>
+                )}
                 {paidAmount > 0.01 && amountDue > 0.01 && (
                   <div className="ac-total-line">
                     <span>Déjà payé</span>
@@ -466,7 +495,7 @@ ${data.settings.companyEmail || ""}`;
                   </div>
                 )}
                 <div className="ac-total-line ac-total-final">
-                  <span>À PAYER</span>
+                  <span>{isQuote && deposit.depositPercent > 0 ? "À PAYER (ACOMPTE)" : "À PAYER"}</span>
                   <strong>{money(amountDue)}</strong>
                 </div>
               </div>

@@ -1,6 +1,6 @@
 import { jsPDF } from "jspdf";
 import { APP_LOGO_URL } from "./assets";
-import { clientName } from "./documents";
+import { clientName, computeDepositTotals } from "./documents";
 import { formatLineDescriptionWithProduction } from "./quoteLines";
 
 const PAGE_WIDTH = 210;
@@ -284,10 +284,10 @@ function drawInvoiceTable(pdf, lines, y, style, { isQuote, products, isDelivery 
   const tableTop = y;
   const headers = isDelivery
     ? ["Réf.", "Désignation", "Quantité"]
-    : ["Réf.", "Désignation", "Prix unitaire HT", "Quantité", "Remise", "Montant total"];
+    : ["Réf.", "Désignation", "Prix unitaire HT", "Quantité", "Montant total"];
   const colWidths = isDelivery
     ? [16, CONTENT_WIDTH - 16 - 22, 22]
-    : [16, CONTENT_WIDTH - 16 - 22 - 14 - 14 - 22, 22, 14, 14, 22];
+    : [16, CONTENT_WIDTH - 16 - 22 - 14 - 22, 22, 14, 22];
   const headerHeight = 7;
 
   drawFlatRect(pdf, tableX, y, CONTENT_WIDTH, headerHeight, { fill: style.rose });
@@ -339,7 +339,6 @@ function drawInvoiceTable(pdf, lines, y, style, { isQuote, products, isDelivery 
       const cells = [
         `${formatPdfMoney(line.price)} €`,
         formatPdfQuantity(line.quantity),
-        `${line.discount || 0}%`,
         `${formatPdfMoney(line.totalHT || line.subtotal)} €`,
       ];
       cells.forEach((cell, index) => {
@@ -646,6 +645,14 @@ function drawClientInfoGrid(pdf, doc, data, y, style, { isQuote, isDelivery }) {
     rightEntries.push({ label: "Statut", value: doc.status || "—" });
     if (!isQuote && doc.invoiceType === "acompte" && doc.depositPercent) {
       rightEntries.push({ label: "Acompte", value: `${doc.depositPercent}%` });
+    } else {
+      const deposit = computeDepositTotals(doc.totalTTC, doc.depositPercent);
+      if (deposit.depositPercent > 0) {
+        rightEntries.push({
+          label: "Acompte",
+          value: `${deposit.depositPercent}% (${formatPdfMoney(deposit.depositAmount)} €)`,
+        });
+      }
     }
     if (!isQuote && doc.dueDate) {
       rightEntries.push({ label: "Échéance", value: doc.dueDate });
@@ -755,12 +762,15 @@ export function buildDocumentPdf({ doc, type, data, logoDataUrl = null }) {
   const lines = normalizeLines(doc);
   const paidAmount = Number(doc.paidAmount || 0);
   const remaining = doc.remaining != null ? Number(doc.remaining) : null;
+  const deposit = computeDepositTotals(doc.totalTTC, doc.depositPercent);
   const amountDue =
     doc.status === "Payée"
       ? 0
-      : remaining != null && !Number.isNaN(remaining)
-        ? remaining
-        : doc.totalTTC || 0;
+      : isQuote && deposit.depositPercent > 0
+        ? deposit.depositAmount
+        : remaining != null && !Number.isNaN(remaining)
+          ? remaining
+          : doc.totalTTC || 0;
   const documentTitle =
     type === "invoice" && doc.invoiceType === "acompte"
       ? "FACTURE D'ACOMPTE"
@@ -782,19 +792,30 @@ export function buildDocumentPdf({ doc, type, data, logoDataUrl = null }) {
   const totalsX = MARGIN + leftColumnWidth + GAP;
   const totals = [
     ["Sous-total HT", `${formatPdfMoney(doc.subtotal || doc.totalHT)} €`],
-    ["Remise lignes", `${formatPdfMoney(doc.lineDiscountAmount || 0)} €`],
     [
       `Remise globale${doc.globalDiscount ? ` (${doc.globalDiscount}%)` : ""}`,
       `${formatPdfMoney(doc.globalDiscountAmount || 0)} €`,
     ],
     ["Total HT", `${formatPdfMoney(doc.totalHT)} €`],
     [`TVA à ${doc.taxRate || settings.taxRate || 0}%`, `${formatPdfMoney(doc.taxAmount)} €`],
-    ["Total TTC", `${formatPdfMoney(doc.totalTTC)} €`],
   ];
+  if (deposit.depositPercent > 0) {
+    totals.push(["Total TTC", `${formatPdfMoney(doc.totalTTC)} €`]);
+    totals.push([
+      `Acompte (${deposit.depositPercent}%)`,
+      `${formatPdfMoney(deposit.depositAmount)} €`,
+    ]);
+    totals.push(["Solde", `${formatPdfMoney(deposit.balanceAfterDeposit)} €`]);
+  } else {
+    totals.push(["Total TTC", `${formatPdfMoney(doc.totalTTC)} €`]);
+  }
   if (paidAmount > 0.01 && amountDue > 0.01) {
     totals.push(["Déjà payé", `${formatPdfMoney(paidAmount)} €`]);
   }
-  totals.push(["À PAYER", `${formatPdfMoney(amountDue)} €`]);
+  totals.push([
+    isQuote && deposit.depositPercent > 0 ? "À PAYER (ACOMPTE)" : "À PAYER",
+    `${formatPdfMoney(amountDue)} €`,
+  ]);
 
   const bottomBlockHeight = measureInvoiceBottomBlockHeight(
     pdf,

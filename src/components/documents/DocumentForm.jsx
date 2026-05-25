@@ -22,6 +22,7 @@ export default function DocumentForm({
   onAddLine,
   onRemoveLine,
   lineTotal,
+  depositPresets = [],
   attachments = [],
   onAttachmentsChange,
 }) {
@@ -163,7 +164,6 @@ export default function DocumentForm({
             <span>Description</span>
             <span>Qté</span>
             <span>Prix HT</span>
-            <span>Remise %</span>
             <span>Total HT</span>
             <span></span>
           </div>
@@ -202,13 +202,6 @@ export default function DocumentForm({
                     step="0.0001"
                     value={line.price}
                     onChange={(e) => onUpdateLine(index, { price: e.target.value })}
-                  />
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={line.discount}
-                    onChange={(e) => onUpdateLine(index, { discount: e.target.value })}
                   />
                   <strong className="documents-line-total">{money(total)}</strong>
                   <button
@@ -341,16 +334,39 @@ export default function DocumentForm({
               onChange={(e) => setForm({ ...form, globalDiscount: e.target.value })}
             />
           </label>
+          <div className="documents-deposit-field">
+            <label className="documents-field documents-field--inline">
+              <span>Acompte %</span>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                value={form.depositPercent || 0}
+                onChange={(e) => setForm({ ...form, depositPercent: e.target.value })}
+              />
+            </label>
+            {depositPresets.length > 0 && (
+              <div className="documents-deposit-presets">
+                {depositPresets.map((percent) => (
+                  <button
+                    key={percent}
+                    type="button"
+                    className="compact documents-deposit-preset"
+                    onClick={() => setForm({ ...form, depositPercent: percent })}
+                  >
+                    {percent}%
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="documents-totals-panel total-box">
           <div className="documents-totals-row">
             <span>Sous-total HT</span>
             <strong>{money(totals.subtotal)}</strong>
-          </div>
-          <div className="documents-totals-row">
-            <span>Remise lignes</span>
-            <strong>{money(totals.lineDiscountAmount)}</strong>
           </div>
           <div className="documents-totals-row">
             <span>Remise globale</span>
@@ -364,10 +380,31 @@ export default function DocumentForm({
             <span>TVA ({taxRate || 0} %)</span>
             <strong>{money(totals.taxAmount)}</strong>
           </div>
-          <div className="documents-totals-row documents-totals-row--final">
-            <span>Total TTC</span>
-            <strong>{money(totals.totalTTC)}</strong>
-          </div>
+          {totals.depositPercent > 0 ? (
+            <>
+              <div className="documents-totals-row">
+                <span>Total TTC</span>
+                <strong>{money(totals.totalTTC)}</strong>
+              </div>
+              <div className="documents-totals-row documents-totals-row--deposit">
+                <span>Acompte ({totals.depositPercent}%)</span>
+                <strong>{money(totals.depositAmount)}</strong>
+              </div>
+              <div className="documents-totals-row">
+                <span>Solde</span>
+                <strong>{money(totals.balanceAfterDeposit)}</strong>
+              </div>
+              <div className="documents-totals-row documents-totals-row--final">
+                <span>À payer (acompte)</span>
+                <strong>{money(totals.depositAmount)}</strong>
+              </div>
+            </>
+          ) : (
+            <div className="documents-totals-row documents-totals-row--final">
+              <span>Total TTC</span>
+              <strong>{money(totals.totalTTC)}</strong>
+            </div>
+          )}
         </div>
 
         <div className="documents-form-actions">

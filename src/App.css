@@ -654,7 +654,7 @@ tbody tr:hover td { background: var(--table-hover); }
 .document-lines { display: grid; gap: 10px; }
 .document-line {
   display: grid;
-  grid-template-columns: 1.2fr 1.5fr 80px 110px 100px 110px 42px;
+  grid-template-columns: 1.2fr 1.5fr 80px 110px 110px 42px;
   gap: 8px;
   align-items: center;
 }

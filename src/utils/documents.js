@@ -314,6 +314,14 @@ export function createDepositInvoiceFromQuote(data, quote, percent) {
   };
 }
 
+export function computeDepositTotals(totalTTC, depositPercent = 0) {
+  const rate = Math.min(100, Math.max(0, Number(depositPercent) || 0));
+  const total = Number(totalTTC || 0);
+  const depositAmount = Math.round(total * (rate / 100) * 100) / 100;
+  const balanceAfterDeposit = Math.round((total - depositAmount) * 100) / 100;
+  return { depositPercent: rate, depositAmount, balanceAfterDeposit };
+}
+
 export function enrichInvoicePaymentFields(invoice) {
   const totalTTC = Number(invoice?.totalTTC || 0);
   const paidAmount = Number(invoice?.paidAmount);

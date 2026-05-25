@@ -8,6 +8,7 @@ import {
   createDeliveryNoteFromQuote,
   getDeliveryNoteForQuote,
   createDepositInvoiceFromQuote,
+  computeDepositTotals,
 } from "./documents.js";
 
 const baseData = () => ({
@@ -197,6 +198,21 @@ describe("bons de livraison", () => {
     expect(result.deliveryNote.quoteNumber).toBe("DEV-2025-0100");
     expect(result.deliveryNote.lines).toHaveLength(1);
     expect(getDeliveryNoteForQuote(result, readyQuote)?.id).toBe(result.deliveryNote.id);
+  });
+});
+
+describe("computeDepositTotals", () => {
+  it("calcule le montant et le solde d'acompte", () => {
+    expect(computeDepositTotals(117, 30)).toEqual({
+      depositPercent: 30,
+      depositAmount: 35.1,
+      balanceAfterDeposit: 81.9,
+    });
+  });
+
+  it("borne le pourcentage entre 0 et 100", () => {
+    expect(computeDepositTotals(100, -5).depositPercent).toBe(0);
+    expect(computeDepositTotals(100, 150).depositPercent).toBe(100);
   });
 });
 

@@ -791,7 +791,7 @@
 
 .document-line {
   display: grid;
-  grid-template-columns: 1.2fr 1.5fr 80px 110px 100px 110px 42px;
+  grid-template-columns: 1.2fr 1.5fr 80px 110px 110px 42px;
   gap: 8px;
   align-items: center;
   padding: 4px 0;
@@ -1031,10 +1031,15 @@
 }
 
 .documents-payment-cell {
+  font-size: 12px;
+  vertical-align: middle;
+}
+
+.documents-payment-stack {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  font-size: 12px;
+  align-items: flex-start;
 }
 
 .documents-paid-full {
@@ -1068,6 +1073,27 @@
 .documents-bl-btn,
 .documents-payment-btn {
   font-size: 11px !important;
+}
+
+.documents-deposit-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.documents-deposit-presets {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.documents-deposit-preset {
+  min-width: 44px;
+}
+
+.documents-totals-row--deposit {
+  color: #a21caf;
 }
 
 .documents-form-header--quote {

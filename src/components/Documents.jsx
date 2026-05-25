@@ -13,6 +13,7 @@ import {
   createDeliveryNoteFromQuote,
   getDeliveryNoteForQuote,
   createDepositInvoiceFromQuote,
+  computeDepositTotals,
   enrichInvoicePaymentFields,
   uid,
   today,
@@ -66,6 +67,7 @@ const [form, setForm] = useState({
   clientId: prefilledClientId,
   status: defaultStatus,
   globalDiscount: 0,
+  depositPercent: 0,
   promisedDeliveryDateInput: "",
   lines: [{ ...emptyLine }],
 });
@@ -89,6 +91,7 @@ const [form, setForm] = useState({
       clientId: draft.clientId || prefilledClientId || "",
       status: "Brouillon",
       globalDiscount: 0,
+      depositPercent: 0,
       promisedDeliveryDateInput: "",
       lines: draft.lines.map((line) => ({
         productId: line.productId || "",
@@ -190,23 +193,27 @@ const [form, setForm] = useState({
 
   function lineTotal(line) {
     const subtotal = Number(line.quantity || 0) * Number(line.price || 0);
-    const discountAmount = subtotal * (Number(line.discount || 0) / 100);
-    const totalHT = subtotal - discountAmount;
-    return { subtotal, discountAmount, totalHT };
+    return { subtotal, totalHT: subtotal };
   }
 
   const totals = useMemo(() => {
     const subtotal = form.lines.reduce((sum, line) => sum + lineTotal(line).subtotal, 0);
-    const lineDiscountAmount = form.lines.reduce((sum, line) => sum + lineTotal(line).discountAmount, 0);
-    const totalBeforeGlobalDiscount = form.lines.reduce((sum, line) => sum + lineTotal(line).totalHT, 0);
     const globalDiscountRate = Math.min(100, Math.max(0, Number(form.globalDiscount || 0)));
-    const globalDiscountAmount = totalBeforeGlobalDiscount * (globalDiscountRate / 100);
-    const discountAmount = lineDiscountAmount + globalDiscountAmount;
-    const totalHT = Math.max(0, totalBeforeGlobalDiscount - globalDiscountAmount);
+    const globalDiscountAmount = subtotal * (globalDiscountRate / 100);
+    const totalHT = Math.max(0, subtotal - globalDiscountAmount);
     const taxAmount = totalHT * (Number(data.settings.taxRate || 0) / 100);
     const totalTTC = totalHT + taxAmount;
-    return { subtotal, lineDiscountAmount, globalDiscountRate, globalDiscountAmount, discountAmount, totalHT, taxAmount, totalTTC };
-  }, [form.lines, form.globalDiscount, data.settings.taxRate]);
+    const deposit = computeDepositTotals(totalTTC, form.depositPercent);
+    return {
+      subtotal,
+      globalDiscountRate,
+      globalDiscountAmount,
+      totalHT,
+      taxAmount,
+      totalTTC,
+      ...deposit,
+    };
+  }, [form.lines, form.globalDiscount, form.depositPercent, data.settings.taxRate]);
 
   function updateLine(index, changes) {
     setForm({
@@ -256,6 +263,7 @@ const [form, setForm] = useState({
       clientId: "",
       status: defaultStatus,
       globalDiscount: 0,
+      depositPercent: 0,
       promisedDeliveryDateInput: "",
       lines: [{ ...emptyLine }],
     });
@@ -278,7 +286,7 @@ const [form, setForm] = useState({
           categoryId: product?.categoryId || line.categoryId || "",
           quantity: Number(line.quantity || 0),
           price: Number(line.price || 0),
-          discount: Number(line.discount || 0),
+          discount: 0,
           ...(isQuote && {
             taille: String(line.taille || "").trim(),
             couleur: String(line.couleur || "").trim(),
@@ -310,6 +318,9 @@ const [form, setForm] = useState({
         clientId: form.clientId,
         status: form.status,
         globalDiscount: Number(form.globalDiscount || 0),
+        depositPercent: totals.depositPercent,
+        depositAmount: totals.depositAmount,
+        balanceAfterDeposit: totals.balanceAfterDeposit,
         description: firstDescription,
         lines: cleanLines,
         taxRate: data.settings.taxRate,
@@ -342,6 +353,9 @@ const [form, setForm] = useState({
         clientId: form.clientId,
         status: form.status,
         globalDiscount: Number(form.globalDiscount || 0),
+        depositPercent: totals.depositPercent,
+        depositAmount: totals.depositAmount,
+        balanceAfterDeposit: totals.balanceAfterDeposit,
         description: firstDescription,
         lines: cleanLines,
         stockAdjusted: !isQuote && form.status !== "Annulée",
@@ -406,6 +420,7 @@ reset();
       clientId: doc.clientId || "",
       status: doc.status || defaultStatus,
       globalDiscount: Number(doc.globalDiscount || 0),
+      depositPercent: Number(doc.depositPercent || 0),
       promisedDeliveryDateInput: toDateInputValue(doc.promisedDeliveryDate),
       lines,
     });
@@ -707,6 +722,7 @@ useEffect(() => {
         onAddLine={addLine}
         onRemoveLine={removeLine}
         lineTotal={lineTotal}
+        depositPresets={DEPOSIT_PRESETS}
         attachments={isQuote ? attachments : undefined}
         onAttachmentsChange={isQuote ? setAttachments : undefined}
       />

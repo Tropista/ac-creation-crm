@@ -139,10 +139,10 @@ export default function DocumentList({
                         {d.status === "Payée" ? (
                           <span className="documents-paid-full">Payé</span>
                         ) : partial || paid > 0 ? (
-                          <>
+                          <div className="documents-payment-stack">
                             <span className="documents-paid-partial">{money(paid)}</span>
                             <span className="muted documents-remaining">Reste {money(remaining)}</span>
-                          </>
+                          </div>
                         ) : (
                           <span className="muted">—</span>
                         )}
