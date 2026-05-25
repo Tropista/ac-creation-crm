@@ -297,8 +297,42 @@ async function upsertRowsBatched(supabase, table, items = []) {
   return written;
 }
 
-function getTombstoneIds(settings, collectionKey) {
+export function getTombstoneIds(settings, collectionKey) {
   return Object.keys(settings?.deletionTombstones?.[collectionKey] || {});
+}
+
+export async function deleteSupabaseRowsByIds(supabase, table, ids = []) {
+  const uniqueIds = [...new Set((ids || []).filter(Boolean))];
+  if (!uniqueIds.length) return [];
+
+  const confirmed = [];
+  for (let offset = 0; offset < uniqueIds.length; offset += DELETE_CHUNK_SIZE) {
+    const chunk = uniqueIds.slice(offset, offset + DELETE_CHUNK_SIZE);
+    const { data, error } = await supabase
+      .from(table)
+      .delete()
+      .in("id", chunk)
+      .select("id");
+
+    if (error) throw formatSupabaseCollectionError(table, error);
+
+    for (const row of data || []) {
+      if (row?.id) confirmed.push(row.id);
+    }
+  }
+
+  const confirmedSet = new Set(confirmed.map((id) => String(id)));
+  const missing = uniqueIds.filter((id) => !confirmedSet.has(String(id)));
+
+  if (missing.length) {
+    throw new Error(
+      `Suppression Supabase incomplète sur « ${table} » : ${missing.length} enregistrement(s) encore présents ` +
+        `(id ${missing.slice(0, 3).join(", ")}${missing.length > 3 ? "…" : ""}). ` +
+        "Vérifiez que votre compte a le rôle Admin dans Supabase."
+    );
+  }
+
+  return confirmed;
 }
 
 export async function syncSupabaseData(nextData, previousData = {}) {
@@ -325,21 +359,18 @@ export async function syncSupabaseData(nextData, previousData = {}) {
       ]),
     ];
 
-    if (!removedIds.length) return;
+    if (!removedIds.length) return [];
 
     if (shouldSkipMassDelete(nextItems, previousItems, removedIds.length)) {
       console.warn(
         `Protection anti-suppression : ${removedIds.length} enregistrement(s) de "${table}" non supprimés ` +
           `(passage de ${previousItems.length} à 0).`
       );
-      return;
+      return [];
     }
 
-    for (let offset = 0; offset < removedIds.length; offset += DELETE_CHUNK_SIZE) {
-      const chunk = removedIds.slice(offset, offset + DELETE_CHUNK_SIZE);
-      const { error } = await supabase.from(table).delete().in("id", chunk);
-      if (error) throw formatSupabaseCollectionError(table, error);
-    }
+    const confirmed = await deleteSupabaseRowsByIds(supabase, table, removedIds);
+    return confirmed;
   };
 
   const upsertCollection = async (table, items = []) => {
@@ -387,33 +418,50 @@ export async function syncSupabaseData(nextData, previousData = {}) {
     upsertCollection("crm_logs", syncedData.logs),
   ]);
 
+  /** @type {Record<string, string[]>} */
+  const confirmedDeletedByCollection = {};
+
+  const trackDelete = async (collectionKey, table, nextItems, previousItems, tombstoneIds) => {
+    confirmedDeletedByCollection[collectionKey] = await deleteRemovedItems(
+      table,
+      nextItems,
+      previousItems,
+      tombstoneIds
+    );
+  };
+
   await Promise.all([
-    deleteRemovedItems(
+    trackDelete(
+      "users",
       "users",
       syncedData.users,
       previousData.users,
       getTombstoneIds(syncedData.settings, "users")
     ),
-    deleteRemovedItems(
+    trackDelete(
+      "clients",
       "clients",
       syncedData.clients,
       previousData.clients,
       getTombstoneIds(syncedData.settings, "clients")
     ),
-    deleteRemovedItems(
+    trackDelete(
+      "products",
       "products",
       syncedData.products,
       previousData.products,
       getTombstoneIds(syncedData.settings, "products")
     ),
-    deleteRemovedItems(
+    trackDelete(
+      "categories",
       "categories",
       syncedData.categories,
       previousData.categories,
       getTombstoneIds(syncedData.settings, "categories")
     ),
     safeOptionalCollectionWrite("suppliers", () =>
-      deleteRemovedItems(
+      trackDelete(
+        "suppliers",
         "suppliers",
         syncedData.suppliers,
         previousData.suppliers,
@@ -421,7 +469,8 @@ export async function syncSupabaseData(nextData, previousData = {}) {
       )
     ),
     safeOptionalCollectionWrite("expenses", () =>
-      deleteRemovedItems(
+      trackDelete(
+        "expenses",
         "expenses",
         syncedData.expenses,
         previousData.expenses,
@@ -429,7 +478,8 @@ export async function syncSupabaseData(nextData, previousData = {}) {
       )
     ),
     safeOptionalCollectionWrite("leads", () =>
-      deleteRemovedItems(
+      trackDelete(
+        "leads",
         "leads",
         syncedData.leads,
         previousData.leads,
@@ -437,26 +487,30 @@ export async function syncSupabaseData(nextData, previousData = {}) {
       )
     ),
     safeOptionalCollectionWrite("delivery_notes", () =>
-      deleteRemovedItems(
+      trackDelete(
+        "deliveryNotes",
         "delivery_notes",
         syncedData.deliveryNotes,
         previousData.deliveryNotes,
         getTombstoneIds(syncedData.settings, "deliveryNotes")
       )
     ),
-    deleteRemovedItems(
+    trackDelete(
+      "quotes",
       "quotes",
       syncedData.quotes,
       previousData.quotes,
       getTombstoneIds(syncedData.settings, "quotes")
     ),
-    deleteRemovedItems(
+    trackDelete(
+      "invoices",
       "invoices",
       syncedData.invoices,
       previousData.invoices,
       getTombstoneIds(syncedData.settings, "invoices")
     ),
-    deleteRemovedItems(
+    trackDelete(
+      "backups",
       "backups",
       syncedData.backups,
       previousData.backups,
@@ -464,7 +518,10 @@ export async function syncSupabaseData(nextData, previousData = {}) {
     ),
   ]);
 
-  syncedData.settings = clearSyncedDeletionTombstones(syncedData.settings, syncedData);
+  syncedData.settings = clearSyncedDeletionTombstones(
+    syncedData.settings,
+    confirmedDeletedByCollection
+  );
 
   const { error: finalSettingsError } = await supabase.from("settings").upsert({
     id: "main",

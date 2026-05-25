@@ -150,6 +150,39 @@ describe("syncMerge", () => {
     expect(filtered.map((item) => item.id)).toEqual(["c2"]);
   });
 
+  it("mergeCloudWithLocal conserve les tombstones même si les paramètres cloud gagnent", () => {
+    setLastSyncAt(Date.parse("2026-05-23T09:00:00.000Z"));
+
+    const local = {
+      settings: {
+        companyName: "Local",
+        updatedAt: "2026-05-23T08:00:00.000Z",
+        deletionTombstones: {
+          clients: { c1: "2026-05-25T12:00:00.000Z" },
+        },
+      },
+      clients: [],
+      quotes: [],
+      invoices: [],
+    };
+
+    const cloud = {
+      settings: {
+        companyName: "Cloud",
+        updatedAt: "2026-05-23T11:00:00.000Z",
+      },
+      clients: [{ id: "c1", name: "Client fantôme", updatedAt: "2026-05-20T08:00:00.000Z" }],
+      quotes: [],
+      invoices: [],
+    };
+
+    const merged = mergeCloudWithLocal(local, cloud);
+
+    expect(merged.settings.companyName).toBe("Cloud");
+    expect(merged.settings.deletionTombstones.clients.c1).toBeTruthy();
+    expect(merged.clients).toEqual([]);
+  });
+
   it("mergeCloudWithLocal ne restaure pas un client supprimé localement", () => {
     setLastSyncAt(Date.parse("2026-05-23T09:00:00.000Z"));
 
@@ -196,11 +229,30 @@ describe("syncMerge", () => {
     };
 
     const cleared = clearSyncedDeletionTombstones(settings, {
-      clients: [],
-      quotes: [],
+      clients: ["c1"],
+      quotes: ["q1"],
     });
 
     expect(cleared.deletionTombstones).toBeUndefined();
+  });
+
+  it("clearSyncedDeletionTombstones conserve les tombstones non confirmés", () => {
+    const settings = {
+      deletionTombstones: {
+        clients: {
+          c1: "2026-05-25T12:00:00.000Z",
+          c2: "2026-05-25T12:00:00.000Z",
+        },
+      },
+    };
+
+    const cleared = clearSyncedDeletionTombstones(settings, {
+      clients: ["c1"],
+    });
+
+    expect(cleared.deletionTombstones.clients).toEqual({
+      c2: "2026-05-25T12:00:00.000Z",
+    });
   });
 
   it("mergeCollection conserve la version cloud si seule la cloud a changé", () => {

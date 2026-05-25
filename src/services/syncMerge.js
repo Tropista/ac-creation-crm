@@ -214,7 +214,10 @@ export function collectDeletions(previousItems = [], nextItems = [], deletedAt) 
   return deletions;
 }
 
-export function clearSyncedDeletionTombstones(settings = {}, collections = {}) {
+export function clearSyncedDeletionTombstones(
+  settings = {},
+  confirmedDeletedByCollection = {}
+) {
   const tombstones = { ...(settings.deletionTombstones || {}) };
   let changed = false;
 
@@ -222,17 +225,19 @@ export function clearSyncedDeletionTombstones(settings = {}, collections = {}) {
     const collectionTombstones = tombstones[key];
     if (!collectionTombstones) continue;
 
-    const nextIds = new Set(
-      (collections[key] || []).filter((item) => item?.id).map((item) => String(item.id))
+    const confirmed = new Set(
+      (confirmedDeletedByCollection[key] || []).map((id) => String(id))
     );
+    if (!confirmed.size) continue;
+
     const kept = {};
 
     for (const [id, deletedAt] of Object.entries(collectionTombstones)) {
-      if (nextIds.has(id)) {
-        kept[id] = deletedAt;
+      if (confirmed.has(String(id))) {
+        changed = true;
         continue;
       }
-      changed = true;
+      kept[id] = deletedAt;
     }
 
     if (Object.keys(kept).length) {

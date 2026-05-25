@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   COLLECTION_PAGE_SIZE,
+  deleteSupabaseRowsByIds,
   fetchCollectionRows,
   fetchCollectionRowsDetailed,
   formatFetchLog,
@@ -21,10 +22,64 @@ describe("supabaseSync tombstones", () => {
           invoices: { inv1: "2026-05-25T12:00:00.000Z" },
         },
       },
-      { invoices: [] }
+      { invoices: ["inv1"] }
     );
 
     expect(settings.deletionTombstones).toBeUndefined();
+  });
+
+  it("deleteSupabaseRowsByIds retourne les ids réellement supprimés", async () => {
+    const deletedIds = ["c1", "c2"];
+    const supabase = {
+      from() {
+        const chain = {
+          delete() {
+            return chain;
+          },
+          in(_column, ids) {
+            chain._ids = ids;
+            return chain;
+          },
+          select() {
+            return Promise.resolve({
+              data: chain._ids.map((id) => ({ id })),
+              error: null,
+            });
+          },
+        };
+        return chain;
+      },
+    };
+
+    const confirmed = await deleteSupabaseRowsByIds(supabase, "clients", deletedIds);
+    expect(confirmed).toEqual(deletedIds);
+  });
+
+  it("deleteSupabaseRowsByIds signale une suppression incomplète", async () => {
+    const supabase = {
+      from() {
+        const chain = {
+          delete() {
+            return chain;
+          },
+          in(_column, ids) {
+            chain._ids = ids;
+            return chain;
+          },
+          select() {
+            return Promise.resolve({
+              data: [{ id: chain._ids[0] }],
+              error: null,
+            });
+          },
+        };
+        return chain;
+      },
+    };
+
+    await expect(
+      deleteSupabaseRowsByIds(supabase, "clients", ["c1", "c2"])
+    ).rejects.toThrow(/Suppression Supabase incomplète/);
   });
 
   it("filterCollectionByTombstones est réutilisable pour le chargement cloud", () => {
