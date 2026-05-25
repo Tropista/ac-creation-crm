@@ -78,6 +78,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Vérifier secrets Vercel
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          missing=()
+          [ -z "$VERCEL_TOKEN" ] && missing+=("VERCEL_TOKEN")
+          [ -z "$VERCEL_ORG_ID" ] && missing+=("VERCEL_ORG_ID")
+          [ -z "$VERCEL_PROJECT_ID" ] && missing+=("VERCEL_PROJECT_ID")
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::Secrets GitHub manquants pour deploy-vercel : ${missing[*]}. Voir README (Déploiement web / Vercel) et Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+
       - name: Node.js
         uses: actions/setup-node@v4
         with:
@@ -87,18 +102,32 @@ jobs:
       - name: Dépendances
         run: npm ci
 
-      - name: Build production (Vercel)
-        run: npm run build
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull config Vercel (production)
+        run: vercel pull --yes --environment=production
         env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Build production (Vercel prebuilt)
+        run: vercel build --prod
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           VERCEL: "1"
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
       - name: Déployer sur Vercel
-        uses: amondnet/vercel-action@v25
+        uses: amondnet/vercel-action@v42
         with:
           vercel-token: ${{ secrets.VERCEL_TOKEN }}
           vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
           vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          vercel-args: "--prod"
+          prebuilt: true
+          target: production
           working-directory: ./
