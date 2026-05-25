@@ -228,7 +228,7 @@ function drawTitleBox(pdf, documentTitle, doc, x, y, width, style, { isQuote, is
   return y + boxHeight;
 }
 
-function measureInfoCardHeight(pdf, title, entries, width, style) {
+function measureInfoCardHeight(pdf, title, entries, width, _style) {
   const innerWidth = width - BOX_PADDING * 2;
   let height = BOX_PADDING * 2 + 6;
   entries.forEach(({ label, value, bold }) => {
