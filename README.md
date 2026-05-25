@@ -41,7 +41,7 @@ Créer les tables Supabase : coller [`docs/supabase-migration.sql`](docs/supabas
 | `npm test` | Tests unitaires Vitest (utilisés en CI) |
 | `npm run electron` | Lance l’app Electron (nécessite `npm run build` au préalable) |
 | `npm run dist` | Build + empaquetage Windows (sortie dans `release/`) |
-| `npm run dist:win` | Idem, cible Windows explicite |
+| `npm run dist:win` | Build Vite + installeur Windows NSIS dans `release/` (lancer localement après bump de version) |
 | `npm run dist:win -- --publish always` | Build + publication GitHub Releases (nécessite `GH_TOKEN`) |
 
 ### API banque (optionnel)
@@ -89,6 +89,14 @@ Les permissions UI (`src/utils/permissions.js`) restent la première barrière.
 ## Realtime Supabase (atelier)
 
 L’Atelier s’abonne aux changements `quotes` / `invoices` si Supabase est configuré. Activer la réplication Realtime sur ces tables dans le dashboard Supabase (Database → Replication). Sinon, la resync manuelle reste disponible.
+
+## Export fiduciaire Luxembourg
+
+Depuis **Dépenses** ou **Paramètres** : export CSV mensuel (UTF-8 BOM, séparateur `;`) avec journal des ventes (factures, type acompte/solde, devis parent), journal des achats et récapitulatif TVA.
+
+## Modèles de devis
+
+Page **Devis** → bloc **Modèles** : 4 packs intégrés (DTF, laser, t-shirt, UV-DTF) + enregistrement du devis courant comme modèle personnalisé (`settings.quoteTemplates`).
 
 ## E-facturation LU (Peppol)
 
@@ -160,11 +168,11 @@ Au démarrage, l’app vérifie GitHub Releases ([Tropista/ac-creation-crm](http
 
 **Publier une nouvelle version :**
 
-1. Incrémenter `"version"` dans `package.json` (ex. `1.0.1`).
+1. Incrémenter `"version"` dans `package.json` (ex. `1.0.3`).
 2. Copier `.env` et lancer `npm run dist:win` — génère dans `release/` :
    - `AC Creation CRM Setup x.x.x.exe`
    - `latest.yml` (métadonnées auto-update)
-3. Créer une **GitHub Release** avec un tag `vX.Y.Z` (ex. `v1.0.1`) sur le dépôt.
+3. Créer une **GitHub Release** avec un tag `vX.Y.Z` (ex. `v1.0.3`) sur le dépôt.
 4. Joindre **`latest.yml`** et **`AC Creation CRM Setup x.x.x.exe`** aux assets de la release.
 
 Publication automatique (optionnel) : définir `GH_TOKEN` (token GitHub avec droits `repo`) puis `npm run dist:win -- --publish always`.

@@ -134,6 +134,7 @@ export function exportAccountingLuxCsv(data, { year, month } = {}) {
     "fr-FR",
     { month: "long", year: "numeric" }
   );
+  const taxRate = Number(data.settings?.taxRate ?? 17);
 
   const invoices = (data.invoices || []).filter((invoice) =>
     isInMonth(invoice.date, targetYear, targetMonth)
@@ -172,20 +173,39 @@ export function exportAccountingLuxCsv(data, { year, month } = {}) {
   const tvaDeductible = expenseTVA;
   const tvaDue = tvaCollectee - tvaDeductible;
 
+  function invoiceTypeLabel(invoice) {
+    const type = String(invoice.invoiceType || "").trim();
+    if (type === "acompte") return "Acompte";
+    if (type === "solde") return "Solde";
+    return "Facture";
+  }
+
   const rows = [
-    ["Export comptable Luxembourg", monthLabel],
+    ["Export fiduciaire Luxembourg", monthLabel],
     [],
-    ["Résumé TVA", ""],
-    ["TVA collectée (factures)", formatCsvNumber(tvaCollectee)],
-    ["TVA déductible (dépenses)", formatCsvNumber(tvaDeductible)],
+    [`Récapitulatif TVA (${taxRate} %)`, ""],
+    ["TVA collectée (ventes)", formatCsvNumber(tvaCollectee)],
+    ["TVA déductible (achats)", formatCsvNumber(tvaDeductible)],
     ["TVA due estimée", formatCsvNumber(tvaDue)],
-    ["Total factures HT", formatCsvNumber(invoiceHT)],
-    ["Total factures TTC", formatCsvNumber(invoiceTTC)],
-    ["Total dépenses HT", formatCsvNumber(expenseHT)],
-    ["Total dépenses TTC", formatCsvNumber(expenseTTC)],
+    ["Total ventes HT", formatCsvNumber(invoiceHT)],
+    ["Total ventes TTC", formatCsvNumber(invoiceTTC)],
+    ["Total achats HT", formatCsvNumber(expenseHT)],
+    ["Total achats TTC", formatCsvNumber(expenseTTC)],
     [],
-    ["Factures du mois", ""],
-    ["N° facture", "Client", "Date", "HT", "TVA", "TTC", "Statut"],
+    ["Journal des ventes (factures)", ""],
+    [
+      "N° facture",
+      "Client",
+      "Date",
+      "Type",
+      "Devis lié",
+      "ID devis parent",
+      "HT",
+      `TVA ${taxRate} %`,
+      "TVA €",
+      "TTC",
+      "Statut",
+    ],
     ...invoices.map((invoice) => {
       const client = (data.clients || []).find(
         (item) => String(item.id) === String(invoice.clientId)
@@ -194,15 +214,28 @@ export function exportAccountingLuxCsv(data, { year, month } = {}) {
         invoice.number || "",
         client?.name || "",
         formatCsvDate(invoice.date),
+        invoiceTypeLabel(invoice),
+        invoice.convertedFrom || "",
+        invoice.parentQuoteId || "",
         formatCsvNumber(invoice.totalHT),
+        String(invoice.taxRate ?? taxRate),
         formatCsvNumber(invoice.taxAmount),
         formatCsvNumber(invoice.totalTTC),
         invoice.status || "",
       ];
     }),
     [],
-    ["Dépenses du mois", ""],
-    ["Fournisseur", "Date", "N° facture", "HT", "TVA %", "TVA €", "TTC", "Catégorie"],
+    ["Journal des achats (dépenses)", ""],
+    [
+      "Fournisseur",
+      "Date",
+      "N° facture",
+      "HT",
+      "TVA %",
+      "TVA €",
+      "TTC",
+      "Catégorie",
+    ],
     ...expenses.map((expense) => [
       expense.supplierName || "",
       formatCsvDate(expense.purchaseDate || expense.createdAt),
@@ -219,7 +252,7 @@ export function exportAccountingLuxCsv(data, { year, month } = {}) {
 
   const lines = rows.map((row) => row.map(escapeCsvCell).join(";"));
   const content = `\uFEFF${lines.join("\r\n")}`;
-  const filename = `comptabilite-lu-${targetYear}-${String(targetMonth + 1).padStart(2, "0")}.csv`;
+  const filename = `fiduciaire-lu-${targetYear}-${String(targetMonth + 1).padStart(2, "0")}.csv`;
   const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");

@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
   nextDocumentNumber,
+  nextInvoiceNumber,
+  detectInvoiceNumberGaps,
+  getInvoiceNumberSettings,
   quoteAlreadyConverted,
   isQuoteConvertible,
   convertQuoteToInvoiceData,
@@ -42,6 +45,32 @@ describe("nextDocumentNumber", () => {
   it("commence à 0001 si aucun document de l'année", () => {
     const year = 2025;
     expect(nextDocumentNumber([], "DEV", year)).toBe("DEV-2025-0001");
+  });
+
+  it("respecte le préfixe et le padding des paramètres facture", () => {
+    const year = 2026;
+    const settings = { invoiceNumberPrefix: "FAC", invoiceNumberPadding: 3 };
+    expect(nextInvoiceNumber([], settings, year)).toBe("FAC-2026-001");
+  });
+});
+
+describe("detectInvoiceNumberGaps", () => {
+  it("liste les numéros manquants dans la série annuelle", () => {
+    const year = 2026;
+    const settings = { invoiceNumberPrefix: "FAC", invoiceNumberPadding: 3 };
+    const invoices = [
+      { number: "FAC-2026-001" },
+      { number: "FAC-2026-003" },
+      { number: "FAC-2026-004" },
+    ];
+
+    expect(detectInvoiceNumberGaps(invoices, settings, year)).toEqual([
+      "FAC-2026-002",
+    ]);
+  });
+
+  it("normalise le préfixe facture depuis les paramètres", () => {
+    expect(getInvoiceNumberSettings({ invoiceNumberPrefix: "  INV  " }).prefix).toBe("INV");
   });
 });
 

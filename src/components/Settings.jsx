@@ -8,6 +8,12 @@ import {
 import { showToast } from "../utils/toast";
 import { getStoredTheme, setTheme, THEMES } from "../utils/theme";
 import { downloadInvoiceUblStub } from "../utils/peppolUbl";
+import { exportAccountingLuxCsv } from "../utils/exportCsv";
+import {
+  currentDocumentYear,
+  detectInvoiceNumberGaps,
+  nextInvoiceNumber,
+} from "../utils/documents";
 
 const THEME_LABELS = {
   light: "Clair",
@@ -80,6 +86,24 @@ export default function Settings({
     showToast("Export UBL stub téléchargé (non Peppol)", "success");
   }
 
+  function handleExportFiduciaire() {
+    exportAccountingLuxCsv(data);
+    showToast("Export fiduciaire Luxembourg téléchargé.", "success");
+    logActivity?.("Export fiduciaire LU", new Date().toLocaleDateString("fr-FR"));
+  }
+
+  const invoiceYear = currentDocumentYear();
+  const nextInvoicePreview = nextInvoiceNumber(
+    data.invoices || [],
+    form,
+    invoiceYear
+  );
+  const invoiceGaps = detectInvoiceNumberGaps(
+    data.invoices || [],
+    form,
+    invoiceYear
+  );
+
   function submit(e) {
 
     e.preventDefault();
@@ -106,6 +130,11 @@ export default function Settings({
             form.taxRate || 0
           ),
         paymentDays: normalizePaymentDays(form.paymentDays),
+        invoiceNumberPrefix: String(form.invoiceNumberPrefix || "FAC").trim() || "FAC",
+        invoiceNumberPadding: Math.min(
+          6,
+          Math.max(3, Number(form.invoiceNumberPadding) || 4)
+        ),
       }
     });
 
@@ -162,6 +191,17 @@ Version installée : <strong>{APP_VERSION}</strong>
   )}
 </div>
 ) : null}
+
+<div className="card" style={{ marginBottom: "1rem" }}>
+  <h3>Export fiduciaire Luxembourg</h3>
+  <p className="muted" style={{ lineHeight: 1.5 }}>
+    Export mensuel CSV (UTF-8 avec BOM) : journal des ventes, journal des achats,
+    récapitulatif TVA et colonnes acompte / solde / devis parent.
+  </p>
+  <button type="button" className="ghost" onClick={handleExportFiduciaire}>
+    Export fiduciaire LU (mois en cours)
+  </button>
+</div>
 
 <div className="card theme-settings-card">
   <h3>Apparence</h3>
@@ -306,6 +346,48 @@ e.target.value
     (relances par e-mail).
   </p>
 </label>
+
+<label className="theme-field">
+  <span>Préfixe numérotation factures</span>
+  <input
+    placeholder="FAC"
+    value={form.invoiceNumberPrefix ?? "FAC"}
+    onChange={(e) =>
+      setForm({
+        ...form,
+        invoiceNumberPrefix: e.target.value,
+      })
+    }
+  />
+  <p className="muted" style={{ margin: 0, fontSize: "12px", lineHeight: 1.4 }}>
+    Format : {form.invoiceNumberPrefix || "FAC"}-{invoiceYear}-0001
+    · Prochain numéro estimé : <strong>{nextInvoicePreview}</strong>
+  </p>
+</label>
+
+<label className="theme-field">
+  <span>Chiffres du compteur (padding)</span>
+  <input
+    type="number"
+    min="3"
+    max="6"
+    step="1"
+    value={form.invoiceNumberPadding ?? 4}
+    onChange={(e) =>
+      setForm({
+        ...form,
+        invoiceNumberPadding: e.target.value,
+      })
+    }
+  />
+</label>
+
+{invoiceGaps.length > 0 && (
+  <p className="muted" style={{ margin: 0, fontSize: "12px", lineHeight: 1.4 }}>
+    Trous détectés en {invoiceYear} : {invoiceGaps.slice(0, 6).join(", ")}
+    {invoiceGaps.length > 6 ? ` … (+${invoiceGaps.length - 6})` : ""}
+  </p>
+)}
 
 <textarea
 placeholder="Conditions de paiement"

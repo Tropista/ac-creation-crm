@@ -184,7 +184,7 @@ export default function Expenses({
 
   function handleExportAccounting() {
     exportAccountingLuxCsv(data);
-    showToast("Export comptable Luxembourg téléchargé.", "success");
+    showToast("Export fiduciaire Luxembourg téléchargé.", "success");
   }
 
   function openImportDialog() {
@@ -435,7 +435,7 @@ export default function Expenses({
             Exporter CSV
           </button>
           <button type="button" onClick={handleExportAccounting}>
-            Export comptable LU
+            Export fiduciaire LU
           </button>
           <input
             ref={importInputRef}

@@ -104,15 +104,75 @@ export function currentDocumentYear() {
   return new Date().getFullYear();
 }
 
-export function nextDocumentNumber(list, docPrefix, year = currentDocumentYear()) {
+export function getInvoiceNumberSettings(settings = {}) {
+  const prefix = String(settings.invoiceNumberPrefix || "FAC").trim() || "FAC";
+  const rawPadding = Number(settings.invoiceNumberPadding);
+  const padding = Number.isFinite(rawPadding)
+    ? Math.min(6, Math.max(3, Math.round(rawPadding)))
+    : 4;
+
+  return { prefix, padding };
+}
+
+export function formatDocumentNumber(prefix, year, sequence, padding = 4) {
+  return `${prefix}-${year}-${String(sequence).padStart(padding, "0")}`;
+}
+
+export function parseDocumentSequence(number, docPrefix, year, padding = 4) {
+  const value = String(number || "");
+  const pattern = new RegExp(
+    `^${docPrefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-${year}-(\\d{${padding},})$`
+  );
+  const match = value.match(pattern);
+  if (!match) return null;
+  const sequence = Number(match[1]);
+  return Number.isNaN(sequence) ? null : sequence;
+}
+
+export function nextDocumentNumber(
+  list,
+  docPrefix,
+  year = currentDocumentYear(),
+  options = {}
+) {
+  const padding = options.padding ?? 4;
   const numbers = (list || [])
-    .map((doc) => String(doc.number || ""))
-    .filter((number) => number.startsWith(`${docPrefix}-${year}-`))
-    .map((number) => Number(number.split("-").pop()))
-    .filter((value) => !Number.isNaN(value));
+    .map((doc) => parseDocumentSequence(doc.number, docPrefix, year, padding))
+    .filter((value) => value != null);
 
   const nextNumber = numbers.length > 0 ? Math.max(...numbers) + 1 : 1;
-  return `${docPrefix}-${year}-${String(nextNumber).padStart(4, "0")}`;
+  return formatDocumentNumber(docPrefix, year, nextNumber, padding);
+}
+
+export function nextInvoiceNumber(invoices, settings, year = currentDocumentYear()) {
+  const { prefix, padding } = getInvoiceNumberSettings(settings);
+  return nextDocumentNumber(invoices, prefix, year, { padding });
+}
+
+export function detectInvoiceNumberGaps(
+  invoices,
+  settings,
+  year = currentDocumentYear()
+) {
+  const { prefix, padding } = getInvoiceNumberSettings(settings);
+  const sequences = (invoices || [])
+    .map((invoice) => parseDocumentSequence(invoice.number, prefix, year, padding))
+    .filter((value) => value != null)
+    .sort((a, b) => a - b);
+
+  if (sequences.length === 0) return [];
+
+  const max = sequences[sequences.length - 1];
+  const present = new Set(sequences);
+  const missing = [];
+
+  for (let index = 1; index < max; index += 1) {
+    if (!present.has(index)) {
+      missing.push(formatDocumentNumber(prefix, year, index, padding));
+    }
+  }
+
+  return missing;
 }
 
 export function isFullInvoiceFromQuote(invoice, quoteNumber) {
@@ -222,7 +282,7 @@ export function convertQuoteToInvoiceData(data, quote) {
   const invoice = {
     ...quote,
     id: uid(),
-    number: nextDocumentNumber(data.invoices || [], "FAC"),
+    number: nextInvoiceNumber(data.invoices || [], data.settings),
     date: today(),
     status: "Non payée",
     dueDate: computeDueDate(today(), data.settings?.paymentDays),
@@ -355,7 +415,7 @@ export function createDepositInvoiceFromQuote(data, quote, percent) {
 
   const invoice = {
     id: uid(),
-    number: nextDocumentNumber(data.invoices || [], "FAC"),
+    number: nextInvoiceNumber(data.invoices || [], data.settings),
     date: today(),
     clientId: quote.clientId,
     status: "Non payée",
@@ -422,7 +482,7 @@ export function createBalanceInvoiceFromQuote(data, quote) {
 
   const invoice = {
     id: uid(),
-    number: nextDocumentNumber(data.invoices || [], "FAC"),
+    number: nextInvoiceNumber(data.invoices || [], data.settings),
     date: today(),
     clientId: quote.clientId,
     status: "Non payée",
