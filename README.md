@@ -137,6 +137,8 @@ Le build Vite utilise `base: "/"` lorsque `VERCEL=1` (défini dans le job CI). E
 
 Premier déploiement manuel possible avec `npx vercel link` puis `npx vercel --prod` depuis la racine du projet.
 
+**Page blanche après déploiement ?** Vérifier dans [Vercel → Deployments](https://vercel.com/dashboard) que la production pointe bien sur le dernier commit (`main`). Puis vider le cache navigateur (**Ctrl+Shift+R**) ou DevTools → Application → Service Workers → *Unregister* (l’ancien SW pouvait servir un `index.html` obsolète référençant des chunks JS supprimés).
+
 ## Electron (atelier)
 
 Les variables `VITE_*` sont **figées au build Vite** (`npm run build`). Copier `.env` **avant** `npm run dist` — l’exe ne relit pas `.env` au démarrage pour Supabase.
