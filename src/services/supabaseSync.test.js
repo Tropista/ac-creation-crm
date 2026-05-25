@@ -11,6 +11,22 @@ import {
   shouldSkipMassDelete,
   MASS_DELETE_GUARD_MIN,
 } from "./supabaseSync.js";
+import { clearSyncedDeletionTombstones } from "./syncMerge.js";
+
+describe("supabaseSync tombstones", () => {
+  it("clearSyncedDeletionTombstones est importable depuis syncMerge", () => {
+    const settings = clearSyncedDeletionTombstones(
+      {
+        deletionTombstones: {
+          invoices: { inv1: "2026-05-25T12:00:00.000Z" },
+        },
+      },
+      { invoices: [] }
+    );
+
+    expect(settings.deletionTombstones).toBeUndefined();
+  });
+});
 
 describe("supabaseSync mass delete guard", () => {
   it("bloque la suppression quand le snapshot suivant est vide", () => {

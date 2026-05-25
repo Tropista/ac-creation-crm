@@ -1,5 +1,6 @@
 import { getSupabase } from "../supabase";
 import { sanitizeProductsForPersistence } from "../utils/productImages";
+import { clearSyncedDeletionTombstones } from "./syncMerge";
 
 /** Refuse de pousser une suppression massive vers le cloud (ex. migration ou snapshot vide). */
 export const MASS_DELETE_GUARD_MIN = 50;
@@ -293,6 +294,10 @@ async function upsertRowsBatched(supabase, table, items = []) {
   return written;
 }
 
+function getTombstoneIds(settings, collectionKey) {
+  return Object.keys(settings?.deletionTombstones?.[collectionKey] || {});
+}
+
 export async function syncSupabaseData(nextData, previousData = {}) {
   const supabase = await getSupabase();
   const syncedData = {
@@ -300,12 +305,22 @@ export async function syncSupabaseData(nextData, previousData = {}) {
     products: sanitizeProductsForPersistence(nextData.products),
   };
 
-  const deleteRemovedItems = async (table, nextItems = [], previousItems = []) => {
+  const deleteRemovedItems = async (
+    table,
+    nextItems = [],
+    previousItems = [],
+    tombstoneIds = []
+  ) => {
     const nextIds = new Set((nextItems || []).map((item) => item.id));
 
-    const removedIds = (previousItems || [])
-      .filter((item) => item?.id && !nextIds.has(item.id))
-      .map((item) => item.id);
+    const removedIds = [
+      ...new Set([
+        ...(previousItems || [])
+          .filter((item) => item?.id && !nextIds.has(item.id))
+          .map((item) => item.id),
+        ...(tombstoneIds || []).filter((id) => id && !nextIds.has(id)),
+      ]),
+    ];
 
     if (!removedIds.length) return;
 
@@ -370,30 +385,94 @@ export async function syncSupabaseData(nextData, previousData = {}) {
   ]);
 
   await Promise.all([
-    deleteRemovedItems("users", syncedData.users, previousData.users),
-    deleteRemovedItems("clients", syncedData.clients, previousData.clients),
-    deleteRemovedItems("products", syncedData.products, previousData.products),
-    deleteRemovedItems("categories", syncedData.categories, previousData.categories),
+    deleteRemovedItems(
+      "users",
+      syncedData.users,
+      previousData.users,
+      getTombstoneIds(syncedData.settings, "users")
+    ),
+    deleteRemovedItems(
+      "clients",
+      syncedData.clients,
+      previousData.clients,
+      getTombstoneIds(syncedData.settings, "clients")
+    ),
+    deleteRemovedItems(
+      "products",
+      syncedData.products,
+      previousData.products,
+      getTombstoneIds(syncedData.settings, "products")
+    ),
+    deleteRemovedItems(
+      "categories",
+      syncedData.categories,
+      previousData.categories,
+      getTombstoneIds(syncedData.settings, "categories")
+    ),
     safeOptionalCollectionWrite("suppliers", () =>
-      deleteRemovedItems("suppliers", syncedData.suppliers, previousData.suppliers)
+      deleteRemovedItems(
+        "suppliers",
+        syncedData.suppliers,
+        previousData.suppliers,
+        getTombstoneIds(syncedData.settings, "suppliers")
+      )
     ),
     safeOptionalCollectionWrite("expenses", () =>
-      deleteRemovedItems("expenses", syncedData.expenses, previousData.expenses)
+      deleteRemovedItems(
+        "expenses",
+        syncedData.expenses,
+        previousData.expenses,
+        getTombstoneIds(syncedData.settings, "expenses")
+      )
     ),
     safeOptionalCollectionWrite("leads", () =>
-      deleteRemovedItems("leads", syncedData.leads, previousData.leads)
+      deleteRemovedItems(
+        "leads",
+        syncedData.leads,
+        previousData.leads,
+        getTombstoneIds(syncedData.settings, "leads")
+      )
     ),
     safeOptionalCollectionWrite("delivery_notes", () =>
       deleteRemovedItems(
         "delivery_notes",
         syncedData.deliveryNotes,
-        previousData.deliveryNotes
+        previousData.deliveryNotes,
+        getTombstoneIds(syncedData.settings, "deliveryNotes")
       )
     ),
-    deleteRemovedItems("quotes", syncedData.quotes, previousData.quotes),
-    deleteRemovedItems("invoices", syncedData.invoices, previousData.invoices),
-    deleteRemovedItems("backups", syncedData.backups, previousData.backups),
+    deleteRemovedItems(
+      "quotes",
+      syncedData.quotes,
+      previousData.quotes,
+      getTombstoneIds(syncedData.settings, "quotes")
+    ),
+    deleteRemovedItems(
+      "invoices",
+      syncedData.invoices,
+      previousData.invoices,
+      getTombstoneIds(syncedData.settings, "invoices")
+    ),
+    deleteRemovedItems(
+      "backups",
+      syncedData.backups,
+      previousData.backups,
+      getTombstoneIds(syncedData.settings, "backups")
+    ),
   ]);
+
+  syncedData.settings = clearSyncedDeletionTombstones(syncedData.settings, syncedData);
+
+  const { error: finalSettingsError } = await supabase.from("settings").upsert({
+    id: "main",
+    data: syncedData.settings,
+  });
+
+  if (finalSettingsError) {
+    throw formatSupabaseCollectionError("settings", finalSettingsError);
+  }
+
+  return syncedData;
 }
 
 export async function loadSupabaseData({ normalizeData, emptyData } = {}) {

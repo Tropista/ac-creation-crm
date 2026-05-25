@@ -144,6 +144,102 @@ export function parseUpdatedAt(item) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+/** @typedef {Record<string, Record<string, string>>} DeletionTombstones */
+
+export function mergeDeletionTombstones(
+  localTombstones = {},
+  cloudTombstones = {}
+) {
+  /** @type {DeletionTombstones} */
+  const merged = {};
+
+  for (const key of new Set([
+    ...Object.keys(localTombstones || {}),
+    ...Object.keys(cloudTombstones || {}),
+  ])) {
+    const localMap = localTombstones?.[key] || {};
+    const cloudMap = cloudTombstones?.[key] || {};
+    const ids = new Set([...Object.keys(localMap), ...Object.keys(cloudMap)]);
+    const collectionTombstones = {};
+
+    for (const id of ids) {
+      const localAt = parseUpdatedAt({ updatedAt: localMap[id] });
+      const cloudAt = parseUpdatedAt({ updatedAt: cloudMap[id] });
+      const deletedAt = localAt >= cloudAt ? localMap[id] : cloudMap[id];
+      if (deletedAt) {
+        collectionTombstones[id] = deletedAt;
+      }
+    }
+
+    if (Object.keys(collectionTombstones).length) {
+      merged[key] = collectionTombstones;
+    }
+  }
+
+  return merged;
+}
+
+export function collectDeletions(previousItems = [], nextItems = [], deletedAt) {
+  const nextIds = new Set(
+    (nextItems || []).filter((item) => item?.id).map((item) => String(item.id))
+  );
+  /** @type {Record<string, string>} */
+  const deletions = {};
+
+  for (const item of previousItems || []) {
+    if (!item?.id) continue;
+    const id = String(item.id);
+    if (!nextIds.has(id)) {
+      deletions[id] = deletedAt;
+    }
+  }
+
+  return deletions;
+}
+
+export function clearSyncedDeletionTombstones(settings = {}, collections = {}) {
+  const tombstones = { ...(settings.deletionTombstones || {}) };
+  let changed = false;
+
+  for (const key of SYNC_COLLECTIONS) {
+    const collectionTombstones = tombstones[key];
+    if (!collectionTombstones) continue;
+
+    const nextIds = new Set(
+      (collections[key] || []).filter((item) => item?.id).map((item) => String(item.id))
+    );
+    const kept = {};
+
+    for (const [id, deletedAt] of Object.entries(collectionTombstones)) {
+      if (nextIds.has(id)) {
+        kept[id] = deletedAt;
+        continue;
+      }
+      changed = true;
+    }
+
+    if (Object.keys(kept).length) {
+      tombstones[key] = kept;
+    } else {
+      delete tombstones[key];
+      changed = true;
+    }
+  }
+
+  if (!changed) {
+    return settings;
+  }
+
+  const nextSettings = { ...settings };
+  if (Object.keys(tombstones).length) {
+    nextSettings.deletionTombstones = tombstones;
+  } else {
+    delete nextSettings.deletionTombstones;
+  }
+
+  return nextSettings;
+}
+
 function stableSerialize(value) {
   return JSON.stringify(value);
 }
@@ -173,17 +269,52 @@ export function stampCollectionChanges(previousItems = [], nextItems = [], now) 
 export function stampDataChanges(previous = {}, next = {}) {
   const timestamp = new Date().toISOString();
   const stamped = { ...next };
+  const deletionTombstones = mergeDeletionTombstones(
+    previous.settings?.deletionTombstones,
+    next.settings?.deletionTombstones
+  );
 
   for (const key of SYNC_COLLECTIONS) {
     stamped[key] = stampCollectionChanges(previous[key], next[key], timestamp);
+
+    const deletions = collectDeletions(previous[key], next[key], timestamp);
+    if (Object.keys(deletions).length) {
+      deletionTombstones[key] = {
+        ...(deletionTombstones[key] || {}),
+        ...deletions,
+      };
+    }
+
+    const activeIds = new Set(
+      (stamped[key] || []).filter((item) => item?.id).map((item) => String(item.id))
+    );
+    if (deletionTombstones[key]) {
+      for (const id of Object.keys(deletionTombstones[key])) {
+        if (activeIds.has(id)) {
+          delete deletionTombstones[key][id];
+        }
+      }
+      if (!Object.keys(deletionTombstones[key]).length) {
+        delete deletionTombstones[key];
+      }
+    }
   }
 
-  if (stableSerialize(previous.settings) !== stableSerialize(next.settings)) {
-    stamped.settings = {
-      ...(next.settings || {}),
-      updatedAt: timestamp,
-    };
+  const nextSettings = { ...(next.settings || {}) };
+  if (Object.keys(deletionTombstones).length) {
+    nextSettings.deletionTombstones = deletionTombstones;
+  } else {
+    delete nextSettings.deletionTombstones;
   }
+
+  const settingsChanged =
+    stableSerialize(previous.settings) !== stableSerialize(next.settings) ||
+    stableSerialize(previous.settings?.deletionTombstones || {}) !==
+      stableSerialize(deletionTombstones);
+
+  stamped.settings = settingsChanged
+    ? { ...nextSettings, updatedAt: timestamp }
+    : nextSettings;
 
   return stamped;
 }
@@ -216,7 +347,7 @@ function mergeRecord(local, cloud, { lastSyncAt, critical, onConflict, entityLab
 export function mergeCollection(
   localItems = [],
   cloudItems = [],
-  { lastSyncAt, critical = false, onConflict, entityLabel } = {}
+  { lastSyncAt, critical = false, onConflict, entityLabel, deletionTombstones = {} } = {}
 ) {
   const localMap = new Map(
     (localItems || []).filter((item) => item?.id).map((item) => [String(item.id), item])
@@ -229,8 +360,15 @@ export function mergeCollection(
   const merged = [];
 
   for (const id of ids) {
+    const local = localMap.get(id);
+    const cloud = cloudMap.get(id);
+
+    if (!local && cloud && deletionTombstones[id]) {
+      continue;
+    }
+
     merged.push(
-      mergeRecord(localMap.get(id), cloudMap.get(id), {
+      mergeRecord(local, cloud, {
         lastSyncAt,
         critical,
         onConflict,
@@ -244,6 +382,10 @@ export function mergeCollection(
 
 export function mergeCloudWithLocal(localData = {}, cloudData = {}, { onConflict } = {}) {
   const lastSyncAt = getLastSyncAt();
+  const deletionTombstones = mergeDeletionTombstones(
+    localData.settings?.deletionTombstones,
+    cloudData.settings?.deletionTombstones
+  );
   const merged = {
     ...localData,
     ...cloudData,
@@ -255,6 +397,7 @@ export function mergeCloudWithLocal(localData = {}, cloudData = {}, { onConflict
       critical: CRITICAL_SYNC_COLLECTIONS.has(key),
       onConflict,
       entityLabel: key,
+      deletionTombstones: deletionTombstones[key] || {},
     });
   }
 
@@ -264,6 +407,16 @@ export function mergeCloudWithLocal(localData = {}, cloudData = {}, { onConflict
     onConflict,
     entityLabel: "settings",
   });
+
+  if (Object.keys(deletionTombstones).length) {
+    merged.settings = {
+      ...(merged.settings || {}),
+      deletionTombstones,
+    };
+  } else if (merged.settings?.deletionTombstones) {
+    const { deletionTombstones: _removed, ...rest } = merged.settings;
+    merged.settings = rest;
+  }
 
   return merged;
 }

@@ -116,10 +116,12 @@ export function useCloudSync({ currentUserEmail, setData, setLoading }) {
 
           const prepared = prepareAppData(mergedRaw);
           setData(prepared);
-          await syncSupabaseData(prepared, cloud.data);
+          const synced = await syncSupabaseData(prepared, cloud.data);
+          const syncedPrepared = prepareAppData(synced);
 
-          saveData(prepared);
+          saveData(syncedPrepared);
           flushSaveData();
+          setData(syncedPrepared);
 
           markSyncSuccess();
           cloudSyncSucceeded.current = true;
@@ -225,12 +227,38 @@ export function useCloudSync({ currentUserEmail, setData, setLoading }) {
         try {
           setSyncStatus(SYNC_STATUS.SAVING);
           const { syncSupabaseData } = await loadSupabaseSyncModule();
-          await syncSupabaseData(normalized, previous);
+          const synced = await syncSupabaseData(normalized, previous);
+          const syncedNormalized = normalizeData({
+            ...synced,
+            users: dedupeItemsById(synced.users || []),
+            backups: dedupeItemsById(synced.backups || []),
+            logs: dedupeItemsById(synced.logs || []),
+          });
+
+          dataRef.current = syncedNormalized;
+          setData(syncedNormalized);
           markSyncSuccess();
           cloudSyncSucceeded.current = true;
           cloudSaved = true;
           setCloudAvailable(true);
           setSyncStatus(SYNC_STATUS.SYNCED);
+
+          saveData(syncedNormalized);
+          const localSaveResult = flushSaveData();
+
+          if (localSaveResult?.quotaExceeded && cloudSaved) {
+            showToast(
+              "Cache local plein — vos données sont bien enregistrées dans le cloud.",
+              "warning"
+            );
+          } else if (localSaveResult?.quotaExceeded && !cloudSaved) {
+            showToast(
+              "Quota localStorage dépassé — les données risquent de ne pas survivre au rechargement.",
+              "error"
+            );
+          }
+
+          return syncedNormalized;
         } catch (error) {
           console.error("Échec sync Supabase :", error);
           if (cloudSyncSucceeded.current) {

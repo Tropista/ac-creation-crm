@@ -1,11 +1,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   LAST_SYNC_AT_KEY,
+  clearSyncedDeletionTombstones,
+  collectDeletions,
   formatLastSyncRelative,
   formatSyncConflictMessage,
   getLastSyncAt,
   mergeCloudWithLocal,
   mergeCollection,
+  mergeDeletionTombstones,
   parseUpdatedAt,
   resolveCloudInitError,
   setLastSyncAt,
@@ -65,6 +68,97 @@ describe("syncMerge", () => {
     const stamped = stampDataChanges(previous, next);
     expect(stamped.settings.updatedAt).toBeTruthy();
     expect(stamped.clients[0].updatedAt).toBeTruthy();
+  });
+
+  it("collectDeletions détecte les ids retirés d'une collection", () => {
+    const deletions = collectDeletions(
+      [{ id: "c1" }, { id: "c2" }],
+      [{ id: "c1" }],
+      "2026-05-25T12:00:00.000Z"
+    );
+
+    expect(deletions).toEqual({ c2: "2026-05-25T12:00:00.000Z" });
+  });
+
+  it("stampDataChanges enregistre un tombstone lors d'une suppression locale", () => {
+    const previous = {
+      settings: { companyName: "AC Creation" },
+      clients: [{ id: "c1", name: "Client à supprimer" }],
+    };
+    const next = {
+      settings: { companyName: "AC Creation" },
+      clients: [],
+    };
+
+    const stamped = stampDataChanges(previous, next);
+
+    expect(stamped.clients).toEqual([]);
+    expect(stamped.settings.deletionTombstones.clients.c1).toBeTruthy();
+  });
+
+  it("mergeCollection ignore le cloud si l'id est tombstoné localement", () => {
+    const merged = mergeCollection(
+      [],
+      [{ id: "c1", name: "Client cloud" }],
+      {
+        deletionTombstones: { c1: "2026-05-25T12:00:00.000Z" },
+      }
+    );
+
+    expect(merged).toEqual([]);
+  });
+
+  it("mergeCloudWithLocal ne restaure pas un client supprimé localement", () => {
+    setLastSyncAt(Date.parse("2026-05-23T09:00:00.000Z"));
+
+    const local = {
+      settings: {
+        companyName: "Local",
+        deletionTombstones: {
+          clients: { c1: "2026-05-25T12:00:00.000Z" },
+        },
+      },
+      clients: [],
+      quotes: [],
+      invoices: [],
+    };
+
+    const cloud = {
+      settings: { companyName: "Cloud" },
+      clients: [{ id: "c1", name: "Client fantôme", updatedAt: "2026-05-20T08:00:00.000Z" }],
+      quotes: [],
+      invoices: [],
+    };
+
+    const merged = mergeCloudWithLocal(local, cloud);
+
+    expect(merged.clients).toEqual([]);
+  });
+
+  it("mergeDeletionTombstones conserve la suppression la plus récente", () => {
+    const merged = mergeDeletionTombstones(
+      { clients: { c1: "2026-05-25T10:00:00.000Z" } },
+      { clients: { c1: "2026-05-25T12:00:00.000Z" } }
+    );
+
+    expect(merged.clients.c1).toBe("2026-05-25T12:00:00.000Z");
+  });
+
+  it("clearSyncedDeletionTombstones retire les tombstones synchronisés", () => {
+    const settings = {
+      companyName: "AC Creation",
+      deletionTombstones: {
+        clients: { c1: "2026-05-25T12:00:00.000Z" },
+        quotes: { q1: "2026-05-25T12:00:00.000Z" },
+      },
+    };
+
+    const cleared = clearSyncedDeletionTombstones(settings, {
+      clients: [],
+      quotes: [],
+    });
+
+    expect(cleared.deletionTombstones).toBeUndefined();
   });
 
   it("mergeCollection conserve la version cloud si seule la cloud a changé", () => {
