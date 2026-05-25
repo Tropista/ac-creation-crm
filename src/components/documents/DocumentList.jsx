@@ -26,6 +26,7 @@ export default function DocumentList({
   onConvertQuote,
   onGenerateDeliveryNote,
   onPreviewDeliveryNote,
+  onDownloadProductionSheet,
   onCreateDeposit,
   onCreateBalance,
   onRecordPayment,
@@ -128,6 +129,8 @@ export default function DocumentList({
                 const depositEligible =
                   isQuote &&
                   ["Accepté", "En production", "Prêt", "Livré"].includes(d.status);
+                const productionSheetEligible =
+                  isQuote && ["En production", "Prêt"].includes(d.status);
 
                 return (
                   <tr
@@ -255,6 +258,16 @@ export default function DocumentList({
                             Convertir
                           </button>
                         ))}
+                      {productionSheetEligible && (
+                        <button
+                          type="button"
+                          className="compact documents-fiche-btn"
+                          onClick={() => onDownloadProductionSheet?.(d)}
+                          title="Télécharger la fiche atelier PDF"
+                        >
+                          Fiche
+                        </button>
+                      )}
                       {blEligible && (
                         <>
                           <button

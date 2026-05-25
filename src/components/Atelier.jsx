@@ -13,6 +13,10 @@ import {
 import { syncQuoteProductionStock } from "../utils/stock";
 import { isQuoteDeliveryOverdue } from "../utils/quoteDelivery";
 import { summarizeQuoteProductionLines } from "../utils/quoteLines";
+import {
+  downloadProductionSheetPdf,
+  isProductionSheetEligible,
+} from "../utils/productionPdf";
 import { pageToPath } from "../utils/routes";
 import { showToast } from "../utils/toast";
 import { canDeleteData } from "../services/authService";
@@ -67,6 +71,7 @@ function AtelierCard({
   onDelete,
   onGenerateBl,
   onPreviewBl,
+  onDownloadProductionSheet,
   onUpdateQuote,
   canDelete = true,
   variant = "kanban",
@@ -78,6 +83,7 @@ function AtelierCard({
   const hasBl = Boolean(getDeliveryNoteForQuote(data, quote));
   const productionLines = summarizeQuoteProductionLines(quote.lines);
   const deliveryOverdue = isQuoteDeliveryOverdue(quote);
+  const productionSheetEligible = isProductionSheetEligible(quote);
   const assignee = (data.users || []).find(
     (user) => String(user.id) === String(quote.assignedTo)
   );
@@ -245,6 +251,18 @@ function AtelierCard({
             </option>
           ))}
         </select>
+
+        {productionSheetEligible && (
+          <button
+            type="button"
+            className="atelier-fiche-btn"
+            data-testid={`atelier-fiche-${quote.id}`}
+            onClick={() => onDownloadProductionSheet?.(quote)}
+            title="Télécharger la fiche atelier PDF"
+          >
+            Fiche PDF
+          </button>
+        )}
 
         {blEligible && (
           <>
@@ -448,6 +466,17 @@ export default function Atelier({
     setPreviewBl(note);
   }
 
+  function handleDownloadProductionSheet(quote) {
+    try {
+      downloadProductionSheetPdf({ quote, data });
+      logActivity?.("Fiche atelier PDF", quote.number);
+      showToast(`Fiche atelier ${quote.number} téléchargée.`, "success");
+    } catch (error) {
+      console.error(error);
+      showToast("Impossible de générer la fiche atelier.", "error");
+    }
+  }
+
   function handleDropOnStatus(event, status) {
     event.preventDefault();
     setDragOverStatus("");
@@ -582,6 +611,7 @@ export default function Atelier({
                       onDelete={handleDelete}
                       onGenerateBl={handleGenerateBl}
                       onPreviewBl={handlePreviewBl}
+                      onDownloadProductionSheet={handleDownloadProductionSheet}
                       onUpdateQuote={patchQuote}
                       canDelete={canDeleteData(currentRole)}
                     />
@@ -608,6 +638,7 @@ export default function Atelier({
                       onDelete={handleDelete}
                       onGenerateBl={handleGenerateBl}
                       onPreviewBl={handlePreviewBl}
+                      onDownloadProductionSheet={handleDownloadProductionSheet}
                       onUpdateQuote={patchQuote}
                       canDelete={canDeleteData(currentRole)}
                     />
@@ -655,6 +686,7 @@ export default function Atelier({
                       onDelete={handleDelete}
                       onGenerateBl={handleGenerateBl}
                       onPreviewBl={handlePreviewBl}
+                      onDownloadProductionSheet={handleDownloadProductionSheet}
                       onUpdateQuote={patchQuote}
                       canDelete={canDeleteData(currentRole)}
                     />
@@ -691,6 +723,7 @@ export default function Atelier({
                       onDelete={handleDelete}
                       onGenerateBl={handleGenerateBl}
                       onPreviewBl={handlePreviewBl}
+                      onDownloadProductionSheet={handleDownloadProductionSheet}
                       onUpdateQuote={patchQuote}
                       canDelete={canDeleteData(currentRole)}
                     />

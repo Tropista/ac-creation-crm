@@ -225,6 +225,7 @@
   border-radius: 14px;
 }
 
+.atelier-fiche-btn,
 .atelier-bl-btn,
 .atelier-bl-preview-btn {
   flex: 0 0 auto;
@@ -239,6 +240,7 @@
   cursor: pointer;
 }
 
+.atelier-fiche-btn:hover,
 .atelier-bl-btn:hover,
 .atelier-bl-preview-btn:hover {
   filter: brightness(0.98);

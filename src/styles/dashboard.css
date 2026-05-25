@@ -367,3 +367,102 @@ background:var(--surface);
 border-color:var(--border);
 color:var(--text);
 }
+
+.dashboard-delivery-nav{
+display:flex;
+flex-wrap:wrap;
+gap:8px;
+align-items:center;
+}
+
+.dashboard-delivery-week{
+display:grid;
+grid-template-columns:repeat(7,minmax(0,1fr));
+gap:10px;
+margin-top:12px;
+}
+
+.dashboard-delivery-day{
+border:1px solid var(--border,#e5e7eb);
+border-radius:14px;
+padding:10px;
+background:rgba(248,250,252,.85);
+min-height:120px;
+}
+
+.dashboard-delivery-day--today{
+border-color:#ec4899;
+box-shadow:0 0 0 1px rgba(236,72,153,.25);
+}
+
+.dashboard-delivery-day__head{
+display:flex;
+justify-content:space-between;
+align-items:center;
+gap:8px;
+margin-bottom:8px;
+text-transform:capitalize;
+}
+
+.dashboard-delivery-day__head span{
+font-size:12px;
+font-weight:700;
+background:rgba(236,72,153,.12);
+color:#db2777;
+padding:2px 8px;
+border-radius:999px;
+}
+
+.dashboard-delivery-day__empty{
+font-size:12px;
+margin:0;
+}
+
+.dashboard-delivery-day__list{
+list-style:none;
+margin:0;
+padding:0;
+display:grid;
+gap:8px;
+}
+
+.dashboard-delivery-day__list li{
+display:grid;
+gap:2px;
+font-size:12px;
+padding:8px;
+border-radius:10px;
+background:#fff;
+border:1px solid rgba(148,163,184,.18);
+}
+
+.dashboard-delivery-day__list li em{
+font-style:normal;
+color:var(--muted,#64748b);
+}
+
+.dashboard-delivery-item--overdue{
+border-color:rgba(220,38,38,.35)!important;
+background:#fef2f2!important;
+}
+
+.dashboard-delivery-overdue-tag{
+display:inline-block;
+width:fit-content;
+font-size:10px;
+font-weight:700;
+text-transform:uppercase;
+color:#b91c1c;
+}
+
+@media (max-width: 1100px){
+.dashboard-delivery-week{
+grid-template-columns:repeat(4,minmax(0,1fr));
+}
+}
+
+@media (max-width: 720px){
+.dashboard-delivery-week{
+grid-template-columns:repeat(2,minmax(0,1fr));
+}
+}

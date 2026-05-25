@@ -153,6 +153,14 @@ export default function Clients({
       .sort((a, b) => new Date(docDate(b) || 0) - new Date(docDate(a) || 0));
   }, [data.quotes, selectedClient]);
 
+  const selectedClientDeliveryNotes = useMemo(() => {
+    if (!selectedClient) return [];
+
+    return (data.deliveryNotes || [])
+      .filter((note) => String(note.clientId) === String(selectedClient.id))
+      .sort((a, b) => new Date(docDate(b) || 0) - new Date(docDate(a) || 0));
+  }, [data.deliveryNotes, selectedClient]);
+
   const clientHistory = useMemo(() => {
     const quotes = selectedClientQuotes.map((quote) => ({
       id: `quote-${quote.id}`,
@@ -178,6 +186,18 @@ export default function Clients({
       total: docTotal(invoice),
     }));
 
+    const deliveryNotes = selectedClientDeliveryNotes.map((note) => ({
+      id: `delivery-${note.id}`,
+      type: "Bon de livraison",
+      docType: "delivery",
+      doc: note,
+      icon: "📦",
+      title: note.number || note.reference || "BL",
+      status: note.status || "Émis",
+      date: docDate(note),
+      total: 0,
+    }));
+
     const created = selectedClient
       ? [
           {
@@ -192,10 +212,15 @@ export default function Clients({
         ]
       : [];
 
-    return [...quotes, ...invoices, ...created].sort(
+    return [...quotes, ...invoices, ...deliveryNotes, ...created].sort(
       (a, b) => new Date(b.date || 0) - new Date(a.date || 0)
     );
-  }, [selectedClient, selectedClientInvoices, selectedClientQuotes]);
+  }, [
+    selectedClient,
+    selectedClientInvoices,
+    selectedClientQuotes,
+    selectedClientDeliveryNotes,
+  ]);
 
   const selectedClientInvoiceTotal = selectedClientInvoices.reduce(
     (sum, invoice) => sum + docTotal(invoice),
@@ -346,7 +371,15 @@ export default function Clients({
     localStorage.setItem("crm_open_document_id", doc.id);
     localStorage.setItem("crm_open_document_type", type);
 
-    setPage?.(type === "quote" ? "quotes" : "invoices");
+    if (type === "quote") {
+      setPage?.("quotes");
+      return;
+    }
+    if (type === "delivery") {
+      setPage?.("quotes");
+      return;
+    }
+    setPage?.("invoices");
   }
 
   function remindClient(mode = "copy") {
@@ -765,7 +798,7 @@ h1{
                 <button type="button" className={clientTab === "contact" ? "active" : ""} onClick={() => setClientTab("contact")}>📞 Contact</button>
                 <button type="button" className={clientTab === "address" ? "active" : ""} onClick={() => setClientTab("address")}>📍 Adresse</button>
                 <button type="button" className={clientTab === "documents" ? "active" : ""} onClick={() => setClientTab("documents")}>📄 Documents</button>
-                <button type="button" className={clientTab === "history" ? "active" : ""} onClick={() => setClientTab("history")}>🕘 Activité</button>
+                <button type="button" className={clientTab === "history" ? "active" : ""} onClick={() => setClientTab("history")}>🕘 Historique</button>
               </div>
 
               <div className="client-card">
@@ -804,6 +837,7 @@ h1{
                       <DashboardCard label="Impayés" value={money(clientUnpaidAmount)} danger />
                       <DashboardCard label="Devis" value={selectedClientQuotes.length} />
                       <DashboardCard label="Factures" value={selectedClientInvoices.length} />
+                      <DashboardCard label="BL" value={selectedClientDeliveryNotes.length} />
                     </div>
 
                     <div className="client-doc-actions">
@@ -816,20 +850,41 @@ h1{
 
                     <div className="client-doc-grid">
                       <div className="client-history-section">
-                        <h4>Derniers devis</h4>
+                        <h4>Devis ({selectedClientQuotes.length})</h4>
                         <div className="client-history-list">
-                          {selectedClientQuotes.slice(0,5).map((quote)=>(
-                            <DocumentRow key={quote.id} doc={quote} type="quote" label="Devis" onOpen={openDocument}/>
-                          ))}
+                          {selectedClientQuotes.length === 0 ? (
+                            <p className="muted">Aucun devis.</p>
+                          ) : (
+                            selectedClientQuotes.map((quote) => (
+                              <DocumentRow key={quote.id} doc={quote} type="quote" label="Devis" onOpen={openDocument} />
+                            ))
+                          )}
                         </div>
                       </div>
 
                       <div className="client-history-section">
-                        <h4>Dernières factures</h4>
+                        <h4>Factures ({selectedClientInvoices.length})</h4>
                         <div className="client-history-list">
-                          {selectedClientInvoices.slice(0,5).map((invoice)=>(
-                            <DocumentRow key={invoice.id} doc={invoice} type="invoice" label="Facture" onOpen={openDocument}/>
-                          ))}
+                          {selectedClientInvoices.length === 0 ? (
+                            <p className="muted">Aucune facture.</p>
+                          ) : (
+                            selectedClientInvoices.map((invoice) => (
+                              <DocumentRow key={invoice.id} doc={invoice} type="invoice" label="Facture" onOpen={openDocument} />
+                            ))
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="client-history-section client-history-section--full">
+                        <h4>Bons de livraison ({selectedClientDeliveryNotes.length})</h4>
+                        <div className="client-history-list">
+                          {selectedClientDeliveryNotes.length === 0 ? (
+                            <p className="muted">Aucun bon de livraison.</p>
+                          ) : (
+                            selectedClientDeliveryNotes.map((note) => (
+                              <DocumentRow key={note.id} doc={note} type="delivery" label="BL" onOpen={openDocument} />
+                            ))
+                          )}
                         </div>
                       </div>
                     </div>
@@ -839,7 +894,7 @@ h1{
 
 
                 {clientTab === "history" && (
-                  <Timeline items={clientHistory.slice(0, 8)} />
+                  <Timeline items={clientHistory} onOpen={openDocument} />
                 )}
 
 
@@ -871,6 +926,8 @@ function DashboardCard({ label, value, danger = false }) {
 }
 
 function DocumentRow({ doc, type, label, onOpen }) {
+  const total = type === "delivery" ? null : docTotal(doc);
+
   return (
     <div className="client-history-item clickable" onClick={() => onOpen(doc, type)}>
       <div>
@@ -879,22 +936,38 @@ function DocumentRow({ doc, type, label, onOpen }) {
       </div>
 
       <div>
-        <strong>{money(docTotal(doc))}</strong>
+        {total != null ? <strong>{money(total)}</strong> : null}
         <span className={"status-badge " + statusClass(doc.status)}>{doc.status || "Sans statut"}</span>
       </div>
     </div>
   );
 }
 
-function Timeline({ items }) {
+function Timeline({ items, onOpen }) {
   if (!items.length) {
-    return <p className="muted">Aucune activité pour ce client.</p>;
+    return <p className="muted">Aucun document pour ce client.</p>;
   }
 
   return (
     <div className="client-timeline">
       {items.map((item) => (
-        <div className="timeline-item" key={item.id}>
+        <div
+          className={`timeline-item${item.doc ? " clickable" : ""}`}
+          key={item.id}
+          onClick={item.doc && item.docType ? () => onOpen?.(item.doc, item.docType) : undefined}
+          onKeyDown={
+            item.doc && item.docType
+              ? (event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onOpen?.(item.doc, item.docType);
+                  }
+                }
+              : undefined
+          }
+          role={item.doc && item.docType ? "button" : undefined}
+          tabIndex={item.doc && item.docType ? 0 : undefined}
+        >
           <div className="timeline-dot" />
 
           <div>

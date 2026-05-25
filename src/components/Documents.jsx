@@ -33,6 +33,7 @@ import {
 import { computeDueDate, openInvoiceReminderMailto } from "../utils/invoiceReminders";
 import { consumeQuoteDraft } from "../utils/quoteDraft";
 import { PRODUCTION_STATUSES } from "../utils/production";
+import { downloadProductionSheetPdf } from "../utils/productionPdf";
 import { fromDateInputValue, toDateInputValue } from "../utils/quoteDelivery";
 import { exportInvoicesCsv } from "../utils/exportCsv";
 import {
@@ -667,6 +668,17 @@ useEffect(() => {
     openPreview(note, "delivery");
   }
 
+  function downloadProductionSheet(quote) {
+    try {
+      downloadProductionSheetPdf({ quote, data });
+      logActivity?.("Fiche atelier PDF", quote.number);
+      showToast(`Fiche atelier ${quote.number} téléchargée.`, "success");
+    } catch (error) {
+      console.error(error);
+      showToast("Impossible de générer la fiche atelier.", "error");
+    }
+  }
+
   function createBalanceInvoice(quote) {
     try {
       const result = createBalanceInvoiceFromQuote(data, quote);
@@ -922,6 +934,7 @@ useEffect(() => {
         onConvertQuote={convertQuoteToInvoice}
         onGenerateDeliveryNote={generateDeliveryNote}
         onPreviewDeliveryNote={previewDeliveryNote}
+        onDownloadProductionSheet={downloadProductionSheet}
         onCreateDeposit={createDepositInvoice}
         onCreateBalance={createBalanceInvoice}
         onRecordPayment={recordPartialPayment}

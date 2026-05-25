@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getSupabase } from "../../supabase";
+import { APP_LOGO_URL } from "../../utils/assets";
 import { resetUrlAfterAuth } from "../../utils/routes";
 import {
   isAllowedUser,
@@ -121,12 +122,17 @@ export default function AuthPage({
       <div className="auth-orb orb-two"></div>
 
       <section className="auth-showcase">
-        <div className="brand-icon">📊</div>
+        <div className="brand-icon auth-brand-logo">
+          <img src={APP_LOGO_URL} alt="AC Creation" />
+        </div>
         <h1>
-          Mon <span>CRM</span>
+          AC <span>Creation</span>
         </h1>
         <p className="brand-text">
-          Accès privé réservé aux utilisateurs autorisés par l'administrateur.
+          Creative CRM — personnalisation, laser et impression 3D.
+        </p>
+        <p className="brand-text auth-brand-sub">
+          Accès privé réservé aux utilisateurs autorisés par l&apos;administrateur.
         </p>
 
         <div className="auth-features">

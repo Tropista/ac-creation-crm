@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   clientName,
@@ -15,6 +15,13 @@ import {
 import { openInvoiceReminderMailto } from "../utils/invoiceReminders";
 import { getProductionQueue } from "../utils/production";
 import { getOverdueQuotes } from "../utils/quoteDelivery";
+import {
+  addDays,
+  buildDeliveryWeekCalendar,
+  countWeekDeliveries,
+  formatWeekRangeLabel,
+  startOfWeekMonday,
+} from "../utils/quoteDeliveryCalendar";
 import { money } from "../utils/money";
 import { pageToPath } from "../utils/routes";
 import { getPermissions } from "../utils/permissions";
@@ -40,6 +47,7 @@ export default function Dashboard({
   currentRole = "Admin",
 }) {
   const navigate = useNavigate();
+  const [deliveryWeekOffset, setDeliveryWeekOffset] = useState(0);
   const permissions = getPermissions(currentRole);
   const canManageInvoices = permissions.pages.includes("invoices");
   const canManageQuotes = permissions.pages.includes("quotes");
@@ -110,6 +118,15 @@ export default function Dashboard({
 
   const productionQueue = getProductionQueue(quotes);
   const overdueDeliveries = getOverdueQuotes(quotes);
+  const deliveryWeekStart = useMemo(
+    () => addDays(startOfWeekMonday(new Date()), deliveryWeekOffset * 7),
+    [deliveryWeekOffset]
+  );
+  const deliveryWeekCalendar = useMemo(
+    () => buildDeliveryWeekCalendar(quotes, deliveryWeekStart, new Date()),
+    [quotes, deliveryWeekStart]
+  );
+  const deliveryWeekCount = countWeekDeliveries(deliveryWeekCalendar);
   const staleDraftQuotes = getStaleDraftQuotes(quotes).slice(0, 8);
   const unreadLeads = (leads || []).filter(
     (lead) => String(lead?.status || "nouveau") === "nouveau"
@@ -810,6 +827,82 @@ export default function Dashboard({
                           <span>{quote.number}</span>
                           <em>{clientName(data, quote.clientId)}</em>
                           <span className={statusClass(quote.status)}>{quote.status}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {canManageQuotes && (
+          <div className="card dashboard-action-card" data-testid="delivery-week-calendar">
+            <div className="dashboard-action-card__header">
+              <div>
+                <h3>Calendrier livraisons</h3>
+                <p className="muted">
+                  {deliveryWeekCount === 0
+                    ? "Aucune livraison prévue cette semaine."
+                    : `${deliveryWeekCount} livraison(s) prévue(s) — semaine du ${formatWeekRangeLabel(deliveryWeekStart)}`}
+                </p>
+              </div>
+              <div className="dashboard-delivery-nav">
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => setDeliveryWeekOffset((value) => value - 1)}
+                  aria-label="Semaine précédente"
+                >
+                  ←
+                </button>
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => setDeliveryWeekOffset(0)}
+                  disabled={deliveryWeekOffset === 0}
+                >
+                  Cette semaine
+                </button>
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => setDeliveryWeekOffset((value) => value + 1)}
+                  aria-label="Semaine suivante"
+                >
+                  →
+                </button>
+                <button type="button" className="ghost" onClick={goToAtelier}>
+                  Atelier →
+                </button>
+              </div>
+            </div>
+            <div className="dashboard-delivery-week">
+              {deliveryWeekCalendar.map((day) => (
+                <div
+                  key={day.date.toISOString()}
+                  className={`dashboard-delivery-day${day.isToday ? " dashboard-delivery-day--today" : ""}`}
+                >
+                  <header className="dashboard-delivery-day__head">
+                    <strong>{day.label}</strong>
+                    {day.items.length > 0 ? (
+                      <span>{day.items.length}</span>
+                    ) : null}
+                  </header>
+                  {day.items.length === 0 ? (
+                    <p className="muted dashboard-delivery-day__empty">—</p>
+                  ) : (
+                    <ul className="dashboard-delivery-day__list">
+                      {day.items.map(({ quote, overdue }) => (
+                        <li
+                          key={quote.id}
+                          className={overdue ? "dashboard-delivery-item--overdue" : ""}
+                        >
+                          <strong>{quote.number}</strong>
+                          <em>{clientName(data, quote.clientId)}</em>
+                          <span className={statusClass(quote.status)}>{quote.status}</span>
+                          {overdue ? <span className="dashboard-delivery-overdue-tag">Retard</span> : null}
                         </li>
                       ))}
                     </ul>
