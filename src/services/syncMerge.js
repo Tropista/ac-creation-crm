@@ -42,6 +42,7 @@ export const SYNC_COLLECTIONS = [
   "clients",
   "quotes",
   "invoices",
+  "deliveryNotes",
   "products",
   "categories",
   "suppliers",
@@ -97,6 +98,7 @@ const CONFLICT_ENTITY_LABELS = {
   clients: "client",
   quotes: "devis",
   invoices: "facture",
+  deliveryNotes: "bon de livraison",
   settings: "paramètres",
 };
 

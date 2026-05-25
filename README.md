@@ -66,6 +66,28 @@ Copier `.env.example` vers `.env`. Ne jamais committer le fichier `.env`.
 
 Sans Supabase configuré, l’app fonctionne en mode local (localStorage) ; le rapprochement bancaire reste désactivé.
 
+## Déploiement web (Vercel)
+
+Le dépôt inclut `vercel.json` (rewrite SPA) et un job CI **`deploy-vercel`** déclenché à chaque push sur `main` (après lint, tests et build).
+
+### Secrets GitHub à configurer
+
+Dans **Settings → Secrets and variables → Actions** du dépôt :
+
+| Secret | Description |
+|--------|-------------|
+| `VERCEL_TOKEN` | Token Vercel ([Account → Tokens](https://vercel.com/account/tokens)) |
+| `VERCEL_ORG_ID` | ID d’équipe ou de compte (`.vercel/project.json` ou `vercel link`) |
+| `VERCEL_PROJECT_ID` | ID du projet Vercel |
+| `VITE_SUPABASE_URL` | URL Supabase pour le build web (recommandé en prod) |
+| `VITE_SUPABASE_ANON_KEY` | Clé anon Supabase pour le build web |
+
+Sans `VERCEL_*`, le job de déploiement échoue — les autres jobs CI (lint, tests, build) restent indépendants.
+
+Le build Vite utilise `base: "/"` lorsque `VERCEL=1` (défini dans le job CI). En local / Electron, `base: "./"` est conservé (`vite.config.js`).
+
+Premier déploiement manuel possible avec `npx vercel link` puis `npx vercel --prod` depuis la racine du projet.
+
 ## Electron (atelier)
 
 Les variables `VITE_*` sont **figées au build Vite** (`npm run build`). Copier `.env` **avant** `npm run dist` — l’exe ne relit pas `.env` au démarrage pour Supabase.

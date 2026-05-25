@@ -8,6 +8,9 @@ import {
   createDeliveryNoteFromQuote,
   getDeliveryNoteForQuote,
   createDepositInvoiceFromQuote,
+  createBalanceInvoiceFromQuote,
+  getQuoteDepositSummary,
+  isFullInvoiceFromQuote,
   computeDepositTotals,
 } from "./documents.js";
 
@@ -240,5 +243,72 @@ describe("factures d'acompte", () => {
     expect(invoice.remaining).toBeCloseTo(35.1, 2);
     expect(invoice.stockAdjusted).toBe(false);
     expect(invoice.convertedFrom).toBe("DEV-2025-0200");
+    expect(invoice.parentQuoteId).toBe("q-dep");
+  });
+});
+
+describe("factures de solde", () => {
+  const quote = {
+    id: "q-bal",
+    number: "DEV-2025-0300",
+    status: "Accepté",
+    clientId: "c1",
+    totalHT: 100,
+    taxAmount: 17,
+    totalTTC: 117,
+    taxRate: 17,
+    lines: [{ productId: "p1", description: "Commande", quantity: 1, price: 100, totalHT: 100 }],
+  };
+
+  it("ignore les acomptes dans quoteAlreadyConverted", () => {
+    const data = {
+      ...baseData(),
+      invoices: [
+        ...baseData().invoices,
+        {
+          id: "dep-1",
+          number: "FAC-2025-0100",
+          invoiceType: "acompte",
+          convertedFrom: "DEV-2025-0300",
+          parentQuoteId: "q-bal",
+          totalTTC: 35.1,
+        },
+      ],
+    };
+
+    expect(isFullInvoiceFromQuote(data.invoices.at(-1), quote.number)).toBe(false);
+  });
+
+  it("crée une facture de solde TTC − acomptes payés", () => {
+    let data = { ...baseData(), settings: { taxRate: 17, paymentDays: 30 } };
+    data = createDepositInvoiceFromQuote(data, quote, 30);
+    const deposit = data.invoices.at(-1);
+    data = {
+      ...data,
+      invoices: data.invoices.map((inv) =>
+        inv.id === deposit.id ? { ...inv, status: "Payée", paidAmount: inv.totalTTC, remaining: 0 } : inv
+      ),
+    };
+
+    const summary = getQuoteDepositSummary(data, quote);
+    expect(summary.paidDeposit).toBeCloseTo(35.1, 2);
+    expect(summary.remainingBalance).toBeCloseTo(81.9, 2);
+    expect(summary.canCreateBalance).toBe(true);
+
+    const result = createBalanceInvoiceFromQuote(data, quote);
+    const balance = result.invoice;
+
+    expect(balance.invoiceType).toBe("solde");
+    expect(balance.parentQuoteId).toBe("q-bal");
+    expect(balance.totalTTC).toBeCloseTo(81.9, 2);
+    expect(balance.stockAdjusted).toBe(true);
+    expect(balance.depositPaidAmount).toBeCloseTo(35.1, 2);
+  });
+
+  it("refuse la conversion directe si un acompte existe", () => {
+    let data = { ...baseData(), settings: { taxRate: 17, paymentDays: 30 } };
+    data = createDepositInvoiceFromQuote(data, quote, 30);
+
+    expect(() => convertQuoteToInvoiceData(data, quote)).toThrow(/acompte/i);
   });
 });

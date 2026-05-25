@@ -645,6 +645,17 @@ function drawClientInfoGrid(pdf, doc, data, y, style, { isQuote, isDelivery }) {
     rightEntries.push({ label: "Statut", value: doc.status || "—" });
     if (!isQuote && doc.invoiceType === "acompte" && doc.depositPercent) {
       rightEntries.push({ label: "Acompte", value: `${doc.depositPercent}%` });
+    } else if (!isQuote && doc.invoiceType === "solde") {
+      rightEntries.push({ label: "Type", value: "Facture de solde" });
+      if (doc.depositPaidAmount != null) {
+        rightEntries.push({
+          label: "Acomptes payés",
+          value: `${formatPdfMoney(doc.depositPaidAmount)} €`,
+        });
+      }
+      if (doc.convertedFrom) {
+        rightEntries.push({ label: "Devis", value: doc.convertedFrom });
+      }
     } else {
       const deposit = computeDepositTotals(doc.totalTTC, doc.depositPercent);
       if (deposit.depositPercent > 0) {
@@ -774,6 +785,8 @@ export function buildDocumentPdf({ doc, type, data, logoDataUrl = null }) {
   const documentTitle =
     type === "invoice" && doc.invoiceType === "acompte"
       ? "FACTURE D'ACOMPTE"
+      : type === "invoice" && doc.invoiceType === "solde"
+        ? "FACTURE DE SOLDE"
       : isQuote
         ? "DEVIS"
         : "FACTURE";
@@ -806,6 +819,10 @@ export function buildDocumentPdf({ doc, type, data, logoDataUrl = null }) {
       `${formatPdfMoney(deposit.depositAmount)} €`,
     ]);
     totals.push(["Solde", `${formatPdfMoney(deposit.balanceAfterDeposit)} €`]);
+  } else if (type === "invoice" && doc.invoiceType === "solde" && doc.depositPaidAmount > 0) {
+    totals.push(["Total TTC devis", `${formatPdfMoney(Number(doc.totalTTC || 0) + Number(doc.depositPaidAmount || 0))} €`]);
+    totals.push(["Acomptes payés", `− ${formatPdfMoney(doc.depositPaidAmount)} €`]);
+    totals.push(["Total TTC", `${formatPdfMoney(doc.totalTTC)} €`]);
   } else {
     totals.push(["Total TTC", `${formatPdfMoney(doc.totalTTC)} €`]);
   }

@@ -37,6 +37,7 @@ La plupart des entités métier utilisent le même schéma : **`id`** (texte, cl
 | `expenses` | id document | Facture de dépense (import PDF ou saisie manuelle) |
 | `quotes` | id document | Devis |
 | `invoices` | id document | Facture |
+| `delivery_notes` | id document | Bon de livraison (lié à un devis) |
 | `backups` | id document | Snapshot backup |
 | `crm_logs` | id document | Entrée journal d’activité |
 
@@ -83,6 +84,12 @@ CREATE TABLE IF NOT EXISTS quotes (
 );
 
 CREATE TABLE IF NOT EXISTS invoices (
+  id text PRIMARY KEY,
+  data jsonb NOT NULL DEFAULT '{}'::jsonb,
+  created_at timestamptz DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS delivery_notes (
   id text PRIMARY KEY,
   data jsonb NOT NULL DEFAULT '{}'::jsonb,
   created_at timestamptz DEFAULT now()
@@ -233,6 +240,14 @@ Messages d’aide côté app : `bankTransactionErrorHint()` dans `src/utils/bank
 3. Vérifier que chaque utilisateur CRM existe dans **Authentication** ET dans `users` (rôle + statut Actif).
 4. Rebuild Electron / redeploy Vercel avec les variables `VITE_SUPABASE_*`.
 5. Tester login + sync + page Banque.
+
+### Bons de livraison (`delivery_notes`)
+
+Les bons de livraison générés depuis un devis (statut **Prêt** ou **Livré**) sont synchronisés via la table `delivery_notes` (clé locale `deliveryNotes`).
+
+1. Exécuter [`supabase/migrations/20260525140000_delivery_notes.sql`](../supabase/migrations/20260525140000_delivery_notes.sql)  
+   *(crée la table + RLS `crm_user_is_active()`)*.
+2. Vérifier qu’un BL créé dans le CRM apparaît après reconnexion / resync sur un autre poste.
 
 ## Storage — images produits
 

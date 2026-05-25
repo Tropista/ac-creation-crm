@@ -13,6 +13,9 @@ import {
   createDeliveryNoteFromQuote,
   getDeliveryNoteForQuote,
   createDepositInvoiceFromQuote,
+  createBalanceInvoiceFromQuote,
+  getQuoteDepositSummary,
+  quoteRequiresDepositFlow,
   computeDepositTotals,
   enrichInvoicePaymentFields,
   uid,
@@ -32,6 +35,7 @@ import { PRODUCTION_STATUSES } from "../utils/production";
 import { fromDateInputValue, toDateInputValue } from "../utils/quoteDelivery";
 import { exportInvoicesCsv } from "../utils/exportCsv";
 import { showToast } from "../utils/toast";
+import { canDeleteData } from "../services/authService";
 
 function Documents({ type, data, setData, currentRole = 'Admin', logActivity }) {
   const location = useLocation();
@@ -58,6 +62,7 @@ function Documents({ type, data, setData, currentRole = 'Admin', logActivity }) 
   const [previewType, setPreviewType] = useState(type);
   const [currentPage, setCurrentPage] = useState(1);
   const [sortBy, setSortBy] = useState("dateDesc");
+  const [search, setSearch] = useState("");
   const [overdueOnly, setOverdueOnly] = useState(false);
   const prefilledClientId =
   localStorage.getItem(
@@ -125,9 +130,24 @@ const [form, setForm] = useState({
   }, [isQuote]);
 
   const sortedDocuments = useMemo(() => {
-    const list = [...documents].filter(
-      (doc) => !overdueOnly || isQuote || isInvoiceOverdue(doc)
-    );
+    const query = search.trim().toLowerCase();
+    const list = [...documents].filter((doc) => {
+      if (overdueOnly && !isQuote && !isInvoiceOverdue(doc)) return false;
+
+      if (!query) return true;
+
+      const client = clientName(data, doc.clientId).toLowerCase();
+      const number = String(doc.number || "").toLowerCase();
+      const total = money(doc.totalTTC).toLowerCase();
+      const totalRaw = String(doc.totalTTC ?? "");
+
+      return (
+        number.includes(query) ||
+        client.includes(query) ||
+        total.includes(query) ||
+        totalRaw.includes(query)
+      );
+    });
 
     function numberValue(doc) {
       return Number(String(doc.number || "").replace(/[^0-9]/g, "")) || 0;
@@ -155,7 +175,7 @@ const [form, setForm] = useState({
       if (sortBy === "statusDesc") return String(b.status || "").localeCompare(String(a.status || ""));
       return 0;
     });
-  }, [documents, sortBy, data, overdueOnly, isQuote]);
+  }, [documents, sortBy, data, overdueOnly, isQuote, search]);
 
   const documentTotalPages = Math.max(1, Math.ceil(sortedDocuments.length / itemsPerPage));
   const documentPage = Math.min(currentPage, documentTotalPages);
@@ -452,6 +472,11 @@ useEffect(() => {
   localStorage.removeItem("crm_open_document_type");
 }, []);
   function remove(id) {
+    if (!canDeleteData(currentRole)) {
+      showToast("Ton rôle ne permet pas de supprimer.", "error");
+      return;
+    }
+
     if (!confirm(`Supprimer ce ${isQuote ? "devis" : "facture"} ?`)) return;
     const removedDoc = documents.find((d) => d.id === id);
     const nextProducts = !isQuote && removedDoc?.stockAdjusted
@@ -559,6 +584,25 @@ useEffect(() => {
     openPreview(note, "delivery");
   }
 
+  function createBalanceInvoice(quote) {
+    try {
+      const result = createBalanceInvoiceFromQuote(data, quote);
+      setData(result);
+      logActivity?.(
+        "Création facture de solde",
+        result.invoice.number,
+        quote.number
+      );
+      showToast(
+        `Facture de solde ${result.invoice.number} créée (${money(result.invoice.totalTTC)}).`,
+        "success"
+      );
+    } catch (error) {
+      console.error(error);
+      showToast(error.message || "Impossible de créer la facture de solde.", "error");
+    }
+  }
+
   function createDepositInvoice(quote, percent) {
     try {
       const result = createDepositInvoiceFromQuote(data, quote, percent);
@@ -613,6 +657,22 @@ useEffect(() => {
   }
 
   function convertQuoteToInvoice(doc) {
+    if (quoteRequiresDepositFlow(data, doc)) {
+      const summary = getQuoteDepositSummary(data, doc);
+      if (summary.depositInvoices.length > 0) {
+        showToast(
+          "Ce devis possède des acomptes. Utilisez « Facture de solde ».",
+          "error"
+        );
+        return;
+      }
+      showToast(
+        "Ce devis prévoit un acompte. Créez d'abord la facture d'acompte.",
+        "error"
+      );
+      return;
+    }
+
     try {
       const nextData = convertQuoteToInvoiceData(data, doc);
       const invoice = nextData.invoices[nextData.invoices.length - 1];
@@ -733,6 +793,12 @@ useEffect(() => {
         sortedDocuments={sortedDocuments}
         paginatedDocuments={paginatedDocuments}
         stats={stats}
+        search={search}
+        onSearchChange={(value) => {
+          setSearch(value);
+          setCurrentPage(1);
+        }}
+        canDelete={canDeleteData(currentRole)}
         overdueOnly={overdueOnly}
         sortBy={sortBy}
         documentPage={documentPage}
@@ -756,6 +822,7 @@ useEffect(() => {
         onGenerateDeliveryNote={generateDeliveryNote}
         onPreviewDeliveryNote={previewDeliveryNote}
         onCreateDeposit={createDepositInvoice}
+        onCreateBalance={createBalanceInvoice}
         onRecordPayment={recordPartialPayment}
         depositPresets={DEPOSIT_PRESETS}
       />

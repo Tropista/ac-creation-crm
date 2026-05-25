@@ -13,6 +13,7 @@ import { isQuoteDeliveryOverdue } from "../utils/quoteDelivery";
 import { summarizeQuoteProductionLines } from "../utils/quoteLines";
 import { pageToPath } from "../utils/routes";
 import { showToast } from "../utils/toast";
+import { canDeleteData } from "../services/authService";
 
 const PROCESS_ICONS = {
   laser: "🔥",
@@ -59,6 +60,7 @@ function AtelierCard({
   onDelete,
   onGenerateBl,
   onPreviewBl,
+  canDelete = true,
   variant = "kanban",
 }) {
   const process = inferProcessType(quote);
@@ -101,16 +103,18 @@ function AtelierCard({
         </button>
         <div className="atelier-card__top-actions">
           <span className={statusClass(quote.status)}>{quote.status}</span>
-          <button
-            type="button"
-            className="atelier-delete-btn"
-            data-testid={`atelier-delete-${quote.id}`}
-            onClick={() => onDelete(quote)}
-            title="Supprimer la commande"
-            aria-label={`Supprimer ${quote.number}`}
-          >
-            <Trash2 size={14} aria-hidden="true" />
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              className="atelier-delete-btn"
+              data-testid={`atelier-delete-${quote.id}`}
+              onClick={() => onDelete(quote)}
+              title="Supprimer la commande"
+              aria-label={`Supprimer ${quote.number}`}
+            >
+              <Trash2 size={14} aria-hidden="true" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -225,7 +229,7 @@ function AtelierListSection({ title, count, icon, children, testId }) {
 
 import DocumentPreview from "./DocumentPreview";
 
-export default function Atelier({ data, setData, logActivity }) {
+export default function Atelier({ data, setData, logActivity, currentRole = "Admin" }) {
   const navigate = useNavigate();
   const isCompact = useMediaQuery(MOBILE_ATELIER_QUERY);
   const [viewMode, setViewMode] = useState("status");
@@ -279,6 +283,11 @@ export default function Atelier({ data, setData, logActivity }) {
   }
 
   function handleDelete(quote) {
+    if (!canDeleteData(currentRole)) {
+      showToast("Ton rôle ne permet pas de supprimer.", "error");
+      return;
+    }
+
     if (
       !confirm(
         `Supprimer la commande « ${quote.number} » de l'atelier ?\n\nCette action supprime définitivement le devis.`
@@ -469,6 +478,7 @@ export default function Atelier({ data, setData, logActivity }) {
                       onDelete={handleDelete}
                       onGenerateBl={handleGenerateBl}
                       onPreviewBl={handlePreviewBl}
+                      canDelete={canDeleteData(currentRole)}
                     />
                   ))}
                 </AtelierListSection>
@@ -493,6 +503,7 @@ export default function Atelier({ data, setData, logActivity }) {
                       onDelete={handleDelete}
                       onGenerateBl={handleGenerateBl}
                       onPreviewBl={handlePreviewBl}
+                      canDelete={canDeleteData(currentRole)}
                     />
                   ))}
                 </AtelierListSection>
@@ -538,6 +549,7 @@ export default function Atelier({ data, setData, logActivity }) {
                       onDelete={handleDelete}
                       onGenerateBl={handleGenerateBl}
                       onPreviewBl={handlePreviewBl}
+                      canDelete={canDeleteData(currentRole)}
                     />
                   ))}
                 </div>
@@ -572,6 +584,7 @@ export default function Atelier({ data, setData, logActivity }) {
                       onDelete={handleDelete}
                       onGenerateBl={handleGenerateBl}
                       onPreviewBl={handlePreviewBl}
+                      canDelete={canDeleteData(currentRole)}
                     />
                   ))}
                 </div>

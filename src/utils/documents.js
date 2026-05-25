@@ -1,5 +1,6 @@
 import { applyStockByLines } from "./stock";
 import { computeDueDate } from "./invoiceReminders";
+import { getInvoicePaidAmount } from "./invoices";
 
 export const uid = () =>
   Date.now().toString(36) + Math.random().toString(36).slice(2);
@@ -114,12 +115,82 @@ export function nextDocumentNumber(list, docPrefix, year = currentDocumentYear()
   return `${docPrefix}-${year}-${String(nextNumber).padStart(4, "0")}`;
 }
 
+export function isFullInvoiceFromQuote(invoice, quoteNumber) {
+  if (String(invoice?.convertedFrom || "") !== String(quoteNumber || "")) return false;
+  const type = String(invoice?.invoiceType || "");
+  return type !== "acompte" && type !== "solde";
+}
+
+export function getQuoteDepositInvoices(data, quote) {
+  const quoteId = String(quote?.id || "");
+  if (!quoteId) return [];
+  return (data.invoices || []).filter(
+    (invoice) =>
+      String(invoice.invoiceType || "") === "acompte" &&
+      String(invoice.parentQuoteId || "") === quoteId
+  );
+}
+
+export function getQuoteBalanceInvoice(data, quote) {
+  const quoteId = String(quote?.id || "");
+  if (!quoteId) return null;
+  return (
+    (data.invoices || []).find(
+      (invoice) =>
+        String(invoice.invoiceType || "") === "solde" &&
+        String(invoice.parentQuoteId || "") === quoteId
+    ) || null
+  );
+}
+
+export function quoteHasBalanceInvoice(data, quote) {
+  return Boolean(getQuoteBalanceInvoice(data, quote));
+}
+
+export function getQuoteDepositSummary(data, quote) {
+  const depositInvoices = getQuoteDepositInvoices(data, quote);
+  const quoteTotalTTC = Number(quote?.totalTTC || 0);
+  const invoicedDeposit = depositInvoices.reduce(
+    (sum, invoice) => sum + Number(invoice.totalTTC || 0),
+    0
+  );
+  const paidDeposit = depositInvoices.reduce(
+    (sum, invoice) => sum + getInvoicePaidAmount(invoice),
+    0
+  );
+  const remainingBalance = Math.round((quoteTotalTTC - paidDeposit) * 100) / 100;
+  const hasDeposits =
+    depositInvoices.length > 0 || Number(quote?.depositPercent || 0) > 0;
+
+  return {
+    depositInvoices,
+    invoicedDeposit: Math.round(invoicedDeposit * 100) / 100,
+    paidDeposit: Math.round(paidDeposit * 100) / 100,
+    remainingBalance,
+    hasDeposits,
+    hasBalanceInvoice: quoteHasBalanceInvoice(data, quote),
+    canCreateBalance:
+      depositInvoices.length > 0 &&
+      !quoteHasBalanceInvoice(data, quote) &&
+      remainingBalance > 0.01,
+  };
+}
+
+export function quoteRequiresDepositFlow(data, quote) {
+  const summary = getQuoteDepositSummary(data, quote);
+  return summary.hasDeposits;
+}
+
 export function quoteAlreadyConverted(data, quote) {
   const quoteNumber = String(quote?.number || "");
   if (!quoteNumber) return false;
-  return (data.invoices || []).some(
-    (invoice) => String(invoice.convertedFrom || "") === quoteNumber
+  return (data.invoices || []).some((invoice) =>
+    isFullInvoiceFromQuote(invoice, quoteNumber)
   );
+}
+
+export function quoteIsFullyInvoiced(data, quote) {
+  return quoteAlreadyConverted(data, quote) || quoteHasBalanceInvoice(data, quote);
 }
 
 const CONVERTIBLE_QUOTE_STATUSES = new Set([
@@ -136,6 +207,18 @@ export function isQuoteConvertible(data, quote) {
 }
 
 export function convertQuoteToInvoiceData(data, quote) {
+  const depositSummary = getQuoteDepositSummary(data, quote);
+  if (depositSummary.depositInvoices.length > 0) {
+    throw new Error(
+      "Ce devis possède des factures d'acompte. Utilisez « Facture de solde »."
+    );
+  }
+  if (Number(quote?.depositPercent || 0) > 0) {
+    throw new Error(
+      "Ce devis prévoit un acompte. Créez d'abord la facture d'acompte, puis la facture de solde."
+    );
+  }
+
   const invoice = {
     ...quote,
     id: uid(),
@@ -309,6 +392,80 @@ export function createDepositInvoiceFromQuote(data, quote, percent) {
 
   return {
     ...data,
+    invoices: [...(data.invoices || []), invoice],
+    invoice,
+  };
+}
+
+export function createBalanceInvoiceFromQuote(data, quote) {
+  const summary = getQuoteDepositSummary(data, quote);
+  if (!summary.depositInvoices.length) {
+    throw new Error("Aucune facture d'acompte pour ce devis.");
+  }
+  if (summary.hasBalanceInvoice) {
+    throw new Error("Une facture de solde existe déjà pour ce devis.");
+  }
+  if (summary.remainingBalance <= 0.01) {
+    throw new Error("Le solde restant est nul ou déjà couvert par les acomptes payés.");
+  }
+
+  const quoteTotalTTC = Number(quote.totalTTC || 0);
+  const balanceTTC = summary.remainingBalance;
+  const ratio = quoteTotalTTC > 0 ? balanceTTC / quoteTotalTTC : 1;
+  const totalHT = Math.round(Number(quote.totalHT || 0) * ratio * 100) / 100;
+  const taxAmount = Math.round(Number(quote.taxAmount || 0) * ratio * 100) / 100;
+  const taxRate = Number(quote.taxRate ?? data.settings?.taxRate ?? 0);
+  const paidDepositLabel = summary.paidDeposit.toLocaleString("fr-FR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+  const invoice = {
+    id: uid(),
+    number: nextDocumentNumber(data.invoices || [], "FAC"),
+    date: today(),
+    clientId: quote.clientId,
+    status: "Non payée",
+    dueDate: computeDueDate(today(), data.settings?.paymentDays),
+    invoiceType: "solde",
+    convertedFrom: quote.number,
+    parentQuoteId: quote.id,
+    depositPaidAmount: summary.paidDeposit,
+    description: `Solde — Devis ${quote.number} (acomptes payés : ${paidDepositLabel} €)`,
+    lines: quote.lines?.length
+      ? quote.lines
+      : [
+          {
+            productId: quote.productId || "",
+            sku: quote.sku || "",
+            description: quote.description || `Solde — Devis ${quote.number}`,
+            quantity: quote.quantity || 1,
+            price: totalHT,
+            discount: 0,
+            subtotal: totalHT,
+            totalHT,
+          },
+        ],
+    globalDiscount: quote.globalDiscount || 0,
+    subtotal: totalHT,
+    lineDiscountAmount: quote.lineDiscountAmount || 0,
+    globalDiscountAmount: Math.round(Number(quote.globalDiscountAmount || 0) * ratio * 100) / 100,
+    totalHT,
+    taxRate,
+    taxAmount,
+    totalTTC: balanceTTC,
+    paidAmount: 0,
+    remaining: balanceTTC,
+    stockAdjusted: true,
+  };
+
+  return {
+    ...data,
+    products: applyStockByLines(data.products || [], invoice.lines || [], "remove", {
+      type: "invoice",
+      reason: "Facture de solde",
+      reference: invoice.number,
+    }),
     invoices: [...(data.invoices || []), invoice],
     invoice,
   };

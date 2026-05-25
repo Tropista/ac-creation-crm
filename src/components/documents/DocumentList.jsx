@@ -1,4 +1,4 @@
-import { clientName, isQuoteConvertible, quoteAlreadyConverted, statusClass, isQuoteDeliveryNoteEligible, quoteHasDeliveryNote } from "../../utils/documents";
+import { clientName, isQuoteConvertible, quoteIsFullyInvoiced, statusClass, isQuoteDeliveryNoteEligible, quoteHasDeliveryNote, getQuoteDepositSummary } from "../../utils/documents";
 import { isInvoiceOverdue, getInvoicePaidAmount, getInvoiceRemaining, isPartiallyPaidInvoice } from "../../utils/invoices";
 import { money } from "../../utils/money";
 import { QUOTE_STATUSES } from "../../utils/production";
@@ -9,6 +9,9 @@ export default function DocumentList({
   sortedDocuments,
   paginatedDocuments,
   stats,
+  search = "",
+  onSearchChange,
+  canDelete = true,
   overdueOnly,
   sortBy,
   documentPage,
@@ -26,6 +29,7 @@ export default function DocumentList({
   onGenerateDeliveryNote,
   onPreviewDeliveryNote,
   onCreateDeposit,
+  onCreateBalance,
   onRecordPayment,
   depositPresets = [30, 50, 70],
 }) {
@@ -44,6 +48,13 @@ export default function DocumentList({
         </div>
 
         <div className="documents-toolbar-controls">
+          <input
+            className="search documents-search"
+            placeholder="Rechercher…"
+            value={search}
+            onChange={(e) => onSearchChange?.(e.target.value)}
+            aria-label={`Rechercher ${isQuote ? "un devis" : "une facture"}`}
+          />
           {!isQuote && (
             <button type="button" onClick={onExportCsv}>
               Exporter CSV
@@ -81,9 +92,11 @@ export default function DocumentList({
         <div className="documents-empty">
           <strong>Aucun {isQuote ? "devis" : "facture"} à afficher</strong>
           <p>
-            {overdueOnly && !isQuote
-              ? "Aucune facture en retard ne correspond à ce filtre."
-              : `Créez votre premier ${isQuote ? "devis" : "facture"} avec le formulaire ci-dessus.`}
+            {search.trim()
+              ? `Aucun résultat pour « ${search.trim()} ».`
+              : overdueOnly && !isQuote
+                ? "Aucune facture en retard ne correspond à ce filtre."
+                : `Créez votre premier ${isQuote ? "devis" : "facture"} avec le formulaire ci-dessus.`}
           </p>
         </div>
       ) : (
@@ -104,8 +117,10 @@ export default function DocumentList({
             <tbody>
               {paginatedDocuments.map((d) => {
                 const overdue = !isQuote && isInvoiceOverdue(d);
-                const convertible = isQuote && isQuoteConvertible(data, d);
-                const converted = isQuote && quoteAlreadyConverted(data, d);
+                const depositSummary = isQuote ? getQuoteDepositSummary(data, d) : null;
+                const convertible = isQuote && isQuoteConvertible(data, d) && !depositSummary?.hasDeposits;
+                const converted = isQuote && quoteIsFullyInvoiced(data, d);
+                const depositFlow = isQuote && depositSummary?.hasDeposits;
                 const blEligible = isQuote && isQuoteDeliveryNoteEligible(d);
                 const hasBl = isQuote && quoteHasDeliveryNote(data, d);
                 const paid = !isQuote ? getInvoicePaidAmount(d) : 0;
@@ -132,6 +147,15 @@ export default function DocumentList({
                       <strong>{money(d.totalTTC)}</strong>
                       {!isQuote && d.invoiceType === "acompte" && (
                         <span className="documents-deposit-tag">Acompte</span>
+                      )}
+                      {!isQuote && d.invoiceType === "solde" && (
+                        <span className="documents-deposit-tag">Solde</span>
+                      )}
+                      {isQuote && depositSummary?.hasDeposits && (
+                        <span className="documents-deposit-summary muted">
+                          Acompte facturé : {money(depositSummary.invoicedDeposit)} / Reste :{" "}
+                          {money(depositSummary.remainingBalance)}
+                        </span>
                       )}
                     </td>
                     {!isQuote && (
@@ -183,6 +207,27 @@ export default function DocumentList({
                       {isQuote &&
                         (converted ? (
                           <span className="documents-converted-tag">Facturé</span>
+                        ) : depositFlow ? (
+                          <>
+                            {depositSummary?.canCreateBalance && (
+                              <button
+                                type="button"
+                                className="compact documents-balance-btn primary"
+                                onClick={() => onCreateBalance(d)}
+                                title="Créer la facture de solde (TTC − acomptes payés)"
+                              >
+                                Facture de solde
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="compact documents-convert-btn"
+                              disabled
+                              title="Utilisez le flux acompte puis facture de solde"
+                            >
+                              Convertir
+                            </button>
+                          </>
                         ) : (
                           <button
                             type="button"
@@ -255,9 +300,11 @@ export default function DocumentList({
                           Relancer
                         </button>
                       )}
-                      <button type="button" className="danger compact" onClick={() => onRemove(d.id)}>
-                        Supprimer
-                      </button>
+                      {canDelete && (
+                        <button type="button" className="danger compact" onClick={() => onRemove(d.id)}>
+                          Supprimer
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );

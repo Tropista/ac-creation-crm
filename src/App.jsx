@@ -790,6 +790,7 @@ function CrmApp() {
                   <Atelier
                     data={data}
                     setData={updateData}
+                    currentRole={currentRole}
                     logActivity={handleLogActivity}
                   />
                 ) : null
