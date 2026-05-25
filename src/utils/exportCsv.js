@@ -52,6 +52,21 @@ function parseMonthYear(year, month) {
   return { year: y, month: m };
 }
 
+/** Valeur `input type="month"` (YYYY-MM) depuis année + mois JS (0–11). */
+export function formatAccountingMonthInput(year, month) {
+  const target = parseMonthYear(year, month);
+  if (!target) return "";
+  return `${target.year}-${String(target.month + 1).padStart(2, "0")}`;
+}
+
+/** Parse la valeur d'un `input type="month"` en { year, month } (mois 0–11). */
+export function parseAccountingMonthInput(value) {
+  if (!value || typeof value !== "string") return null;
+  const match = /^(\d{4})-(\d{2})$/.exec(value.trim());
+  if (!match) return null;
+  return parseMonthYear(match[1], Number(match[2]) - 1);
+}
+
 function isInMonth(value, year, month) {
   if (!value) return false;
   const parts = String(value).split("/");
@@ -121,13 +136,13 @@ export function exportInvoicesCsv(invoices, data, filename) {
   downloadCsv(filename, headers, rows);
 }
 
-export function exportAccountingLuxCsv(data, { year, month } = {}) {
+export function buildMonthlyAccountingCsvRows(data, { year, month } = {}) {
   const now = new Date();
   const target = parseMonthYear(
     year ?? now.getFullYear(),
     month ?? now.getMonth()
   );
-  if (!target) return;
+  if (!target) return null;
 
   const { year: targetYear, month: targetMonth } = target;
   const monthLabel = new Date(targetYear, targetMonth, 1).toLocaleDateString(
@@ -181,7 +196,8 @@ export function exportAccountingLuxCsv(data, { year, month } = {}) {
   }
 
   const rows = [
-    ["Export fiduciaire Luxembourg", monthLabel],
+    ["Export comptable mensuel — AC Creation CRM", monthLabel],
+    ["Généré le", formatCsvDate(new Date())],
     [],
     [`Récapitulatif TVA (${taxRate} %)`, ""],
     ["TVA collectée (ventes)", formatCsvNumber(tvaCollectee)],
@@ -191,6 +207,8 @@ export function exportAccountingLuxCsv(data, { year, month } = {}) {
     ["Total ventes TTC", formatCsvNumber(invoiceTTC)],
     ["Total achats HT", formatCsvNumber(expenseHT)],
     ["Total achats TTC", formatCsvNumber(expenseTTC)],
+    ["Nombre de factures ventes", String(invoices.length)],
+    ["Nombre de factures achats", String(expenses.length)],
     [],
     ["Journal des ventes (factures)", ""],
     [
@@ -250,9 +268,21 @@ export function exportAccountingLuxCsv(data, { year, month } = {}) {
     ]),
   ];
 
+  return {
+    rows,
+    monthLabel,
+    targetYear,
+    targetMonth,
+    invoiceCount: invoices.length,
+    expenseCount: expenses.length,
+    tvaDue,
+  };
+}
+
+export function downloadAccountingCsvPack(rows, { targetYear, targetMonth }) {
   const lines = rows.map((row) => row.map(escapeCsvCell).join(";"));
   const content = `\uFEFF${lines.join("\r\n")}`;
-  const filename = `fiduciaire-lu-${targetYear}-${String(targetMonth + 1).padStart(2, "0")}.csv`;
+  const filename = `comptable-mensuel-${targetYear}-${String(targetMonth + 1).padStart(2, "0")}.csv`;
   const blob = new Blob([content], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
@@ -260,6 +290,26 @@ export function exportAccountingLuxCsv(data, { year, month } = {}) {
   anchor.download = filename;
   anchor.click();
   URL.revokeObjectURL(url);
+  return filename;
+}
+
+/** Export mensuel comptable 1 clic — ventes, achats, récap TVA (UTF-8 BOM). */
+export function exportMonthlyAccountingPack(data, { year, month } = {}) {
+  const built = buildMonthlyAccountingCsvRows(data, { year, month });
+  if (!built) return null;
+
+  const filename = downloadAccountingCsvPack(built.rows, built);
+  return {
+    filename,
+    monthLabel: built.monthLabel,
+    invoiceCount: built.invoiceCount,
+    expenseCount: built.expenseCount,
+    tvaDue: built.tvaDue,
+  };
+}
+
+export function exportAccountingLuxCsv(data, options = {}) {
+  return exportMonthlyAccountingPack(data, options);
 }
 
 function formatPoDate() {

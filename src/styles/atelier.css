@@ -355,6 +355,10 @@
 }
 
 .atelier-card__delivery {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
   color: #475569;
 }
@@ -362,6 +366,78 @@
 .atelier-card__delivery--overdue {
   color: #b91c1c;
   font-weight: 700;
+}
+
+.delivery-urgency {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  line-height: 1.4;
+}
+
+.delivery-urgency--overdue {
+  color: #991b1b;
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+}
+
+.delivery-urgency--today {
+  color: #c2410c;
+  background: #ffedd5;
+  border: 1px solid #fed7aa;
+}
+
+.delivery-urgency--thisWeek {
+  color: #15803d;
+  background: #dcfce7;
+  border: 1px solid #bbf7d0;
+}
+
+.delivery-urgency--later {
+  color: #475569;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+}
+
+.atelier-launch-today {
+  margin-bottom: 16px;
+  border-color: #fed7aa;
+  background: linear-gradient(180deg, #fffbeb 0%, #fff 100%);
+}
+
+.atelier-launch-today__header {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.atelier-launch-today__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.atelier-launch-today__item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid rgba(251, 146, 60, 0.25);
+}
+
+.atelier-launch-today__item em {
+  font-style: normal;
+  color: #64748b;
 }
 
 .atelier-card__lines {

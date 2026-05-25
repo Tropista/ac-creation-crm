@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   getOverdueQuotes,
   fromDateInputValue,
+  getDeliveryUrgency,
+  getQuotesToLaunchToday,
   isQuoteDeliveryOverdue,
   sortOverdueQuotes,
   toDateInputValue,
@@ -44,5 +46,35 @@ describe("quoteDelivery helpers", () => {
   it("convertit les dates input ↔ fr-FR", () => {
     expect(fromDateInputValue("2026-05-25")).toBe("25/05/2026");
     expect(toDateInputValue("25/05/2026")).toBe("2026-05-25");
+  });
+
+  it("calcule l'urgence de livraison", () => {
+    const ref = new Date("2026-05-25");
+    expect(
+      getDeliveryUrgency({ status: "Accepté", promisedDeliveryDate: "20/05/2026" }, ref)
+    ).toBe("overdue");
+    expect(
+      getDeliveryUrgency({ status: "Accepté", promisedDeliveryDate: "25/05/2026" }, ref)
+    ).toBe("today");
+    expect(
+      getDeliveryUrgency({ status: "Accepté", promisedDeliveryDate: "27/05/2026" }, ref)
+    ).toBe("thisWeek");
+    expect(
+      getDeliveryUrgency({ status: "Livré", promisedDeliveryDate: "20/05/2026" }, ref)
+    ).toBe(null);
+  });
+
+  it("liste les devis à lancer aujourd'hui", () => {
+    const ref = new Date("2026-05-25");
+    const quotes = [
+      { id: "a", number: "DEV-1", status: "Accepté", promisedDeliveryDate: "25/05/2026" },
+      { id: "b", number: "DEV-2", status: "Accepté", promisedDeliveryDate: "30/05/2026", priority: "urgent" },
+      { id: "c", number: "DEV-3", status: "Accepté", promisedDeliveryDate: "30/05/2026", priority: "normal" },
+      { id: "d", number: "DEV-4", status: "En production", promisedDeliveryDate: "25/05/2026" },
+      { id: "e", number: "DEV-5", status: "Accepté", promisedDeliveryDate: "20/05/2026", priority: "normal" },
+    ];
+
+    const toLaunch = getQuotesToLaunchToday(quotes, ref);
+    expect(toLaunch.map((quote) => quote.id)).toEqual(["e", "a", "b"]);
   });
 });

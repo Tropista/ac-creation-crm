@@ -8,7 +8,7 @@ import {
 import { showToast } from "../utils/toast";
 import { getStoredTheme, setTheme, THEMES } from "../utils/theme";
 import { downloadInvoiceUblStub } from "../utils/peppolUbl";
-import { exportAccountingLuxCsv } from "../utils/exportCsv";
+import MonthlyAccountingExport from "./MonthlyAccountingExport";
 import {
   currentDocumentYear,
   detectInvoiceNumberGaps,
@@ -84,12 +84,6 @@ export default function Settings({
     );
     downloadInvoiceUblStub(invoice, { client, settings: data.settings || form });
     showToast("Export UBL stub téléchargé (non Peppol)", "success");
-  }
-
-  function handleExportFiduciaire() {
-    exportAccountingLuxCsv(data);
-    showToast("Export fiduciaire Luxembourg téléchargé.", "success");
-    logActivity?.("Export fiduciaire LU", new Date().toLocaleDateString("fr-FR"));
   }
 
   const invoiceYear = currentDocumentYear();
@@ -193,14 +187,11 @@ Version installée : <strong>{APP_VERSION}</strong>
 ) : null}
 
 <div className="card" style={{ marginBottom: "1rem" }}>
-  <h3>Export fiduciaire Luxembourg</h3>
-  <p className="muted" style={{ lineHeight: 1.5 }}>
-    Export mensuel CSV (UTF-8 avec BOM) : journal des ventes, journal des achats,
-    récapitulatif TVA et colonnes acompte / solde / devis parent.
-  </p>
-  <button type="button" className="ghost" onClick={handleExportFiduciaire}>
-    Export fiduciaire LU (mois en cours)
-  </button>
+  <MonthlyAccountingExport
+    data={data}
+    logActivity={logActivity}
+    layout="settings"
+  />
 </div>
 
 <div className="card theme-settings-card">

@@ -11,7 +11,8 @@ import {
   resolveProcessType,
 } from "../utils/production";
 import { syncQuoteProductionStock } from "../utils/stock";
-import { isQuoteDeliveryOverdue } from "../utils/quoteDelivery";
+import { isQuoteDeliveryOverdue, getQuotesToLaunchToday } from "../utils/quoteDelivery";
+import DeliveryUrgencyBadge from "./DeliveryUrgencyBadge";
 import { summarizeQuoteProductionLines } from "../utils/quoteLines";
 import {
   downloadProductionSheetPdf,
@@ -83,6 +84,9 @@ function AtelierCard({
   const hasBl = Boolean(getDeliveryNoteForQuote(data, quote));
   const productionLines = summarizeQuoteProductionLines(quote.lines);
   const deliveryOverdue = isQuoteDeliveryOverdue(quote);
+  const urgencyClass = deliveryOverdue
+    ? " atelier-card__delivery--overdue"
+    : "";
   const productionSheetEligible = isProductionSheetEligible(quote);
   const assignee = (data.users || []).find(
     (user) => String(user.id) === String(quote.assignedTo)
@@ -159,7 +163,7 @@ function AtelierCard({
         <span className="muted atelier-card__date">{quote.date || "—"}</span>
         {quote.promisedDeliveryDate && (
           <span
-            className={`atelier-card__delivery${deliveryOverdue ? " atelier-card__delivery--overdue" : ""}`}
+            className={`atelier-card__delivery${urgencyClass}`}
             title={
               deliveryOverdue
                 ? "Date de livraison dépassée"
@@ -167,7 +171,7 @@ function AtelierCard({
             }
           >
             Livraison : {quote.promisedDeliveryDate}
-            {deliveryOverdue ? " · en retard" : ""}
+            <DeliveryUrgencyBadge quote={quote} />
           </span>
         )}
       </div>
@@ -333,6 +337,7 @@ export default function Atelier({
   const board = viewMode === "status" ? statusBoard : processBoard;
   const showListLayout = isCompact && layoutMode === "list";
   const overdueDeliveries = quotes.filter(isQuoteDeliveryOverdue);
+  const quotesToLaunchToday = getQuotesToLaunchToday(quotes);
 
   useAtelierRealtime({
     enabled: cloudAvailable && typeof onCloudResync === "function",
@@ -551,6 +556,41 @@ export default function Atelier({
         </div>
       </div>
 
+      {quotesToLaunchToday.length > 0 && (
+        <div className="card atelier-launch-today" data-testid="atelier-launch-today">
+          <div className="atelier-launch-today__header">
+            <strong>À lancer aujourd&apos;hui ({quotesToLaunchToday.length})</strong>
+            <span className="muted">
+              Devis acceptés à démarrer — triés par urgence et priorité
+            </span>
+          </div>
+          <ul className="atelier-launch-today__list">
+            {quotesToLaunchToday.map((quote) => (
+              <li key={quote.id} className="atelier-launch-today__item">
+                <button type="button" className="atelier-card__number" onClick={() => openQuote(quote)}>
+                  {quote.number}
+                </button>
+                <span>{clientName(data, quote.clientId)}</span>
+                <em>{quote.promisedDeliveryDate || "—"}</em>
+                <DeliveryUrgencyBadge quote={quote} />
+                {quote.priority && quote.priority !== "normal" && (
+                  <span className={`atelier-priority atelier-priority--${quote.priority}`}>
+                    {priorityLabel(quote.priority)}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  className="primary compact"
+                  onClick={() => handleAdvance(quote)}
+                >
+                  Lancer →
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {overdueDeliveries.length > 0 && (
         <div className="card atelier-overdue-alert" data-testid="atelier-overdue-alert">
           <strong>Livraisons en retard ({overdueDeliveries.length})</strong>
@@ -562,6 +602,7 @@ export default function Atelier({
                 </button>
                 <span>{clientName(data, quote.clientId)}</span>
                 <em>{quote.promisedDeliveryDate}</em>
+                <DeliveryUrgencyBadge quote={quote} />
                 <span className={statusClass(quote.status)}>{quote.status}</span>
               </li>
             ))}

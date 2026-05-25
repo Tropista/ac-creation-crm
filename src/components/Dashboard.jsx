@@ -14,7 +14,8 @@ import {
 } from "../utils/invoices";
 import { openInvoiceReminderMailto } from "../utils/invoiceReminders";
 import { getProductionQueue } from "../utils/production";
-import { getOverdueQuotes } from "../utils/quoteDelivery";
+import { getOverdueQuotes, getQuotesToLaunchToday } from "../utils/quoteDelivery";
+import DeliveryUrgencyBadge from "./DeliveryUrgencyBadge";
 import {
   addDays,
   buildDeliveryWeekCalendar,
@@ -27,6 +28,7 @@ import { pageToPath } from "../utils/routes";
 import { getPermissions } from "../utils/permissions";
 import { isExpenseInMonth } from "../utils/expenseSuppliers";
 import { exportInvoicesCsv, exportLowStockPurchaseOrderCsv, buildPurchaseOrderText } from "../utils/exportCsv";
+import MonthlyAccountingExport from "./MonthlyAccountingExport";
 import { getStaleDraftQuotes, markDocumentReminder } from "../utils/documentTracking";
 import { countUnreadLeads, markLeadRead } from "../services/leadsService";
 import { showToast } from "../utils/toast";
@@ -130,6 +132,7 @@ export default function Dashboard({
 
   const productionQueue = getProductionQueue(quotes);
   const overdueDeliveries = getOverdueQuotes(quotes);
+  const quotesToLaunchToday = getQuotesToLaunchToday(quotes);
   const deliveryWeekStart = useMemo(
     () => addDays(startOfWeekMonday(new Date()), deliveryWeekOffset * 7),
     [deliveryWeekOffset]
@@ -623,6 +626,19 @@ export default function Dashboard({
         </div>
       </div>
 
+      {(canManageExpenses || canManageInvoices) && (
+        <div
+          className="card dashboard-action-card dashboard-accounting-export"
+          data-testid="dashboard-accounting-export"
+        >
+          <MonthlyAccountingExport
+            data={data}
+            logActivity={logActivity}
+            layout="card"
+          />
+        </div>
+      )}
+
       <div className="dashboard-actions-grid">
         {canManageInvoices && (
           <div className="card dashboard-action-card">
@@ -816,6 +832,58 @@ export default function Dashboard({
           </div>
         )}
 
+        {canManageQuotes && quotesToLaunchToday.length > 0 && (
+          <div
+            className="card dashboard-action-card dashboard-action-card--warning"
+            data-testid="dashboard-launch-today"
+          >
+            <div className="dashboard-action-card__header">
+              <div>
+                <h3>À lancer aujourd&apos;hui</h3>
+                <p className="muted">
+                  {quotesToLaunchToday.length} devis accepté(s) à démarrer — triés
+                  par urgence livraison et priorité.
+                </p>
+              </div>
+              <button type="button" className="ghost" onClick={goToAtelier}>
+                Ouvrir l&apos;atelier →
+              </button>
+            </div>
+            <div className="table compact-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>N°</th>
+                    <th>Client</th>
+                    <th>Livraison</th>
+                    <th>Urgence</th>
+                    <th>Priorité</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {quotesToLaunchToday.slice(0, 8).map((quote) => (
+                    <tr key={quote.id}>
+                      <td>{quote.number}</td>
+                      <td>{clientName(data, quote.clientId)}</td>
+                      <td>{quote.promisedDeliveryDate || "—"}</td>
+                      <td>
+                        <DeliveryUrgencyBadge quote={quote} />
+                      </td>
+                      <td>
+                        {quote.priority && quote.priority !== "normal"
+                          ? quote.priority === "urgent"
+                            ? "Urgente"
+                            : "Haute"
+                          : "Normale"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         {canManageQuotes && productionQueue.total > 0 && (
           <div className="card dashboard-action-card">
             <div className="dashboard-action-card__header">
@@ -923,6 +991,7 @@ export default function Dashboard({
                         >
                           <strong>{quote.number}</strong>
                           <em>{clientName(data, quote.clientId)}</em>
+                          <DeliveryUrgencyBadge quote={quote} />
                           <span className={statusClass(quote.status)}>{quote.status}</span>
                           {overdue ? <span className="dashboard-delivery-overdue-tag">Retard</span> : null}
                         </li>
@@ -964,6 +1033,9 @@ export default function Dashboard({
                       <td>{quote.number}</td>
                       <td>{clientName(data, quote.clientId)}</td>
                       <td>{quote.promisedDeliveryDate}</td>
+                      <td>
+                        <DeliveryUrgencyBadge quote={quote} />
+                      </td>
                       <td>
                         <span className={statusClass(quote.status)}>{quote.status}</span>
                       </td>

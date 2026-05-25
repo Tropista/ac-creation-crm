@@ -1003,3 +1003,36 @@ html,
 .card {
   width: 100%;
 }
+
+.accounting-export-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.accounting-export-month {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.accounting-export-month input[type="month"] {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font: inherit;
+  color: var(--text);
+}
+
+.accounting-export-controls--settings {
+  margin-top: 12px;
+}
+
+.accounting-export-preview {
+  margin: 10px 0 0;
+  font-size: 13px;
+}

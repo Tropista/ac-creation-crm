@@ -455,6 +455,16 @@ text-transform:uppercase;
 color:#b91c1c;
 }
 
+.dashboard-accounting-export{
+border-color:rgba(124,58,237,.25);
+background:linear-gradient(180deg,rgba(124,58,237,.06) 0%,#fff 100%);
+}
+
+.dashboard-accounting-export__hint{
+margin:0;
+font-size:13px;
+}
+
 @media (max-width: 1100px){
 .dashboard-delivery-week{
 grid-template-columns:repeat(4,minmax(0,1fr));
