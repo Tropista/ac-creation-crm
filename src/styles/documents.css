@@ -1187,21 +1187,6 @@
   flex-shrink: 0;
 }
 
-.documents-templates-card {
-  margin-bottom: 1rem;
-}
-
-.documents-templates-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-}
-
-.documents-templates-actions select {
-  min-width: 260px;
-}
-
 .documents-gap-warning {
   margin-bottom: 1rem;
   border-color: #f59e0b;

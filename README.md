@@ -94,10 +94,6 @@ L’Atelier s’abonne aux changements `quotes` / `invoices` si Supabase est con
 
 Depuis **Dépenses** ou **Paramètres** : export CSV mensuel (UTF-8 BOM, séparateur `;`) avec journal des ventes (factures, type acompte/solde, devis parent), journal des achats et récapitulatif TVA.
 
-## Modèles de devis
-
-Page **Devis** → bloc **Modèles** : 4 packs intégrés (DTF, laser, t-shirt, UV-DTF) + enregistrement du devis courant comme modèle personnalisé (`settings.quoteTemplates`).
-
 ## E-facturation LU (Peppol)
 
 Export **UBL stub** depuis Paramètres (non certifié Peppol). Intégration réseau Peppol : évolution future.

@@ -45,12 +45,6 @@ import { downloadProductionSheetPdf } from "../utils/productionPdf";
 import { fromDateInputValue, toDateInputValue } from "../utils/quoteDelivery";
 import { exportInvoicesCsv } from "../utils/exportCsv";
 import {
-  applyQuoteTemplate,
-  createQuoteTemplateFromForm,
-  getQuoteTemplates,
-  addQuoteTemplate,
-} from "../utils/quoteTemplates";
-import {
   formatTrackingDate,
   getStaleDraftQuotes,
   markDocumentReminder,
@@ -103,15 +97,9 @@ const [form, setForm] = useState({
   lines: [{ ...emptyLine }],
 });
   const [attachments, setAttachments] = useState([]);
-  const [selectedTemplateId, setSelectedTemplateId] = useState("");
 
   const itemsPerPage = 25;
   const documents = data[listKey] || [];
-
-  const quoteTemplates = useMemo(
-    () => getQuoteTemplates(data.settings || {}),
-    [data.settings]
-  );
 
   const invoiceNumberGaps = useMemo(() => {
     if (isQuote) return [];
@@ -336,52 +324,6 @@ const [form, setForm] = useState({
   function removeLine(index) {
     if (form.lines.length === 1) return showToast("Il faut au moins une ligne.", "error");
     setForm({ ...form, lines: form.lines.filter((_, i) => i !== index) });
-  }
-
-  function applySelectedTemplate() {
-    if (!selectedTemplateId) {
-      showToast("Choisissez un modèle.", "error");
-      return;
-    }
-
-    const template = quoteTemplates.find(
-      (entry) => String(entry.id) === String(selectedTemplateId)
-    );
-    const applied = applyQuoteTemplate(template);
-    if (!applied?.lines?.length) {
-      showToast("Modèle vide ou introuvable.", "error");
-      return;
-    }
-
-    setEditingId(null);
-    setAttachments([]);
-    setForm((current) => ({
-      ...current,
-      status: "Brouillon",
-      processType: applied.processType || current.processType,
-      globalDiscount: applied.globalDiscount,
-      depositPercent: applied.depositPercent,
-      lines: applied.lines,
-    }));
-    showToast(`Modèle « ${template.name} » appliqué.`, "success");
-  }
-
-  function saveCurrentFormAsTemplate() {
-    const name = window.prompt("Nom du modèle de devis :");
-    if (name === null) return;
-
-    try {
-      const template = createQuoteTemplateFromForm(form, name);
-      setData({
-        ...data,
-        settings: addQuoteTemplate(data.settings || {}, template),
-      });
-      setSelectedTemplateId(template.id);
-      logActivity?.("Création modèle de devis", template.name);
-      showToast(`Modèle « ${template.name} » enregistré.`, "success");
-    } catch (error) {
-      showToast(error.message || "Impossible d'enregistrer le modèle.", "error");
-    }
   }
 
   function reset() {
@@ -990,39 +932,6 @@ useEffect(() => {
           </>
         )}
       </div>
-
-      {isQuote && (
-        <div className="card documents-templates-card">
-          <div className="documents-form-head">
-            <span className="filters-icon">📑</span>
-            <div>
-              <strong>Modèles de devis</strong>
-              <span>Pré-remplissez un nouveau devis à partir d&apos;un pack récurrent.</span>
-            </div>
-          </div>
-          <div className="documents-templates-actions">
-            <select
-              value={selectedTemplateId}
-              onChange={(e) => setSelectedTemplateId(e.target.value)}
-              data-testid="quote-template-select"
-            >
-              <option value="">Choisir un modèle…</option>
-              {quoteTemplates.map((template) => (
-                <option key={template.id} value={template.id}>
-                  {template.name}
-                  {template.builtIn ? " (intégré)" : ""}
-                </option>
-              ))}
-            </select>
-            <button type="button" onClick={applySelectedTemplate}>
-              Appliquer le modèle
-            </button>
-            <button type="button" className="ghost" onClick={saveCurrentFormAsTemplate}>
-              Enregistrer le devis actuel comme modèle
-            </button>
-          </div>
-        </div>
-      )}
 
       {!isQuote && invoiceNumberGaps.length > 0 && (
         <div className="card documents-gap-warning">

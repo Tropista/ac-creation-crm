@@ -82,7 +82,6 @@ export const emptyData = {
     invoiceStyle: "a",
     invoiceNumberPrefix: "FAC",
     invoiceNumberPadding: 4,
-    quoteTemplates: [],
     consumablesStock: [],
   },
   clients: [],
