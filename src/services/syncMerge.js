@@ -179,6 +179,23 @@ export function mergeDeletionTombstones(
   return merged;
 }
 
+export function isItemTombstoned(item, tombstoneDeletedAt) {
+  if (!item?.id || !tombstoneDeletedAt) return false;
+  const deletedAt = parseUpdatedAt({ updatedAt: tombstoneDeletedAt });
+  if (!deletedAt) return false;
+  return deletedAt >= parseUpdatedAt(item);
+}
+
+export function filterCollectionByTombstones(items = [], tombstones = {}) {
+  if (!items?.length || !tombstones || !Object.keys(tombstones).length) {
+    return items || [];
+  }
+
+  return (items || []).filter(
+    (item) => !isItemTombstoned(item, tombstones[String(item?.id)])
+  );
+}
+
 export function collectDeletions(previousItems = [], nextItems = [], deletedAt) {
   const nextIds = new Set(
     (nextItems || []).filter((item) => item?.id).map((item) => String(item.id))
@@ -362,8 +379,12 @@ export function mergeCollection(
   for (const id of ids) {
     const local = localMap.get(id);
     const cloud = cloudMap.get(id);
+    const tombstoneDeletedAt = deletionTombstones[id];
 
-    if (!local && cloud && deletionTombstones[id]) {
+    if (
+      tombstoneDeletedAt &&
+      isItemTombstoned(local || cloud, tombstoneDeletedAt)
+    ) {
       continue;
     }
 

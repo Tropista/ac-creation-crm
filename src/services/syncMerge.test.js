@@ -3,9 +3,11 @@ import {
   LAST_SYNC_AT_KEY,
   clearSyncedDeletionTombstones,
   collectDeletions,
+  filterCollectionByTombstones,
   formatLastSyncRelative,
   formatSyncConflictMessage,
   getLastSyncAt,
+  isItemTombstoned,
   mergeCloudWithLocal,
   mergeCollection,
   mergeDeletionTombstones,
@@ -106,6 +108,46 @@ describe("syncMerge", () => {
     );
 
     expect(merged).toEqual([]);
+  });
+
+  it("isItemTombstoned ignore un enregistrement recréé après la suppression", () => {
+    expect(
+      isItemTombstoned(
+        { id: "c1", updatedAt: "2026-05-25T14:00:00.000Z" },
+        "2026-05-25T12:00:00.000Z"
+      )
+    ).toBe(false);
+
+    expect(
+      isItemTombstoned(
+        { id: "c1", updatedAt: "2026-05-25T10:00:00.000Z" },
+        "2026-05-25T12:00:00.000Z"
+      )
+    ).toBe(true);
+  });
+
+  it("mergeCollection ignore le cloud même si local et cloud existent encore", () => {
+    const merged = mergeCollection(
+      [{ id: "c1", name: "Local", updatedAt: "2026-05-25T10:00:00.000Z" }],
+      [{ id: "c1", name: "Cloud", updatedAt: "2026-05-25T11:00:00.000Z" }],
+      {
+        deletionTombstones: { c1: "2026-05-25T12:00:00.000Z" },
+      }
+    );
+
+    expect(merged).toEqual([]);
+  });
+
+  it("filterCollectionByTombstones retire les lignes cloud encore présentes", () => {
+    const filtered = filterCollectionByTombstones(
+      [
+        { id: "c1", name: "Fantôme", updatedAt: "2026-05-20T08:00:00.000Z" },
+        { id: "c2", name: "Actif", updatedAt: "2026-05-20T08:00:00.000Z" },
+      ],
+      { c1: "2026-05-25T12:00:00.000Z" }
+    );
+
+    expect(filtered.map((item) => item.id)).toEqual(["c2"]);
   });
 
   it("mergeCloudWithLocal ne restaure pas un client supprimé localement", () => {

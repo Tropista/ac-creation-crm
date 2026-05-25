@@ -1,6 +1,9 @@
 import { getSupabase } from "../supabase";
 import { sanitizeProductsForPersistence } from "../utils/productImages";
-import { clearSyncedDeletionTombstones } from "./syncMerge";
+import {
+  clearSyncedDeletionTombstones,
+  filterCollectionByTombstones,
+} from "./syncMerge";
 
 /** Refuse de pousser une suppression massive vers le cloud (ex. migration ou snapshot vide). */
 export const MASS_DELETE_GUARD_MIN = 50;
@@ -516,20 +519,35 @@ export async function loadSupabaseData({ normalizeData, emptyData } = {}) {
   const resolvedLeadsRes = resolveCollectionResult(leadsRes, "leads");
   const resolvedDeliveryNotesRes = resolveCollectionResult(deliveryNotesRes, "delivery_notes");
 
+  const cloudSettings = settingsRes.data?.data || emptyData.settings;
+  const tombstones = cloudSettings.deletionTombstones || {};
+
   const cloudData = normalizeData({
-    settings: settingsRes.data?.data || emptyData.settings,
-    users: rowsToItems(usersRes.data),
-    backups: rowsToItems(backupsRes.data),
-    clients: rowsToItems(clientsRes.data),
-    products: rowsToItems(productsRes.data),
-    categories: rowsToItems(categoriesRes.data),
-    suppliers: rowsToItems(resolvedSuppliersRes.data),
-    expenses: rowsToItems(resolvedExpensesRes.data),
-    leads: rowsToItems(resolvedLeadsRes.data),
-    deliveryNotes: rowsToItems(resolvedDeliveryNotesRes.data),
-    quotes: rowsToItems(quotesRes.data),
-    invoices: rowsToItems(invoicesRes.data),
-    logs: rowsToItems(logsRes.data),
+    settings: cloudSettings,
+    users: filterCollectionByTombstones(rowsToItems(usersRes.data), tombstones.users),
+    backups: filterCollectionByTombstones(rowsToItems(backupsRes.data), tombstones.backups),
+    clients: filterCollectionByTombstones(rowsToItems(clientsRes.data), tombstones.clients),
+    products: filterCollectionByTombstones(rowsToItems(productsRes.data), tombstones.products),
+    categories: filterCollectionByTombstones(
+      rowsToItems(categoriesRes.data),
+      tombstones.categories
+    ),
+    suppliers: filterCollectionByTombstones(
+      rowsToItems(resolvedSuppliersRes.data),
+      tombstones.suppliers
+    ),
+    expenses: filterCollectionByTombstones(
+      rowsToItems(resolvedExpensesRes.data),
+      tombstones.expenses
+    ),
+    leads: filterCollectionByTombstones(rowsToItems(resolvedLeadsRes.data), tombstones.leads),
+    deliveryNotes: filterCollectionByTombstones(
+      rowsToItems(resolvedDeliveryNotesRes.data),
+      tombstones.deliveryNotes
+    ),
+    quotes: filterCollectionByTombstones(rowsToItems(quotesRes.data), tombstones.quotes),
+    invoices: filterCollectionByTombstones(rowsToItems(invoicesRes.data), tombstones.invoices),
+    logs: filterCollectionByTombstones(rowsToItems(logsRes.data), tombstones.logs),
   });
 
   return {

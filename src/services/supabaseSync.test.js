@@ -11,7 +11,7 @@ import {
   shouldSkipMassDelete,
   MASS_DELETE_GUARD_MIN,
 } from "./supabaseSync.js";
-import { clearSyncedDeletionTombstones } from "./syncMerge.js";
+import { clearSyncedDeletionTombstones, filterCollectionByTombstones } from "./syncMerge.js";
 
 describe("supabaseSync tombstones", () => {
   it("clearSyncedDeletionTombstones est importable depuis syncMerge", () => {
@@ -25,6 +25,15 @@ describe("supabaseSync tombstones", () => {
     );
 
     expect(settings.deletionTombstones).toBeUndefined();
+  });
+
+  it("filterCollectionByTombstones est réutilisable pour le chargement cloud", () => {
+    const filtered = filterCollectionByTombstones(
+      [{ id: "c1", updatedAt: "2026-05-20T08:00:00.000Z" }],
+      { c1: "2026-05-25T12:00:00.000Z" }
+    );
+
+    expect(filtered).toEqual([]);
   });
 });
 
