@@ -7,6 +7,14 @@ const PROCESS_PATTERNS = [
   { key: "other", label: "Autre", patterns: [] },
 ];
 
+export const PROCESS_TYPES = PROCESS_PATTERNS.map(({ key, label }) => ({ key, label }));
+
+export const QUOTE_PRIORITY_OPTIONS = [
+  { value: "normal", label: "Normale" },
+  { value: "high", label: "Haute" },
+  { value: "urgent", label: "Urgente" },
+];
+
 export const PRODUCTION_STATUSES = ["En production", "Prêt", "Livré"];
 
 export const ATELIER_PIPELINE_STATUSES = [
@@ -72,7 +80,7 @@ export function inferProcessType(quote) {
     quote?.description,
     ...(quote?.lines || []).map(
       (line) =>
-        `${line.description || ""} ${line.category || ""} ${line.sku || ""}`
+        `${line.description || ""} ${line.category || ""} ${line.sku || ""} ${line.technique || ""}`
     ),
   ]
     .join(" ")
@@ -88,6 +96,16 @@ export function inferProcessType(quote) {
   return PROCESS_PATTERNS.find((entry) => entry.key === "other");
 }
 
+export function resolveProcessType(quote) {
+  const explicit = String(quote?.processType || "").trim();
+  if (explicit) {
+    const match = PROCESS_PATTERNS.find((entry) => entry.key === explicit);
+    if (match) return match;
+  }
+
+  return inferProcessType(quote);
+}
+
 export function getProductionQueue(quotes = []) {
   const queue = quotes.filter(isQuoteInProductionQueue);
 
@@ -97,7 +115,7 @@ export function getProductionQueue(quotes = []) {
   }
 
   for (const quote of queue) {
-    const process = inferProcessType(quote);
+    const process = resolveProcessType(quote);
     byProcess[process.key].items.push(quote);
   }
 
@@ -119,7 +137,7 @@ export function getAtelierBoard(quotes = []) {
   }
 
   for (const quote of pipeline) {
-    const process = inferProcessType(quote);
+    const process = resolveProcessType(quote);
     byProcess[process.key].items.push(quote);
   }
 

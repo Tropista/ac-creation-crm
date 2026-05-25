@@ -4,7 +4,7 @@ import { canDeleteData } from "../services/authService";
 import {
   resolveSupplierForExpense,
 } from "../utils/expenseSuppliers";
-import { exportExpensesCsv } from "../utils/exportCsv";
+import { exportExpensesCsv, exportAccountingLuxCsv } from "../utils/exportCsv";
 import {
   buildExpensesFromImportRows,
   parseExpensesCsv,
@@ -180,6 +180,11 @@ export default function Expenses({
       `depenses-${new Date().toISOString().slice(0, 10)}.csv`
     );
     showToast(`${filteredExpenses.length} dépense(s) exportée(s).`, "success");
+  }
+
+  function handleExportAccounting() {
+    exportAccountingLuxCsv(data);
+    showToast("Export comptable Luxembourg téléchargé.", "success");
   }
 
   function openImportDialog() {
@@ -428,6 +433,9 @@ export default function Expenses({
           </button>
           <button type="button" onClick={handleExportCsv}>
             Exporter CSV
+          </button>
+          <button type="button" onClick={handleExportAccounting}>
+            Export comptable LU
           </button>
           <input
             ref={importInputRef}

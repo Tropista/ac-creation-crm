@@ -9,6 +9,7 @@ import Product3DErrorBoundary from "./3d/Product3DErrorBoundary";
 import { showToast } from "../utils/toast";
 import { TSHIRT_MODEL_URL } from "../utils/assets";
 import { buildCalculatorQuoteLine, getCrmQuotesUrl, openQuoteFromCalculator, saveQuoteDraft } from "../utils/quoteDraft";
+import { submitPublicLead } from "../services/leadsService";
 import { estimatePrintPriceHT } from "../utils/tshirtPricing";
 import { PUBLIC_TSHIRT_PATH } from "../utils/routes";
 
@@ -724,6 +725,11 @@ export default function Vue3DTshirt() {
   const [orderQuantity, setOrderQuantity] = useState(1);
   const [currentProjectId, setCurrentProjectId] = useState(null);
   const [quoteSavedModal, setQuoteSavedModal] = useState(false);
+  const [leadModalOpen, setLeadModalOpen] = useState(false);
+  const [leadEmail, setLeadEmail] = useState("");
+  const [leadPhone, setLeadPhone] = useState("");
+  const [leadSubmitting, setLeadSubmitting] = useState(false);
+  const [pendingQuoteDraft, setPendingQuoteDraft] = useState(null);
   const previewRef = useRef(null);
   const editorRef = useRef(null);
   const actionRef = useRef(null);
@@ -1783,18 +1789,45 @@ ${customizationLines.join("\n")}`,
     };
 
     if (isPublicConfigurator) {
-      saveQuoteDraft(draft);
-      setQuoteSavedModal(true);
-      showToast(
-        "Projet enregistré dans ce navigateur. Ouvrez le CRM → Devis pour finaliser.",
-        "info",
-        7000
-      );
+      setPendingQuoteDraft(draft);
+      setLeadModalOpen(true);
       return;
     }
 
     openQuoteFromCalculator(navigate, draft);
     showToast("Devis pré-rempli depuis le configurateur.", "success");
+  }
+
+  async function submitPublicLeadAndQuote(event) {
+    event.preventDefault();
+    if (!pendingQuoteDraft) return;
+
+    setLeadSubmitting(true);
+    try {
+      await submitPublicLead({
+        email: leadEmail,
+        phone: leadPhone,
+        source: "configurateur-tshirt",
+        metadata: {
+          projectName: projectName.trim() || "T-shirt configuré",
+          quantity: orderQuantity,
+          color: tshirtColor,
+          size: garmentSize,
+        },
+      });
+      saveQuoteDraft(pendingQuoteDraft);
+      setLeadModalOpen(false);
+      setQuoteSavedModal(true);
+      showToast(
+        "Merci ! Votre projet est enregistré. Ouvrez le CRM → Devis pour finaliser.",
+        "success",
+        7000
+      );
+    } catch (error) {
+      showToast(error.message || "Impossible d'enregistrer votre contact.", "error");
+    } finally {
+      setLeadSubmitting(false);
+    }
   }
 
   return (
@@ -1803,11 +1836,50 @@ ${customizationLines.join("\n")}`,
         <div className="tshirt3d-public-banner">
           <div>
             <strong>Configurateur public AC Creation</strong>
-            <p>Créez votre visuel, puis cliquez sur « Créer un devis ». Le projet est enregistré dans ce navigateur.</p>
+            <p>Créez votre visuel, puis cliquez sur « Créer un devis ». Laissez votre email pour être recontacté.</p>
           </div>
           <a className="tshirt3d-public-crm-link" href={getCrmQuotesUrl()}>
             Ouvrir le CRM → Devis
           </a>
+        </div>
+      ) : null}
+
+      {leadModalOpen ? (
+        <div className="tshirt3d-quote-modal" role="dialog" aria-labelledby="tshirt-lead-modal-title">
+          <div className="tshirt3d-quote-modal-card">
+            <h3 id="tshirt-lead-modal-title">Recevoir votre devis</h3>
+            <p>Laissez votre email pour enregistrer le projet et être recontacté par AC Creation.</p>
+            <form className="tshirt3d-lead-form" onSubmit={submitPublicLeadAndQuote}>
+              <label>
+                Email *
+                <input
+                  type="email"
+                  required
+                  value={leadEmail}
+                  onChange={(event) => setLeadEmail(event.target.value)}
+                  placeholder="vous@exemple.com"
+                  data-testid="public-lead-email"
+                />
+              </label>
+              <label>
+                Téléphone (optionnel)
+                <input
+                  type="tel"
+                  value={leadPhone}
+                  onChange={(event) => setLeadPhone(event.target.value)}
+                  placeholder="+352 …"
+                />
+              </label>
+              <div className="tshirt3d-quote-modal-actions">
+                <button type="submit" className="primary" disabled={leadSubmitting}>
+                  {leadSubmitting ? "Envoi…" : "Enregistrer mon projet"}
+                </button>
+                <button type="button" onClick={() => setLeadModalOpen(false)}>
+                  Annuler
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       ) : null}
 

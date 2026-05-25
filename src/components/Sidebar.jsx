@@ -141,6 +141,7 @@ export default function Sidebar({
   lastSyncAt = 0,
   cloudAvailable = false,
   resyncing = false,
+  syncConflictCount = 0,
   onResync,
   permissions,
   logout,
@@ -246,6 +247,11 @@ export default function Sidebar({
             <div className="sidebar-sync__text">
               <span className="sidebar-sync__status">{syncStatus}</span>
               <span className="sidebar-sync__time">{syncTimeLabel}</span>
+              {syncConflictCount > 0 ? (
+                <span className="sidebar-sync__conflicts" data-testid="sidebar-sync-conflicts">
+                  {syncConflictCount} conflit(s) récent(s) — local conservé
+                </span>
+              ) : null}
             </div>
           </div>
           {onResync ? (

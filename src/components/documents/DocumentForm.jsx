@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { money } from "../../utils/money";
-import { QUOTE_STATUSES } from "../../utils/production";
+import { QUOTE_STATUSES, PROCESS_TYPES, QUOTE_PRIORITY_OPTIONS } from "../../utils/production";
 import { uploadQuoteAttachmentFileWithLocalFallback } from "../../services/quoteAttachmentStorage";
 import { isPreviewableAttachment } from "../../utils/quoteAttachments";
 import { uid } from "../../utils/documents";
@@ -15,6 +15,7 @@ export default function DocumentForm({
   taxRate,
   products,
   clients,
+  users = [],
   onSubmit,
   onReset,
   onUpdateLine,
@@ -155,7 +156,68 @@ export default function DocumentForm({
             />
           </label>
         )}
+
+        {isQuote && (
+          <label className="documents-field">
+            <span>Processus</span>
+            <select
+              value={form.processType || ""}
+              onChange={(e) => setForm({ ...form, processType: e.target.value })}
+            >
+              <option value="">Auto (depuis lignes)</option>
+              {PROCESS_TYPES.map((entry) => (
+                <option key={entry.key} value={entry.key}>
+                  {entry.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
+
+      {isQuote && (
+        <div className="documents-form-header documents-form-header--quote">
+          <label className="documents-field">
+            <span>Assigné à</span>
+            <select
+              value={form.assignedTo || ""}
+              onChange={(e) => setForm({ ...form, assignedTo: e.target.value })}
+            >
+              <option value="">Non assigné</option>
+              {(users || [])
+                .filter((user) => String(user?.status || "Actif") !== "Désactivé")
+                .map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.name || user.email}
+                  </option>
+                ))}
+            </select>
+          </label>
+
+          <label className="documents-field">
+            <span>Priorité atelier</span>
+            <select
+              value={form.priority || "normal"}
+              onChange={(e) => setForm({ ...form, priority: e.target.value })}
+            >
+              {QUOTE_PRIORITY_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="documents-field documents-field--wide">
+            <span>Notes atelier</span>
+            <input
+              placeholder="Instructions opérateur, contraintes, rappels…"
+              value={form.atelierNotes || ""}
+              onChange={(e) => setForm({ ...form, atelierNotes: e.target.value })}
+            />
+          </label>
+        </div>
+      )}
 
       <div className="documents-lines-wrap">
         <div className="document-lines">

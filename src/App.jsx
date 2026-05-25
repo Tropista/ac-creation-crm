@@ -75,12 +75,15 @@ import {
 import {
   formatSyncConflictMessage,
   getLastSyncAt,
+  getLastSyncConflictCount,
   mergeCloudWithLocal,
   resolveCloudInitError,
   setLastSyncAt,
+  setLastSyncConflictCount,
   stampDataChanges,
   SYNC_STATUS,
 } from "./services/syncMerge";
+import { mergePublicLeadsIntoData } from "./services/leadsService";
 import "./styles/sidebar.css";
 import "./styles/dashboard.css";
 import "./styles/clients.css";
@@ -144,11 +147,12 @@ async function loadSupabaseSyncModule() {
 }
 
 function prepareAppData(raw) {
+  const withLeads = mergePublicLeadsIntoData(raw);
   return normalizeData({
-    ...raw,
-    users: dedupeItemsById(raw.users || []),
-    backups: dedupeItemsById(raw.backups || []),
-    logs: dedupeItemsById(raw.logs || []),
+    ...withLeads,
+    users: dedupeItemsById(withLeads.users || []),
+    backups: dedupeItemsById(withLeads.backups || []),
+    logs: dedupeItemsById(withLeads.logs || []),
   });
 }
 
@@ -233,6 +237,9 @@ function CrmApp() {
   const [cloudAvailable, setCloudAvailable] = useState(false);
   const [syncStatus, setSyncStatus] = useState(SYNC_STATUS.CONNECTING);
   const [lastSyncAt, setLastSyncAtState] = useState(() => getLastSyncAt());
+  const [syncConflictCount, setSyncConflictCountState] = useState(() =>
+    getLastSyncConflictCount()
+  );
   const [resyncing, setResyncing] = useState(false);
   const autoBackupStarted = useRef(false);
   const cloudInitPromise = useRef(null);
@@ -355,6 +362,7 @@ function CrmApp() {
     } finally {
       setResyncing(false);
       setLastSyncAtState(getLastSyncAt());
+      setSyncConflictCountState(getLastSyncConflictCount());
     }
   }
 
@@ -419,6 +427,8 @@ function CrmApp() {
           markSyncSuccess();
           cloudSyncSucceeded.current = true;
           setSyncStatus(SYNC_STATUS.SYNCED);
+          setLastSyncConflictCount(conflictCount);
+          setSyncConflictCountState(conflictCount);
           if (!silent && conflictCount) {
             showToast(
               `${conflictCount} conflit(s) — versions locales conservées. Vérifiez vos données ou resynchronisez.`,
@@ -650,6 +660,7 @@ function CrmApp() {
         lastSyncAt={lastSyncAt}
         cloudAvailable={cloudAvailable}
         resyncing={resyncing}
+        syncConflictCount={syncConflictCount}
         onResync={resyncFromCloud}
         permissions={permissions}
         logout={logout}

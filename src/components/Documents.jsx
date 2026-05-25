@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import DocumentPreview from "./DocumentPreview";
 import DocumentForm from "./documents/DocumentForm";
 import DocumentList from "./documents/DocumentList";
+import PaginationControls from "./PaginationControls";
 import { money } from "../utils/money";
 import {
   clientName,
@@ -21,7 +22,7 @@ import {
   uid,
   today,
 } from "../utils/documents";
-import { applyStockByLines, syncDocumentStock } from "../utils/stock";
+import { applyStockByLines, syncDocumentStock, syncQuoteProductionStock } from "../utils/stock";
 import {
   INVOICES_FILTER_KEY,
   isInvoiceOverdue,
@@ -34,6 +35,12 @@ import { consumeQuoteDraft } from "../utils/quoteDraft";
 import { PRODUCTION_STATUSES } from "../utils/production";
 import { fromDateInputValue, toDateInputValue } from "../utils/quoteDelivery";
 import { exportInvoicesCsv } from "../utils/exportCsv";
+import {
+  formatTrackingDate,
+  getStaleDraftQuotes,
+  markDocumentReminder,
+  markDocumentSent,
+} from "../utils/documentTracking";
 import { showToast } from "../utils/toast";
 import { canDeleteData } from "../services/authService";
 
@@ -74,6 +81,10 @@ const [form, setForm] = useState({
   globalDiscount: 0,
   depositPercent: 0,
   promisedDeliveryDateInput: "",
+  processType: "",
+  assignedTo: "",
+  atelierNotes: "",
+  priority: "normal",
   lines: [{ ...emptyLine }],
 });
   const [attachments, setAttachments] = useState([]);
@@ -98,6 +109,10 @@ const [form, setForm] = useState({
       globalDiscount: 0,
       depositPercent: 0,
       promisedDeliveryDateInput: "",
+      processType: "",
+      assignedTo: "",
+      atelierNotes: "",
+      priority: "normal",
       lines: draft.lines.map((line) => ({
         productId: line.productId || "",
         sku: line.sku || "",
@@ -188,12 +203,13 @@ const [form, setForm] = useState({
       const pending = documents.filter(
         (doc) => doc.status === "Brouillon" || doc.status === "Envoyé"
       ).length;
+      const staleDrafts = getStaleDraftQuotes(documents).length;
       const accepted = documents.filter((doc) => doc.status === "Accepté").length;
       const inProduction = documents.filter((doc) =>
         PRODUCTION_STATUSES.includes(doc.status)
       ).length;
       const convertible = documents.filter((doc) => isQuoteConvertible(data, doc)).length;
-      return { count: documents.length, totalTTC, pending, accepted, inProduction, convertible };
+      return { count: documents.length, totalTTC, pending, staleDrafts, accepted, inProduction, convertible };
     }
 
     const overdueDocs = documents.filter((doc) => isInvoiceOverdue(doc));
@@ -285,8 +301,21 @@ const [form, setForm] = useState({
       globalDiscount: 0,
       depositPercent: 0,
       promisedDeliveryDateInput: "",
+      processType: "",
+      assignedTo: "",
+      atelierNotes: "",
+      priority: "normal",
       lines: [{ ...emptyLine }],
     });
+  }
+
+  function quoteFormExtras() {
+    return {
+      processType: form.processType || "",
+      assignedTo: form.assignedTo || "",
+      atelierNotes: String(form.atelierNotes || "").trim(),
+      priority: form.priority || "normal",
+    };
   }
 
   function submit(e) {
@@ -328,6 +357,7 @@ const [form, setForm] = useState({
       ? {
           promisedDeliveryDate,
           attachments: attachments || [],
+          ...quoteFormExtras(),
         }
       : {};
 
@@ -349,18 +379,31 @@ const [form, setForm] = useState({
         ...totals,
       });
 
+      const stockSync = isQuote
+        ? syncQuoteProductionStock(
+            data.products || [],
+            existingDoc,
+            updatedDoc,
+            { user: currentRole }
+          )
+        : null;
+
       const nextProducts = isQuote
-        ? data.products || []
+        ? stockSync.products
         : syncDocumentStock(data.products || [], existingDoc, updatedDoc, {
             isQuote,
             user: currentRole,
           });
 
+      const savedDoc = isQuote
+        ? { ...updatedDoc, productionStockAdjusted: stockSync.productionStockAdjusted }
+        : updatedDoc;
+
       setData({
         ...data,
         products: nextProducts,
         [listKey]: documents.map((d) =>
-          d.id === editingId ? updatedDoc : d
+          d.id === editingId ? savedDoc : d
         ),
       });
       logActivity?.(`Modification ${isQuote ? "devis" : "facture"}`, existingDoc?.number || editingId, money(totals.totalTTC));
@@ -388,6 +431,12 @@ const [form, setForm] = useState({
         ...totals,
       };
 
+      const quoteStockSync = isQuote
+        ? syncQuoteProductionStock(data.products || [], null, doc, {
+            user: currentRole,
+          })
+        : null;
+
       const nextProducts = !isQuote && doc.stockAdjusted
         ? applyStockByLines(data.products || [], cleanLines, "remove", {
             type: "invoice",
@@ -395,9 +444,15 @@ const [form, setForm] = useState({
             reference: doc.number,
             user: currentRole,
           })
-        : data.products || [];
+        : isQuote
+          ? quoteStockSync.products
+          : data.products || [];
 
-      setData({ ...data, products: nextProducts, [listKey]: [...documents, doc] });
+      const savedDoc = isQuote
+        ? { ...doc, productionStockAdjusted: quoteStockSync.productionStockAdjusted }
+        : doc;
+
+      setData({ ...data, products: nextProducts, [listKey]: [...documents, savedDoc] });
       logActivity?.(`Création ${isQuote ? "devis" : "facture"}`, doc.number, money(doc.totalTTC));
     }
 
@@ -442,6 +497,10 @@ reset();
       globalDiscount: Number(doc.globalDiscount || 0),
       depositPercent: Number(doc.depositPercent || 0),
       promisedDeliveryDateInput: toDateInputValue(doc.promisedDeliveryDate),
+      processType: doc.processType || "",
+      assignedTo: doc.assignedTo || "",
+      atelierNotes: doc.atelierNotes || "",
+      priority: doc.priority || "normal",
       lines,
     });
   }
@@ -479,14 +538,25 @@ useEffect(() => {
 
     if (!confirm(`Supprimer ce ${isQuote ? "devis" : "facture"} ?`)) return;
     const removedDoc = documents.find((d) => d.id === id);
-    const nextProducts = !isQuote && removedDoc?.stockAdjusted
-      ? applyStockByLines(data.products || [], removedDoc.lines || [], "add", {
-          type: "invoice",
-          reason: "Suppression facture",
-          reference: removedDoc?.number || "",
-          user: currentRole,
-        })
-      : data.products || [];
+    let nextProducts = data.products || [];
+
+    if (!isQuote && removedDoc?.stockAdjusted) {
+      nextProducts = applyStockByLines(nextProducts, removedDoc.lines || [], "add", {
+        type: "invoice",
+        reason: "Suppression facture",
+        reference: removedDoc?.number || "",
+        user: currentRole,
+      });
+    }
+
+    if (isQuote && removedDoc?.productionStockAdjusted) {
+      nextProducts = syncQuoteProductionStock(
+        nextProducts,
+        removedDoc,
+        { ...removedDoc, status: "Accepté" },
+        { user: currentRole }
+      ).products;
+    }
 
     setData({
       ...data,
@@ -502,16 +572,29 @@ useEffect(() => {
       ? { ...existingDoc, status, stockAdjusted: !isQuote && status !== "Annulée" }
       : null;
 
+    let nextProducts = data.products || [];
+
+    if (!isQuote && updatedDoc) {
+      nextProducts = syncDocumentStock(nextProducts, existingDoc, updatedDoc, {
+        isQuote,
+        user: currentRole,
+      });
+    }
+
+    if (isQuote && updatedDoc) {
+      const stockSync = syncQuoteProductionStock(
+        nextProducts,
+        existingDoc,
+        updatedDoc,
+        { user: currentRole }
+      );
+      nextProducts = stockSync.products;
+      updatedDoc.productionStockAdjusted = stockSync.productionStockAdjusted;
+    }
+
     const nextDocuments = dedupeDocuments((data[listKey] || []).map((d) =>
       String(d.id) === String(id) && updatedDoc ? updatedDoc : d
     ));
-
-    const nextProducts = !isQuote && updatedDoc
-      ? syncDocumentStock(data.products || [], existingDoc, updatedDoc, {
-          isQuote,
-          user: currentRole,
-        })
-      : data.products || [];
 
     const changedDoc = nextDocuments.find((d) => String(d.id) === String(id));
     setData({
@@ -532,7 +615,7 @@ useEffect(() => {
 
     const nextInvoices = documents.map((doc) =>
       String(doc.id) === String(invoice.id)
-        ? { ...doc, lastReminderDate: today() }
+        ? markDocumentReminder(doc)
         : doc
     );
     setData({ ...data, invoices: nextInvoices });
@@ -656,6 +739,20 @@ useEffect(() => {
     );
   }
 
+  function handleDocumentSent(doc) {
+    const nextDocuments = documents.map((entry) =>
+      String(entry.id) === String(doc.id) ? markDocumentSent(entry) : entry
+    );
+    setData({ ...data, [listKey]: nextDocuments });
+    setPreviewDoc(markDocumentSent(doc));
+    logActivity?.(
+      `Envoi ${isQuote ? "devis" : "facture"}`,
+      doc.number,
+      formatTrackingDate(new Date().toISOString())
+    );
+    showToast(`${doc.number} marqué comme envoyé.`, "success");
+  }
+
   function convertQuoteToInvoice(doc) {
     if (quoteRequiresDepositFlow(data, doc)) {
       const summary = getQuoteDepositSummary(data, doc);
@@ -742,6 +839,12 @@ useEffect(() => {
                 {stats.convertible > 0 ? ` · ${stats.convertible}` : ""}
               </strong>
             </div>
+            {stats.staleDrafts > 0 && (
+              <div className="documents-stat-card documents-stat-card--danger">
+                <span>Brouillons &gt; 7 j</span>
+                <strong>{stats.staleDrafts}</strong>
+              </div>
+            )}
             {stats.inProduction > 0 && (
               <div className="documents-stat-card documents-stat-card--production">
                 <span>En atelier</span>
@@ -775,6 +878,7 @@ useEffect(() => {
         taxRate={data.settings.taxRate}
         products={data.products || []}
         clients={data.clients || []}
+        users={data.users || []}
         onSubmit={submit}
         onReset={reset}
         onUpdateLine={updateLine}
@@ -801,8 +905,6 @@ useEffect(() => {
         canDelete={canDeleteData(currentRole)}
         overdueOnly={overdueOnly}
         sortBy={sortBy}
-        documentPage={documentPage}
-        documentTotalPages={documentTotalPages}
         onExportCsv={handleExportCsv}
         onToggleOverdueOnly={() => {
           setOverdueOnly((value) => !value);
@@ -812,7 +914,6 @@ useEffect(() => {
           setSortBy(value);
           setCurrentPage(1);
         }}
-        onPageChange={setCurrentPage}
         onPreview={openPreview}
         onEdit={edit}
         onRemove={remove}
@@ -827,6 +928,14 @@ useEffect(() => {
         depositPresets={DEPOSIT_PRESETS}
       />
 
+      <PaginationControls
+        page={documentPage}
+        totalPages={documentTotalPages}
+        onPageChange={setCurrentPage}
+        totalItems={sortedDocuments.length}
+        perPage={itemsPerPage}
+      />
+
       {previewDoc && (
         <DocumentPreview
           doc={previewDoc}
@@ -836,6 +945,7 @@ useEffect(() => {
             setPreviewDoc(null);
             setPreviewType(type);
           }}
+          onDocumentSent={handleDocumentSent}
         />
       )}
     </section>

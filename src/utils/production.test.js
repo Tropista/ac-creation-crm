@@ -6,6 +6,7 @@ import {
   getNextProductionStatus,
   getProductionQueue,
   inferProcessType,
+  resolveProcessType,
   isAtelierPipelineQuote,
   isProductionStatus,
   isQuoteInProductionQueue,
@@ -154,6 +155,15 @@ describe("inferProcessType / isProductionStatus", () => {
       "print3d"
     );
     expect(inferProcessType({ description: "Prestation diverse" }).key).toBe("other");
+  });
+
+  it("utilise le processus explicite s'il est défini", () => {
+    expect(
+      resolveProcessType({
+        processType: "laser",
+        lines: [{ description: "Transfert DTF" }],
+      }).key
+    ).toBe("laser");
   });
 
   it("reconnaît les statuts de production", () => {

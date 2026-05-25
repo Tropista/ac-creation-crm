@@ -89,6 +89,7 @@ export const emptyData = {
   categories: [],
   suppliers: [],
   expenses: [],
+  leads: [],
   backups: [],
   logs: [],
 };
@@ -165,6 +166,10 @@ export function normalizeData(data) {
 
     expenses: dedupeItemsById(
       rest?.expenses || []
+    ),
+
+    leads: dedupeItemsById(
+      rest?.leads || []
     ),
 
     backups: dedupeItemsById(

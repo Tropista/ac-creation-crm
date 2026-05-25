@@ -2,6 +2,7 @@ import { clientName, isQuoteConvertible, quoteIsFullyInvoiced, statusClass, isQu
 import { isInvoiceOverdue, getInvoicePaidAmount, getInvoiceRemaining, isPartiallyPaidInvoice } from "../../utils/invoices";
 import { money } from "../../utils/money";
 import { QUOTE_STATUSES } from "../../utils/production";
+import { formatTrackingDate } from "../../utils/documentTracking";
 
 export default function DocumentList({
   isQuote,
@@ -14,12 +15,9 @@ export default function DocumentList({
   canDelete = true,
   overdueOnly,
   sortBy,
-  documentPage,
-  documentTotalPages,
   onExportCsv,
   onToggleOverdueOnly,
   onSortChange,
-  onPageChange,
   onPreview,
   onEdit,
   onRemove,
@@ -111,6 +109,7 @@ export default function DocumentList({
                 <th>Total TTC</th>
                 {!isQuote && <th>Paiement</th>}
                 <th>Statut</th>
+                <th>Suivi</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -196,6 +195,20 @@ export default function DocumentList({
                           )}
                         </select>
                       </div>
+                    </td>
+                    <td className="documents-tracking-cell">
+                      {d.sentAt ? (
+                        <span className="muted" title={`Envoyé le ${formatTrackingDate(d.sentAt)}`}>
+                          Envoyé {formatTrackingDate(d.sentAt)}
+                        </span>
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
+                      {!isQuote && Number(d.reminderCount || 0) > 0 && (
+                        <span className="documents-reminder-count" title={`Dernière relance : ${formatTrackingDate(d.lastReminderAt || d.lastReminderDate)}`}>
+                          Relances : {d.reminderCount}
+                        </span>
+                      )}
                     </td>
                     <td className="actions documents-actions">
                       <button type="button" className="compact" onClick={() => onPreview(d)}>
@@ -292,8 +305,8 @@ export default function DocumentList({
                           className="compact documents-remind-btn"
                           onClick={() => onSendReminder(d)}
                           title={
-                            d.lastReminderDate
-                              ? `Dernière relance : ${d.lastReminderDate}`
+                            d.lastReminderAt || d.lastReminderDate
+                              ? `Dernière relance : ${formatTrackingDate(d.lastReminderAt || d.lastReminderDate)} (${d.reminderCount || 0})`
                               : "Préparer un email de relance"
                           }
                         >
@@ -313,28 +326,6 @@ export default function DocumentList({
           </table>
         </div>
       )}
-
-      <div className="pagination documents-pagination">
-        <button
-          type="button"
-          disabled={documentPage <= 1}
-          onClick={() => onPageChange(documentPage - 1)}
-        >
-          Précédent
-        </button>
-
-        <span>
-          Page {documentPage} / {documentTotalPages}
-        </span>
-
-        <button
-          type="button"
-          disabled={documentPage >= documentTotalPages}
-          onClick={() => onPageChange(documentPage + 1)}
-        >
-          Suivant
-        </button>
-      </div>
     </div>
   );
 }

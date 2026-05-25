@@ -4,11 +4,13 @@ import { useNavigate } from "react-router-dom";
 import { clientName, statusClass, createDeliveryNoteFromQuote, getDeliveryNoteForQuote, isQuoteDeliveryNoteEligible } from "../utils/documents";
 import {
   ATELIER_PIPELINE_STATUSES,
+  QUOTE_PRIORITY_OPTIONS,
   advanceProductionStatus,
   getAtelierBoard,
   getAtelierStatusBoard,
-  inferProcessType,
+  resolveProcessType,
 } from "../utils/production";
+import { syncQuoteProductionStock } from "../utils/stock";
 import { isQuoteDeliveryOverdue } from "../utils/quoteDelivery";
 import { summarizeQuoteProductionLines } from "../utils/quoteLines";
 import { pageToPath } from "../utils/routes";
@@ -51,6 +53,10 @@ function advanceLabel(status) {
   return null;
 }
 
+function priorityLabel(priority) {
+  return QUOTE_PRIORITY_OPTIONS.find((entry) => entry.value === priority)?.label || "Normale";
+}
+
 function AtelierCard({
   data,
   quote,
@@ -60,16 +66,20 @@ function AtelierCard({
   onDelete,
   onGenerateBl,
   onPreviewBl,
+  onUpdateQuote,
   canDelete = true,
   variant = "kanban",
 }) {
-  const process = inferProcessType(quote);
+  const process = resolveProcessType(quote);
   const nextLabel = advanceLabel(quote.status);
   const isList = variant === "list";
   const blEligible = isQuoteDeliveryNoteEligible(quote);
   const hasBl = Boolean(getDeliveryNoteForQuote(data, quote));
   const productionLines = summarizeQuoteProductionLines(quote.lines);
   const deliveryOverdue = isQuoteDeliveryOverdue(quote);
+  const assignee = (data.users || []).find(
+    (user) => String(user.id) === String(quote.assignedTo)
+  );
 
   return (
     <article
@@ -120,6 +130,21 @@ function AtelierCard({
 
       <p className="atelier-card__client">{clientName(data, quote.clientId)}</p>
 
+      <div className="atelier-card__assignment">
+        {assignee ? (
+          <span className="atelier-card__assignee" title="Opérateur assigné">
+            👤 {assignee.name || assignee.email}
+          </span>
+        ) : (
+          <span className="muted">Non assigné</span>
+        )}
+        {quote.priority && quote.priority !== "normal" && (
+          <span className={`atelier-priority atelier-priority--${quote.priority}`}>
+            {priorityLabel(quote.priority)}
+          </span>
+        )}
+      </div>
+
       <div className="atelier-card__meta">
         <span className="atelier-process-badge">
           {PROCESS_ICONS[process.key] || "📋"} {process.label}
@@ -138,6 +163,46 @@ function AtelierCard({
             {deliveryOverdue ? " · en retard" : ""}
           </span>
         )}
+      </div>
+
+      {quote.atelierNotes ? (
+        <p className="atelier-card__notes" title={quote.atelierNotes}>
+          {quote.atelierNotes}
+        </p>
+      ) : null}
+
+      <div className="atelier-card__inline-fields">
+        <select
+          className="atelier-inline-select"
+          value={quote.assignedTo || ""}
+          onChange={(event) =>
+            onUpdateQuote?.(quote, { assignedTo: event.target.value })
+          }
+          aria-label={`Assignation ${quote.number}`}
+        >
+          <option value="">Assigner…</option>
+          {(data.users || [])
+            .filter((user) => String(user?.status || "Actif") !== "Désactivé")
+            .map((user) => (
+              <option key={user.id} value={user.id}>
+                {user.name || user.email}
+              </option>
+            ))}
+        </select>
+        <select
+          className="atelier-inline-select"
+          value={quote.priority || "normal"}
+          onChange={(event) =>
+            onUpdateQuote?.(quote, { priority: event.target.value })
+          }
+          aria-label={`Priorité ${quote.number}`}
+        >
+          {QUOTE_PRIORITY_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       {productionLines.length > 0 && (
@@ -260,15 +325,32 @@ export default function Atelier({ data, setData, logActivity, currentRole = "Adm
     navigate(pageToPath("quotes"));
   }
 
+  function patchQuote(quote, changes) {
+    const nextQuotes = quotes.map((entry) =>
+      String(entry.id) === String(quote.id) ? { ...entry, ...changes } : entry
+    );
+    setData({ ...data, quotes: nextQuotes });
+  }
+
   function updateQuoteStatus(quote, status) {
     if (!ATELIER_PIPELINE_STATUSES.includes(status)) return;
     if (quote.status === status) return;
 
-    const nextQuotes = quotes.map((entry) =>
-      String(entry.id) === String(quote.id) ? { ...entry, status } : entry
+    const updatedQuote = { ...quote, status };
+    const stockSync = syncQuoteProductionStock(
+      data.products || [],
+      quote,
+      updatedQuote,
+      { user: currentRole }
     );
 
-    setData({ ...data, quotes: nextQuotes });
+    const nextQuotes = quotes.map((entry) =>
+      String(entry.id) === String(quote.id)
+        ? { ...updatedQuote, productionStockAdjusted: stockSync.productionStockAdjusted }
+        : entry
+    );
+
+    setData({ ...data, quotes: nextQuotes, products: stockSync.products });
     logActivity?.("Changement statut devis", quote.number, status);
     showToast(`${quote.number} : ${status}`, "success");
   }
@@ -300,7 +382,16 @@ export default function Atelier({ data, setData, logActivity, currentRole = "Adm
       (entry) => String(entry.id) !== String(quote.id)
     );
 
-    setData({ ...data, quotes: nextQuotes });
+    const nextProducts = quote.productionStockAdjusted
+      ? syncQuoteProductionStock(
+          data.products || [],
+          quote,
+          { ...quote, status: "Accepté" },
+          { user: currentRole }
+        ).products
+      : data.products || [];
+
+    setData({ ...data, quotes: nextQuotes, products: nextProducts });
     logActivity?.("Suppression devis atelier", quote.number, quote.status);
     showToast(`${quote.number} supprimé de l'atelier`, "success");
   }
@@ -478,6 +569,7 @@ export default function Atelier({ data, setData, logActivity, currentRole = "Adm
                       onDelete={handleDelete}
                       onGenerateBl={handleGenerateBl}
                       onPreviewBl={handlePreviewBl}
+                      onUpdateQuote={patchQuote}
                       canDelete={canDeleteData(currentRole)}
                     />
                   ))}
@@ -503,6 +595,7 @@ export default function Atelier({ data, setData, logActivity, currentRole = "Adm
                       onDelete={handleDelete}
                       onGenerateBl={handleGenerateBl}
                       onPreviewBl={handlePreviewBl}
+                      onUpdateQuote={patchQuote}
                       canDelete={canDeleteData(currentRole)}
                     />
                   ))}
@@ -549,6 +642,7 @@ export default function Atelier({ data, setData, logActivity, currentRole = "Adm
                       onDelete={handleDelete}
                       onGenerateBl={handleGenerateBl}
                       onPreviewBl={handlePreviewBl}
+                      onUpdateQuote={patchQuote}
                       canDelete={canDeleteData(currentRole)}
                     />
                   ))}
@@ -584,6 +678,7 @@ export default function Atelier({ data, setData, logActivity, currentRole = "Adm
                       onDelete={handleDelete}
                       onGenerateBl={handleGenerateBl}
                       onPreviewBl={handlePreviewBl}
+                      onUpdateQuote={patchQuote}
                       canDelete={canDeleteData(currentRole)}
                     />
                   ))}

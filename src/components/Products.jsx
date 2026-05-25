@@ -15,6 +15,7 @@ import {
 } from "../utils/productImages";
 import { applyProductStockChange } from "../utils/stock";
 import { showToast } from "../utils/toast";
+import PaginationControls from "./PaginationControls";
 
 function money(value) {
   return Number(value || 0).toLocaleString(
@@ -82,7 +83,7 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
   const [priceMin, setPriceMin] = useState("");
   const [priceMax, setPriceMax] = useState("");
   const [editing, setEditing] = useState(null);
-  const [, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(1);
   const [selectedProductIds, setSelectedProductIds] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [bulkCategory, setBulkCategory] = useState("");
@@ -482,6 +483,11 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
     });
   }, [allProducts, search, categoryFilter, stockFilter, priceMin, priceMax, sortBy]);
 
+  const itemsPerPage = 24;
+  const totalPages = Math.max(1, Math.ceil(products.length / itemsPerPage));
+  const page = Math.min(currentPage, totalPages);
+  const visibleProducts = products.slice((page - 1) * itemsPerPage, page * itemsPerPage);
+
 
   const selectedProductStats = useMemo(() => {
     if (!selectedProduct) return null;
@@ -569,8 +575,6 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
     setPriceMax("");
     setCurrentPage(1);
   }
-
-  const visibleProducts = products;
 
   function reset() {
     setEditing(null);
@@ -1424,6 +1428,14 @@ function openLinkedDocument(doc) {
             )}
           </aside>
         </div>
+
+        <PaginationControls
+          page={page}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          totalItems={products.length}
+          perPage={itemsPerPage}
+        />
 
       </div>
     </section>

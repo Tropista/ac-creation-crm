@@ -354,6 +354,9 @@ export async function syncSupabaseData(nextData, previousData = {}) {
     safeOptionalCollectionWrite("expenses", () =>
       upsertCollectionDelta("expenses", previousData.expenses, syncedData.expenses)
     ),
+    safeOptionalCollectionWrite("leads", () =>
+      upsertCollectionDelta("leads", previousData.leads, syncedData.leads)
+    ),
     safeOptionalCollectionWrite("delivery_notes", () =>
       upsertCollectionDelta(
         "delivery_notes",
@@ -376,6 +379,9 @@ export async function syncSupabaseData(nextData, previousData = {}) {
     ),
     safeOptionalCollectionWrite("expenses", () =>
       deleteRemovedItems("expenses", syncedData.expenses, previousData.expenses)
+    ),
+    safeOptionalCollectionWrite("leads", () =>
+      deleteRemovedItems("leads", syncedData.leads, previousData.leads)
     ),
     safeOptionalCollectionWrite("delivery_notes", () =>
       deleteRemovedItems(
@@ -406,6 +412,7 @@ export async function loadSupabaseData({ normalizeData, emptyData } = {}) {
     categoriesRes,
     suppliersRes,
     expensesRes,
+    leadsRes,
     deliveryNotesRes,
     quotesRes,
     invoicesRes,
@@ -418,6 +425,7 @@ export async function loadSupabaseData({ normalizeData, emptyData } = {}) {
     fetchCollectionRows(supabase, "categories").then((data) => ({ data, error: null })),
     fetchCollectionRows(supabase, "suppliers").then((data) => ({ data, error: null })),
     fetchCollectionRows(supabase, "expenses").then((data) => ({ data, error: null })),
+    fetchCollectionRows(supabase, "leads").then((data) => ({ data, error: null })),
     fetchCollectionRows(supabase, "delivery_notes").then((data) => ({ data, error: null })),
     fetchCollectionRows(supabase, "quotes").then((data) => ({ data, error: null })),
     fetchCollectionRows(supabase, "invoices").then((data) => ({ data, error: null })),
@@ -426,6 +434,7 @@ export async function loadSupabaseData({ normalizeData, emptyData } = {}) {
 
   const resolvedSuppliersRes = resolveCollectionResult(suppliersRes, "suppliers");
   const resolvedExpensesRes = resolveCollectionResult(expensesRes, "expenses");
+  const resolvedLeadsRes = resolveCollectionResult(leadsRes, "leads");
   const resolvedDeliveryNotesRes = resolveCollectionResult(deliveryNotesRes, "delivery_notes");
 
   const cloudData = normalizeData({
@@ -437,6 +446,7 @@ export async function loadSupabaseData({ normalizeData, emptyData } = {}) {
     categories: rowsToItems(categoriesRes.data),
     suppliers: rowsToItems(resolvedSuppliersRes.data),
     expenses: rowsToItems(resolvedExpensesRes.data),
+    leads: rowsToItems(resolvedLeadsRes.data),
     deliveryNotes: rowsToItems(resolvedDeliveryNotesRes.data),
     quotes: rowsToItems(quotesRes.data),
     invoices: rowsToItems(invoicesRes.data),
@@ -455,6 +465,7 @@ export async function loadSupabaseData({ normalizeData, emptyData } = {}) {
         categoriesRes.data?.length ||
         resolvedSuppliersRes.data?.length ||
         resolvedExpensesRes.data?.length ||
+        resolvedLeadsRes.data?.length ||
         resolvedDeliveryNotesRes.data?.length ||
         quotesRes.data?.length ||
         invoicesRes.data?.length

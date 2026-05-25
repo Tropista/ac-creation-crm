@@ -139,6 +139,7 @@ describe("syncMerge", () => {
     });
 
     expect(message).toContain("FAC-2026-042");
+    expect(message).toContain("inv-1");
     expect(message).toContain("facture");
     expect(message).toContain("Resynchroniser");
   });

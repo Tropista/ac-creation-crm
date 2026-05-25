@@ -1,10 +1,10 @@
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   clientName,
   statusClass,
   convertQuoteToInvoiceData,
   isQuoteConvertible,
-  today,
 } from "../utils/documents";
 import {
   INVOICES_FILTER_KEY,
@@ -20,6 +20,8 @@ import { pageToPath } from "../utils/routes";
 import { getPermissions } from "../utils/permissions";
 import { isExpenseInMonth } from "../utils/expenseSuppliers";
 import { exportInvoicesCsv } from "../utils/exportCsv";
+import { getStaleDraftQuotes, markDocumentReminder } from "../utils/documentTracking";
+import { countUnreadLeads, markLeadRead } from "../services/leadsService";
 import { showToast } from "../utils/toast";
 import {
   countLowStockProducts,
@@ -48,6 +50,7 @@ export default function Dashboard({
   const products = data.products || [];
   const categories = data.categories || [];
   const expenses = data.expenses || [];
+  const leads = data.leads || [];
 
   const now = new Date();
   const currentMonth = now.getMonth();
@@ -104,6 +107,11 @@ export default function Dashboard({
 
   const productionQueue = getProductionQueue(quotes);
   const overdueDeliveries = getOverdueQuotes(quotes);
+  const staleDraftQuotes = getStaleDraftQuotes(quotes).slice(0, 8);
+  const unreadLeads = (leads || []).filter(
+    (lead) => String(lead?.status || "nouveau") === "nouveau"
+  );
+  const unreadLeadCount = countUnreadLeads(leads);
 
   const totalInvoices = invoices.reduce(
     (sum, inv) => sum + Number(inv.totalTTC || 0),
@@ -116,52 +124,65 @@ export default function Dashboard({
   const unpaidCount = invoices.filter((i) => i.status !== "Payée").length;
   const acceptedQuotes = quotes.filter((q) => q.status === "Accepté").length;
 
-  const invoiceLines = invoices.flatMap((invoice) =>
-    (invoice.lines || []).map((line) => ({
-      ...line,
-      invoiceId: invoice.id,
-      invoiceNumber: invoice.number,
-      clientId: invoice.clientId,
-      date: invoice.date,
-      status: invoice.status,
-    }))
+  const invoiceLines = useMemo(
+    () =>
+      invoices.flatMap((invoice) =>
+        (invoice.lines || []).map((line) => ({
+          ...line,
+          invoiceId: invoice.id,
+          invoiceNumber: invoice.number,
+          clientId: invoice.clientId,
+          date: invoice.date,
+          status: invoice.status,
+        }))
+      ),
+    [invoices]
   );
 
-  const productStats = products
-    .map((product) => {
-      const lines = invoiceLines.filter(
-        (line) => String(line.productId) === String(product.id)
-      );
-      const quantity = lines.reduce(
-        (sum, line) => sum + Number(line.quantity || 0),
-        0
-      );
-      const revenue = lines.reduce(
-        (sum, line) => sum + Number(line.totalHT || 0),
-        0
-      );
-      return { ...product, quantity, revenue };
-    })
-    .filter((p) => p.quantity > 0 || p.revenue > 0)
-    .sort((a, b) => b.revenue - a.revenue)
-    .slice(0, 5);
+  const productStats = useMemo(
+    () =>
+      products
+        .map((product) => {
+          const lines = invoiceLines.filter(
+            (line) => String(line.productId) === String(product.id)
+          );
+          const quantity = lines.reduce(
+            (sum, line) => sum + Number(line.quantity || 0),
+            0
+          );
+          const revenue = lines.reduce(
+            (sum, line) => sum + Number(line.totalHT || 0),
+            0
+          );
+          return { ...product, quantity, revenue };
+        })
+        .filter((p) => p.quantity > 0 || p.revenue > 0)
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 5),
+    [products, invoiceLines]
+  );
 
-  const clientStats = clients
-    .map((client) => {
-      const clientInvoices = invoices.filter(
-        (invoice) => invoice.clientId === client.id
-      );
-      const total = clientInvoices.reduce(
-        (sum, inv) => sum + Number(inv.totalTTC || 0),
-        0
-      );
-      return { ...client, invoiceCount: clientInvoices.length, total };
-    })
-    .filter((c) => c.total > 0)
-    .sort((a, b) => b.total - a.total)
-    .slice(0, 5);
+  const clientStats = useMemo(
+    () =>
+      clients
+        .map((client) => {
+          const clientInvoices = invoices.filter(
+            (invoice) => invoice.clientId === client.id
+          );
+          const total = clientInvoices.reduce(
+            (sum, inv) => sum + Number(inv.totalTTC || 0),
+            0
+          );
+          return { ...client, invoiceCount: clientInvoices.length, total };
+        })
+        .filter((c) => c.total > 0)
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 5),
+    [clients, invoices]
+  );
 
-  const categoryStats = categories
+  const categoryStats = useMemo(() => {
+    return categories
     .map((category) => {
       const categoryName =
         category.name || category.label || category.category || "";
@@ -204,6 +225,7 @@ export default function Dashboard({
     })
     .filter((c) => c.revenue > 0 || c.quantity > 0)
     .sort((a, b) => b.revenue - a.revenue);
+  }, [categories, products, invoiceLines]);
 
   const maxProductRevenue = Math.max(...productStats.map((p) => p.revenue), 1);
   const maxClientRevenue = Math.max(...clientStats.map((c) => c.total), 1);
@@ -287,7 +309,7 @@ export default function Dashboard({
 
     const nextInvoices = invoices.map((doc) =>
       String(doc.id) === String(invoice.id)
-        ? { ...doc, lastReminderDate: today() }
+        ? markDocumentReminder(doc)
         : doc
     );
     setData({ ...data, invoices: nextInvoices });
@@ -631,6 +653,67 @@ export default function Dashboard({
                 </table>
               </div>
             )}
+          </div>
+        )}
+
+        {canManageQuotes && staleDraftQuotes.length > 0 && (
+          <div className="card dashboard-action-card dashboard-action-card--warning">
+            <div className="dashboard-action-card__header">
+              <div>
+                <h3>Brouillons à relancer</h3>
+                <p className="muted">
+                  Devis brouillon datant de plus de 7 jours, jamais envoyés.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => navigate(pageToPath("quotes"))}
+              >
+                Voir les devis →
+              </button>
+            </div>
+            <ul className="dashboard-stale-drafts">
+              {staleDraftQuotes.map((quote) => (
+                <li key={quote.id}>
+                  <strong>{quote.number}</strong>
+                  <span>{clientName(data, quote.clientId)}</span>
+                  <span className="muted">{quote.date}</span>
+                  <span>{money(quote.totalTTC)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {unreadLeadCount > 0 && (
+          <div className="card dashboard-action-card" data-testid="dashboard-leads">
+            <div className="dashboard-action-card__header">
+              <div>
+                <h3>Nouveaux leads configurateur</h3>
+                <p className="muted">
+                  {unreadLeadCount} contact(s) depuis le configurateur public.
+                </p>
+              </div>
+            </div>
+            <ul className="dashboard-leads-list">
+              {unreadLeads.slice(0, 6).map((lead) => (
+                <li key={lead.id}>
+                  <strong>{lead.email}</strong>
+                  {lead.phone ? <span>{lead.phone}</span> : null}
+                  <span className="muted">{lead.source || "configurateur"}</span>
+                  <button
+                    type="button"
+                    className="compact"
+                    onClick={() =>
+                      setData({ ...data, leads: markLeadRead(leads, lead.id) })
+                    }
+                  >
+                    Marquer lu
+                  </button>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 

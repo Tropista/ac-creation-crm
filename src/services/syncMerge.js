@@ -1,4 +1,5 @@
 export const LAST_SYNC_AT_KEY = "crm_last_sync_at";
+export const LAST_SYNC_CONFLICT_COUNT_KEY = "crm_last_sync_conflict_count";
 
 export const SYNC_STATUS = {
   CONNECTING: "Connexion à Supabase...",
@@ -47,6 +48,7 @@ export const SYNC_COLLECTIONS = [
   "categories",
   "suppliers",
   "expenses",
+  "leads",
   "users",
   "backups",
   "logs",
@@ -66,6 +68,19 @@ export function getLastSyncAt() {
 
 export function setLastSyncAt(timestamp = Date.now()) {
   localStorage.setItem(LAST_SYNC_AT_KEY, String(timestamp));
+}
+
+export function getLastSyncConflictCount() {
+  const raw = localStorage.getItem(LAST_SYNC_CONFLICT_COUNT_KEY);
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+export function setLastSyncConflictCount(count = 0) {
+  localStorage.setItem(
+    LAST_SYNC_CONFLICT_COUNT_KEY,
+    String(Math.max(0, Number(count) || 0))
+  );
 }
 
 export function formatLastSyncRelative(timestamp = getLastSyncAt(), now = Date.now()) {
@@ -115,8 +130,9 @@ export function formatSyncConflictMessage({ entityLabel, local } = {}) {
   }
 
   const referencePart = reference ? ` (${reference})` : "";
+  const idPart = local?.id ? ` · id ${local.id}` : "";
   return (
-    `Conflit cloud/local — version locale conservée${referencePart} (${typeLabel}). ` +
+    `Conflit cloud/local — version locale conservée${referencePart}${idPart} (${typeLabel}). ` +
     "Utilisez « Resynchroniser » si besoin."
   );
 }

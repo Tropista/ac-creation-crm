@@ -41,7 +41,7 @@ function IconInfo() {
   );
 }
 
-export default function DocumentPreview({ doc, type, data, onClose }) {
+export default function DocumentPreview({ doc, type, data, onClose, onDocumentSent }) {
   const isQuote = type === "quote";
   const isDelivery = type === "delivery";
   const client = (data.clients || []).find((c) => c.id === doc.clientId);
@@ -226,6 +226,8 @@ ${data.settings.companyEmail || ""}`;
     window.location.href = `mailto:${encodeURIComponent(
       client.email
     )}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+    onDocumentSent?.(doc);
   }
 
   return (

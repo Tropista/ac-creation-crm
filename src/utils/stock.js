@@ -128,6 +128,41 @@ export function applyStockByLines(products, lines, direction, options = {}) {
   });
 }
 
+const QUOTE_PRODUCTION_STOCK_STATUSES = ["En production", "Prêt", "Livré"];
+
+export function shouldAdjustQuoteProductionStock(status) {
+  return QUOTE_PRODUCTION_STOCK_STATUSES.includes(String(status || "").trim());
+}
+
+export function syncQuoteProductionStock(products, previousQuote, nextQuote, options = {}) {
+  let nextProducts = [...(products || [])];
+  const wasStocked = Boolean(previousQuote?.productionStockAdjusted);
+  const shouldStock = shouldAdjustQuoteProductionStock(nextQuote?.status);
+
+  if (wasStocked && !shouldStock) {
+    nextProducts = applyStockByLines(nextProducts, previousQuote?.lines || [], "add", {
+      type: "production",
+      reason: "Restitution stock (production annulée)",
+      reference: previousQuote?.number || "",
+      user: options.user || "",
+    });
+  }
+
+  if (shouldStock && !wasStocked) {
+    nextProducts = applyStockByLines(nextProducts, nextQuote?.lines || [], "remove", {
+      type: "production",
+      reason: "Sortie stock (mise en production)",
+      reference: nextQuote?.number || "",
+      user: options.user || "",
+    });
+  }
+
+  return {
+    products: nextProducts,
+    productionStockAdjusted: shouldStock,
+  };
+}
+
 export function syncDocumentStock(products, previousDoc, nextDoc, options = {}) {
   let nextProducts = [...(products || [])];
   const previousWasStocked = Boolean(previousDoc?.stockAdjusted);
