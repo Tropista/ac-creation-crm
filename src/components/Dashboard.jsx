@@ -13,7 +13,7 @@ import {
   sortOverdueInvoices,
 } from "../utils/invoices";
 import { openInvoiceReminderMailto } from "../utils/invoiceReminders";
-import { getProductionQueue } from "../utils/production";
+import { getProductionQueue, QUOTES_STATUS_FILTER_KEY } from "../utils/production";
 import { getOverdueQuotes, getQuotesToLaunchToday } from "../utils/quoteDelivery";
 import DeliveryUrgencyBadge from "./DeliveryUrgencyBadge";
 import {
@@ -40,7 +40,23 @@ import {
   isOutOfStock,
   resolveProductSupplier,
   suggestedReorderQty,
+  PRODUCTS_KIND_FILTER_KEY,
+  PRODUCTS_STOCK_FILTER_KEY,
 } from "../utils/stock";
+
+function DashboardStatCard({ label, value, onClick, className = "", detail }) {
+  return (
+    <button
+      type="button"
+      className={`card stat stat--clickable${className ? ` ${className}` : ""}`}
+      onClick={onClick}
+    >
+      <span>{label}</span>
+      <strong>{value}</strong>
+      {detail ? <em className="stat-detail">{detail}</em> : null}
+    </button>
+  );
+}
 
 export default function Dashboard({
   data,
@@ -286,13 +302,36 @@ export default function Dashboard({
     navigate(pageToPath("atelier"));
   }
 
-  function goToOverdueInvoices() {
-    localStorage.setItem(INVOICES_FILTER_KEY, "overdue");
+  function goToInvoices(filter) {
+    if (filter) {
+      localStorage.setItem(INVOICES_FILTER_KEY, filter);
+    }
     navigate(pageToPath("invoices"));
   }
 
-  function goToProducts() {
+  function goToOverdueInvoices() {
+    goToInvoices("overdue");
+  }
+
+  function goToQuotes(status) {
+    if (status) {
+      localStorage.setItem(QUOTES_STATUS_FILTER_KEY, status);
+    }
+    navigate(pageToPath("quotes"));
+  }
+
+  function goToProducts({ stock, kind } = {}) {
+    if (stock) {
+      localStorage.setItem(PRODUCTS_STOCK_FILTER_KEY, stock);
+    }
+    if (kind) {
+      localStorage.setItem(PRODUCTS_KIND_FILTER_KEY, kind);
+    }
     navigate(pageToPath("products"));
+  }
+
+  function goToProductsPage() {
+    goToProducts();
   }
 
   function goToSupplier(supplierId) {
@@ -539,91 +578,102 @@ export default function Dashboard({
       {(canManageExpenses || canManageInvoices) && (
         <div className="stats dashboard-kpis">
           {canManageExpenses && (
-            <div className="card stat dashboard-kpi">
-              <span>Dépenses du mois ({monthLabel})</span>
-              <strong>{money(monthExpensesTTC)}</strong>
-              <em className="muted">
-                {monthExpenses.length} facture(s) · {money(monthExpensesHT)} HT
-              </em>
-            </div>
+            <DashboardStatCard
+              label={`Dépenses du mois (${monthLabel})`}
+              value={money(monthExpensesTTC)}
+              detail={`${monthExpenses.length} facture(s) · ${money(monthExpensesHT)} HT`}
+              className="dashboard-kpi"
+              onClick={() => navigate(pageToPath("expenses"))}
+            />
           )}
           {canManageInvoices && marginCalculable && (
-            <div
-              className={`card stat dashboard-kpi${
-                monthMarginHT < 0 ? " stat--danger" : ""
-              }`}
-            >
-              <span>Marge du mois (CA HT − dépenses HT)</span>
-              <strong>{money(monthMarginHT)}</strong>
-              <em className="muted">
-                CA {money(monthRevenueHT)} · Dépenses {money(monthExpensesHT)}
-              </em>
-            </div>
+            <DashboardStatCard
+              label="Marge du mois (CA HT − dépenses HT)"
+              value={money(monthMarginHT)}
+              detail={`CA ${money(monthRevenueHT)} · Dépenses ${money(monthExpensesHT)}`}
+              className={`dashboard-kpi${monthMarginHT < 0 ? " stat--danger" : ""}`}
+              onClick={() => navigate(pageToPath("expenses"))}
+            />
           )}
         </div>
       )}
 
       <div className="stats">
-        <div className="card stat">
-          <span>Clients</span>
-          <strong>{clients.length}</strong>
-        </div>
-        <div className="card stat">
-          <span>Produits</span>
-          <strong>{products.length}</strong>
-        </div>
-        <div className="card stat">
-          <span>Devis</span>
-          <strong>{quotes.length}</strong>
-        </div>
-        <div className="card stat">
-          <span>Devis acceptés</span>
-          <strong>{acceptedQuotes}</strong>
-        </div>
-        <div className="card stat">
-          <span>Factures</span>
-          <strong>{invoices.length}</strong>
-        </div>
-        <div className="card stat stat--danger">
-          <span>En retard</span>
-          <strong>{overdueInvoices.length}</strong>
-        </div>
+        <DashboardStatCard
+          label="Clients"
+          value={clients.length}
+          onClick={() => navigate(pageToPath("clients"))}
+        />
+        <DashboardStatCard
+          label="Produits"
+          value={products.length}
+          onClick={goToProductsPage}
+        />
+        <DashboardStatCard
+          label="Devis"
+          value={quotes.length}
+          onClick={() => goToQuotes()}
+        />
+        <DashboardStatCard
+          label="Devis acceptés"
+          value={acceptedQuotes}
+          onClick={() => goToQuotes("Accepté")}
+        />
+        <DashboardStatCard
+          label="Factures"
+          value={invoices.length}
+          onClick={() => goToInvoices()}
+        />
+        <DashboardStatCard
+          label="En retard"
+          value={overdueInvoices.length}
+          className="stat--danger"
+          onClick={goToOverdueInvoices}
+        />
         {canManageProducts && (
-          <div className={`card stat ${lowStockCount > 0 ? "stat--danger" : ""}`}>
-            <span>Stock bas (produits)</span>
-            <strong>{lowStockCount}</strong>
-          </div>
+          <DashboardStatCard
+            label="Stock bas (produits)"
+            value={lowStockCount}
+            className={lowStockCount > 0 ? "stat--danger" : ""}
+            onClick={() => goToProducts({ stock: "low", kind: "blank" })}
+          />
         )}
         {canManageProducts && (
-          <div
-            className={`card stat ${lowStockConsumablesCount > 0 ? "stat--danger" : ""}`}
-          >
-            <span>Consommables bas</span>
-            <strong>{lowStockConsumablesCount}</strong>
-          </div>
+          <DashboardStatCard
+            label="Consommables bas"
+            value={lowStockConsumablesCount}
+            className={lowStockConsumablesCount > 0 ? "stat--danger" : ""}
+            onClick={() => goToProducts({ stock: "low", kind: "consumable" })}
+          />
         )}
         {canManageProducts && outOfStockCount > 0 && (
-          <div className="card stat stat--danger">
-            <span>Rupture</span>
-            <strong>{outOfStockCount}</strong>
-          </div>
+          <DashboardStatCard
+            label="Rupture"
+            value={outOfStockCount}
+            className="stat--danger"
+            onClick={() => goToProducts({ stock: "out" })}
+          />
         )}
-        <div className="card stat">
-          <span>Non payées</span>
-          <strong>{unpaidCount}</strong>
-        </div>
-        <div className="card stat">
-          <span>Total facturé</span>
-          <strong>{money(totalInvoices)}</strong>
-        </div>
-        <div className="card stat">
-          <span>Payé</span>
-          <strong>{money(paidInvoices)}</strong>
-        </div>
-        <div className="card stat">
-          <span>À encaisser</span>
-          <strong>{money(unpaidInvoices)}</strong>
-        </div>
+        <DashboardStatCard
+          label="Non payées"
+          value={unpaidCount}
+          onClick={() => goToInvoices("unpaid")}
+        />
+        <DashboardStatCard
+          label="Total facturé"
+          value={money(totalInvoices)}
+          onClick={() => goToInvoices()}
+        />
+        <DashboardStatCard
+          label="Payé"
+          value={money(paidInvoices)}
+          onClick={() => goToInvoices("paid")}
+        />
+        <DashboardStatCard
+          label="À encaisser"
+          value={money(unpaidInvoices)}
+          onClick={() => goToInvoices("unpaid")}
+        />
       </div>
 
       {(canManageExpenses || canManageInvoices) && (
@@ -1060,7 +1110,7 @@ export default function Dashboard({
               </div>
               {(lowStockCount > 0 || outOfStockCount > 0) && (
                 <div className="dashboard-action-card__actions">
-                  <button type="button" className="ghost" onClick={goToProducts}>
+                  <button type="button" className="ghost" onClick={goToProductsPage}>
                     Voir stock →
                   </button>
                   <button type="button" className="ghost" onClick={handleExportPurchaseOrder}>
@@ -1110,7 +1160,7 @@ export default function Dashboard({
                     </tbody>
                   </table>
                 </div>
-                <button type="button" className="dashboard-kpi-cta" onClick={goToProducts}>
+                <button type="button" className="dashboard-kpi-cta" onClick={goToProductsPage}>
                   Voir stock →
                 </button>
               </>
@@ -1131,7 +1181,7 @@ export default function Dashboard({
               </div>
               {lowStockConsumablesCount > 0 && (
                 <div className="dashboard-action-card__actions">
-                  <button type="button" className="ghost" onClick={goToProducts}>
+                  <button type="button" className="ghost" onClick={goToProductsPage}>
                     Voir stock →
                   </button>
                 </div>

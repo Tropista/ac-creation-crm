@@ -139,6 +139,31 @@ font-size:13px;
 color:#dc2626;
 }
 
+.stat--clickable{
+cursor:pointer;
+text-align:left;
+width:100%;
+font:inherit;
+transition:transform .2s ease,box-shadow .2s ease;
+}
+
+.stat--clickable:hover{
+transform:translateY(-3px);
+box-shadow:0 12px 28px rgba(0,0,0,.15);
+}
+
+.stat--clickable:focus-visible{
+outline:2px solid rgba(255,255,255,.85);
+outline-offset:2px;
+}
+
+.stat-detail{
+display:block;
+font-style:normal;
+font-size:13px;
+color:rgba(255,255,255,.72)!important;
+}
+
 button.compact{
 padding:6px 12px;
 font-size:13px;

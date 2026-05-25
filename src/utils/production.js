@@ -22,6 +22,8 @@ export const ATELIER_PIPELINE_STATUSES = [
   ...PRODUCTION_STATUSES,
 ];
 
+export const QUOTES_STATUS_FILTER_KEY = "crm_quotes_status_filter";
+
 export const QUOTE_STATUSES = [
   "Brouillon",
   "Envoyé",

@@ -3,6 +3,9 @@ import { uid, today } from "./documents";
 /** Noms de catégorie reconnus comme consommables (encre DTF, films, vinyle…). */
 export const CONSUMABLE_CATEGORY_NAMES = ["consommable", "consommables"];
 
+export const PRODUCTS_STOCK_FILTER_KEY = "crm_products_stock_filter";
+export const PRODUCTS_KIND_FILTER_KEY = "crm_products_kind_filter";
+
 export function isConsumableProduct(product, settings = {}) {
   if (!product || product.archived) return false;
 

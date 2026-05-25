@@ -29,6 +29,8 @@ import { applyStockByLines, syncDocumentStock, syncQuoteProductionStock } from "
 import {
   INVOICES_FILTER_KEY,
   isInvoiceOverdue,
+  isPaidInvoice,
+  isCancelledInvoice,
   applyPartialPayment,
   getInvoiceRemaining,
   DEPOSIT_PRESETS,
@@ -40,7 +42,7 @@ import {
   getQuoteIdFromLocation,
   openQuoteWhatsAppShare,
 } from "../utils/quoteShare";
-import { PRODUCTION_STATUSES } from "../utils/production";
+import { PRODUCTION_STATUSES, QUOTES_STATUS_FILTER_KEY } from "../utils/production";
 import { downloadProductionSheetPdf } from "../utils/productionPdf";
 import { fromDateInputValue, toDateInputValue } from "../utils/quoteDelivery";
 import { exportInvoicesCsv } from "../utils/exportCsv";
@@ -80,6 +82,9 @@ function Documents({ type, data, setData, currentRole = 'Admin', logActivity }) 
   const [sortBy, setSortBy] = useState("dateDesc");
   const [search, setSearch] = useState("");
   const [overdueOnly, setOverdueOnly] = useState(false);
+  const [unpaidOnly, setUnpaidOnly] = useState(false);
+  const [paidOnly, setPaidOnly] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("");
   const prefilledClientId =
   localStorage.getItem(
     "crm_prefill_client_id"
@@ -171,17 +176,37 @@ const [form, setForm] = useState({
   }, [isQuote, location.search, documents]);
 
   useEffect(() => {
-    if (isQuote) return;
-    if (localStorage.getItem(INVOICES_FILTER_KEY) !== "overdue") return;
+    if (isQuote) {
+      const value = localStorage.getItem(QUOTES_STATUS_FILTER_KEY);
+      if (!value) return;
+      localStorage.removeItem(QUOTES_STATUS_FILTER_KEY);
+      setStatusFilter(value);
+      setCurrentPage(1);
+      return;
+    }
+
+    const filter = localStorage.getItem(INVOICES_FILTER_KEY);
+    if (!filter) return;
     localStorage.removeItem(INVOICES_FILTER_KEY);
-    setOverdueOnly(true);
+    if (filter === "overdue") {
+      setOverdueOnly(true);
+    } else if (filter === "unpaid") {
+      setUnpaidOnly(true);
+    } else if (filter === "paid") {
+      setPaidOnly(true);
+    }
     setCurrentPage(1);
   }, [isQuote]);
 
   const sortedDocuments = useMemo(() => {
     const query = search.trim().toLowerCase();
     const list = [...documents].filter((doc) => {
+      if (statusFilter && doc.status !== statusFilter) return false;
       if (overdueOnly && !isQuote && !isInvoiceOverdue(doc)) return false;
+      if (unpaidOnly && !isQuote && (isPaidInvoice(doc) || isCancelledInvoice(doc))) {
+        return false;
+      }
+      if (paidOnly && !isQuote && !isPaidInvoice(doc)) return false;
 
       if (!query) return true;
 
@@ -224,7 +249,7 @@ const [form, setForm] = useState({
       if (sortBy === "statusDesc") return String(b.status || "").localeCompare(String(a.status || ""));
       return 0;
     });
-  }, [documents, sortBy, data, overdueOnly, isQuote, search]);
+  }, [documents, sortBy, data, overdueOnly, unpaidOnly, paidOnly, statusFilter, isQuote, search]);
 
   const documentTotalPages = Math.max(1, Math.ceil(sortedDocuments.length / itemsPerPage));
   const documentPage = Math.min(currentPage, documentTotalPages);

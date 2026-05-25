@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   canDeleteData
 } from "../services/authService";
@@ -13,7 +13,13 @@ import {
   isLargeBase64Image,
   PRODUCT_IMAGE_MAX_BASE64_BYTES,
 } from "../utils/productImages";
-import { applyProductStockChange } from "../utils/stock";
+import {
+  applyProductStockChange,
+  isBlankProduct,
+  isConsumableProduct,
+  PRODUCTS_KIND_FILTER_KEY,
+  PRODUCTS_STOCK_FILTER_KEY,
+} from "../utils/stock";
 import { showToast } from "../utils/toast";
 import PaginationControls from "./PaginationControls";
 
@@ -79,6 +85,7 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [stockFilter, setStockFilter] = useState("all");
+  const [kindFilter, setKindFilter] = useState("");
   const [sortBy, setSortBy] = useState("name-asc");
   const [priceMin, setPriceMin] = useState("");
   const [priceMax, setPriceMax] = useState("");
@@ -280,6 +287,21 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
         : Number(product.stock || 0),
   }));
 
+  useEffect(() => {
+    const stock = localStorage.getItem(PRODUCTS_STOCK_FILTER_KEY);
+    const kind = localStorage.getItem(PRODUCTS_KIND_FILTER_KEY);
+    if (stock) {
+      localStorage.removeItem(PRODUCTS_STOCK_FILTER_KEY);
+      setStockFilter(stock);
+      setCurrentPage(1);
+    }
+    if (kind) {
+      localStorage.removeItem(PRODUCTS_KIND_FILTER_KEY);
+      setKindFilter(kind);
+      setCurrentPage(1);
+    }
+  }, []);
+
   function getCategoryName(categoryName) {
     return String(categoryName || "").trim();
   }
@@ -443,12 +465,20 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
       const matchesPriceMin = minPrice === null || price >= minPrice;
       const matchesPriceMax = maxPrice === null || price <= maxPrice;
 
+      const matchesKind =
+        !kindFilter ||
+        (kindFilter === "consumable" &&
+          isConsumableProduct(product, data.settings || {})) ||
+        (kindFilter === "blank" &&
+          isBlankProduct(product, data.settings || {}));
+
       return (
         matchesSearch &&
         matchesCategory &&
         matchesStock &&
         matchesPriceMin &&
-        matchesPriceMax
+        matchesPriceMax &&
+        matchesKind
       );
     });
 
@@ -481,7 +511,7 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
           return String(a.name || "").localeCompare(String(b.name || ""));
       }
     });
-  }, [allProducts, search, categoryFilter, stockFilter, priceMin, priceMax, sortBy]);
+  }, [allProducts, search, categoryFilter, stockFilter, kindFilter, priceMin, priceMax, sortBy, data.settings]);
 
   const itemsPerPage = 24;
   const totalPages = Math.max(1, Math.ceil(products.length / itemsPerPage));
