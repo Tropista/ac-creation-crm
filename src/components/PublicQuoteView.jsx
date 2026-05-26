@@ -5,6 +5,7 @@ import { money } from "../utils/money";
 import { statusClass } from "../utils/documents";
 import {
   acceptPublicQuote,
+  declinePublicQuote,
   fetchPublicQuoteContext,
 } from "../services/publicQuoteService";
 import { getQuoteIdFromLocation, getShareTokenFromLocation } from "../utils/quoteShare";
@@ -39,7 +40,10 @@ export default function PublicQuoteView() {
   const [error, setError] = useState("");
   const [context, setContext] = useState(null);
   const [accepting, setAccepting] = useState(false);
+  const [declining, setDeclining] = useState(false);
   const [accepted, setAccepted] = useState(false);
+  const [declined, setDeclined] = useState(false);
+  const [declineReason, setDeclineReason] = useState("");
   const [showPreview, setShowPreview] = useState(false);
 
   useEffect(() => {
@@ -52,7 +56,9 @@ export default function PublicQuoteView() {
         const result = await fetchPublicQuoteContext(quoteId, shareToken);
         if (cancelled) return;
         setContext(result);
-        setAccepted(String(result.quote?.status || "") === "Accepté");
+        const status = String(result.quote?.status || "");
+        setAccepted(status === "Accepté");
+        setDeclined(status === "Refusé");
       } catch (loadError) {
         if (cancelled) return;
         setError(loadError.message || "Devis introuvable.");
@@ -75,7 +81,7 @@ export default function PublicQuoteView() {
     [context]
   );
 
-  const canAccept = useMemo(() => {
+  const canRespond = useMemo(() => {
     if (!context?.quote) return false;
     const status = String(context.quote.status || "");
     return !["Accepté", "Refusé", "Annulé"].includes(status);
@@ -95,6 +101,28 @@ export default function PublicQuoteView() {
       showToast(acceptError.message || "Acceptation impossible.", "error");
     } finally {
       setAccepting(false);
+    }
+  }
+
+  async function handleDecline() {
+    if (!quoteId || declining) return;
+    if (!confirm("Confirmez-vous le refus de ce devis ?")) return;
+
+    setDeclining(true);
+    try {
+      const result = await declinePublicQuote(
+        quoteId,
+        shareToken,
+        context?.settings,
+        declineReason
+      );
+      setContext(result);
+      setDeclined(true);
+      showToast("Votre refus a été enregistré.", "info");
+    } catch (declineError) {
+      showToast(declineError.message || "Refus impossible.", "error");
+    } finally {
+      setDeclining(false);
     }
   }
 
@@ -165,18 +193,43 @@ export default function PublicQuoteView() {
           <button type="button" className="primary" onClick={() => setShowPreview(true)}>
             Voir le devis / PDF
           </button>
-          {canAccept && !accepted ? (
-            <button
-              type="button"
-              className="public-quote-accept"
-              disabled={accepting}
-              onClick={handleAccept}
-            >
-              {accepting ? "Enregistrement…" : "J'accepte ce devis"}
-            </button>
+          {canRespond && !accepted && !declined ? (
+            <>
+              <button
+                type="button"
+                className="public-quote-accept"
+                disabled={accepting || declining}
+                onClick={handleAccept}
+              >
+                {accepting ? "Enregistrement…" : "J'accepte ce devis"}
+              </button>
+              <div className="public-quote-decline">
+                <label htmlFor="public-quote-decline-reason">
+                  Motif de refus (optionnel)
+                </label>
+                <textarea
+                  id="public-quote-decline-reason"
+                  rows={3}
+                  value={declineReason}
+                  onChange={(event) => setDeclineReason(event.target.value)}
+                  placeholder="Précisez la raison si vous le souhaitez…"
+                />
+                <button
+                  type="button"
+                  className="public-quote-decline-btn"
+                  disabled={accepting || declining}
+                  onClick={handleDecline}
+                >
+                  {declining ? "Enregistrement…" : "Je refuse ce devis"}
+                </button>
+              </div>
+            </>
           ) : null}
           {accepted ? (
             <p className="public-quote-accepted">Devis accepté — merci pour votre confiance.</p>
+          ) : null}
+          {declined ? (
+            <p className="public-quote-declined">Devis refusé — votre réponse a été transmise.</p>
           ) : null}
         </div>
       </section>

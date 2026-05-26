@@ -2,6 +2,16 @@ import { useMemo, useRef, useState } from "react";
 import PaginationControls from "./PaginationControls";
 import { canDeleteData } from "../services/authService";
 import {
+  VAT_RATE_CUSTOM,
+  LUXEMBOURG_VAT_RATES,
+  computeTotalFromHtAndVat,
+  computeVatFromHtAndRate,
+  formatExpenseAmountField,
+  isPresetVatRate,
+  resolveVatRateSelectValue,
+  roundMoney,
+} from "../utils/expenseAmounts";
+import {
   resolveSupplierForExpense,
 } from "../utils/expenseSuppliers";
 import { exportExpensesCsv } from "../utils/exportCsv";
@@ -55,8 +65,6 @@ const emptyExpenseForm = {
   notes: "",
 };
 
-const VAT_RATE_OPTIONS = ["", "3", "8", "14", "16", "17", "20"];
-
 export default function Expenses({
   data,
   setData,
@@ -70,9 +78,11 @@ export default function Expenses({
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyExpenseForm);
+  const [customVatRateMode, setCustomVatRateMode] = useState(false);
   const [importPreview, setImportPreview] = useState(null);
   const [importFileName, setImportFileName] = useState("");
   const importInputRef = useRef(null);
+  const amountsManualRef = useRef({ vatAmount: false, totalTTC: false });
 
   const itemsPerPage = 25;
   const expenses = data.expenses || [];
@@ -139,14 +149,68 @@ export default function Expenses({
     page * itemsPerPage
   );
 
+  function resetAmountOverrides() {
+    amountsManualRef.current = { vatAmount: false, totalTTC: false };
+  }
+
   function resetForm() {
     setEditingId(null);
     setForm(emptyExpenseForm);
+    setCustomVatRateMode(false);
+    resetAmountOverrides();
     setShowForm(false);
   }
 
+  function applyHtRateCalculation(next, amountHT, vatRate) {
+    const computed = computeVatFromHtAndRate(amountHT, vatRate);
+    if (!computed) return next;
+
+    next.vatAmount = formatExpenseAmountField(computed.vatAmount);
+    next.totalTTC = formatExpenseAmountField(computed.totalTTC);
+    return next;
+  }
+
   function updateForm(field, value) {
-    setForm((current) => ({ ...current, [field]: value }));
+    setForm((current) => {
+      const next = { ...current, [field]: value };
+
+      if (field === "amountHT" || field === "vatRate") {
+        resetAmountOverrides();
+        return applyHtRateCalculation(
+          next,
+          field === "amountHT" ? value : current.amountHT,
+          field === "vatRate" ? value : current.vatRate
+        );
+      }
+
+      if (field === "vatAmount") {
+        amountsManualRef.current.vatAmount = true;
+        if (!amountsManualRef.current.totalTTC) {
+          const totalTTC = computeTotalFromHtAndVat(current.amountHT, value);
+          if (totalTTC != null) {
+            next.totalTTC = formatExpenseAmountField(totalTTC);
+          }
+        }
+        return next;
+      }
+
+      if (field === "totalTTC") {
+        amountsManualRef.current.totalTTC = true;
+        return next;
+      }
+
+      return next;
+    });
+  }
+
+  function handleVatRateSelect(value) {
+    if (value === VAT_RATE_CUSTOM) {
+      setCustomVatRateMode(true);
+      return;
+    }
+
+    setCustomVatRateMode(false);
+    updateForm("vatRate", value);
   }
 
   function handleSupplierSelect(supplierId) {
@@ -280,12 +344,20 @@ export default function Expenses({
   function openManualForm() {
     setEditingId(null);
     setForm(emptyExpenseForm);
+    setCustomVatRateMode(false);
+    resetAmountOverrides();
     setShowForm(true);
   }
 
   function editExpense(expense) {
     setEditingId(expense.id);
     setShowForm(true);
+    resetAmountOverrides();
+    setCustomVatRateMode(
+      expense.vatRate != null &&
+        expense.vatRate !== "" &&
+        !isPresetVatRate(expense.vatRate)
+    );
     setForm({
       supplierId: expense.supplierId || "",
       supplierName: expense.supplierName || "",
@@ -308,10 +380,26 @@ export default function Expenses({
       return;
     }
 
-    const amountHT = parseNumberInput(form.amountHT);
-    const vatRate = parseNumberInput(form.vatRate);
-    const vatAmount = parseNumberInput(form.vatAmount);
-    const totalTTC = parseNumberInput(form.totalTTC);
+    let amountHT = parseNumberInput(form.amountHT);
+    let vatRate = parseNumberInput(form.vatRate);
+    let vatAmount = parseNumberInput(form.vatAmount);
+    let totalTTC = parseNumberInput(form.totalTTC);
+
+    const computed = computeVatFromHtAndRate(form.amountHT, form.vatRate);
+    if (
+      computed &&
+      !amountsManualRef.current.vatAmount &&
+      !amountsManualRef.current.totalTTC
+    ) {
+      vatAmount = computed.vatAmount;
+      totalTTC = computed.totalTTC;
+    } else {
+      vatAmount = vatAmount != null ? roundMoney(vatAmount) : 0;
+      totalTTC = totalTTC != null ? roundMoney(totalTTC) : 0;
+    }
+
+    amountHT = amountHT != null ? roundMoney(amountHT) : 0;
+    vatRate = vatRate ?? 0;
 
     if (
       [amountHT, vatRate, vatAmount, totalTTC].some(
@@ -635,17 +723,33 @@ export default function Expenses({
             onChange={(e) => updateForm("amountHT", e.target.value)}
           />
 
-          <select
-            value={form.vatRate}
-            onChange={(e) => updateForm("vatRate", e.target.value)}
-          >
-            <option value="">Taux TVA %</option>
-            {VAT_RATE_OPTIONS.filter(Boolean).map((rate) => (
-              <option key={rate} value={rate}>
-                {rate} %
-              </option>
-            ))}
-          </select>
+          <div className="expenses-vat-rate-field">
+            <select
+              value={resolveVatRateSelectValue(form.vatRate, {
+                customMode: customVatRateMode,
+              })}
+              onChange={(e) => handleVatRateSelect(e.target.value)}
+            >
+              <option value="">Taux TVA %</option>
+              {LUXEMBOURG_VAT_RATES.map((rate) => (
+                <option key={rate} value={rate}>
+                  {rate} %
+                </option>
+              ))}
+              <option value={VAT_RATE_CUSTOM}>Saisie manuelle</option>
+            </select>
+            {(customVatRateMode ||
+              resolveVatRateSelectValue(form.vatRate) === VAT_RATE_CUSTOM) && (
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="Taux personnalisé %"
+                value={form.vatRate}
+                onChange={(e) => updateForm("vatRate", e.target.value)}
+              />
+            )}
+          </div>
 
           <input
             placeholder="Montant TVA €"

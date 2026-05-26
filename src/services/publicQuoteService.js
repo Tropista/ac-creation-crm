@@ -22,6 +22,8 @@ export function validateShareToken(quote, token, settings = {}) {
   return expected === String(token || "");
 }
 
+const BLOCKED_PUBLIC_STATUSES = ["Accepté", "Refusé", "Annulé"];
+
 function findQuoteInLocalData(quoteId) {
   const data = loadData();
   return (data.quotes || []).find((entry) => String(entry.id) === String(quoteId)) || null;
@@ -84,12 +86,41 @@ export async function fetchPublicQuoteContext(quoteId, shareToken, settings = {}
   return { quote, client, settings: cloudSettings, source: "cloud" };
 }
 
+async function persistPublicQuote(context, quoteId, nextQuote) {
+  if (context.source === "local") {
+    const data = loadData();
+    const nextQuotes = (data.quotes || []).map((entry) =>
+      String(entry.id) === String(quoteId) ? nextQuote : entry
+    );
+    localStorage.setItem(
+      "crm_local_data_v2",
+      JSON.stringify({ ...data, quotes: nextQuotes })
+    );
+    return { ...context, quote: nextQuote, source: "local" };
+  }
+
+  if (!isSupabaseConfigured) {
+    throw new Error("Action impossible — synchronisation cloud indisponible.");
+  }
+
+  const supabase = await getSupabase();
+  const { error } = await supabase
+    .from("quotes")
+    .update({ data: nextQuote })
+    .eq("id", String(quoteId));
+
+  if (error) {
+    throw new Error("Impossible d'enregistrer votre réponse. Contactez-nous.");
+  }
+
+  return { ...context, quote: nextQuote, source: "cloud" };
+}
+
 export async function acceptPublicQuote(quoteId, shareToken, settings = {}) {
   const context = await fetchPublicQuoteContext(quoteId, shareToken, settings);
   const { quote } = context;
 
-  const blocked = ["Accepté", "Refusé", "Annulé"];
-  if (blocked.includes(String(quote.status || ""))) {
+  if (BLOCKED_PUBLIC_STATUSES.includes(String(quote.status || ""))) {
     return { ...context, alreadyHandled: true };
   }
 
@@ -100,31 +131,27 @@ export async function acceptPublicQuote(quoteId, shareToken, settings = {}) {
     acceptedVia: "public-link",
   };
 
-  if (context.source === "local") {
-    const data = loadData();
-    const nextQuotes = (data.quotes || []).map((entry) =>
-      String(entry.id) === String(quoteId) ? acceptedQuote : entry
-    );
-    localStorage.setItem(
-      "crm_local_data_v2",
-      JSON.stringify({ ...data, quotes: nextQuotes })
-    );
-    return { ...context, quote: acceptedQuote, accepted: true, source: "local" };
+  const result = await persistPublicQuote(context, quoteId, acceptedQuote);
+  return { ...result, accepted: true };
+}
+
+export async function declinePublicQuote(quoteId, shareToken, settings = {}, reason = "") {
+  const context = await fetchPublicQuoteContext(quoteId, shareToken, settings);
+  const { quote } = context;
+
+  if (BLOCKED_PUBLIC_STATUSES.includes(String(quote.status || ""))) {
+    return { ...context, alreadyHandled: true };
   }
 
-  if (!isSupabaseConfigured) {
-    throw new Error("Acceptation impossible — synchronisation cloud indisponible.");
-  }
+  const trimmedReason = String(reason || "").trim();
+  const declinedQuote = {
+    ...quote,
+    status: "Refusé",
+    declinedAt: new Date().toISOString(),
+    declinedVia: "public-link",
+    ...(trimmedReason ? { declineReason: trimmedReason } : {}),
+  };
 
-  const supabase = await getSupabase();
-  const { error } = await supabase
-    .from("quotes")
-    .update({ data: acceptedQuote })
-    .eq("id", String(quoteId));
-
-  if (error) {
-    throw new Error("Impossible d'enregistrer votre acceptation. Contactez-nous.");
-  }
-
-  return { ...context, quote: acceptedQuote, accepted: true, source: "cloud" };
+  const result = await persistPublicQuote(context, quoteId, declinedQuote);
+  return { ...result, declined: true };
 }

@@ -26,6 +26,7 @@ export default function CalculatorProjectLibrary({
   currentName = "",
   getFormSnapshot,
   onLoadForm,
+  onSyncSettings,
   className = "",
 }) {
   const [projectName, setProjectName] = useState(currentName || "");
@@ -43,6 +44,10 @@ export default function CalculatorProjectLibrary({
     setProjects(loadCalculatorProjects(calculatorType));
   }
 
+  function pushSettingsSync() {
+    onSyncSettings?.();
+  }
+
   function handleSave() {
     const form = typeof getFormSnapshot === "function" ? getFormSnapshot() : null;
     if (!form) {
@@ -55,6 +60,7 @@ export default function CalculatorProjectLibrary({
     });
     refresh();
     setProjectName(saved.name);
+    pushSettingsSync();
     showToast(`Projet « ${saved.name} » sauvegardé.`, "success");
   }
 
@@ -72,6 +78,7 @@ export default function CalculatorProjectLibrary({
     if (!confirm(`Supprimer le projet « ${project.name} » ?`)) return;
     deleteCalculatorProject(calculatorType, projectId);
     refresh();
+    pushSettingsSync();
     showToast("Projet supprimé.", "info");
   }
 
@@ -80,7 +87,7 @@ export default function CalculatorProjectLibrary({
       <header className="calculator-projects__header">
         <div>
           <strong>Bibliothèque de projets</strong>
-          <span className="muted">Sauvegarde locale — {sortedProjects.length} projet(s)</span>
+          <span className="muted">Sauvegarde cloud — {sortedProjects.length} projet(s)</span>
         </div>
       </header>
 

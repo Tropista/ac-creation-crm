@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { clientName, statusClass, createDeliveryNoteFromQuote, getDeliveryNoteForQuote, isQuoteDeliveryNoteEligible } from "../utils/documents";
@@ -22,6 +22,7 @@ import { pageToPath } from "../utils/routes";
 import { showToast } from "../utils/toast";
 import { canDeleteData } from "../services/authService";
 import { useAtelierRealtime } from "../hooks/useAtelierRealtime";
+import { openOrderReadyWhatsApp } from "../utils/quoteShare";
 
 const PROCESS_ICONS = {
   laser: "🔥",
@@ -69,6 +70,7 @@ function AtelierMobileSimpleCard({
   onAdvance,
   onDownloadProductionSheet,
   onOpen,
+  onNotifyReady,
 }) {
   const nextLabel = advanceLabel(quote.status);
   const productionSheetEligible = isProductionSheetEligible(quote);
@@ -115,6 +117,16 @@ function AtelierMobileSimpleCard({
             Fiche PDF
           </button>
         ) : null}
+        {quote.status === "Prêt" ? (
+          <button
+            type="button"
+            className="atelier-wa-btn"
+            data-testid={`atelier-wa-${quote.id}`}
+            onClick={() => onNotifyReady?.(quote)}
+          >
+            WhatsApp prêt
+          </button>
+        ) : null}
       </div>
     </article>
   );
@@ -131,6 +143,7 @@ function AtelierCard({
   onPreviewBl,
   onDownloadProductionSheet,
   onUpdateQuote,
+  onNotifyReady,
   canDelete = true,
   variant = "kanban",
 }) {
@@ -325,6 +338,18 @@ function AtelierCard({
           </button>
         )}
 
+        {quote.status === "Prêt" && (
+          <button
+            type="button"
+            className="atelier-wa-btn"
+            data-testid={`atelier-wa-${quote.id}`}
+            onClick={() => onNotifyReady?.(quote)}
+            title="Prévenir le client par WhatsApp"
+          >
+            WhatsApp prêt
+          </button>
+        )}
+
         {blEligible && (
           <>
             <button
@@ -386,15 +411,31 @@ export default function Atelier({
   const isCompact = useMediaQuery(MOBILE_ATELIER_QUERY);
   const [viewMode, setViewMode] = useState("status");
   const [layoutMode, setLayoutMode] = useState("list");
+  const [assigneeFilter, setAssigneeFilter] = useState("all");
   const [dragOverStatus, setDragOverStatus] = useState("");
   const [previewBl, setPreviewBl] = useState(null);
   const quotes = data.quotes || [];
-  const statusBoard = getAtelierStatusBoard(quotes);
-  const processBoard = getAtelierBoard(quotes);
+  const settings = data.settings || {};
+  const activeUsers = (data.users || []).filter(
+    (user) => String(user?.status || "Actif") !== "Désactivé"
+  );
+
+  const filteredQuotes = useMemo(() => {
+    if (assigneeFilter === "all") return quotes;
+    if (assigneeFilter === "unassigned") {
+      return quotes.filter((quote) => !quote.assignedTo);
+    }
+    return quotes.filter(
+      (quote) => String(quote.assignedTo || "") === String(assigneeFilter)
+    );
+  }, [assigneeFilter, quotes]);
+
+  const statusBoard = getAtelierStatusBoard(filteredQuotes);
+  const processBoard = getAtelierBoard(filteredQuotes);
   const board = viewMode === "status" ? statusBoard : processBoard;
   const showListLayout = isCompact && layoutMode === "list";
-  const overdueDeliveries = quotes.filter(isQuoteDeliveryOverdue);
-  const quotesToLaunchToday = getQuotesToLaunchToday(quotes);
+  const overdueDeliveries = filteredQuotes.filter(isQuoteDeliveryOverdue);
+  const quotesToLaunchToday = getQuotesToLaunchToday(filteredQuotes);
 
   useAtelierRealtime({
     enabled: cloudAvailable && typeof onCloudResync === "function",
@@ -539,6 +580,19 @@ export default function Atelier({
     }
   }
 
+  function handleNotifyReady(quote) {
+    const client =
+      (data.clients || []).find((entry) => entry.id === quote.clientId) || null;
+    const result = openOrderReadyWhatsApp(quote, settings, client);
+    logActivity?.("WhatsApp commande prête", quote.number);
+    showToast(
+      result.hasPhone
+        ? `WhatsApp ouvert pour ${quote.number}.`
+        : `Message prêt pour ${quote.number} — ajoutez le numéro client.`,
+      "success"
+    );
+  }
+
   function handleDropOnStatus(event, status) {
     event.preventDefault();
     setDragOverStatus("");
@@ -610,6 +664,24 @@ export default function Atelier({
               Par processus
             </button>
           </div>
+
+          <label className="atelier-assignee-filter">
+            <span className="muted">Assigné à</span>
+            <select
+              value={assigneeFilter}
+              onChange={(event) => setAssigneeFilter(event.target.value)}
+              aria-label="Filtrer par assignation"
+              data-testid="atelier-assignee-filter"
+            >
+              <option value="all">Toutes</option>
+              <option value="unassigned">Non assignées</option>
+              {activeUsers.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.name || user.email}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
       </div>
 
@@ -705,6 +777,7 @@ export default function Atelier({
                       onOpen={openQuote}
                       onAdvance={handleAdvance}
                       onDownloadProductionSheet={handleDownloadProductionSheet}
+                      onNotifyReady={handleNotifyReady}
                     />
                   ))}
                 </AtelierListSection>
@@ -725,6 +798,7 @@ export default function Atelier({
                       onOpen={openQuote}
                       onAdvance={handleAdvance}
                       onDownloadProductionSheet={handleDownloadProductionSheet}
+                      onNotifyReady={handleNotifyReady}
                     />
                   ))}
                 </AtelierListSection>
@@ -772,6 +846,7 @@ export default function Atelier({
                       onPreviewBl={handlePreviewBl}
                       onDownloadProductionSheet={handleDownloadProductionSheet}
                       onUpdateQuote={patchQuote}
+                      onNotifyReady={handleNotifyReady}
                       canDelete={canDeleteData(currentRole)}
                     />
                   ))}
@@ -809,6 +884,7 @@ export default function Atelier({
                       onPreviewBl={handlePreviewBl}
                       onDownloadProductionSheet={handleDownloadProductionSheet}
                       onUpdateQuote={patchQuote}
+                      onNotifyReady={handleNotifyReady}
                       canDelete={canDeleteData(currentRole)}
                     />
                   ))}

@@ -87,3 +87,10 @@ export function mergeSettingsCalculatorProjects(settings = {}) {
   if (changed) writeAll(store);
   return settings;
 }
+
+export function syncCalculatorProjectsIntoSettings(settings = {}) {
+  return {
+    ...settings,
+    calculatorProjects: readAll(),
+  };
+}

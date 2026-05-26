@@ -570,3 +570,51 @@ grid-template-columns:repeat(4,minmax(0,1fr));
 grid-template-columns:repeat(2,minmax(0,1fr));
 }
 }
+
+.dashboard-badge{
+display:inline-flex;
+align-items:center;
+justify-content:center;
+min-width:22px;
+height:22px;
+margin-left:8px;
+padding:0 7px;
+border-radius:999px;
+background:#10b981;
+color:#fff;
+font-size:12px;
+font-weight:800;
+vertical-align:middle;
+}
+
+.dashboard-public-acceptances-list,
+.dashboard-process-stats__list{
+list-style:none;
+margin:0;
+padding:0;
+display:grid;
+gap:8px;
+}
+
+.dashboard-public-acceptances-list li,
+.dashboard-process-stats__list li{
+display:flex;
+flex-wrap:wrap;
+gap:8px 12px;
+align-items:center;
+padding:10px 12px;
+border-radius:12px;
+background:rgba(255,255,255,.7);
+border:1px solid var(--border);
+}
+
+.dashboard-process-stats{
+margin-top:14px;
+padding-top:14px;
+border-top:1px solid var(--border);
+}
+
+.dashboard-process-stats h4{
+margin:0 0 10px;
+font-size:15px;
+}

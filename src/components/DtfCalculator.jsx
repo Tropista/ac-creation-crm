@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { showToast } from "../utils/toast";
 import { buildCalculatorQuoteLine, openQuoteFromCalculator } from "../utils/quoteDraft";
 import CalculatorProjectLibrary from "./CalculatorProjectLibrary";
-import { CALCULATOR_TYPES } from "../utils/calculatorProjects";
+import { CALCULATOR_TYPES, syncCalculatorProjectsIntoSettings } from "../utils/calculatorProjects";
 import "../styles/dtf-calculator.css";
 
 const GARMENT_PRESETS = {
@@ -1043,6 +1043,12 @@ Machine : ${form.machineLabel}`,
             currentName={form.projectName}
             getFormSnapshot={() => form}
             onLoadForm={(snapshot) => setForm((current) => ({ ...current, ...snapshot }))}
+            onSyncSettings={() =>
+              setData((current) => ({
+                ...current,
+                settings: syncCalculatorProjectsIntoSettings(current.settings || {}),
+              }))
+            }
           />
         </aside>
       </div>

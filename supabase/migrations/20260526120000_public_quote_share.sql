@@ -15,7 +15,7 @@ CREATE POLICY "quotes_anon_shared_accept" ON public.quotes
   )
   WITH CHECK (
     coalesce(data->>'shareToken', '') <> ''
-    AND data->>'status' = 'Accepté'
+    AND data->>'status' IN ('Accepté', 'Refusé')
   );
 
 DROP POLICY IF EXISTS "settings_anon_public_read" ON public.settings;

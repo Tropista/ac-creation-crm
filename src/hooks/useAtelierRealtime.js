@@ -1,12 +1,19 @@
 import { useEffect, useRef } from "react";
 import { getSupabase, isSupabaseConfigured } from "../supabase";
+import { loadData } from "../services/dataService";
 import { showToast } from "../utils/toast";
+import { findNewPublicAcceptances } from "../utils/publicQuoteAcceptance";
 
 /**
- * Abonnement Realtime Supabase (devis + factures) pour rafraîchir l'atelier.
+ * Abonnement Realtime Supabase (devis + factures) pour rafraîchir l'atelier / tableau de bord.
  * Fallback : resync manuelle / polling page inchangés si Supabase absent.
  */
-export function useAtelierRealtime({ enabled = false, onRefresh }) {
+export function useAtelierRealtime({
+  enabled = false,
+  onRefresh,
+  alertPublicAcceptances = false,
+  syncToastMessage = "Atelier synchronisé (temps réel)",
+} = {}) {
   const onRefreshRef = useRef(onRefresh);
   onRefreshRef.current = onRefresh;
   const debounceRef = useRef(null);
@@ -28,8 +35,26 @@ export function useAtelierRealtime({ enabled = false, onRefresh }) {
           clearTimeout(debounceRef.current);
           debounceRef.current = setTimeout(async () => {
             try {
+              const beforeQuotes = alertPublicAcceptances
+                ? loadData().quotes || []
+                : [];
+
               await onRefreshRef.current?.({ silent: true });
-              showToast("Atelier synchronisé (temps réel)", "info");
+
+              if (alertPublicAcceptances) {
+                const afterQuotes = loadData().quotes || [];
+                const newAcceptances = findNewPublicAcceptances(beforeQuotes, afterQuotes);
+                for (const quote of newAcceptances) {
+                  showToast(
+                    `Devis ${quote.number} accepté en ligne par le client`,
+                    "success"
+                  );
+                }
+              }
+
+              if (syncToastMessage) {
+                showToast(syncToastMessage, "info");
+              }
             } catch (error) {
               console.warn("[Realtime atelier]", error);
             }
@@ -65,5 +90,5 @@ export function useAtelierRealtime({ enabled = false, onRefresh }) {
           .catch(() => {});
       }
     };
-  }, [enabled]);
+  }, [alertPublicAcceptances, enabled, syncToastMessage]);
 }

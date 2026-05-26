@@ -11,6 +11,7 @@ import {
   hasLocalBusinessData,
 } from "../services/dataService";
 import { mergePublicLeadsIntoData } from "../services/leadsService";
+import { mergeSettingsCalculatorProjects } from "../utils/calculatorProjects";
 import {
   formatSyncConflictMessage,
   getLastSyncAt,
@@ -44,6 +45,7 @@ function showLocalQuotaToast(message, type = "warning") {
 
 function prepareAppData(raw) {
   const withLeads = mergePublicLeadsIntoData(raw);
+  mergeSettingsCalculatorProjects(withLeads.settings || {});
   return normalizeData({
     ...withLeads,
     users: dedupeItemsById(withLeads.users || []),

@@ -9,7 +9,7 @@ import {
 } from "../utils/laserCalc";
 import { getNextNumericSku } from "../utils/productSku";
 import CalculatorProjectLibrary from "./CalculatorProjectLibrary";
-import { CALCULATOR_TYPES } from "../utils/calculatorProjects";
+import { CALCULATOR_TYPES, syncCalculatorProjectsIntoSettings } from "../utils/calculatorProjects";
 import "../styles/laser-calculator.css";
 
 function euro(value) {
@@ -704,6 +704,12 @@ ${multiQty ? `Calcul : ${euro(calc.pricePerUnitHT)} HT / pièce` : ""}`,
             currentName={form.projectName}
             getFormSnapshot={() => form}
             onLoadForm={(snapshot) => setForm((current) => ({ ...current, ...snapshot }))}
+            onSyncSettings={() =>
+              setData((current) => ({
+                ...current,
+                settings: syncCalculatorProjectsIntoSettings(current.settings || {}),
+              }))
+            }
           />
         </aside>
       </div>

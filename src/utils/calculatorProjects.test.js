@@ -3,6 +3,7 @@ import {
   deleteCalculatorProject,
   loadCalculatorProjects,
   saveCalculatorProject,
+  syncCalculatorProjectsIntoSettings,
   CALCULATOR_TYPES,
 } from "./calculatorProjects.js";
 
@@ -40,5 +41,15 @@ describe("calculatorProjects", () => {
     });
     deleteCalculatorProject(CALCULATOR_TYPES.dtf, saved.id);
     expect(loadCalculatorProjects(CALCULATOR_TYPES.dtf)).toHaveLength(0);
+  });
+
+  it("exporte les projets dans settings.calculatorProjects", () => {
+    saveCalculatorProject(CALCULATOR_TYPES.laser, {
+      name: "Test",
+      form: { quantity: 2 },
+    });
+    const settings = syncCalculatorProjectsIntoSettings({ companyName: "AC" });
+    expect(settings.calculatorProjects.laser).toHaveLength(1);
+    expect(settings.companyName).toBe("AC");
   });
 });

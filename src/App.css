@@ -1123,3 +1123,46 @@ html,
   color: #065f46;
   font-weight: 700;
 }
+
+.public-quote-decline {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid #fecaca;
+  background: #fff7f7;
+}
+
+.public-quote-decline label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #991b1b;
+}
+
+.public-quote-decline textarea {
+  width: 100%;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  padding: 10px;
+  font: inherit;
+  resize: vertical;
+}
+
+.public-quote-decline-btn {
+  min-height: 44px;
+  border: 1px solid #fca5a5;
+  border-radius: 12px;
+  background: #fff;
+  color: #b91c1c;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.public-quote-declined {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fef2f2;
+  color: #991b1b;
+  font-weight: 700;
+}

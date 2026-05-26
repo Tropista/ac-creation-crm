@@ -154,6 +154,49 @@ export function openQuoteWhatsAppShare(quote, settings = {}, client = null) {
   return { ok: true, url };
 }
 
+export function normalizePhoneForWhatsApp(phone) {
+  const digits = String(phone || "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.startsWith("00")) return digits.slice(2);
+  return digits;
+}
+
+export function buildWhatsAppUrlWithPhone(phone, text) {
+  const normalized = normalizePhoneForWhatsApp(phone);
+  const encoded = encodeURIComponent(text);
+  if (normalized) {
+    return `https://wa.me/${normalized}?text=${encoded}`;
+  }
+  return buildWhatsAppShareUrl(text);
+}
+
+export function resolveQuoteClientPhone(client = null, quote = null) {
+  return String(client?.phone || quote?.clientSnapshot?.phone || "").trim();
+}
+
+export function buildOrderReadyWhatsAppMessage(quote, settings = {}, client = null) {
+  const companyName = settings.companyName || "AC Creation";
+  const clientName = client?.name || quote?.clientSnapshot?.name || "";
+  const greeting = clientName ? `Bonjour ${clientName}` : "Bonjour";
+
+  return `${greeting},
+
+Votre commande ${quote?.number || ""} est prête chez ${companyName}.
+
+Vous pouvez venir la récupérer aux horaires d'ouverture.
+
+Merci pour votre confiance !
+${companyName}`;
+}
+
+export function openOrderReadyWhatsApp(quote, settings = {}, client = null) {
+  const message = buildOrderReadyWhatsAppMessage(quote, settings, client);
+  const phone = resolveQuoteClientPhone(client, quote);
+  const url = buildWhatsAppUrlWithPhone(phone, message);
+  window.open(url, "_blank", "noopener,noreferrer");
+  return { ok: true, url, hasPhone: Boolean(phone) };
+}
+
 export function getQuoteIdFromLocation(location) {
   const fromSearch = new URLSearchParams(location?.search || "").get("id");
   if (fromSearch) return fromSearch;

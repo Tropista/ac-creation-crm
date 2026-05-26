@@ -462,6 +462,8 @@ function CrmApp() {
                     setData={updateData}
                     currentRole={currentRole}
                     logActivity={handleLogActivity}
+                    cloudAvailable={cloudAvailable}
+                    onCloudResync={initializeCloudData}
                   />
                 ) : null
               }

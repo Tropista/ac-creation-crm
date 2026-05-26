@@ -227,7 +227,8 @@
 
 .atelier-fiche-btn,
 .atelier-bl-btn,
-.atelier-bl-preview-btn {
+.atelier-bl-preview-btn,
+.atelier-wa-btn {
   flex: 0 0 auto;
   min-height: 36px;
   padding: 6px 10px;
@@ -242,8 +243,31 @@
 
 .atelier-fiche-btn:hover,
 .atelier-bl-btn:hover,
-.atelier-bl-preview-btn:hover {
+.atelier-bl-preview-btn:hover,
+.atelier-wa-btn:hover {
   filter: brightness(0.98);
+}
+
+.atelier-wa-btn {
+  border-color: #bbf7d0;
+  background: linear-gradient(135deg, #ecfdf5, #f0fdf4);
+  color: #047857;
+}
+
+.atelier-assignee-filter {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 180px;
+}
+
+.atelier-assignee-filter select {
+  min-height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 8px 10px;
+  background: #fff;
+  font: inherit;
 }
 
 .atelier-card__actions--list {
@@ -654,6 +678,17 @@
     border-radius: 14px;
     background: linear-gradient(135deg, #fff1f7, #fdf4ff);
     color: #be185d;
+    font-size: 14px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+
+  .atelier-mobile-card__actions .atelier-wa-btn {
+    min-height: 48px;
+    border: 1px solid #bbf7d0;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #ecfdf5, #f0fdf4);
+    color: #047857;
     font-size: 14px;
     font-weight: 800;
     cursor: pointer;

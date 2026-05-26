@@ -3,6 +3,9 @@ import {
   buildQuoteShareUrl,
   buildQuoteWhatsAppMessage,
   buildWhatsAppShareUrl,
+  buildOrderReadyWhatsAppMessage,
+  buildWhatsAppUrlWithPhone,
+  normalizePhoneForWhatsApp,
   DEFAULT_PUBLIC_APP_URL,
   getQuoteIdFromLocation,
   resolvePublicAppOrigin,
@@ -123,6 +126,28 @@ describe("buildWhatsAppShareUrl", () => {
   it("encode le texte pour wa.me", () => {
     const url = buildWhatsAppShareUrl("Bonjour devis");
     expect(url).toBe("https://wa.me/?text=Bonjour%20devis");
+  });
+});
+
+describe("order ready WhatsApp", () => {
+  it("prépare un message de commande prête", () => {
+    const message = buildOrderReadyWhatsAppMessage(
+      { number: "DEV-2025-0010" },
+      { companyName: "AC Creation" },
+      { name: "Paul" }
+    );
+    expect(message).toContain("Bonjour Paul");
+    expect(message).toContain("DEV-2025-0010");
+    expect(message).toContain("prête");
+  });
+
+  it("utilise le numéro client dans l'URL wa.me", () => {
+    const url = buildWhatsAppUrlWithPhone(
+      "+352 621 123 456",
+      "Commande prête"
+    );
+    expect(url).toBe("https://wa.me/352621123456?text=Commande%20pr%C3%AAte");
+    expect(normalizePhoneForWhatsApp("00352 621 123")).toBe("352621123");
   });
 });
 

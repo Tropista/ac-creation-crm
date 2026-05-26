@@ -37,12 +37,21 @@ import {
 import { money } from "../utils/money";
 import { pageToPath } from "../utils/routes";
 import { getPermissions } from "../utils/permissions";
-import { isExpenseInMonth } from "../utils/expenseSuppliers";
+import { isExpenseInMonth, getExpenseDate } from "../utils/expenseSuppliers";
 import { exportInvoicesCsv, exportLowStockPurchaseOrderCsv, buildPurchaseOrderText } from "../utils/exportCsv";
 import MonthlyAccountingExport from "./MonthlyAccountingExport";
 import { getStaleDraftQuotes, markDocumentReminder } from "../utils/documentTracking";
 import { countUnreadLeads, markLeadRead } from "../services/leadsService";
 import { showToast } from "../utils/toast";
+import { useAtelierRealtime } from "../hooks/useAtelierRealtime";
+import {
+  dismissPublicAcceptance,
+  getRecentPublicAcceptances,
+} from "../utils/publicQuoteAcceptance";
+import {
+  allocateExpensesByProcessRevenue,
+  computeProcessTypeStats,
+} from "../utils/processTypeStats";
 import {
   countLowStockByKind,
   getLowStockProductsByKind,
@@ -74,6 +83,8 @@ export default function Dashboard({
   setData,
   logActivity,
   currentRole = "Admin",
+  cloudAvailable = false,
+  onCloudResync,
 }) {
   const navigate = useNavigate();
   const [deliveryWeekOffset, setDeliveryWeekOffset] = useState(0);
@@ -89,11 +100,19 @@ export default function Dashboard({
   const [billingYear, setBillingYear] = useState(() =>
     String(new Date().getFullYear())
   );
+  const [, setPublicAcceptanceDismissTick] = useState(0);
   const permissions = getPermissions(currentRole);
   const canManageInvoices = permissions.pages.includes("invoices");
   const canManageQuotes = permissions.pages.includes("quotes");
   const canManageProducts = permissions.pages.includes("products");
   const canManageExpenses = permissions.pages.includes("expenses");
+
+  useAtelierRealtime({
+    enabled: cloudAvailable && typeof onCloudResync === "function",
+    onRefresh: onCloudResync,
+    alertPublicAcceptances: canManageQuotes,
+    syncToastMessage: "Tableau de bord synchronisé (temps réel)",
+  });
 
   const invoices = data.invoices || [];
   const quotes = data.quotes || [];
@@ -186,6 +205,7 @@ export default function Dashboard({
     (lead) => String(lead?.status || "nouveau") === "nouveau"
   );
   const unreadLeadCount = countUnreadLeads(leads);
+  const recentPublicAcceptances = getRecentPublicAcceptances(quotes);
 
   const unpaidCount = invoices.filter((i) => i.status !== "Payée").length;
 
@@ -229,6 +249,29 @@ export default function Dashboard({
     const filtered = filterInvoicesByPeriod(invoices, billingPeriod);
     return computeInvoicePeriodTotals(filtered);
   }, [invoices, billingPeriod]);
+
+  const periodInvoices = filterInvoicesByPeriod(invoices, billingPeriod);
+  const periodExpensesHT =
+    billingPeriod.mode === INVOICE_PERIOD_MODES.ALL
+      ? expenses.reduce((sum, expense) => sum + Number(expense.amountHT || 0), 0)
+      : billingPeriod.mode === INVOICE_PERIOD_MODES.YEAR
+        ? expenses
+            .filter((expense) => {
+              const date = getExpenseDate(expense);
+              return date && date.getFullYear() === billingPeriod.year;
+            })
+            .reduce((sum, expense) => sum + Number(expense.amountHT || 0), 0)
+        : expenses
+            .filter((expense) =>
+              isExpenseInMonth(expense, billingPeriod.year, billingPeriod.month)
+            )
+            .reduce((sum, expense) => sum + Number(expense.amountHT || 0), 0);
+
+  const processTypeStats = allocateExpensesByProcessRevenue(
+    computeProcessTypeStats(periodInvoices),
+    periodExpensesHT
+  );
+
   const acceptedQuotes = quotes.filter((q) => q.status === "Accepté").length;
 
   const invoiceLines = useMemo(
@@ -760,6 +803,26 @@ export default function Dashboard({
             onClick={() => goToInvoices("unpaid")}
           />
         </div>
+        {canManageInvoices && processTypeStats.length > 0 ? (
+          <div
+            className="dashboard-process-stats"
+            data-testid="dashboard-process-stats"
+          >
+            <h4>CA et marge par technique ({billingPeriodLabel})</h4>
+            <ul className="dashboard-process-stats__list">
+              {processTypeStats.map((entry) => (
+                <li key={entry.key}>
+                  <strong>{entry.label}</strong>
+                  <span>{entry.count} facture(s)</span>
+                  <span>{money(entry.revenueHT)} HT</span>
+                  <span className={entry.marginHT < 0 ? "stat--danger" : ""}>
+                    Marge {money(entry.marginHT)} HT
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
       </div>
 
       <div className="stats">
@@ -994,6 +1057,51 @@ export default function Dashboard({
                   <span>{clientName(data, quote.clientId)}</span>
                   <span className="muted">{quote.date}</span>
                   <span>{money(quote.totalTTC)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {canManageQuotes && recentPublicAcceptances.length > 0 && (
+          <div
+            className="card dashboard-action-card"
+            data-testid="dashboard-public-acceptances"
+          >
+            <div className="dashboard-action-card__header">
+              <div>
+                <h3>
+                  Acceptations en ligne
+                  <span className="dashboard-badge">{recentPublicAcceptances.length}</span>
+                </h3>
+                <p className="muted">
+                  Devis acceptés par le client via le lien public.
+                </p>
+              </div>
+              <button type="button" className="ghost" onClick={() => goToQuotes("Accepté")}>
+                Voir les devis →
+              </button>
+            </div>
+            <ul className="dashboard-public-acceptances-list">
+              {recentPublicAcceptances.slice(0, 6).map((quote) => (
+                <li key={quote.id}>
+                  <strong>{quote.number}</strong>
+                  <span>{clientName(data, quote.clientId)}</span>
+                  <span className="muted">
+                    {quote.acceptedAt
+                      ? new Date(quote.acceptedAt).toLocaleString("fr-FR")
+                      : "—"}
+                  </span>
+                  <button
+                    type="button"
+                    className="compact"
+                    onClick={() => {
+                      dismissPublicAcceptance(quote.id);
+                      setPublicAcceptanceDismissTick((tick) => tick + 1);
+                    }}
+                  >
+                    Marquer vu
+                  </button>
                 </li>
               ))}
             </ul>
