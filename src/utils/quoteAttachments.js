@@ -73,6 +73,64 @@ export function sanitizeQuotesForPersistence(quotes = []) {
   return (quotes || []).map((quote) => sanitizeQuoteForPersistence(quote));
 }
 
+export function getAttachmentSyncStatus(attachment) {
+  if (!attachment) return "missing";
+  const url = String(attachment.url || "").trim();
+  const storagePath = String(attachment.storagePath || "").trim();
+
+  if (url && /^https?:\/\//i.test(url)) {
+    return storagePath ? "cloud" : "cloud";
+  }
+  if (isBase64DataUrl(url)) return "local";
+  if (storagePath) return "pending";
+  if (!url && !storagePath) return "missing";
+  return "local";
+}
+
+export function getAttachmentSyncLabel(status) {
+  if (status === "cloud") return "Synchronisé (cloud)";
+  if (status === "local") return "Local uniquement";
+  if (status === "pending") return "Cloud — rechargement…";
+  return "Indisponible sur cet appareil";
+}
+
+export function hydrateQuoteAttachment(attachment) {
+  if (!attachment || typeof attachment !== "object") return attachment;
+  const url = String(attachment.url || "").trim();
+  if (url && (isHttpUrl(url) || isBase64DataUrl(url))) {
+    return { ...attachment, syncStatus: getAttachmentSyncStatus(attachment) };
+  }
+
+  const storagePath = String(attachment.storagePath || "").trim();
+  if (storagePath) {
+    const publicUrl = buildQuoteAttachmentPublicUrlFromPath(storagePath);
+    return {
+      ...attachment,
+      url: publicUrl || "",
+      syncStatus: publicUrl ? "cloud" : "pending",
+    };
+  }
+
+  return { ...attachment, syncStatus: getAttachmentSyncStatus(attachment) };
+}
+
+export function hydrateQuoteAttachments(attachments = []) {
+  return (attachments || []).map(hydrateQuoteAttachment);
+}
+
+export function countUnavailableAttachments(attachments = []) {
+  return hydrateQuoteAttachments(attachments).filter(
+    (entry) => !entry.url && entry.storagePath
+  ).length;
+}
+
+function buildQuoteAttachmentPublicUrlFromPath(storagePath) {
+  const env = import.meta.env ?? {};
+  const base = env.VITE_SUPABASE_URL;
+  if (!base || !storagePath) return "";
+  return `${base}/storage/v1/object/public/ac-creation-attachments/${storagePath}`;
+}
+
 export function fileToDataUrl(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

@@ -24,6 +24,7 @@ import {
   enrichInvoicePaymentFields,
   uid,
   today,
+  resolveDocumentTaxRate,
 } from "../utils/documents";
 import { applyStockByLines, syncDocumentStock, syncQuoteProductionStock } from "../utils/stock";
 import {
@@ -41,6 +42,7 @@ import {
   copyQuoteShareLink,
   getQuoteIdFromLocation,
   openQuoteWhatsAppShare,
+  prepareQuoteForShare,
 } from "../utils/quoteShare";
 import { PRODUCTION_STATUSES, QUOTES_STATUS_FILTER_KEY } from "../utils/production";
 import { downloadProductionSheetPdf } from "../utils/productionPdf";
@@ -54,6 +56,10 @@ import {
 } from "../utils/documentTracking";
 import { showToast } from "../utils/toast";
 import { canDeleteData } from "../services/authService";
+import {
+  countUnavailableAttachments,
+  hydrateQuoteAttachments,
+} from "../utils/quoteAttachments";
 
 function Documents({ type, data, setData, currentRole = 'Admin', logActivity }) {
   const location = useLocation();
@@ -106,6 +112,16 @@ const [form, setForm] = useState({
 
   const itemsPerPage = 25;
   const documents = data[listKey] || [];
+
+  const selectedClient = useMemo(
+    () => (data.clients || []).find((client) => client.id === form.clientId) || null,
+    [data.clients, form.clientId]
+  );
+
+  const effectiveTaxRate = useMemo(
+    () => resolveDocumentTaxRate(selectedClient, data.settings),
+    [selectedClient, data.settings]
+  );
 
   const invoiceNumberGaps = useMemo(() => {
     if (isQuote) return [];
@@ -298,7 +314,7 @@ const [form, setForm] = useState({
     const globalDiscountRate = Math.min(100, Math.max(0, Number(form.globalDiscount || 0)));
     const globalDiscountAmount = subtotal * (globalDiscountRate / 100);
     const totalHT = Math.max(0, subtotal - globalDiscountAmount);
-    const taxAmount = totalHT * (Number(data.settings.taxRate || 0) / 100);
+    const taxAmount = totalHT * (Number(effectiveTaxRate || 0) / 100);
     const totalTTC = totalHT + taxAmount;
     const deposit = computeDepositTotals(totalTTC, form.depositPercent);
     return {
@@ -310,7 +326,7 @@ const [form, setForm] = useState({
       totalTTC,
       ...deposit,
     };
-  }, [form.lines, form.globalDiscount, form.depositPercent, data.settings.taxRate]);
+  }, [form.lines, form.globalDiscount, form.depositPercent, effectiveTaxRate]);
 
   function updateLine(index, changes) {
     setForm({
@@ -438,7 +454,7 @@ const [form, setForm] = useState({
         balanceAfterDeposit: totals.balanceAfterDeposit,
         description: firstDescription,
         lines: cleanLines,
-        taxRate: data.settings.taxRate,
+        taxRate: effectiveTaxRate,
         stockAdjusted: !isQuote && form.status !== "Annulée",
         ...quoteExtras,
         ...(!isQuote && { date: invoiceDate }),
@@ -480,7 +496,7 @@ const [form, setForm] = useState({
           ? nextDocumentNumber(documents, prefix)
           : nextInvoiceNumber(documents, data.settings),
         date: isQuote ? today() : invoiceDate,
-        taxRate: data.settings.taxRate,
+        taxRate: effectiveTaxRate,
         clientId: form.clientId,
         status: form.status,
         globalDiscount: Number(form.globalDiscount || 0),
@@ -558,7 +574,17 @@ reset();
         ];
 
     setEditingId(doc.id);
-    setAttachments(doc.attachments || []);
+    const hydrated = hydrateQuoteAttachments(doc.attachments || []);
+    setAttachments(hydrated);
+    if (isQuote) {
+      const unavailable = countUnavailableAttachments(hydrated);
+      if (unavailable > 0) {
+        showToast(
+          `${unavailable} pièce(s) jointe(s) absente(s) sur cet appareil — vérifiez Supabase Storage ou réimportez.`,
+          "warning"
+        );
+      }
+    }
     setForm({
       clientId: doc.clientId || "",
       status: doc.status || defaultStatus,
@@ -693,7 +719,20 @@ useEffect(() => {
   }
 
   async function handleCopyQuoteLink(quote) {
-    const result = await copyQuoteShareLink(quote);
+    const client = (data.clients || []).find((c) => c.id === quote.clientId);
+    const prepared = prepareQuoteForShare(quote, client);
+    const result = await copyQuoteShareLink(prepared, {
+      client,
+      settings: data.settings || {},
+    });
+    if (prepared.shareToken && prepared.shareToken !== quote.shareToken) {
+      setData({
+        ...data,
+        quotes: (data.quotes || []).map((entry) =>
+          String(entry.id) === String(quote.id) ? prepared : entry
+        ),
+      });
+    }
     if (result.ok) {
       showToast("Lien devis copié dans le presse-papiers.", "success");
       logActivity?.("Partage lien devis", quote.number);
@@ -984,7 +1023,7 @@ useEffect(() => {
         form={form}
         setForm={setForm}
         totals={totals}
-        taxRate={data.settings.taxRate}
+        taxRate={effectiveTaxRate}
         products={data.products || []}
         clients={data.clients || []}
         users={data.users || []}
@@ -1058,6 +1097,18 @@ useEffect(() => {
             setPreviewType(type);
           }}
           onDocumentSent={handleDocumentSent}
+          onQuoteSharePrepared={(prepared) => {
+            if (!isQuote) return;
+            setData({
+              ...data,
+              quotes: (data.quotes || []).map((entry) =>
+                String(entry.id) === String(prepared.id) ? prepared : entry
+              ),
+            });
+            if (previewDoc && String(previewDoc.id) === String(prepared.id)) {
+              setPreviewDoc(prepared);
+            }
+          }}
         />
       )}
     </section>

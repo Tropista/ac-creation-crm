@@ -6,6 +6,8 @@ import "./Vue3D.css";
 import Product3DErrorBoundary from "./3d/Product3DErrorBoundary";
 import { MUG_MODEL_URL } from "../utils/assets";
 import { showToast } from "../utils/toast";
+import CalculatorProjectLibrary from "./CalculatorProjectLibrary";
+import { CALCULATOR_TYPES } from "../utils/calculatorProjects";
 
 const MODEL_URL = MUG_MODEL_URL;
 const CANVAS_WIDTH = 1400;
@@ -725,6 +727,7 @@ export default function Vue3D() {
   const [items, setItems] = useState([]);
   const [selectedId, setSelectedId] = useState("");
   const [customFonts, setCustomFonts] = useState([]);
+  const [projectName, setProjectName] = useState("");
   const previewRef = useRef(null);
 
   const builtInFonts = [
@@ -1080,6 +1083,18 @@ Tu peux importer tes propres polices avec le bouton “+ Importer police” : TT
               </p>
             </div>
           )}
+
+          <CalculatorProjectLibrary
+            calculatorType={CALCULATOR_TYPES.vue3d}
+            currentName={projectName}
+            getFormSnapshot={() => ({ items, selectedId, customFonts, projectName })}
+            onLoadForm={(snapshot) => {
+              setItems(Array.isArray(snapshot.items) ? snapshot.items : []);
+              setSelectedId(snapshot.selectedId || "");
+              setCustomFonts(Array.isArray(snapshot.customFonts) ? snapshot.customFonts : []);
+              setProjectName(snapshot.projectName || "");
+            }}
+          />
         </div>
       </div>
     </section>

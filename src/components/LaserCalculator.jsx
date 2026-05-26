@@ -8,6 +8,8 @@ import {
   MATERIAL_PRESETS,
 } from "../utils/laserCalc";
 import { getNextNumericSku } from "../utils/productSku";
+import CalculatorProjectLibrary from "./CalculatorProjectLibrary";
+import { CALCULATOR_TYPES } from "../utils/calculatorProjects";
 import "../styles/laser-calculator.css";
 
 function euro(value) {
@@ -696,6 +698,13 @@ ${multiQty ? `Calcul : ${euro(calc.pricePerUnitHT)} HT / pièce` : ""}`,
             pièce, le prix par pièce est affiché en principal et le total
             commande en sous-ligne.
           </p>
+
+          <CalculatorProjectLibrary
+            calculatorType={CALCULATOR_TYPES.laser}
+            currentName={form.projectName}
+            getFormSnapshot={() => form}
+            onLoadForm={(snapshot) => setForm((current) => ({ ...current, ...snapshot }))}
+          />
         </aside>
       </div>
     </section>

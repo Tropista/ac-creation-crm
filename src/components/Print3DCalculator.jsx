@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { showToast } from "../utils/toast";
 import { buildCalculatorQuoteLine, openQuoteFromCalculator } from "../utils/quoteDraft";
+import CalculatorProjectLibrary from "./CalculatorProjectLibrary";
+import { CALCULATOR_TYPES } from "../utils/calculatorProjects";
 import "../styles/print3d-calculator.css";
 
 function euro(value) {
@@ -586,6 +588,13 @@ Temps impression : ${form.printHours}h ${form.printMinutes}min`,
           <p className="print3d-note">
             Formule pro : matière + électricité + amortissement machine + maintenance + main-d’œuvre + risque + marge + TVA.
           </p>
+
+          <CalculatorProjectLibrary
+            calculatorType={CALCULATOR_TYPES.print3d}
+            currentName={form.projectName}
+            getFormSnapshot={() => form}
+            onLoadForm={(snapshot) => setForm((current) => ({ ...current, ...snapshot }))}
+          />
         </aside>
       </div>
     </section>

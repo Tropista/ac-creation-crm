@@ -1210,6 +1210,96 @@
   width: 100%;
 }
 
+.quote-attachments-sync-hint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.quote-attachments-warning {
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+  font-size: 12px;
+}
+
+.quote-attachment-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.quote-attachment-badge--cloud {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.quote-attachment-badge--local {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.quote-attachment-badge--pending,
+.quote-attachment-badge--missing {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.calculator-projects {
+  margin-top: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.calculator-projects__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.calculator-projects__save {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.calculator-projects__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.calculator-projects__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.calculator-projects__item-actions {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.calculator-projects__empty {
+  margin: 0;
+  font-size: 13px;
+}
+
 /* --- Product picker (devis / facture lines) --- */
 .product-picker {
   position: relative;

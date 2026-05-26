@@ -11,6 +11,7 @@ import { money } from "../utils/money";
 import {
   copyQuoteShareLink,
   openQuoteWhatsAppShare,
+  prepareQuoteForShare,
 } from "../utils/quoteShare";
 import { showToast } from "../utils/toast";
 
@@ -46,7 +47,7 @@ function IconInfo() {
   );
 }
 
-export default function DocumentPreview({ doc, type, data, onClose, onDocumentSent }) {
+export default function DocumentPreview({ doc, type, data, onClose, onDocumentSent, onQuoteSharePrepared }) {
   const pdfWrapperRef = useRef(null);
   const isQuote = type === "quote";
   const isDelivery = type === "delivery";
@@ -265,7 +266,14 @@ ${data.settings.companyEmail || ""}`;
   }
 
   async function copyQuoteLink() {
-    const result = await copyQuoteShareLink(doc);
+    const prepared = prepareQuoteForShare(doc, client);
+    if (prepared.shareToken && prepared.shareToken !== doc.shareToken) {
+      onQuoteSharePrepared?.(prepared);
+    }
+    const result = await copyQuoteShareLink(prepared, {
+      client,
+      settings: data.settings || {},
+    });
     if (result.ok) {
       showToast("Lien devis copié dans le presse-papiers.", "success");
       return;
@@ -274,7 +282,11 @@ ${data.settings.companyEmail || ""}`;
   }
 
   function shareQuoteWhatsApp() {
-    openQuoteWhatsAppShare(doc, data.settings || {}, client);
+    const prepared = prepareQuoteForShare(doc, client);
+    if (prepared.shareToken && prepared.shareToken !== doc.shareToken) {
+      onQuoteSharePrepared?.(prepared);
+    }
+    openQuoteWhatsAppShare(prepared, data.settings || {}, client);
     showToast("WhatsApp ouvert avec le message pré-rempli.", "info");
   }
 

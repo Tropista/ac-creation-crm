@@ -19,6 +19,7 @@ import {
 } from "./supabase";
 import {
   PUBLIC_TSHIRT_PATH,
+  PUBLIC_QUOTE_PATH,
   pageToPath,
   pathToPage,
 } from "./utils/routes";
@@ -39,6 +40,7 @@ import ActivityLogs from "./components/ActivityLogs";
 import Backups from "./components/Backups";
 import AuthPage from "./components/auth/AuthPage";
 import AccessDenied from "./components/auth/AccessDenied";
+import PublicQuoteView from "./components/PublicQuoteView";
 
 import {
   createCloudBackup
@@ -157,6 +159,7 @@ export default function App() {
         path={PUBLIC_TSHIRT_PATH}
         element={<PublicTshirtConfigurator />}
       />
+      <Route path={PUBLIC_QUOTE_PATH} element={<PublicQuoteView />} />
       <Route path="/*" element={<CrmApp />} />
     </Routes>
   );

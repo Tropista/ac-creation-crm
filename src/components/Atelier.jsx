@@ -63,6 +63,63 @@ function priorityLabel(priority) {
   return QUOTE_PRIORITY_OPTIONS.find((entry) => entry.value === priority)?.label || "Normale";
 }
 
+function AtelierMobileSimpleCard({
+  data,
+  quote,
+  onAdvance,
+  onDownloadProductionSheet,
+  onOpen,
+}) {
+  const nextLabel = advanceLabel(quote.status);
+  const productionSheetEligible = isProductionSheetEligible(quote);
+  const process = resolveProcessType(quote);
+
+  return (
+    <article className="atelier-mobile-card" data-testid={`atelier-mobile-${quote.id}`}>
+      <button type="button" className="atelier-mobile-card__number" onClick={() => onOpen(quote)}>
+        {quote.number}
+      </button>
+      <p className="atelier-mobile-card__client">{clientName(data, quote.clientId)}</p>
+      <div className="atelier-mobile-card__meta">
+        <span className={statusClass(quote.status)}>{quote.status}</span>
+        <span className="atelier-process-badge">
+          {PROCESS_ICONS[process.key] || "📋"} {process.label}
+        </span>
+      </div>
+      {quote.promisedDeliveryDate ? (
+        <p className="atelier-mobile-card__delivery">
+          Livraison : {quote.promisedDeliveryDate}
+          <DeliveryUrgencyBadge quote={quote} />
+        </p>
+      ) : null}
+      <div className="atelier-mobile-card__actions">
+        {nextLabel ? (
+          <button
+            type="button"
+            className="atelier-mobile-advance"
+            data-testid={`atelier-advance-${quote.id}`}
+            onClick={() => onAdvance(quote)}
+          >
+            {nextLabel}
+          </button>
+        ) : (
+          <span className="muted atelier-done">Livré</span>
+        )}
+        {productionSheetEligible ? (
+          <button
+            type="button"
+            className="atelier-mobile-fiche"
+            data-testid={`atelier-fiche-${quote.id}`}
+            onClick={() => onDownloadProductionSheet?.(quote)}
+          >
+            Fiche PDF
+          </button>
+        ) : null}
+      </div>
+    </article>
+  );
+}
+
 function AtelierCard({
   data,
   quote,
@@ -641,20 +698,13 @@ export default function Atelier({
                   testId={`atelier-list-status-${column.status.replace(/\s+/g, "-").toLowerCase()}`}
                 >
                   {column.items.map((quote) => (
-                    <AtelierCard
+                    <AtelierMobileSimpleCard
                       key={quote.id}
                       data={data}
                       quote={quote}
-                      variant="list"
                       onOpen={openQuote}
                       onAdvance={handleAdvance}
-                      onStatusChange={updateQuoteStatus}
-                      onDelete={handleDelete}
-                      onGenerateBl={handleGenerateBl}
-                      onPreviewBl={handlePreviewBl}
                       onDownloadProductionSheet={handleDownloadProductionSheet}
-                      onUpdateQuote={patchQuote}
-                      canDelete={canDeleteData(currentRole)}
                     />
                   ))}
                 </AtelierListSection>
@@ -668,20 +718,13 @@ export default function Atelier({
                   testId={`atelier-list-process-${group.key}`}
                 >
                   {group.items.map((quote) => (
-                    <AtelierCard
+                    <AtelierMobileSimpleCard
                       key={quote.id}
                       data={data}
                       quote={quote}
-                      variant="list"
                       onOpen={openQuote}
                       onAdvance={handleAdvance}
-                      onStatusChange={updateQuoteStatus}
-                      onDelete={handleDelete}
-                      onGenerateBl={handleGenerateBl}
-                      onPreviewBl={handlePreviewBl}
                       onDownloadProductionSheet={handleDownloadProductionSheet}
-                      onUpdateQuote={patchQuote}
-                      canDelete={canDeleteData(currentRole)}
                     />
                   ))}
                 </AtelierListSection>

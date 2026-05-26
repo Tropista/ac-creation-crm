@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { showToast } from "../utils/toast";
 import { buildCalculatorQuoteLine, openQuoteFromCalculator } from "../utils/quoteDraft";
+import CalculatorProjectLibrary from "./CalculatorProjectLibrary";
+import { CALCULATOR_TYPES } from "../utils/calculatorProjects";
 import "../styles/uv-dtf-calculator.css";
 
 /*
@@ -1093,6 +1095,13 @@ Machine : ${form.machineLabel}`,
             + maintenance + main-d&apos;œuvre, puis complexité × marge + TVA.
             Pas de poudreuse ni presse textile (UV-DTF sur objets rigides).
           </p>
+
+          <CalculatorProjectLibrary
+            calculatorType={CALCULATOR_TYPES.uvdtf}
+            currentName={form.projectName}
+            getFormSnapshot={() => form}
+            onLoadForm={(snapshot) => setForm((current) => ({ ...current, ...snapshot }))}
+          />
         </aside>
       </div>
     </section>

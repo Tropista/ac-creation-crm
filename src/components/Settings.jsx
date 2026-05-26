@@ -321,6 +321,23 @@ e.target.value
 />
 
 <input
+placeholder="URL publique du CRM"
+value={form.publicAppUrl || ""}
+onChange={(e)=>
+setForm({
+...form,
+publicAppUrl:
+e.target.value
+})
+}
+/>
+<p className="muted" style={{ margin: "0 0 1rem", fontSize: "12px", lineHeight: 1.4 }}>
+  URL accessible par vos clients pour consulter et accepter un devis (ex.{" "}
+  <code>https://ac-creation-crm.vercel.app</code>). Utilisée pour les liens
+  « Copier le lien » et WhatsApp lorsque l&apos;app tourne en local ou sur Electron.
+</p>
+
+<input
 type="number"
 min="0"
 placeholder="TVA %"
@@ -333,6 +350,15 @@ e.target.value
 })
 }
 />
+<p className="muted" style={{ margin: "0 0 1rem", fontSize: "12px", lineHeight: 1.4 }}>
+  Taux par défaut pour les clients sans override TVA (0 % intra-UE B2B, 17 % Luxembourg).
+</p>
+
+<p className="muted settings-hint-block">
+  Pièces jointes devis : configurez le bucket Supabase « ac-creation-attachments »
+  (migration 20260525120000) pour synchroniser les fichiers entre postes. Sans bucket,
+  les fichiers restent locaux à l&apos;appareil qui les a importés.
+</p>
 
 <label className="theme-field">
   <span>Délai de paiement (jours)</span>

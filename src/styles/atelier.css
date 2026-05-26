@@ -589,6 +589,75 @@
   .atelier-stats {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .atelier-mobile-card {
+    padding: 18px;
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    background: var(--surface);
+    display: grid;
+    gap: 12px;
+  }
+
+  .atelier-mobile-card__number {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #1d4ed8;
+    font-size: 18px;
+    font-weight: 900;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .atelier-mobile-card__client {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 700;
+  }
+
+  .atelier-mobile-card__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .atelier-mobile-card__delivery {
+    margin: 0;
+    font-size: 13px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .atelier-mobile-card__actions {
+    display: grid;
+    gap: 10px;
+  }
+
+  .atelier-mobile-advance {
+    min-height: 56px;
+    border: 0;
+    border-radius: 16px;
+    background: linear-gradient(135deg, var(--purple), var(--pink));
+    color: #fff;
+    font-size: 16px;
+    font-weight: 800;
+    cursor: pointer;
+  }
+
+  .atelier-mobile-fiche {
+    min-height: 48px;
+    border: 1px solid #f5d0fe;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #fff1f7, #fdf4ff);
+    color: #be185d;
+    font-size: 14px;
+    font-weight: 800;
+    cursor: pointer;
+  }
 }
 
 @media (max-width: 700px) {

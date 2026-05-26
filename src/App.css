@@ -1036,3 +1036,90 @@ html,
   margin: 10px 0 0;
   font-size: 13px;
 }
+
+.settings-hint-block {
+  margin: 0 0 1rem;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid #dbeafe;
+  background: #eff6ff;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.public-quote-page {
+  min-height: 100vh;
+  padding: 24px 16px 40px;
+  background: linear-gradient(180deg, #eef2ff 0%, #f8fafc 100%);
+}
+
+.public-quote-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  max-width: 720px;
+  margin: 0 auto 16px;
+}
+
+.public-quote-logo {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+}
+
+.public-quote-card {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px;
+  border-radius: 22px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-soft);
+}
+
+.public-quote-card--error {
+  text-align: center;
+}
+
+.public-quote-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.public-quote-meta span.muted {
+  display: block;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.public-quote-delivery {
+  margin: 0 0 16px;
+  font-size: 14px;
+}
+
+.public-quote-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.public-quote-accept {
+  min-height: 48px;
+  border: 0;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.public-quote-accepted {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #ecfdf5;
+  color: #065f46;
+  font-weight: 700;
+}

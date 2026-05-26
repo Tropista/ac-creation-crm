@@ -1,4 +1,5 @@
 export const PUBLIC_TSHIRT_PATH = "/configurateur-tshirt";
+export const PUBLIC_QUOTE_PATH = "/devis-public";
 
 export const PAGE_PATHS = {
   dashboard: "/dashboard",

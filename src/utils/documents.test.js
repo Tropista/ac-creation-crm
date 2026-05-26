@@ -15,6 +15,7 @@ import {
   getQuoteDepositSummary,
   isFullInvoiceFromQuote,
   computeDepositTotals,
+  resolveDocumentTaxRate,
 } from "./documents.js";
 
 const baseData = () => ({
@@ -339,5 +340,17 @@ describe("factures de solde", () => {
     data = createDepositInvoiceFromQuote(data, quote, 30);
 
     expect(() => convertQuoteToInvoiceData(data, quote)).toThrow(/acompte/i);
+  });
+});
+
+describe("resolveDocumentTaxRate", () => {
+  it("utilise le taux par défaut des paramètres", () => {
+    expect(resolveDocumentTaxRate({}, { taxRate: 17 })).toBe(17);
+    expect(resolveDocumentTaxRate({ taxRateOverride: "" }, { taxRate: 17 })).toBe(17);
+  });
+
+  it("applique l'override client (0 % ou personnalisé)", () => {
+    expect(resolveDocumentTaxRate({ taxRateOverride: 0 }, { taxRate: 17 })).toBe(0);
+    expect(resolveDocumentTaxRate({ taxRateOverride: 8 }, { taxRate: 17 })).toBe(8);
   });
 });

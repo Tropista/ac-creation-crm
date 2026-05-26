@@ -6,6 +6,12 @@ import {
 
 export const QUOTE_ATTACHMENTS_BUCKET = "ac-creation-attachments";
 
+function getSupabasePublicStorageBase() {
+  const base = import.meta.env?.VITE_SUPABASE_URL;
+  if (!base) return "";
+  return `${base}/storage/v1/object/public/${QUOTE_ATTACHMENTS_BUCKET}`;
+}
+
 export function isQuoteAttachmentBucketMissingError(error) {
   const message = String(error?.message || error || "").toLowerCase();
   return (
@@ -60,6 +66,13 @@ function buildStoragePath(quoteId, fileName) {
 export function getQuoteAttachmentPublicUrl(supabase, storagePath) {
   const { data } = supabase.storage.from(QUOTE_ATTACHMENTS_BUCKET).getPublicUrl(storagePath);
   return data?.publicUrl || "";
+}
+
+export function buildQuoteAttachmentPublicUrlFromPath(storagePath) {
+  const path = String(storagePath || "").trim();
+  if (!path || !isSupabaseConfigured) return "";
+  const base = getSupabasePublicStorageBase();
+  return base ? `${base}/${path}` : "";
 }
 
 export async function uploadQuoteAttachmentFile(file, { quoteId } = {}) {

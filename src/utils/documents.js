@@ -13,6 +13,27 @@ export function clientName(data, id) {
   return data.clients.find((c) => c.id === id)?.name || "Client supprimé";
 }
 
+/** TVA applicable au devis/facture : override client ou paramètre entreprise. */
+export function resolveDocumentTaxRate(client, settings = {}) {
+  const defaultRate = Number(settings.taxRate ?? 17);
+  if (
+    client?.taxRateOverride === null ||
+    client?.taxRateOverride === undefined ||
+    client?.taxRateOverride === ""
+  ) {
+    return defaultRate;
+  }
+  const override = Number(client.taxRateOverride);
+  return Number.isFinite(override) ? override : defaultRate;
+}
+
+export function formatTaxRateLabel(rate, settings = {}) {
+  const defaultRate = Number(settings.taxRate ?? 17);
+  if (rate === defaultRate) return `TVA (${rate} % — défaut)`;
+  if (rate === 0) return "TVA (0 % — autoliquidation / intra-UE)";
+  return `TVA (${rate} %)`;
+}
+
 export function statusClass(status) {
   return (
     "badge " +

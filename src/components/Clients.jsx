@@ -79,6 +79,7 @@ const emptyClientForm = {
   clientType: "Professionnel",
   website: "",
   vat: "",
+  taxRateOverride: "",
   zip: "",
   city: "",
   country: "Luxembourg",
@@ -286,11 +287,19 @@ export default function Clients({
       return;
     }
 
+    const payload = {
+      ...form,
+      taxRateOverride:
+        form.taxRateOverride === "" || form.taxRateOverride === "default"
+          ? ""
+          : Number(form.taxRateOverride),
+    };
+
     if (editing) {
       setData({
         ...data,
         clients: (data.clients || []).map((client) =>
-          client.id === editing ? { ...client, ...form } : client
+          client.id === editing ? { ...client, ...payload } : client
         ),
       });
 
@@ -299,7 +308,7 @@ export default function Clients({
       const client = {
         id: uid(),
         createdAt: today(),
-        ...form,
+        ...payload,
       };
 
       setData({
@@ -329,6 +338,10 @@ export default function Clients({
       clientType: client.clientType || "Professionnel",
       website: client.website || "",
       vat: client.vat || "",
+      taxRateOverride:
+        client.taxRateOverride === null || client.taxRateOverride === undefined
+          ? ""
+          : String(client.taxRateOverride),
       zip: client.zip || "",
       city: client.city || "",
       country: client.country || "Luxembourg",
@@ -455,7 +468,18 @@ AC Creation`;
           <input placeholder="Téléphone" value={form.phone} onChange={(e) => updateForm("phone", e.target.value)} />
           <input placeholder="Société" value={form.company} onChange={(e) => updateForm("company", e.target.value)} />
           <input placeholder="Site web" value={form.website} onChange={(e) => updateForm("website", e.target.value)} />
-          <input placeholder="TVA" value={form.vat} onChange={(e) => updateForm("vat", e.target.value)} />
+          <input placeholder="TVA (n°)" value={form.vat} onChange={(e) => updateForm("vat", e.target.value)} />
+          <label className="documents-field">
+            <span>Taux TVA sur devis/factures</span>
+            <select
+              value={form.taxRateOverride === "" ? "default" : String(form.taxRateOverride)}
+              onChange={(e) => updateForm("taxRateOverride", e.target.value === "default" ? "" : e.target.value)}
+            >
+              <option value="default">Par défaut (paramètres)</option>
+              <option value="17">17 % — TVA Luxembourg</option>
+              <option value="0">0 % — autoliquidation / intra-UE B2B</option>
+            </select>
+          </label>
           <input placeholder="Adresse" value={form.address} onChange={(e) => updateForm("address", e.target.value)} />
           <input placeholder="Code postal" value={form.zip} onChange={(e) => updateForm("zip", e.target.value)} />
           <input placeholder="Ville" value={form.city} onChange={(e) => updateForm("city", e.target.value)} />
@@ -807,7 +831,17 @@ h1{
                     <InfoBox label="Société" value={selectedClient.company} />
                     <InfoBox label="Type client" value={selectedClient.clientType} />
                     <InfoBox label="Site web" value={selectedClient.website} />
-                    <InfoBox label="TVA" value={selectedClient.vat} />
+                    <InfoBox label="TVA (n°)" value={selectedClient.vat} />
+                    <InfoBox
+                      label="Taux TVA"
+                      value={
+                        selectedClient.taxRateOverride === "" ||
+                        selectedClient.taxRateOverride === null ||
+                        selectedClient.taxRateOverride === undefined
+                          ? "Par défaut"
+                          : `${selectedClient.taxRateOverride} %`
+                      }
+                    />
                     <InfoBox label="Statut" value={selectedClient.status} />
                     <InfoBox label="Notes" value={selectedClient.notes} />
                   </div>

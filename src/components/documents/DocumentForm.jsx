@@ -1,10 +1,19 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { money } from "../../utils/money";
 import { QUOTE_STATUSES, PROCESS_TYPES, QUOTE_PRIORITY_OPTIONS } from "../../utils/production";
-import { uploadQuoteAttachmentFileWithLocalFallback } from "../../services/quoteAttachmentStorage";
-import { isPreviewableAttachment } from "../../utils/quoteAttachments";
+import {
+  canUploadQuoteAttachments,
+  uploadQuoteAttachmentFileWithLocalFallback,
+} from "../../services/quoteAttachmentStorage";
+import {
+  getAttachmentSyncLabel,
+  getAttachmentSyncStatus,
+  hydrateQuoteAttachments,
+  isPreviewableAttachment,
+} from "../../utils/quoteAttachments";
 import { uid } from "../../utils/documents";
 import { showToast } from "../../utils/toast";
+import { isSupabaseConfigured } from "../../supabase";
 import ProductPicker from "./ProductPicker";
 
 export default function DocumentForm({
@@ -30,6 +39,28 @@ export default function DocumentForm({
 }) {
   const fileInputRef = useRef(null);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [attachmentSyncReady, setAttachmentSyncReady] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function probeSync() {
+      if (!isQuote || !onAttachmentsChange) return;
+      const canCloud = isSupabaseConfigured ? await canUploadQuoteAttachments() : false;
+      if (!cancelled) setAttachmentSyncReady(canCloud);
+    }
+    probeSync();
+    return () => {
+      cancelled = true;
+    };
+  }, [isQuote, onAttachmentsChange]);
+
+  const hydratedAttachments = hydrateQuoteAttachments(attachments || []);
+  const localOnlyCount = hydratedAttachments.filter(
+    (entry) => getAttachmentSyncStatus(entry) === "local"
+  ).length;
+  const unavailableCount = hydratedAttachments.filter(
+    (entry) => !entry.url && entry.storagePath
+  ).length;
 
   async function handleAttachmentUpload(event) {
     const file = event.target.files?.[0];
@@ -62,6 +93,7 @@ export default function DocumentForm({
           url,
           storagePath: storagePath || "",
           uploadedAt: new Date().toISOString(),
+          syncStatus: source === "storage" ? "cloud" : "local",
         },
       ]);
     } catch (error) {
@@ -80,11 +112,15 @@ export default function DocumentForm({
   }
 
   function openAttachment(attachment) {
-    if (!attachment?.url) {
-      showToast("Fichier indisponible (trop lourd ou supprimé).", "error");
+    const resolved = hydrateQuoteAttachments([attachment])[0];
+    if (!resolved?.url) {
+      showToast(
+        "Fichier indisponible sur cet appareil. Connectez-vous au CRM avec Supabase ou réimportez le fichier.",
+        "warning"
+      );
       return;
     }
-    window.open(attachment.url, "_blank", "noopener,noreferrer");
+    window.open(resolved.url, "_blank", "noopener,noreferrer");
   }
 
   return (
@@ -333,15 +369,39 @@ export default function DocumentForm({
             <span className="muted">BAT, visuel client, DST, PNG…</span>
           </div>
 
-          {(attachments || []).length > 0 && (
+          <p className="quote-attachments-sync-hint muted">
+            {attachmentSyncReady === false
+              ? "Stockage cloud indisponible — les fichiers restent sur cet appareil jusqu'à connexion Supabase (bucket « ac-creation-attachments »)."
+              : attachmentSyncReady
+                ? "Synchronisation Supabase Storage active — fichiers partagés entre postes."
+                : "Vérification de la synchronisation…"}
+          </p>
+
+          {unavailableCount > 0 ? (
+            <p className="quote-attachments-warning">
+              {unavailableCount} fichier(s) enregistré(s) dans le cloud mais absent(s) ici — vérifiez le bucket Storage ou réimportez.
+            </p>
+          ) : null}
+
+          {localOnlyCount > 0 && attachmentSyncReady ? (
+            <p className="quote-attachments-warning">
+              {localOnlyCount} fichier(s) local(aux) — réimportez après connexion pour les synchroniser.
+            </p>
+          ) : null}
+
+          {hydratedAttachments.length > 0 && (
             <ul className="quote-attachments-list">
-              {(attachments || []).map((attachment) => (
+              {hydratedAttachments.map((attachment) => {
+                const syncStatus = getAttachmentSyncStatus(attachment);
+                return (
                 <li key={attachment.id} className="quote-attachment-item">
                   <div className="quote-attachment-info">
                     <strong>{attachment.name || "Fichier"}</strong>
                     <span className="muted">
                       {attachment.mimeType || "—"}
-                      {!attachment.url ? " · indisponible localement" : ""}
+                    </span>
+                    <span className={`quote-attachment-badge quote-attachment-badge--${syncStatus}`}>
+                      {getAttachmentSyncLabel(syncStatus)}
                     </span>
                   </div>
                   <div className="quote-attachment-actions">
@@ -363,7 +423,8 @@ export default function DocumentForm({
                     </button>
                   </div>
                 </li>
-              ))}
+              );
+              })}
             </ul>
           )}
 
