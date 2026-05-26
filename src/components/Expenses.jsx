@@ -20,6 +20,12 @@ import {
   buildExpensesFromImportRows,
   parseExpensesCsv,
 } from "../utils/importExpensesCsv";
+import {
+  collectExpenseYears,
+  computeExpenseMonthlyBreakdown,
+  computeExpenseYearTotals,
+  filterExpensesByYear,
+} from "../utils/expenseYearStats";
 import { getPermissions } from "../utils/permissions";
 import { showToast } from "../utils/toast";
 
@@ -74,6 +80,9 @@ export default function Expenses({
 }) {
   const [search, setSearch] = useState("");
   const [supplierFilter, setSupplierFilter] = useState("");
+  const [selectedYear, setSelectedYear] = useState(() =>
+    String(new Date().getFullYear())
+  );
   const [currentPage, setCurrentPage] = useState(1);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -97,20 +106,29 @@ export default function Expenses({
     [data.suppliers]
   );
 
-  const totals = useMemo(() => {
-    return expenses.reduce(
-      (acc, expense) => {
-        acc.count += 1;
-        acc.ht += Number(expense.amountHT || 0);
-        acc.vat += Number(expense.vatAmount || 0);
-        acc.ttc += Number(expense.totalTTC || 0);
-        return acc;
-      },
-      { count: 0, ht: 0, vat: 0, ttc: 0 }
-    );
-  }, [expenses]);
+  const yearOptions = useMemo(
+    () => collectExpenseYears(expenses),
+    [expenses]
+  );
 
-  const filteredExpenses = expenses
+  const yearExpenses = useMemo(
+    () => filterExpensesByYear(expenses, selectedYear),
+    [expenses, selectedYear]
+  );
+
+  const yearTotals = useMemo(
+    () => computeExpenseYearTotals(yearExpenses),
+    [yearExpenses]
+  );
+
+  const monthlyBreakdown = useMemo(
+    () => computeExpenseMonthlyBreakdown(expenses, selectedYear),
+    [expenses, selectedYear]
+  );
+
+  const monthsWithExpenses = monthlyBreakdown.filter((entry) => entry.count > 0);
+
+  const filteredExpenses = yearExpenses
     .filter((expense) => {
       const supplier = resolveSupplierForExpense(expense, suppliers);
       const supplierLabel = supplier?.name || expense.supplierName || "";
@@ -488,23 +506,91 @@ export default function Expenses({
         </div>
       </div>
 
-      <div className="stats expenses-stats">
-        <div className="card">
-          <strong>{totals.count}</strong>
-          <span>Facture(s)</span>
+      <div
+        className="card expenses-preview"
+        data-testid="expenses-preview"
+      >
+        <div className="expenses-preview__head">
+          <div>
+            <h3>Aperçu</h3>
+            <p className="muted">
+              Synthèse des dépenses pour {selectedYear}
+              {yearTotals.count > 0
+                ? ` · ${yearTotals.count} facture(s)`
+                : ""}
+            </p>
+          </div>
+          <label
+            className="expenses-preview__year"
+            htmlFor="expenses-preview-year"
+          >
+            <span>Année</span>
+            <select
+              id="expenses-preview-year"
+              value={selectedYear}
+              onChange={(event) => {
+                setSelectedYear(event.target.value);
+                setCurrentPage(1);
+              }}
+              data-testid="expenses-preview-year"
+            >
+              {yearOptions.map((year) => (
+                <option key={year} value={String(year)}>
+                  {year}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
-        <div className="card">
-          <strong>{money(totals.ht)}</strong>
-          <span>Total HT</span>
+
+        <div className="stats expenses-stats expenses-preview__stats">
+          <div className="card">
+            <strong>{yearTotals.count}</strong>
+            <span>Facture(s)</span>
+          </div>
+          <div className="card">
+            <strong>{money(yearTotals.ht)}</strong>
+            <span>Total HT</span>
+          </div>
+          <div className="card">
+            <strong>{money(yearTotals.vat)}</strong>
+            <span>TVA payée</span>
+          </div>
+          <div className="card">
+            <strong>{money(yearTotals.ttc)}</strong>
+            <span>Total TTC</span>
+          </div>
         </div>
-        <div className="card">
-          <strong>{money(totals.vat)}</strong>
-          <span>TVA payée</span>
-        </div>
-        <div className="card">
-          <strong>{money(totals.ttc)}</strong>
-          <span>Total TTC</span>
-        </div>
+
+        {monthsWithExpenses.length > 0 && (
+          <div className="expenses-monthly-breakdown">
+            <h4>Répartition mensuelle ({selectedYear})</h4>
+            <div className="expenses-monthly-breakdown__table-wrap">
+              <table className="expenses-table expenses-monthly-table">
+                <thead>
+                  <tr>
+                    <th>Mois</th>
+                    <th>Factures</th>
+                    <th>HT</th>
+                    <th>TVA</th>
+                    <th>TTC</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {monthsWithExpenses.map((entry) => (
+                    <tr key={entry.month}>
+                      <td>{entry.label}</td>
+                      <td>{entry.count}</td>
+                      <td>{money(entry.ht)}</td>
+                      <td>{money(entry.vat)}</td>
+                      <td>{money(entry.ttc)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="expenses-toolbar">
@@ -787,7 +873,9 @@ export default function Expenses({
       )}
 
       <div className="table card expenses-table-card">
-        <p className="muted">{filteredExpenses.length} facture(s) trouvée(s)</p>
+        <p className="muted">
+          {filteredExpenses.length} facture(s) trouvée(s) en {selectedYear}
+        </p>
 
         <PaginationControls
           page={page}

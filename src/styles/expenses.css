@@ -12,6 +12,61 @@
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
 
+.expenses-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.expenses-preview__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.expenses-preview__head h3 {
+  margin: 0;
+}
+
+.expenses-preview__year {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.expenses-preview__year select {
+  min-width: 120px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  font: inherit;
+  color: inherit;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+}
+
+.expenses-preview__stats {
+  margin: 0;
+}
+
+.expenses-monthly-breakdown h4 {
+  margin: 0 0 10px;
+  font-size: 14px;
+}
+
+.expenses-monthly-breakdown__table-wrap {
+  overflow: auto;
+}
+
+.expenses-monthly-table td,
+.expenses-monthly-table th {
+  white-space: nowrap;
+}
+
 .expenses-toolbar {
   display: flex;
   justify-content: space-between;
