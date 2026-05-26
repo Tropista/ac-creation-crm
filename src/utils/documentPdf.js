@@ -11,6 +11,7 @@ const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
 const FOOTER_RESERVE = 20;
 const BOX_PADDING = 3;
 const TEXT_LINE_HEIGHT = 4;
+const REF_COL_WIDTH = 22;
 
 const STYLE_A = {
   logoSize: 20,
@@ -286,8 +287,8 @@ function drawInvoiceTable(pdf, lines, y, style, { isQuote, products, isDelivery 
     ? ["Réf.", "Désignation", "Quantité"]
     : ["Réf.", "Désignation", "Prix unitaire HT", "Quantité", "Montant total"];
   const colWidths = isDelivery
-    ? [16, CONTENT_WIDTH - 16 - 22, 22]
-    : [16, CONTENT_WIDTH - 16 - 22 - 14 - 22, 22, 14, 22];
+    ? [REF_COL_WIDTH, CONTENT_WIDTH - REF_COL_WIDTH - 22, 22]
+    : [REF_COL_WIDTH, CONTENT_WIDTH - REF_COL_WIDTH - 22 - 14 - 22, 22, 14, 22];
   const headerHeight = 7;
 
   drawFlatRect(pdf, tableX, y, CONTENT_WIDTH, headerHeight, { fill: style.rose });

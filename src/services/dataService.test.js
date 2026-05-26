@@ -8,6 +8,7 @@ import {
   flushSaveData,
   STORAGE_KEY,
   isQuotaExceededError,
+  prepareDataForLocalStorage,
 } from "./dataService.js";
 import { stampDataChanges } from "./syncMerge.js";
 
@@ -111,6 +112,52 @@ describe("dataService", () => {
 
     expect(result?.ok).toBe(false);
     expect(result?.quotaExceeded).toBe(true);
+  });
+
+  it("flushSaveData récupère en retirant les snapshots de sauvegarde", () => {
+    const storage = createStorage({ quotaBytes: 2500 });
+    vi.stubGlobal("localStorage", storage);
+
+    const heavyBackup = {
+      id: "b1",
+      label: "Sauvegarde",
+      createdAt: "2026-05-26T10:00:00.000Z",
+      data: {
+        ...emptyData,
+        clients: [{ id: "c1", name: "Client".repeat(200) }],
+      },
+    };
+
+    const payload = {
+      ...emptyData,
+      clients: [{ id: "c1", name: "Client actuel" }],
+      backups: [heavyBackup],
+    };
+
+    saveData(payload);
+    const result = flushSaveData();
+
+    expect(result?.ok).toBe(true);
+    expect(result?.recovered).toBe(true);
+    expect(result?.quotaExceeded).toBe(false);
+
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    expect(stored.backups[0].label).toBe("Sauvegarde");
+    expect(stored.backups[0].data).toBeUndefined();
+    expect(stored.clients[0].name).toBe("Client actuel");
+  });
+
+  it("prepareDataForLocalStorage retire les payloads de sauvegarde en mode recovery", () => {
+    const prepared = prepareDataForLocalStorage(
+      {
+        ...emptyData,
+        backups: [{ id: "b1", label: "Test", data: { clients: [{ id: "c1" }] } }],
+      },
+      { recoveryLevel: 1 }
+    );
+
+    expect(prepared.backups[0].label).toBe("Test");
+    expect(prepared.backups[0].data).toBeUndefined();
   });
 
   it("isQuotaExceededError détecte QuotaExceededError", () => {

@@ -233,11 +233,9 @@
 
 .ac-table th:first-child,
 .ac-table td:first-child {
-  width: 16mm;
-  max-width: 16mm;
+  width: 22mm;
+  max-width: 22mm;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
   font-size: 9px;
 }
 

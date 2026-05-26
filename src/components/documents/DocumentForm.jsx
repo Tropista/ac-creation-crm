@@ -5,6 +5,7 @@ import { uploadQuoteAttachmentFileWithLocalFallback } from "../../services/quote
 import { isPreviewableAttachment } from "../../utils/quoteAttachments";
 import { uid } from "../../utils/documents";
 import { showToast } from "../../utils/toast";
+import ProductPicker from "./ProductPicker";
 
 export default function DocumentForm({
   isQuote,
@@ -141,7 +142,7 @@ export default function DocumentForm({
           </select>
         </label>
 
-        {isQuote && (
+        {isQuote ? (
           <label className="documents-field">
             <span>Date de livraison prévue</span>
             <input
@@ -153,6 +154,16 @@ export default function DocumentForm({
                   promisedDeliveryDateInput: e.target.value,
                 })
               }
+            />
+          </label>
+        ) : (
+          <label className="documents-field">
+            <span>Date d&apos;émission</span>
+            <input
+              type="date"
+              value={form.dateInput || ""}
+              onChange={(e) => setForm({ ...form, dateInput: e.target.value })}
+              data-testid="invoice-date-input"
             />
           </label>
         )}
@@ -235,18 +246,12 @@ export default function DocumentForm({
             return (
               <div className="document-line-group" key={index}>
                 <div className="document-line">
-                  <select
+                  <ProductPicker
                     value={line.productId || ""}
-                    onChange={(e) => onSelectProduct(index, e.target.value)}
-                  >
-                    <option value="">Produit libre</option>
-                    {products.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.category ? `${p.category} — ` : ""}
-                        {p.name} - {money(p.price)}
-                      </option>
-                    ))}
-                  </select>
+                    products={products}
+                    onChange={(productId) => onSelectProduct(index, productId)}
+                    data-testid={`document-line-product-${index}`}
+                  />
                   <input
                     placeholder="Produit / prestation"
                     value={line.description}

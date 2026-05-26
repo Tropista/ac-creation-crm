@@ -27,6 +27,21 @@ async function loadSupabaseSyncModule() {
   return import("../services/supabaseSync");
 }
 
+const LOCAL_QUOTA_TOAST_KEY = "crm_local_quota_toast_shown";
+
+function showLocalQuotaToast(message, type = "warning") {
+  try {
+    if (sessionStorage.getItem(LOCAL_QUOTA_TOAST_KEY)) {
+      return;
+    }
+    sessionStorage.setItem(LOCAL_QUOTA_TOAST_KEY, "1");
+  } catch {
+    // sessionStorage indisponible (mode privé strict, etc.)
+  }
+
+  showToast(message, type);
+}
+
 function prepareAppData(raw) {
   const withLeads = mergePublicLeadsIntoData(raw);
   return normalizeData({
@@ -248,12 +263,12 @@ export function useCloudSync({ currentUserEmail, setData, setLoading }) {
           const localSaveResult = flushSaveData();
 
           if (localSaveResult?.quotaExceeded && cloudSaved) {
-            showToast(
+            showLocalQuotaToast(
               "Cache local plein — vos données sont bien enregistrées dans le cloud.",
               "warning"
             );
           } else if (localSaveResult?.quotaExceeded && !cloudSaved) {
-            showToast(
+            showLocalQuotaToast(
               "Quota localStorage dépassé — les données risquent de ne pas survivre au rechargement.",
               "error"
             );
@@ -285,12 +300,12 @@ export function useCloudSync({ currentUserEmail, setData, setLoading }) {
       const localSaveResult = flushSaveData();
 
       if (localSaveResult?.quotaExceeded && cloudSaved) {
-        showToast(
+        showLocalQuotaToast(
           "Cache local plein — vos données sont bien enregistrées dans le cloud.",
           "warning"
         );
       } else if (localSaveResult?.quotaExceeded && !cloudSaved) {
-        showToast(
+        showLocalQuotaToast(
           "Quota localStorage dépassé — les données risquent de ne pas survivre au rechargement.",
           "error"
         );

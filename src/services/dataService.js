@@ -2,11 +2,16 @@ import { dedupeDocuments } from "../utils/documents";
 import { debounce } from "../utils/debounce";
 import { normalizePaymentDays } from "../utils/invoiceReminders";
 import { normalizeInvoiceStyle } from "../utils/invoiceStyles";
-import { sanitizeProductsForPersistence } from "../utils/productImages";
+import {
+  sanitizeProductsForPersistence,
+  sanitizeProductImageUrl,
+} from "../utils/productImages";
 import { sanitizeQuotesForPersistence } from "../utils/quoteAttachments";
 
 export const STORAGE_KEY = "crm_local_data_v2";
 export const SAVE_DEBOUNCE_MS = 400;
+export const LOCAL_LOGS_MAX = 100;
+export const LOCAL_LOGS_AGGRESSIVE_MAX = 25;
 
 export const DEFAULT_COMPANY_EMAIL = "ac.creation.officiel@gmail.com";
 export const LEGACY_PLACEHOLDER_EMAIL = "contact@monentreprise.com";
@@ -19,7 +24,32 @@ export function isQuotaExceededError(error) {
   return error.name === "QuotaExceededError" || error.code === 22;
 }
 
-function prepareDataForLocalStorage(data) {
+function stripBackupPayloadForLocalStorage(backup) {
+  if (!backup || typeof backup !== "object") return backup;
+
+  const {
+    data: _payload,
+    ...meta
+  } = backup;
+
+  return meta;
+}
+
+function stripSettingsForLocalStorage(settings = {}) {
+  if (!settings || typeof settings !== "object") return settings;
+
+  const logoUrl = sanitizeProductImageUrl(settings.logoUrl);
+  if (logoUrl === (settings.logoUrl || "")) {
+    return settings;
+  }
+
+  return {
+    ...settings,
+    logoUrl,
+  };
+}
+
+export function prepareDataForLocalStorage(data, { recoveryLevel = 0 } = {}) {
   const next = { ...data };
 
   if (data?.products?.length) {
@@ -30,30 +60,88 @@ function prepareDataForLocalStorage(data) {
     next.quotes = sanitizeQuotesForPersistence(data.quotes);
   }
 
-  if (next === data && !data?.products?.length && !data?.quotes?.length) {
-    return data;
+  if (next.settings) {
+    next.settings = stripSettingsForLocalStorage(next.settings);
+  }
+
+  if (recoveryLevel >= 1) {
+    if (data?.backups?.length) {
+      next.backups = data.backups.map(stripBackupPayloadForLocalStorage);
+    }
+
+    if (data?.logs?.length) {
+      next.logs = (data.logs || []).slice(0, LOCAL_LOGS_MAX);
+    }
+  }
+
+  if (recoveryLevel >= 2) {
+    if (data?.products?.length) {
+      next.products = (data.products || []).map((product) => {
+        if (!product || typeof product !== "object") return product;
+        const imageUrl = sanitizeProductImageUrl(product.imageUrl);
+        return imageUrl ? { ...product, imageUrl } : { ...product, imageUrl: "" };
+      });
+    }
+
+    if (data?.quotes?.length) {
+      next.quotes = sanitizeQuotesForPersistence(data.quotes).map((quote) => ({
+        ...quote,
+        attachments: (quote.attachments || []).filter(
+          (attachment) => attachment?.storagePath && !String(attachment?.url || "").startsWith("data:")
+        ),
+      }));
+    }
+
+    if (data?.logs?.length) {
+      next.logs = (data.logs || []).slice(0, LOCAL_LOGS_AGGRESSIVE_MAX);
+    }
   }
 
   return next;
 }
 
 function writeDataImmediate(data) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(prepareDataForLocalStorage(data)));
-    lastSaveError = null;
-    pendingData = null;
-    return { ok: true, quotaExceeded: false, recovered: false };
-  } catch (error) {
-    lastSaveError = error;
+  const recoveryLevels = [0, 1, 2];
 
-    if (isQuotaExceededError(error)) {
-      console.warn("Impossible d'enregistrer les données localement (quota) :", error);
-      return { ok: false, quotaExceeded: true, recovered: false };
+  for (let index = 0; index < recoveryLevels.length; index += 1) {
+    const recoveryLevel = recoveryLevels[index];
+
+    try {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify(prepareDataForLocalStorage(data, { recoveryLevel }))
+      );
+      lastSaveError = null;
+      pendingData = null;
+
+      if (recoveryLevel > 0) {
+        console.info(
+          `Cache local optimisé (niveau ${recoveryLevel}) — données complètes conservées en mémoire et dans le cloud.`
+        );
+      }
+
+      return {
+        ok: true,
+        quotaExceeded: false,
+        recovered: recoveryLevel > 0,
+        recoveryLevel,
+      };
+    } catch (error) {
+      lastSaveError = error;
+
+      if (!isQuotaExceededError(error)) {
+        console.error("Impossible d'enregistrer les données localement :", error);
+        return { ok: false, quotaExceeded: false, recovered: false, error };
+      }
+
+      if (index === recoveryLevels.length - 1) {
+        console.warn("Impossible d'enregistrer les données localement (quota) :", error);
+        return { ok: false, quotaExceeded: true, recovered: false };
+      }
     }
-
-    console.error("Impossible d'enregistrer les données localement :", error);
-    return { ok: false, quotaExceeded: false, recovered: false, error };
   }
+
+  return { ok: false, quotaExceeded: true, recovered: false };
 }
 
 export function getLastSaveError() {

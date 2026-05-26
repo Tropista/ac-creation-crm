@@ -95,6 +95,7 @@ const [form, setForm] = useState({
   globalDiscount: 0,
   depositPercent: 0,
   promisedDeliveryDateInput: "",
+  dateInput: isQuote ? "" : toDateInputValue(today()),
   processType: "",
   assignedTo: "",
   atelierNotes: "",
@@ -132,6 +133,7 @@ const [form, setForm] = useState({
       globalDiscount: 0,
       depositPercent: 0,
       promisedDeliveryDateInput: "",
+      dateInput: "",
       processType: "",
       assignedTo: "",
       atelierNotes: "",
@@ -360,6 +362,7 @@ const [form, setForm] = useState({
       globalDiscount: 0,
       depositPercent: 0,
       promisedDeliveryDateInput: "",
+      dateInput: isQuote ? "" : toDateInputValue(today()),
       processType: "",
       assignedTo: "",
       atelierNotes: "",
@@ -412,6 +415,9 @@ const [form, setForm] = useState({
     const promisedDeliveryDate = isQuote
       ? fromDateInputValue(form.promisedDeliveryDateInput)
       : "";
+    const invoiceDate = !isQuote
+      ? fromDateInputValue(form.dateInput) || today()
+      : "";
     const quoteExtras = isQuote
       ? {
           promisedDeliveryDate,
@@ -435,6 +441,7 @@ const [form, setForm] = useState({
         taxRate: data.settings.taxRate,
         stockAdjusted: !isQuote && form.status !== "Annulée",
         ...quoteExtras,
+        ...(!isQuote && { date: invoiceDate }),
         ...totals,
       });
 
@@ -472,7 +479,7 @@ const [form, setForm] = useState({
         number: isQuote
           ? nextDocumentNumber(documents, prefix)
           : nextInvoiceNumber(documents, data.settings),
-        date: today(),
+        date: isQuote ? today() : invoiceDate,
         taxRate: data.settings.taxRate,
         clientId: form.clientId,
         status: form.status,
@@ -485,7 +492,7 @@ const [form, setForm] = useState({
         stockAdjusted: !isQuote && form.status !== "Annulée",
         ...quoteExtras,
         ...(!isQuote && {
-          dueDate: computeDueDate(today(), data.settings.paymentDays),
+          dueDate: computeDueDate(invoiceDate, data.settings.paymentDays),
           paidAmount: 0,
           remaining: totals.totalTTC,
         }),
@@ -558,6 +565,7 @@ reset();
       globalDiscount: Number(doc.globalDiscount || 0),
       depositPercent: Number(doc.depositPercent || 0),
       promisedDeliveryDateInput: toDateInputValue(doc.promisedDeliveryDate),
+      dateInput: isQuote ? "" : toDateInputValue(doc.date),
       processType: doc.processType || "",
       assignedTo: doc.assignedTo || "",
       atelierNotes: doc.atelierNotes || "",

@@ -7,6 +7,7 @@ import {
   getLaserCompactSummary,
   MATERIAL_PRESETS,
 } from "../utils/laserCalc";
+import { getNextNumericSku } from "../utils/productSku";
 import "../styles/laser-calculator.css";
 
 function euro(value) {
@@ -136,8 +137,10 @@ TVA (commande) : ${euro(calc.vatAmount)}`;
       return;
     }
 
-    const nextNumber = (data.products || []).length + 1;
-    const sku = `LASER-${String(nextNumber).padStart(4, "0")}`;
+    const sku = getNextNumericSku(data.products || [], {
+      prefix: "LAS",
+      legacyPrefixes: ["LASER"],
+    });
 
     const qtyLine = multiQty
       ? `Quantité de référence : ${calc.qty} pièces
