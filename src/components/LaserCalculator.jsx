@@ -2,16 +2,12 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { showToast } from "../utils/toast";
 import { buildCalculatorQuoteLine, openQuoteFromCalculator } from "../utils/quoteDraft";
+import {
+  computeLaserCalc,
+  getLaserCompactSummary,
+  MATERIAL_PRESETS,
+} from "../utils/laserCalc";
 import "../styles/laser-calculator.css";
-
-const MATERIAL_PRESETS = {
-  Bois: { costPerM2: 18, cutSpeed: 600, engraveSpeed: 45000 },
-  Acrylique: { costPerM2: 28, cutSpeed: 900, engraveSpeed: 55000 },
-  Contreplaqué: { costPerM2: 15, cutSpeed: 550, engraveSpeed: 40000 },
-  MDF: { costPerM2: 12, cutSpeed: 500, engraveSpeed: 40000 },
-  Cuir: { costPerM2: 45, cutSpeed: 300, engraveSpeed: 25000 },
-  Autre: { costPerM2: 20, cutSpeed: 600, engraveSpeed: 45000 },
-};
 
 function euro(value) {
   return (
@@ -20,10 +16,6 @@ function euro(value) {
       maximumFractionDigits: 2,
     }) + " €"
   );
-}
-
-function n(value) {
-  return Number(value || 0);
 }
 
 export default function LaserCalculator({ data, setData, logActivity }) {
@@ -37,8 +29,8 @@ export default function LaserCalculator({ data, setData, logActivity }) {
     heightMm: 150,
 
     autoEstimateTime: true,
-    cuttingMinutes: 0,
-    engravingMinutes: 0,
+    cutTime: 0,
+    engraveTime: 0,
 
     machineLabel: "CO2 80W",
     laserPrice: 3500,
@@ -73,89 +65,41 @@ export default function LaserCalculator({ data, setData, logActivity }) {
     }));
   }
 
-  const calc = useMemo(() => {
-    const preset = MATERIAL_PRESETS[form.material] || MATERIAL_PRESETS.Autre;
-    const width = Math.max(0, n(form.widthMm));
-    const height = Math.max(0, n(form.heightMm));
-    const areaMm2 = width * height;
-    const areaM2 = areaMm2 / 1_000_000;
-    const perimeterMm = 2 * (width + height);
-    const qty = Math.max(1, n(form.quantity));
-
-    const materialCostPerM2 =
-      form.material === "Autre"
-        ? n(form.customMaterialCost)
-        : preset.costPerM2;
-    const materialCost = areaM2 * materialCostPerM2 * qty;
-
-    let cuttingMinutes = n(form.cuttingMinutes);
-    let engravingMinutes = n(form.engravingMinutes);
-
-    if (form.autoEstimateTime) {
-      cuttingMinutes = perimeterMm / Math.max(1, preset.cutSpeed);
-      engravingMinutes = areaMm2 / Math.max(1, preset.engraveSpeed);
-    }
-
-    const machineMinutesPerUnit = cuttingMinutes + engravingMinutes;
-    const totalMachineHours = (machineMinutesPerUnit * qty) / 60;
-
-    const machineHourlyCost =
-      n(form.laserPrice) / Math.max(1, n(form.laserLifetimeHours));
-    const machineCost = machineHourlyCost * totalMachineHours;
-    const electricityCost =
-      n(form.powerKw) * totalMachineHours * n(form.electricityPrice);
-    const maintenanceCost = totalMachineHours * n(form.maintenancePerHour);
-
-    const laborHours = n(form.preparationMinutes) / 60;
-    const laborCost = laborHours * n(form.laborRate);
-
-    const setupCost = n(form.setupFee);
-
-    const subtotal =
-      materialCost +
-      machineCost +
-      electricityCost +
-      maintenanceCost +
-      laborCost +
-      setupCost;
-
-    const complexityMultiplier = Math.max(0.1, n(form.complexityFactor));
-    const costWithComplexity = subtotal * complexityMultiplier;
-    const totalHT = costWithComplexity * n(form.marginCoef);
-    const marginAmount = totalHT - costWithComplexity;
-    const vatAmount = totalHT * (n(form.vatRate) / 100);
-    const totalTTC = totalHT + vatAmount;
-    const pricePerUnitHT = totalHT / qty;
-    const pricePerUnitTTC = totalTTC / qty;
-
-    return {
-      areaM2,
-      perimeterMm,
-      cuttingMinutes,
-      engravingMinutes,
-      machineMinutesPerUnit,
-      totalMachineHours,
-      materialCostPerM2,
-      materialCost,
-      machineHourlyCost,
-      machineCost,
-      electricityCost,
-      maintenanceCost,
-      laborCost,
-      setupCost,
-      subtotal,
-      complexityMultiplier,
-      marginAmount,
-      totalHT,
-      vatAmount,
-      totalTTC,
-      pricePerUnitHT,
-      pricePerUnitTTC,
-      qty,
-    };
-  }, [form]);
+  const calc = useMemo(() => computeLaserCalc(form), [form]);
+  const multiQty = calc.qty > 1;
+  const compactSummary = useMemo(
+    () => getLaserCompactSummary(calc),
+    [calc]
+  );
 
   function copySummary() {
+    const perPieceBlock = multiQty
+      ? `
+--- Par pièce (×${calc.qty}) ---
+Matière / pièce : ${euro(calc.materialCostPerUnit)}
+Amortissement / pièce : ${euro(calc.machineCostPerUnit)}
+Électricité / pièce : ${euro(calc.electricityCostPerUnit)}
+Maintenance / pièce : ${euro(calc.maintenanceCostPerUnit)}
+Coût production / pièce : ${euro(calc.sortieAtelierBasePerUnit)}
+Sortie d'atelier / pièce : ${euro(calc.sortieAtelierPerUnit)}
+Prix unitaire HT : ${euro(calc.pricePerUnitHT)}
+Prix unitaire TTC : ${euro(calc.pricePerUnitTTC)}`
+      : "";
+
+    const orderBlock = multiQty
+      ? `
+--- Total commande ---
+Frais commande (MO + setup) : ${euro(calc.orderFixedCost)}
+Coût production (commande) : ${euro(calc.sortieAtelierBase)}
+Sortie d'atelier (commande) : ${euro(calc.sortieAtelier)}
+Total HT commande : ${euro(calc.totalHT)}
+Prix conseillé TTC commande : ${euro(calc.totalTTC)}`
+      : `
+Coût production : ${euro(calc.sortieAtelierBase)}
+Sortie d'atelier : ${euro(calc.sortieAtelier)}
+Total HT : ${euro(calc.totalHT)}
+Prix conseillé TTC : ${euro(calc.totalTTC)}`;
+
     const text = `Calcul laser CO2 - ${form.projectName || "Projet"}
 
 Matière : ${form.material}
@@ -165,25 +109,22 @@ Périmètre : ${calc.perimeterMm.toLocaleString("fr-FR")} mm
 Machine : ${form.machineLabel}
 Quantité : ${calc.qty}
 
-Temps découpe / pièce : ${calc.cuttingMinutes.toFixed(1)} min
-Temps gravure / pièce : ${calc.engravingMinutes.toFixed(1)} min
+Temps découpe / pièce : ${calc.cutTime.toFixed(1)} s
+Temps gravure / pièce : ${calc.engraveTime.toFixed(1)} s
 Temps machine total : ${calc.totalMachineHours.toFixed(2)} h
+${perPieceBlock}
+${orderBlock}
 
-Coût matière : ${euro(calc.materialCost)}
-Temps machine : ${euro(calc.machineCost)}
-Électricité : ${euro(calc.electricityCost)}
-Maintenance : ${euro(calc.maintenanceCost)}
-Main-d'œuvre : ${euro(calc.laborCost)}
-Frais de setup : ${euro(calc.setupCost)}
+Coût matière (commande) : ${euro(calc.materialCost)}
+Temps machine (commande) : ${euro(calc.machineCost)}
+Électricité (commande) : ${euro(calc.electricityCost)}
+Maintenance (commande) : ${euro(calc.maintenanceCost)}
+Main-d'œuvre (1× commande) : ${euro(calc.laborCost)}
+Frais de setup (1× commande) : ${euro(calc.setupCost)}
 Complexité : ×${calc.complexityMultiplier}
 Coefficient : ×${form.marginCoef}
-Marge : ${euro(calc.marginAmount)}
-
-Total HT : ${euro(calc.totalHT)}
-Prix unitaire HT : ${euro(calc.pricePerUnitHT)}
-TVA : ${euro(calc.vatAmount)}
-Prix conseillé TTC : ${euro(calc.totalTTC)}
-Prix unitaire TTC : ${euro(calc.pricePerUnitTTC)}`;
+Marge (commande) : ${euro(calc.marginAmount)}
+TVA (commande) : ${euro(calc.vatAmount)}`;
 
     navigator.clipboard.writeText(text);
     showToast("Calcul copié dans le presse-papier.", "success");
@@ -197,6 +138,12 @@ Prix unitaire TTC : ${euro(calc.pricePerUnitTTC)}`;
 
     const nextNumber = (data.products || []).length + 1;
     const sku = `LASER-${String(nextNumber).padStart(4, "0")}`;
+
+    const qtyLine = multiQty
+      ? `Quantité de référence : ${calc.qty} pièces
+Prix catalogue : HT / pièce (${euro(calc.pricePerUnitHT)})
+Total commande type : HT ${euro(calc.totalHT)} · TTC ${euro(calc.totalTTC)}`
+      : `Prix catalogue : HT ${euro(calc.totalHT)} · TTC ${euro(calc.totalTTC)}`;
 
     const product = {
       id: crypto.randomUUID(),
@@ -213,25 +160,24 @@ ${form.widthMm} × ${form.heightMm} mm
 Machine :
 ${form.machineLabel}
 
-Quantité :
-${calc.qty}
+${qtyLine}
 
-Détail calcul :
+Détail calcul (commande) :
 Matière : ${euro(calc.materialCost)}
 Temps machine : ${euro(calc.machineCost)}
 Électricité : ${euro(calc.electricityCost)}
 Maintenance : ${euro(calc.maintenanceCost)}
-Main-d'œuvre : ${euro(calc.laborCost)}
-Frais de setup : ${euro(calc.setupCost)}
+Main-d'œuvre (1×) : ${euro(calc.laborCost)}
+Frais de setup (1×) : ${euro(calc.setupCost)}
+Coût production : ${euro(calc.sortieAtelierBase)}
+Sortie d'atelier : ${euro(calc.sortieAtelier)}
+Sortie d'atelier / pièce : ${euro(calc.sortieAtelierPerUnit)}
 Complexité : ×${calc.complexityMultiplier}
 Coefficient : ×${form.marginCoef}
 Marge : ${euro(calc.marginAmount)}
-Total HT : ${euro(calc.totalHT)}
-Prix unitaire HT : ${euro(calc.pricePerUnitHT)}
-TVA : ${euro(calc.vatAmount)}
-TTC conseillé : ${euro(calc.totalTTC)}`,
+TVA : ${euro(calc.vatAmount)}`,
       category: "Laser CO2",
-      price: Number(calc.totalHT || 0),
+      price: Number(calc.pricePerUnitHT || 0),
       stock: 0,
       createdAt: new Date().toISOString(),
     };
@@ -244,7 +190,7 @@ TTC conseillé : ${euro(calc.totalTTC)}`,
     logActivity?.({
       action: "Produit laser créé",
       target: product.name,
-      details: euro(calc.totalHT),
+      details: euro(calc.pricePerUnitHT),
     });
 
     showToast("Produit créé dans Produits.", "success");
@@ -263,7 +209,8 @@ TTC conseillé : ${euro(calc.totalTTC)}`,
 
 Matière : ${form.material}
 Dimensions : ${form.widthMm} × ${form.heightMm} mm
-Machine : ${form.machineLabel}`,
+Machine : ${form.machineLabel}
+${multiQty ? `Calcul : ${euro(calc.pricePerUnitHT)} HT / pièce` : ""}`,
           quantity: calc.qty,
           priceHT: calc.pricePerUnitHT,
           sku: "LASER-CALC",
@@ -279,8 +226,8 @@ Machine : ${form.machineLabel}`,
         <div>
           <h2>Calculateur laser CO2 80W</h2>
           <p>
-            Estimation pro avec matière, temps machine, électricité, setup,
-            complexité et marge.
+            Estimation pro avec matière, temps machine, électricité, setup
+            et marge.
           </p>
         </div>
       </div>
@@ -363,13 +310,7 @@ Machine : ${form.machineLabel}`,
                   type="number"
                   min="0"
                   step="0.01"
-                  value={
-                    form.material === "Autre"
-                      ? form.customMaterialCost
-                      : (MATERIAL_PRESETS[form.material] || MATERIAL_PRESETS.Autre)
-                          .costPerM2
-                  }
-                  disabled={form.material !== "Autre"}
+                  value={form.customMaterialCost}
                   onChange={(e) => update("customMaterialCost", e.target.value)}
                 />
               </label>
@@ -379,7 +320,7 @@ Machine : ${form.machineLabel}`,
           <div className="laser-section">
             <div className="laser-section-title">
               <span>⏱️</span>
-              <strong>Temps de production</strong>
+              <strong>Temps machine (secondes)</strong>
             </div>
 
             <div className="laser-grid">
@@ -389,30 +330,30 @@ Machine : ${form.machineLabel}`,
                   checked={form.autoEstimateTime}
                   onChange={(e) => update("autoEstimateTime", e.target.checked)}
                 />
-                Estimer automatiquement (périmètre / surface)
+                Estimer automatiquement (résultat en sec / pièce)
               </label>
 
               <label>
-                Temps découpe (min / pièce)
+                Temps découpe (sec / pièce)
                 <input
                   type="number"
                   min="0"
-                  step="0.1"
-                  value={form.cuttingMinutes}
+                  step="1"
+                  value={form.cutTime}
                   disabled={form.autoEstimateTime}
-                  onChange={(e) => update("cuttingMinutes", e.target.value)}
+                  onChange={(e) => update("cutTime", e.target.value)}
                 />
               </label>
 
               <label>
-                Temps gravure (min / pièce)
+                Temps gravure (sec / pièce)
                 <input
                   type="number"
                   min="0"
-                  step="0.1"
-                  value={form.engravingMinutes}
+                  step="1"
+                  value={form.engraveTime}
                   disabled={form.autoEstimateTime}
-                  onChange={(e) => update("engravingMinutes", e.target.value)}
+                  onChange={(e) => update("engraveTime", e.target.value)}
                 />
               </label>
             </div>
@@ -495,7 +436,7 @@ Machine : ${form.machineLabel}`,
 
             <div className="laser-grid">
               <label>
-                Préparation (min)
+                Préparation (min, 1× par commande)
                 <input
                   type="number"
                   min="0"
@@ -517,7 +458,7 @@ Machine : ${form.machineLabel}`,
               </label>
 
               <label>
-                Frais de setup (€)
+                Frais de setup (€, 1× par commande)
                 <input
                   type="number"
                   min="0"
@@ -531,11 +472,16 @@ Machine : ${form.machineLabel}`,
                 Facteur complexité
                 <input
                   type="number"
-                  min="0.1"
+                  min="0"
                   step="0.1"
+                  placeholder="1"
                   value={form.complexityFactor}
                   onChange={(e) => update("complexityFactor", e.target.value)}
                 />
+                <small className="laser-field-hint">
+                  1 = normal, &gt;1 = majoration — laisser vide ou 1 si pas de
+                  surcoût
+                </small>
               </label>
             </div>
           </div>
@@ -573,76 +519,156 @@ Machine : ${form.machineLabel}`,
         </form>
 
         <aside className="card laser-result-card">
-          <div className="laser-price">
-            <span>Prix conseillé TTC</span>
-            <strong>{euro(calc.totalTTC)}</strong>
-          </div>
-
-          <div className="laser-total-ht">
-            <span>Total HT</span>
-            <strong>{euro(calc.totalHT)}</strong>
-          </div>
-
-          <div className="laser-unit-price">
-            <span>Prix unitaire TTC</span>
-            <strong>{euro(calc.pricePerUnitTTC)}</strong>
-          </div>
+          {compactSummary.map((row) => (
+            <div key={row.key} className={row.className}>
+              <span>{row.label}</span>
+              <strong>{euro(row.main)}</strong>
+              {row.sub != null && (
+                <small className={row.subClassName}>
+                  {row.subPrefix} : {euro(row.sub)}
+                </small>
+              )}
+            </div>
+          ))}
 
           <div className="laser-breakdown">
+            <p className="laser-breakdown-heading">Technique</p>
             <div>
-              <span>Surface</span>
+              <span>Surface / pièce</span>
               <strong>{calc.areaM2.toFixed(4)} m²</strong>
             </div>
-
             <div>
-              <span>Périmètre</span>
+              <span>Périmètre / pièce</span>
               <strong>{calc.perimeterMm.toLocaleString("fr-FR")} mm</strong>
             </div>
-
             <div>
               <span>Temps machine total</span>
               <strong>{calc.totalMachineHours.toFixed(2)} h</strong>
             </div>
 
+            <p className="laser-breakdown-heading">
+              {multiQty ? `Coûts par pièce (×${calc.qty})` : "Coûts"}
+            </p>
             <div>
-              <span>Matière</span>
-              <strong>{euro(calc.materialCost)}</strong>
+              <span>Matière{multiQty ? " / pièce" : ""}</span>
+              <strong>
+                {euro(multiQty ? calc.materialCostPerUnit : calc.materialCost)}
+              </strong>
+            </div>
+            <div>
+              <span>Amortissement machine{multiQty ? " / pièce" : ""}</span>
+              <strong>
+                {euro(multiQty ? calc.machineCostPerUnit : calc.machineCost)}
+              </strong>
+            </div>
+            <div>
+              <span>Électricité{multiQty ? " / pièce" : ""}</span>
+              <strong>
+                {euro(
+                  multiQty ? calc.electricityCostPerUnit : calc.electricityCost
+                )}
+              </strong>
+            </div>
+            <div>
+              <span>Maintenance{multiQty ? " / pièce" : ""}</span>
+              <strong>
+                {euro(
+                  multiQty ? calc.maintenanceCostPerUnit : calc.maintenanceCost
+                )}
+              </strong>
             </div>
 
-            <div>
-              <span>Amortissement machine</span>
-              <strong>{euro(calc.machineCost)}</strong>
-            </div>
-
-            <div>
-              <span>Électricité</span>
-              <strong>{euro(calc.electricityCost)}</strong>
-            </div>
-
-            <div>
-              <span>Maintenance</span>
-              <strong>{euro(calc.maintenanceCost)}</strong>
-            </div>
-
+            <p className="laser-breakdown-heading">Frais commande (1×)</p>
             <div>
               <span>Main-d&apos;œuvre</span>
               <strong>{euro(calc.laborCost)}</strong>
             </div>
-
             <div>
               <span>Frais de setup</span>
               <strong>{euro(calc.setupCost)}</strong>
             </div>
 
+            {multiQty && (
+              <>
+                <p className="laser-breakdown-heading">
+                  Total commande (×{calc.qty} pièces)
+                </p>
+                <div>
+                  <span>Matière (ligne)</span>
+                  <strong>{euro(calc.materialCost)}</strong>
+                </div>
+                <div>
+                  <span>Amortissement (ligne)</span>
+                  <strong>{euro(calc.machineCost)}</strong>
+                </div>
+                <div>
+                  <span>Électricité (ligne)</span>
+                  <strong>{euro(calc.electricityCost)}</strong>
+                </div>
+                <div>
+                  <span>Maintenance (ligne)</span>
+                  <strong>{euro(calc.maintenanceCost)}</strong>
+                </div>
+                {calc.complexityMultiplier !== 1 && (
+                  <div className="laser-sortie-atelier">
+                    <span>Coût production (commande)</span>
+                    <strong>{euro(calc.sortieAtelierBase)}</strong>
+                  </div>
+                )}
+                <div className="laser-sortie-atelier">
+                  <span>
+                    Sortie d&apos;atelier (commande)
+                    {calc.complexityMultiplier !== 1 ? " (× complexité)" : ""}
+                  </span>
+                  <strong>{euro(calc.sortieAtelier)}</strong>
+                </div>
+              </>
+            )}
+
+            <p className="laser-breakdown-heading">Prix de vente</p>
+            {calc.complexityMultiplier !== 1 && (
+              <div>
+                <span>
+                  Coût production{multiQty ? " (commande)" : ""}
+                </span>
+                <strong>{euro(calc.sortieAtelierBase)}</strong>
+              </div>
+            )}
+            {calc.complexityMultiplier !== 1 && (
+              <div>
+                <span>
+                  Complexité (×{calc.complexityMultiplier})
+                </span>
+                <strong>{euro(calc.sortieAtelier)}</strong>
+              </div>
+            )}
+            <div className="laser-sortie-atelier">
+              <span>
+                Sortie d&apos;atelier{multiQty ? " (commande)" : ""}
+                {calc.complexityMultiplier !== 1 ? " (× complexité)" : ""}
+              </span>
+              <strong>{euro(calc.sortieAtelier)}</strong>
+            </div>
             <div>
-              <span>Marge</span>
+              <span>Marge{multiQty ? " (commande)" : ""}</span>
               <strong>{euro(calc.marginAmount)}</strong>
             </div>
-
             <div>
-              <span>TVA</span>
+              <span>TVA{multiQty ? " (commande)" : ""}</span>
               <strong>{euro(calc.vatAmount)}</strong>
             </div>
+            {multiQty && (
+              <>
+                <div>
+                  <span>Marge / pièce</span>
+                  <strong>{euro(calc.marginAmountPerUnit)}</strong>
+                </div>
+                <div>
+                  <span>TVA / pièce</span>
+                  <strong>{euro(calc.vatAmountPerUnit)}</strong>
+                </div>
+              </>
+            )}
           </div>
 
           <div className="laser-actions">
@@ -660,8 +686,12 @@ Machine : ${form.machineLabel}`,
           </div>
 
           <p className="laser-note">
-            Formule : matière + amortissement machine + électricité + maintenance
-            + main-d&apos;œuvre + setup, puis complexité × marge + TVA.
+            Matière et temps machine sont calculés par pièce puis multipliés par
+            la quantité. La préparation et le setup sont facturés une seule fois
+            par commande. Avec quantité 1, les trois montants en tête (sortie
+            d&apos;atelier, HT, TTC) sont les totaux commande. Au-delà de 1
+            pièce, le prix par pièce est affiché en principal et le total
+            commande en sous-ligne.
           </p>
         </aside>
       </div>

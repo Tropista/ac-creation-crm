@@ -53,6 +53,13 @@
   font-weight:800;
 }
 
+.laser-field-hint{
+  color:#94a3b8;
+  font-size:11px;
+  font-weight:600;
+  line-height:1.35;
+}
+
 .laser-checkbox{
   grid-column:1 / -1;
   display:flex !important;
@@ -96,6 +103,40 @@
   line-height:1;
 }
 
+.laser-price-order{
+  display:block;
+  margin-top:10px;
+  font-size:14px;
+  opacity:.92;
+}
+
+.laser-total-ht small,
+.laser-unit-price small,
+.laser-sortie-highlight small{
+  display:block;
+  margin-top:4px;
+  color:#64748b;
+  font-size:12px;
+  font-weight:700;
+}
+
+.laser-sortie-highlight{
+  background:#f0fdf4;
+  border-color:#bbf7d0;
+}
+
+.laser-sortie-highlight strong{color:#166534}
+
+.laser-breakdown-heading{
+  margin:6px 0 0;
+  padding:0 4px;
+  color:#475569;
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+}
+
 .laser-total-ht,
 .laser-unit-price{
   display:flex;
@@ -124,6 +165,15 @@
 
 .laser-breakdown span{color:#64748b}
 .laser-breakdown strong{color:#0f172a}
+
+.laser-sortie-atelier,
+.laser-sortie-atelier-unit{
+  background:#f0fdf4;
+  border-color:#bbf7d0;
+}
+
+.laser-sortie-atelier strong,
+.laser-sortie-atelier-unit strong{color:#166534}
 
 .laser-actions{
   display:flex;
