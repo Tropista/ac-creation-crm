@@ -205,6 +205,7 @@ function CrmApp() {
   }, [navigate]);
   const [loading, setLoading] = useState(true);
   const autoBackupStarted = useRef(false);
+  const pageCloudResyncTimer = useRef(null);
 
   const {
     cloudAvailable,
@@ -316,9 +317,16 @@ function CrmApp() {
   }, []);
 
   useEffect(() => {
-    if (page === "invoices" || page === "quotes" || page === "atelier") {
-      initializeCloudData({ silent: true });
+    if (page !== "invoices" && page !== "quotes" && page !== "atelier") {
+      return undefined;
     }
+
+    clearTimeout(pageCloudResyncTimer.current);
+    pageCloudResyncTimer.current = setTimeout(() => {
+      initializeCloudData({ silent: true });
+    }, 600);
+
+    return () => clearTimeout(pageCloudResyncTimer.current);
   }, [page]);
 
   function handleLogActivity(payloadOrAction, target = "", details = "") {

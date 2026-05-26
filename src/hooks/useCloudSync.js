@@ -117,8 +117,6 @@ export function useCloudSync({ currentUserEmail, setData, setLoading }) {
 
           const prepared = prepareAppData(mergedRaw);
           setData(prepared);
-          saveData(prepared);
-          flushSaveData();
           const synced = await syncSupabaseData(prepared, cloud.data);
           const syncedPrepared = prepareAppData(synced);
 
@@ -223,8 +221,6 @@ export function useCloudSync({ currentUserEmail, setData, setLoading }) {
 
       dataRef.current = normalized;
       setData(normalized);
-      saveData(normalized);
-      flushSaveData();
 
       let cloudSaved = false;
 

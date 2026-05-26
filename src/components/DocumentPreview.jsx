@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { APP_LOGO_URL } from "../utils/assets";
@@ -46,6 +47,7 @@ function IconInfo() {
 }
 
 export default function DocumentPreview({ doc, type, data, onClose, onDocumentSent }) {
+  const pdfWrapperRef = useRef(null);
   const isQuote = type === "quote";
   const isDelivery = type === "delivery";
   const client = (data.clients || []).find((c) => c.id === doc.clientId);
@@ -91,6 +93,28 @@ export default function DocumentPreview({ doc, type, data, onClose, onDocumentSe
   const documentFileName = getDocumentFileName(doc, type);
   const invoiceStyleClass = getInvoiceStyleClass();
 
+  useEffect(() => {
+    function onKeyDown(event) {
+      if (event.key === "Escape") {
+        onClose?.();
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
+
+  useEffect(
+    () => () => {
+      const wrapper = pdfWrapperRef.current;
+      if (wrapper?.parentNode) {
+        wrapper.parentNode.removeChild(wrapper);
+        pdfWrapperRef.current = null;
+      }
+    },
+    []
+  );
+
   async function downloadPdfNative() {
     try {
       const pdf = buildDocumentPdf({ doc, type, data });
@@ -122,6 +146,7 @@ export default function DocumentPreview({ doc, type, data, onClose, onDocumentSe
 
     wrapper.appendChild(clone);
     document.body.appendChild(wrapper);
+    pdfWrapperRef.current = wrapper;
 
     try {
       const images = Array.from(clone.querySelectorAll("img"));
@@ -196,7 +221,12 @@ export default function DocumentPreview({ doc, type, data, onClose, onDocumentSe
       console.error(error);
       showToast("Impossible de générer le PDF.", "error");
     } finally {
-      document.body.removeChild(wrapper);
+      if (wrapper.parentNode) {
+        wrapper.parentNode.removeChild(wrapper);
+      }
+      if (pdfWrapperRef.current === wrapper) {
+        pdfWrapperRef.current = null;
+      }
     }
   }
 
@@ -249,10 +279,19 @@ ${data.settings.companyEmail || ""}`;
   }
 
   return (
-    <div className="modal ac-invoice-modal-wrap document-preview-overlay">
+    <div
+      className="modal ac-invoice-modal-wrap document-preview-overlay"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose?.();
+        }
+      }}
+    >
       <div className="modal-content invoice-modal ac-invoice-modal">
         <div className="no-print modal-actions ac-invoice-actions">
-          <button onClick={onClose}>Fermer</button>
+          <button type="button" onClick={onClose}>
+            Fermer
+          </button>
           {isQuote && (
             <>
               <button type="button" onClick={copyQuoteLink}>
@@ -263,9 +302,13 @@ ${data.settings.companyEmail || ""}`;
               </button>
             </>
           )}
-          <button onClick={sendEmail}>Envoyer par email</button>
-          <button onClick={() => window.print()}>Imprimer</button>
-          <button className="primary" onClick={downloadPdfNative}>
+          <button type="button" onClick={sendEmail}>
+            Envoyer par email
+          </button>
+          <button type="button" onClick={() => window.print()}>
+            Imprimer
+          </button>
+          <button type="button" className="primary" onClick={downloadPdfNative}>
             Télécharger PDF
           </button>
         </div>

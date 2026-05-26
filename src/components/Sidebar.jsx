@@ -183,6 +183,18 @@ export default function Sidebar({
   }, [mobileOpen]);
 
   useEffect(() => {
+    const media = window.matchMedia("(max-width: 900px)");
+    const onChange = () => {
+      if (!media.matches) {
+        setMobileOpen(false);
+      }
+    };
+    onChange();
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, []);
+
+  useEffect(() => {
     setSyncTimeLabel(formatLastSyncRelative(lastSyncAt));
     const interval = setInterval(() => {
       setSyncTimeLabel(formatLastSyncRelative(lastSyncAt));
