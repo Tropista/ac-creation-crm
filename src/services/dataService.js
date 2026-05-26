@@ -162,9 +162,9 @@ export const emptyData = {
     vatNumber: "LU00000000",
     logoUrl: "",
     paymentTerms:
-      "Conditions de paiement : virement bancaire ou carte de crédit",
+      "Tout paiement au nom de Couto Da Silva Carla \nPayconiq: +352 691 88 77 94",
     bankInfo:
-      "Informations bancaires : Tout paiement au nom de votre entreprise\nNom de la banque : BCEE\nBIC : BCEELULL\nIBAN : LU00 0000 0000 0000 0000\nVeuillez indiquer le numéro de facture dans votre communication",
+      "Nom de la banque : BCEE\nBIC : BCEELULL\nIBAN : LU00 0000 0000 0000 0000\nVeuillez indiquer le numéro de facture dans votre communication",
     taxRate: 17,
     paymentDays: 30,
     invoiceStyle: "a",
@@ -223,6 +223,9 @@ export function normalizeData(data) {
         ...emptyData.settings,
         ...stored,
         companyEmail,
+        paymentTerms: stored.paymentTerms?.trim()
+          ? stored.paymentTerms
+          : emptyData.settings.paymentTerms,
         paymentDays: normalizePaymentDays(stored.paymentDays),
         invoiceStyle: normalizeInvoiceStyle(),
       };

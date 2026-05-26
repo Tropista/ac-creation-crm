@@ -480,6 +480,75 @@ text-transform:uppercase;
 color:#b91c1c;
 }
 
+.dashboard-billing-period{
+margin-bottom:12px;
+display:flex;
+flex-direction:column;
+gap:14px;
+}
+
+.dashboard-billing-period__head{
+display:flex;
+align-items:flex-start;
+justify-content:space-between;
+gap:16px;
+flex-wrap:wrap;
+}
+
+.dashboard-billing-period__head h3{
+margin:0;
+}
+
+.dashboard-billing-period__controls{
+display:flex;
+flex-wrap:wrap;
+gap:12px;
+align-items:flex-end;
+}
+
+.dashboard-billing-period__controls select{
+padding:10px 12px;
+border-radius:12px;
+border:1px solid var(--border);
+background:var(--surface);
+font:inherit;
+color:var(--text);
+min-width:120px;
+}
+
+.dashboard-period-tabs{
+display:flex;
+gap:8px;
+flex-wrap:wrap;
+}
+
+.dashboard-period-tabs button{
+padding:8px 12px;
+border:1px solid rgba(148,163,184,.25);
+border-radius:999px;
+background:rgba(15,23,42,.04);
+font-weight:700;
+cursor:pointer;
+transition:.25s;
+font:inherit;
+color:inherit;
+}
+
+.dashboard-period-tabs button:hover{
+background:#eef2ff;
+}
+
+.dashboard-period-tabs button.active{
+background:linear-gradient(135deg,#111827,#334155);
+color:#fff;
+border-color:transparent;
+box-shadow:0 8px 20px rgba(99,102,241,.2);
+}
+
+.dashboard-billing-period__stats{
+margin:0;
+}
+
 .dashboard-accounting-export{
 border-color:rgba(124,58,237,.25);
 background:linear-gradient(180deg,rgba(124,58,237,.06) 0%,#fff 100%);

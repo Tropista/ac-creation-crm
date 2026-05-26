@@ -12,6 +12,17 @@ import {
   parseDocumentDate,
   sortOverdueInvoices,
 } from "../utils/invoices";
+import {
+  INVOICE_PERIOD_MODES,
+  collectInvoiceYears,
+  computeInvoicePeriodTotals,
+  filterInvoicesByPeriod,
+  formatInvoicePeriodLabel,
+} from "../utils/invoicePeriodStats";
+import {
+  formatAccountingMonthInput,
+  parseAccountingMonthInput,
+} from "../utils/exportCsv";
 import { openInvoiceReminderMailto } from "../utils/invoiceReminders";
 import { getProductionQueue, QUOTES_STATUS_FILTER_KEY } from "../utils/production";
 import { getOverdueQuotes, getQuotesToLaunchToday } from "../utils/quoteDelivery";
@@ -66,6 +77,18 @@ export default function Dashboard({
 }) {
   const navigate = useNavigate();
   const [deliveryWeekOffset, setDeliveryWeekOffset] = useState(0);
+  const [billingPeriodMode, setBillingPeriodMode] = useState(
+    INVOICE_PERIOD_MODES.MONTH
+  );
+  const [billingMonthValue, setBillingMonthValue] = useState(() =>
+    formatAccountingMonthInput(
+      new Date().getFullYear(),
+      new Date().getMonth()
+    )
+  );
+  const [billingYear, setBillingYear] = useState(() =>
+    String(new Date().getFullYear())
+  );
   const permissions = getPermissions(currentRole);
   const canManageInvoices = permissions.pages.includes("invoices");
   const canManageQuotes = permissions.pages.includes("quotes");
@@ -164,15 +187,48 @@ export default function Dashboard({
   );
   const unreadLeadCount = countUnreadLeads(leads);
 
-  const totalInvoices = invoices.reduce(
-    (sum, inv) => sum + Number(inv.totalTTC || 0),
-    0
-  );
-  const paidInvoices = invoices
-    .filter((i) => i.status === "Payée")
-    .reduce((sum, inv) => sum + Number(inv.totalTTC || 0), 0);
-  const unpaidInvoices = totalInvoices - paidInvoices;
   const unpaidCount = invoices.filter((i) => i.status !== "Payée").length;
+
+  const billingPeriod = useMemo(() => {
+    const today = new Date();
+    const fallbackYear = today.getFullYear();
+    const fallbackMonth = today.getMonth();
+    if (billingPeriodMode === INVOICE_PERIOD_MODES.ALL) {
+      return { mode: INVOICE_PERIOD_MODES.ALL };
+    }
+    if (billingPeriodMode === INVOICE_PERIOD_MODES.YEAR) {
+      return {
+        mode: INVOICE_PERIOD_MODES.YEAR,
+        year: Number(billingYear) || fallbackYear,
+      };
+    }
+    const parsed =
+      parseAccountingMonthInput(billingMonthValue) || {
+        year: fallbackYear,
+        month: fallbackMonth,
+      };
+    return {
+      mode: INVOICE_PERIOD_MODES.MONTH,
+      year: parsed.year,
+      month: parsed.month,
+    };
+  }, [billingPeriodMode, billingMonthValue, billingYear]);
+
+  const billingPeriodLabel = formatInvoicePeriodLabel(billingPeriod);
+  const billingYearOptions = useMemo(
+    () => collectInvoiceYears(invoices, new Date().getFullYear()),
+    [invoices]
+  );
+
+  const allTimeInvoiceTotals = useMemo(
+    () => computeInvoicePeriodTotals(invoices),
+    [invoices]
+  );
+
+  const periodInvoiceTotals = useMemo(() => {
+    const filtered = filterInvoicesByPeriod(invoices, billingPeriod);
+    return computeInvoicePeriodTotals(filtered);
+  }, [invoices, billingPeriod]);
   const acceptedQuotes = quotes.filter((q) => q.status === "Accepté").length;
 
   const invoiceLines = useMemo(
@@ -521,7 +577,9 @@ export default function Dashboard({
                   <span><i className="dot dot--paid" /> Payées ({paidInvoiceCount})</span>
                   <span><i className="dot dot--unpaid" /> Impayées ({unpaidCount})</span>
                 </div>
-                <strong className="dashboard-unpaid-amount">{money(unpaidInvoices)}</strong>
+                <strong className="dashboard-unpaid-amount">
+                  {money(allTimeInvoiceTotals.unpaidTTC)}
+                </strong>
                 <span className="muted">Montant à encaisser</span>
                 {overdueInvoices.length > 0 && (
                   <button type="button" className="dashboard-kpi-cta" onClick={goToOverdueInvoices}>
@@ -598,6 +656,112 @@ export default function Dashboard({
         </div>
       )}
 
+      <div
+        className="card dashboard-billing-period"
+        data-testid="dashboard-billing-period"
+      >
+        <div className="dashboard-billing-period__head">
+          <div>
+            <h3>Facturation</h3>
+            <p className="muted">
+              Montants TTC pour la période : {billingPeriodLabel}
+              {periodInvoiceTotals.count > 0
+                ? ` · ${periodInvoiceTotals.count} facture(s)`
+                : ""}
+            </p>
+          </div>
+          <div className="dashboard-period-tabs" role="tablist" aria-label="Période">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={billingPeriodMode === INVOICE_PERIOD_MODES.MONTH}
+              className={
+                billingPeriodMode === INVOICE_PERIOD_MODES.MONTH ? "active" : ""
+              }
+              onClick={() => setBillingPeriodMode(INVOICE_PERIOD_MODES.MONTH)}
+            >
+              Mois
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={billingPeriodMode === INVOICE_PERIOD_MODES.YEAR}
+              className={
+                billingPeriodMode === INVOICE_PERIOD_MODES.YEAR ? "active" : ""
+              }
+              onClick={() => setBillingPeriodMode(INVOICE_PERIOD_MODES.YEAR)}
+            >
+              Année
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={billingPeriodMode === INVOICE_PERIOD_MODES.ALL}
+              className={
+                billingPeriodMode === INVOICE_PERIOD_MODES.ALL ? "active" : ""
+              }
+              onClick={() => setBillingPeriodMode(INVOICE_PERIOD_MODES.ALL)}
+            >
+              Depuis la création
+            </button>
+          </div>
+        </div>
+        <div className="dashboard-billing-period__controls">
+          {billingPeriodMode === INVOICE_PERIOD_MODES.MONTH && (
+            <label className="accounting-export-month" htmlFor="dashboard-billing-month">
+              <span>Mois</span>
+              <input
+                id="dashboard-billing-month"
+                type="month"
+                value={billingMonthValue}
+                onChange={(event) => setBillingMonthValue(event.target.value)}
+                data-testid="dashboard-billing-month"
+              />
+            </label>
+          )}
+          {billingPeriodMode === INVOICE_PERIOD_MODES.YEAR && (
+            <label className="accounting-export-month" htmlFor="dashboard-billing-year">
+              <span>Année</span>
+              <select
+                id="dashboard-billing-year"
+                value={billingYear}
+                onChange={(event) => setBillingYear(event.target.value)}
+                data-testid="dashboard-billing-year"
+              >
+                {billingYearOptions.map((year) => (
+                  <option key={year} value={String(year)}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+        </div>
+        <div className="stats dashboard-billing-period__stats">
+          <DashboardStatCard
+            label="Total facturé"
+            value={money(periodInvoiceTotals.billedTTC)}
+            detail={`TTC · ${billingPeriodLabel}`}
+            onClick={() => goToInvoices()}
+          />
+          <DashboardStatCard
+            label="Total payé"
+            value={money(periodInvoiceTotals.paidTTC)}
+            detail={`TTC · ${billingPeriodLabel}`}
+            onClick={() => goToInvoices("paid")}
+          />
+          <DashboardStatCard
+            label="À encaisser"
+            value={money(periodInvoiceTotals.unpaidTTC)}
+            detail={`TTC · ${billingPeriodLabel}`}
+            className={
+              periodInvoiceTotals.unpaidTTC > 0 ? "stat--danger" : ""
+            }
+            onClick={() => goToInvoices("unpaid")}
+          />
+        </div>
+      </div>
+
       <div className="stats">
         <DashboardStatCard
           label="Clients"
@@ -657,21 +821,6 @@ export default function Dashboard({
         <DashboardStatCard
           label="Non payées"
           value={unpaidCount}
-          onClick={() => goToInvoices("unpaid")}
-        />
-        <DashboardStatCard
-          label="Total facturé"
-          value={money(totalInvoices)}
-          onClick={() => goToInvoices()}
-        />
-        <DashboardStatCard
-          label="Payé"
-          value={money(paidInvoices)}
-          onClick={() => goToInvoices("paid")}
-        />
-        <DashboardStatCard
-          label="À encaisser"
-          value={money(unpaidInvoices)}
           onClick={() => goToInvoices("unpaid")}
         />
       </div>

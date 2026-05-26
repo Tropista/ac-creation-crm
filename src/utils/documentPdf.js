@@ -387,8 +387,7 @@ function drawPaymentCard(pdf, settings, x, y, width, style) {
   pdf.setTextColor(...style.textSecondary);
 
   if (settings.paymentTerms) {
-    const paymentText = `Échéance de paiement : ${settings.paymentTerms}`;
-    const paymentLines = wrapText(pdf, paymentText, width - padding * 2);
+    const paymentLines = wrapText(pdf, settings.paymentTerms, width - padding * 2);
     paymentLines.forEach((line, index) => {
       pdf.text(line, centerX, cursor + 3 + index * TEXT_LINE_HEIGHT, { align: "center" });
     });

@@ -503,10 +503,7 @@ ${data.settings.companyEmail || ""}`;
             <div className="ac-after-table-left">
               <div className="ac-payment-card">
                 <h3>CONDITIONS DE PAIEMENT</h3>
-                <p>
-                  <strong>Échéance de paiement :</strong>{" "}
-                  {data.settings.paymentTerms}
-                </p>
+                <pre>{data.settings.paymentTerms}</pre>
                 <pre>{data.settings.bankInfo}</pre>
               </div>
 
