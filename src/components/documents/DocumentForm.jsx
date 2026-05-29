@@ -39,6 +39,7 @@ export default function DocumentForm({
   onAttachmentsChange,
 }) {
   const fileInputRef = useRef(null);
+  const resolvedAttachmentsRef = useRef([]);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [attachmentSyncReady, setAttachmentSyncReady] = useState(null);
   const [resolvedAttachments, setResolvedAttachments] = useState([]);
@@ -64,8 +65,13 @@ export default function DocumentForm({
         return;
       }
       setResolvedAttachments(hydrateQuoteAttachments(attachments || []));
-      const hydrated = await hydrateQuoteAttachmentsAsync(attachments || []);
-      if (!cancelled) setResolvedAttachments(hydrated);
+      try {
+        const hydrated = await hydrateQuoteAttachmentsAsync(attachments || []);
+        if (!cancelled) setResolvedAttachments(hydrated);
+      } catch (error) {
+        console.error(error);
+        if (!cancelled) setResolvedAttachments(hydrateQuoteAttachments(attachments || []));
+      }
     }
     resolveAttachments();
     return () => {
@@ -73,7 +79,21 @@ export default function DocumentForm({
     };
   }, [attachments, isQuote, onAttachmentsChange]);
 
+  useEffect(
+    () => () => {
+      setUploadingAttachment(false);
+      resolvedAttachmentsRef.current.forEach((attachment) => {
+        const url = String(attachment?.url || "");
+        if (url.startsWith("blob:")) {
+          URL.revokeObjectURL(url);
+        }
+      });
+    },
+    []
+  );
+
   const hydratedAttachments = resolvedAttachments;
+  resolvedAttachmentsRef.current = hydratedAttachments;
   const localOnlyCount = hydratedAttachments.filter(
     (entry) => getAttachmentSyncStatus(entry) === "local"
   ).length;

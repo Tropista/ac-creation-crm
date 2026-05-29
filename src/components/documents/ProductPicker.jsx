@@ -6,6 +6,7 @@ import {
   formatProductOptionLabel,
   matchesFreeProductOption,
 } from "../../utils/productPicker";
+import { CRM_ROUTE_CHANGE_EVENT } from "../../utils/uiCleanup";
 
 export default function ProductPicker({
   value,
@@ -86,6 +87,25 @@ export default function ProductPicker({
       window.removeEventListener("scroll", updateListPosition, true);
     };
   }, [open, updateListPosition, options.length]);
+
+  useEffect(
+    () => () => {
+      setOpen(false);
+      setListPosition(null);
+    },
+    []
+  );
+
+  useEffect(() => {
+    function closeOnRouteChange() {
+      setOpen(false);
+      setQuery("");
+      setListPosition(null);
+    }
+
+    window.addEventListener(CRM_ROUTE_CHANGE_EVENT, closeOnRouteChange);
+    return () => window.removeEventListener(CRM_ROUTE_CHANGE_EVENT, closeOnRouteChange);
+  }, []);
 
   useEffect(() => {
     if (!open) return undefined;

@@ -2,6 +2,71 @@ import { isHashRouterMode, pageToPath } from "./routes";
 import { sanitizeQuoteAttachmentsForPersistence } from "./quoteAttachments";
 
 export const QUOTE_DRAFT_KEY = "crm_quote_draft";
+export const INVOICE_DRAFT_KEY = "crm_invoice_draft";
+
+const appliedDraftTokens = new Set();
+
+export function getQuoteDraftToken(draft) {
+  if (!draft) return "";
+  return `${draft.source || ""}|${draft.savedAt || ""}|${(draft.lines || []).length}`;
+}
+
+export function markQuoteDraftApplied(draft) {
+  const token = getQuoteDraftToken(draft);
+  if (token) appliedDraftTokens.add(token);
+}
+
+export function wasQuoteDraftApplied(draft) {
+  return appliedDraftTokens.has(getQuoteDraftToken(draft));
+}
+
+export function clearQuoteDraft() {
+  localStorage.removeItem(QUOTE_DRAFT_KEY);
+}
+
+export function clearInvoiceDraft() {
+  localStorage.removeItem(INVOICE_DRAFT_KEY);
+}
+
+/** Navigation menu / tableau de bord : liste devis sans ré-appliquer un brouillon. */
+export const QUOTES_LIST_NAV_STATE = { quotesListView: true };
+
+export const QUOTES_LIST_VIEW_EVENT = "crm-quotes-list-view";
+
+export function requestQuotesListView() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(QUOTES_LIST_VIEW_EVENT));
+  }
+}
+
+export function navigateToQuotesList(navigate) {
+  navigate(pageToPath("quotes"), { state: QUOTES_LIST_NAV_STATE });
+}
+
+/** Navigation menu / tableau de bord : liste factures sans formulaire / aperçu bloquants. */
+export const INVOICES_LIST_NAV_STATE = { invoicesListView: true };
+
+export const INVOICES_LIST_VIEW_EVENT = "crm-invoices-list-view";
+
+export function requestInvoicesListView() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(INVOICES_LIST_VIEW_EVENT));
+  }
+}
+
+export function navigateToInvoicesList(navigate) {
+  navigate(pageToPath("invoices"), { state: INVOICES_LIST_NAV_STATE });
+}
+
+/** Lien vers la page Factures (compatible Electron file:// + hash). */
+export function getCrmInvoicesUrl() {
+  const path = pageToPath("invoices");
+  if (typeof window === "undefined") return path;
+  if (isHashRouterMode()) {
+    return `${window.location.pathname}#${path}`;
+  }
+  return path;
+}
 
 /** Lien vers la page Devis (compatible Electron file:// + hash). */
 export function getCrmQuotesUrl() {

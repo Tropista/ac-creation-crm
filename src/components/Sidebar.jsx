@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   Banknote,
   BarChart3,
@@ -35,7 +35,15 @@ import {
 import { APP_LOGO_URL } from "../utils/assets";
 import { APP_VERSION } from "../utils/appVersion";
 import { pageToPath } from "../utils/routes";
+import {
+  INVOICES_LIST_NAV_STATE,
+  QUOTES_LIST_NAV_STATE,
+  requestInvoicesListView,
+  requestQuotesListView,
+} from "../utils/quoteDraft";
 import { formatLastSyncRelative } from "../services/syncMerge";
+import { cleanupNavigationBlockers, dispatchRouteChange } from "../utils/uiCleanup";
+import { useSyncedPathname } from "../hooks/useSyncedPathname";
 
 const SECTIONS_STORAGE_KEY = "crm_sidebar_sections_v1";
 
@@ -146,8 +154,11 @@ export default function Sidebar({
   permissions,
   logout,
 }) {
-  const location = useLocation();
+  const navigate = useNavigate();
+  const pathname = useSyncedPathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const quotesPath = pageToPath("quotes");
+  const invoicesPath = pageToPath("invoices");
   const [sectionState, setSectionState] = useState(loadSectionState);
   const [syncTimeLabel, setSyncTimeLabel] = useState(() =>
     formatLastSyncRelative(lastSyncAt)
@@ -173,9 +184,58 @@ export default function Sidebar({
     });
   }
 
+  function isNavActive(pageKey) {
+    const path = pageToPath(pageKey);
+    return pathname === path || pathname === `${path}/`;
+  }
+
+  function navLinkState(item) {
+    if (item.page === "quotes") {
+      return QUOTES_LIST_NAV_STATE;
+    }
+    if (item.page === "invoices") {
+      return INVOICES_LIST_NAV_STATE;
+    }
+    const leavingDocuments =
+      pathname === quotesPath || pathname === invoicesPath;
+    if (leavingDocuments) {
+      return {};
+    }
+    return undefined;
+  }
+
+  function handleNavClick(event, item) {
+    cleanupNavigationBlockers();
+    setMobileOpen(false);
+
+    const path = pageToPath(item.page);
+    const linkState = navLinkState(item);
+    const leavingDocuments =
+      pathname === quotesPath || pathname === invoicesPath;
+
+    if (item.page === "quotes" && pathname === quotesPath) {
+      event.preventDefault();
+      requestQuotesListView();
+      navigate(path, { replace: true, state: QUOTES_LIST_NAV_STATE });
+      return;
+    }
+    if (item.page === "invoices" && pathname === invoicesPath) {
+      event.preventDefault();
+      requestInvoicesListView();
+      navigate(path, { replace: true, state: INVOICES_LIST_NAV_STATE });
+      return;
+    }
+
+    if (leavingDocuments && item.page !== "quotes" && item.page !== "invoices") {
+      event.preventDefault();
+      dispatchRouteChange(path);
+      navigate(path, { state: linkState ?? undefined });
+    }
+  }
+
   useEffect(() => {
     setMobileOpen(false);
-  }, [location.pathname]);
+  }, [pathname]);
 
   useEffect(() => {
     document.body.classList.toggle("sidebar-drawer-open", mobileOpen);
@@ -312,17 +372,19 @@ export default function Sidebar({
                   {isOpen ? (
                     <div className="sidebar-section__items" id={`sidebar-section-${group.id}`}>
                       {group.items.map((item) => (
-                        <NavLink
+                        <Link
                           key={item.page}
                           to={pageToPath(item.page)}
+                          state={navLinkState(item)}
                           data-testid={`nav-${item.page}`}
-                          className={({ isActive }) => (isActive ? "active" : "")}
-                          onClick={() => setMobileOpen(false)}
+                          className={isNavActive(item.page) ? "active" : ""}
+                          onClick={(event) => handleNavClick(event, item)}
                           aria-label={item.label}
+                          aria-current={isNavActive(item.page) ? "page" : undefined}
                         >
                           <NavIcon page={item.page} />
                           {item.label}
-                        </NavLink>
+                        </Link>
                       ))}
                     </div>
                   ) : null}

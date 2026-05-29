@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   lazy,
@@ -23,6 +24,7 @@ import {
   pageToPath,
   pathToPage,
 } from "./utils/routes";
+import { INVOICES_LIST_NAV_STATE, QUOTES_LIST_NAV_STATE } from "./utils/quoteDraft";
 import {
   loadLocalPublicLeads,
   mergePublicLeadsIntoData,
@@ -75,6 +77,11 @@ import {
   logActivity
 } from "./services/logService";
 import { useCloudSync } from "./hooks/useCloudSync";
+import { useSyncedPathname } from "./hooks/useSyncedPathname";
+import {
+  cleanupNavigationBlockers,
+  dispatchRouteChange,
+} from "./utils/uiCleanup";
 import "./styles/sidebar.css";
 import "./styles/dashboard.css";
 import "./styles/clients.css";
@@ -183,10 +190,28 @@ function PublicTshirtConfigurator() {
 function CrmApp() {
   const navigate = useNavigate();
   const location = useLocation();
-  const page = pathToPage(location.pathname) ?? "dashboard";
+  const pathname = useSyncedPathname();
+  const page = pathToPage(pathname) ?? "dashboard";
+  const routesLocation =
+    pathname !== location.pathname
+      ? { ...location, pathname }
+      : location;
 
-  const setPage = (pageKey) => {
-    navigate(pageToPath(pageKey));
+  useLayoutEffect(() => {
+    if (typeof window === "undefined") return;
+    if (pathname === location.pathname) return;
+    navigate(`${pathname}${window.location.search}${window.location.hash}`, {
+      replace: true,
+    });
+  }, [pathname, location.pathname, navigate]);
+
+  const setPage = (pageKey, options = {}) => {
+    const path = pageToPath(pageKey);
+    if (options.state) {
+      navigate(path, { state: options.state });
+      return;
+    }
+    navigate(path);
   };
 
   const [data, setData] = useState(loadData);
@@ -197,13 +222,18 @@ function CrmApp() {
   const [authNotice, setAuthNotice] = useState(initialAuth.notice);
 
   useEffect(() => {
+    cleanupNavigationBlockers();
+    dispatchRouteChange(pathname);
+  }, [pathname]);
+
+  useEffect(() => {
     function handleOpenPage(event) {
       if (event.detail === "quotes") {
-        setPage("quotes");
+        setPage("quotes", { state: QUOTES_LIST_NAV_STATE });
       }
 
       if (event.detail === "invoices") {
-        setPage("invoices");
+        setPage("invoices", { state: INVOICES_LIST_NAV_STATE });
       }
     }
 
@@ -468,7 +498,7 @@ function CrmApp() {
             />
           )}
 
-          <Routes>
+          <Routes location={routesLocation}>
             <Route
               index
               element={<Navigate to={pageToPath("dashboard")} replace />}

@@ -1,10 +1,17 @@
 import { describe, expect, it, beforeEach, vi } from "vitest";
 import {
+  INVOICE_DRAFT_KEY,
+  INVOICES_LIST_NAV_STATE,
   QUOTE_DRAFT_KEY,
+  QUOTES_LIST_NAV_STATE,
   saveQuoteDraft,
   peekQuoteDraft,
   consumeQuoteDraft,
+  clearInvoiceDraft,
+  getCrmInvoicesUrl,
   getCrmQuotesUrl,
+  navigateToInvoicesList,
+  navigateToQuotesList,
   buildTshirtConfiguratorQuoteDescription,
   buildTshirtConfiguratorWorkshopNotes,
   formatTshirtColorLabel,
@@ -100,6 +107,33 @@ describe("quoteDraft", () => {
     const saved = peekQuoteDraft()?.attachments?.[0];
     expect(saved?.localBlobId).toBe("idb-zip");
     expect(saved?.url).toBe("");
+  });
+
+  it("navigue vers la liste Devis sans brouillon", () => {
+    const navigate = vi.fn();
+    navigateToQuotesList(navigate);
+    expect(navigate).toHaveBeenCalledWith("/devis", { state: QUOTES_LIST_NAV_STATE });
+  });
+
+  it("navigue vers la liste Factures", () => {
+    const navigate = vi.fn();
+    navigateToInvoicesList(navigate);
+    expect(navigate).toHaveBeenCalledWith("/factures", { state: INVOICES_LIST_NAV_STATE });
+  });
+
+  it("efface le brouillon facture", () => {
+    localStorage.setItem(INVOICE_DRAFT_KEY, "{}");
+    clearInvoiceDraft();
+    expect(localStorage.getItem(INVOICE_DRAFT_KEY)).toBeNull();
+  });
+
+  it("retourne l’URL Factures en mode hash", () => {
+    vi.stubGlobal("window", {
+      location: { protocol: "file:", pathname: "/index.html" },
+    });
+    expect(getCrmInvoicesUrl()).toBe("/index.html#/factures");
+    vi.unstubAllGlobals();
+    vi.stubGlobal("localStorage", createStorage());
   });
 
   it("retourne l’URL Devis en mode hash", () => {

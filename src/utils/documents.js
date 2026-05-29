@@ -501,6 +501,21 @@ export function createBalanceInvoiceFromQuote(data, quote) {
     maximumFractionDigits: 2,
   });
 
+  const scaledLines = quote.lines?.length
+    ? scaleDocumentLinesByRatio(quote.lines, ratio)
+    : [
+        {
+          productId: quote.productId || "",
+          sku: quote.sku || "",
+          description: quote.description || `Solde — Devis ${quote.number}`,
+          quantity: quote.quantity || 1,
+          price: totalHT,
+          discount: 0,
+          subtotal: totalHT,
+          totalHT,
+        },
+      ];
+
   const invoice = {
     id: uid(),
     number: nextInvoiceNumber(data.invoices || [], data.settings),
@@ -513,20 +528,7 @@ export function createBalanceInvoiceFromQuote(data, quote) {
     parentQuoteId: quote.id,
     depositPaidAmount: summary.paidDeposit,
     description: `Solde — Devis ${quote.number} (acomptes payés : ${paidDepositLabel} €)`,
-    lines: quote.lines?.length
-      ? quote.lines
-      : [
-          {
-            productId: quote.productId || "",
-            sku: quote.sku || "",
-            description: quote.description || `Solde — Devis ${quote.number}`,
-            quantity: quote.quantity || 1,
-            price: totalHT,
-            discount: 0,
-            subtotal: totalHT,
-            totalHT,
-          },
-        ],
+    lines: scaledLines,
     globalDiscount: quote.globalDiscount || 0,
     subtotal: totalHT,
     lineDiscountAmount: quote.lineDiscountAmount || 0,
@@ -552,12 +554,71 @@ export function createBalanceInvoiceFromQuote(data, quote) {
   };
 }
 
+/** Réduit chaque ligne au ratio solde / devis (prix unitaire et totaux HT). */
+export function scaleDocumentLinesByRatio(lines = [], ratio = 1) {
+  const r = Math.max(0, Number(ratio) || 0);
+  if (r <= 0 || !lines.length) return lines;
+
+  return lines.map((line) => {
+    const quantity = Number(line.quantity || 0);
+    const price = Math.round(Number(line.price || 0) * r * 100) / 100;
+    const discount = Math.min(100, Math.max(0, Number(line.discount || 0)));
+    const subtotal = Math.round(quantity * price * 100) / 100;
+    const totalHT = Math.round(subtotal * (1 - discount / 100) * 100) / 100;
+    return {
+      ...line,
+      price,
+      subtotal,
+      totalHT,
+    };
+  });
+}
+
 export function computeDepositTotals(totalTTC, depositPercent = 0) {
   const rate = Math.min(100, Math.max(0, Number(depositPercent) || 0));
   const total = Number(totalTTC || 0);
   const depositAmount = Math.round(total * (rate / 100) * 100) / 100;
   const balanceAfterDeposit = Math.round((total - depositAmount) * 100) / 100;
   return { depositPercent: rate, depositAmount, balanceAfterDeposit };
+}
+
+/**
+ * Lignes Acompte / Solde du pied de page : uniquement sur les devis.
+ * Sur une facture d'acompte, totalTTC est déjà le montant à payer (ne pas re-appliquer %).
+ */
+export function getDocumentFooterTotals(doc, type) {
+  const isQuote = type === "quote";
+  const isSolde = type === "invoice" && doc.invoiceType === "solde";
+  const depositPercent = Number(doc.depositPercent || 0);
+  const showQuoteDepositSplit = isQuote && depositPercent > 0;
+  const quoteDeposit = showQuoteDepositSplit
+    ? computeDepositTotals(doc.totalTTC, depositPercent)
+    : { depositPercent: 0, depositAmount: 0, balanceAfterDeposit: 0 };
+  const depositPaidAmount = Number(doc.depositPaidAmount || 0);
+  const showSoldeBreakdown = isSolde && depositPaidAmount > 0.01;
+  const quoteTotalTTCForSolde = showSoldeBreakdown
+    ? Math.round((Number(doc.totalTTC || 0) + depositPaidAmount) * 100) / 100
+    : 0;
+
+  return {
+    showQuoteDepositSplit,
+    quoteDeposit,
+    showSoldeBreakdown,
+    quoteTotalTTCForSolde,
+    depositPaidAmount,
+  };
+}
+
+/** Montant « À payer » sur PDF / aperçu. */
+export function getDocumentAmountDue(doc, type, { remaining } = {}) {
+  if (type === "delivery") return 0;
+  if (doc.status === "Payée") return 0;
+  if (type === "quote" && Number(doc.depositPercent || 0) > 0) {
+    return computeDepositTotals(doc.totalTTC, doc.depositPercent).depositAmount;
+  }
+  const rem = remaining != null ? Number(remaining) : Number(doc.remaining);
+  if (rem != null && !Number.isNaN(rem)) return Math.max(0, rem);
+  return Number(doc.totalTTC || 0);
 }
 
 export function enrichInvoicePaymentFields(invoice) {

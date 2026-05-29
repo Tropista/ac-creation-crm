@@ -15,6 +15,9 @@ import {
   getQuoteDepositSummary,
   isFullInvoiceFromQuote,
   computeDepositTotals,
+  getDocumentFooterTotals,
+  getDocumentAmountDue,
+  scaleDocumentLinesByRatio,
   resolveDocumentTaxRate,
 } from "./documents.js";
 
@@ -249,6 +252,52 @@ describe("computeDepositTotals", () => {
   });
 });
 
+describe("getDocumentFooterTotals / getDocumentAmountDue", () => {
+  it("n'affiche pas le split acompte/solde sur une facture d'acompte", () => {
+    const depositInvoice = {
+      invoiceType: "acompte",
+      depositPercent: 30,
+      totalTTC: 540,
+      totalHT: 461.54,
+    };
+    const footer = getDocumentFooterTotals(depositInvoice, "invoice");
+    expect(footer.showQuoteDepositSplit).toBe(false);
+    expect(footer.showSoldeBreakdown).toBe(false);
+    expect(getDocumentAmountDue(depositInvoice, "invoice", { remaining: 540 })).toBe(540);
+  });
+
+  it("affiche le split uniquement sur le devis", () => {
+    const quote = { depositPercent: 30, totalTTC: 1800 };
+    const footer = getDocumentFooterTotals(quote, "quote");
+    expect(footer.showQuoteDepositSplit).toBe(true);
+    expect(footer.quoteDeposit.depositAmount).toBe(540);
+    expect(footer.quoteDeposit.balanceAfterDeposit).toBe(1260);
+    expect(getDocumentAmountDue(quote, "quote", { remaining: 1800 })).toBe(540);
+  });
+
+  it("affiche le détail devis − acomptes sur facture de solde", () => {
+    const balance = {
+      invoiceType: "solde",
+      totalTTC: 1260,
+      depositPaidAmount: 540,
+    };
+    const footer = getDocumentFooterTotals(balance, "invoice");
+    expect(footer.showSoldeBreakdown).toBe(true);
+    expect(footer.quoteTotalTTCForSolde).toBe(1800);
+  });
+});
+
+describe("scaleDocumentLinesByRatio", () => {
+  it("réduit prix unitaire et total HT par ligne", () => {
+    const scaled = scaleDocumentLinesByRatio(
+      [{ description: "Polo XL", quantity: 100, price: 15.38, discount: 0 }],
+      0.7
+    );
+    expect(scaled[0].price).toBeCloseTo(10.77, 2);
+    expect(scaled[0].totalHT).toBeCloseTo(1077, 0);
+  });
+});
+
 describe("factures d'acompte", () => {
   const quote = {
     id: "q-dep",
@@ -333,6 +382,53 @@ describe("factures de solde", () => {
     expect(balance.totalTTC).toBeCloseTo(81.9, 2);
     expect(balance.stockAdjusted).toBe(true);
     expect(balance.depositPaidAmount).toBeCloseTo(35.1, 2);
+  });
+
+  it("aligne les lignes du solde sur le ratio 70 % (DEV-2026-0002)", () => {
+    const quote = {
+      id: "q-dev-2026-0002",
+      number: "DEV-2026-0002",
+      status: "Accepté",
+      clientId: "c1",
+      totalHT: 1538.46,
+      taxAmount: 261.54,
+      totalTTC: 1800,
+      taxRate: 17,
+      lines: [
+        {
+          productId: "p-polo",
+          description: "Polo XL",
+          quantity: 100,
+          price: 15.38,
+          discount: 0,
+          subtotal: 1538.46,
+          totalHT: 1538.46,
+        },
+      ],
+    };
+
+    let data = { ...baseData(), settings: { taxRate: 17, paymentDays: 30 } };
+    data = createDepositInvoiceFromQuote(data, quote, 30);
+    const deposit = data.invoices.at(-1);
+    expect(deposit.totalTTC).toBeCloseTo(540, 2);
+    expect(deposit.totalHT).toBeCloseTo(461.54, 2);
+    expect(getDocumentFooterTotals(deposit, "invoice").showQuoteDepositSplit).toBe(false);
+
+    data = {
+      ...data,
+      invoices: data.invoices.map((inv) =>
+        inv.id === deposit.id
+          ? { ...inv, status: "Payée", paidAmount: inv.totalTTC, remaining: 0 }
+          : inv
+      ),
+    };
+
+    const result = createBalanceInvoiceFromQuote(data, quote);
+    const balance = result.invoice;
+    expect(balance.totalTTC).toBeCloseTo(1260, 2);
+    expect(balance.totalHT).toBeCloseTo(1076.92, 2);
+    expect(balance.lines[0].price).toBeCloseTo(10.77, 2);
+    expect(balance.lines[0].totalHT).toBeCloseTo(balance.totalHT, 0);
   });
 
   it("refuse la conversion directe si un acompte existe", () => {

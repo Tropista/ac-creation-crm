@@ -54,7 +54,11 @@ import {
   mergePublicLeadsIntoData,
   PUBLIC_LEADS_UPDATED_EVENT,
 } from "../services/leadsService";
-import { openQuoteFromCalculator } from "../utils/quoteDraft";
+import {
+  navigateToInvoicesList,
+  navigateToQuotesList,
+  openQuoteFromCalculator,
+} from "../utils/quoteDraft";
 import { showToast } from "../utils/toast";
 import { useAtelierRealtime } from "../hooks/useAtelierRealtime";
 import {
@@ -440,7 +444,7 @@ export default function Dashboard({
     if (filter) {
       localStorage.setItem(INVOICES_FILTER_KEY, filter);
     }
-    navigate(pageToPath("invoices"));
+    navigateToInvoicesList(navigate);
   }
 
   function goToOverdueInvoices() {
@@ -451,7 +455,7 @@ export default function Dashboard({
     if (status) {
       localStorage.setItem(QUOTES_STATUS_FILTER_KEY, status);
     }
-    navigate(pageToPath("quotes"));
+    navigateToQuotesList(navigate);
   }
 
   function handleConvertLead(lead) {
@@ -1053,7 +1057,7 @@ export default function Dashboard({
                 <button
                   type="button"
                   className="ghost"
-                  onClick={() => navigate(pageToPath("quotes"))}
+                  onClick={() => navigateToQuotesList(navigate)}
                 >
                   Voir les devis →
                 </button>
@@ -1110,7 +1114,7 @@ export default function Dashboard({
               <button
                 type="button"
                 className="ghost"
-                onClick={() => navigate(pageToPath("quotes"))}
+                onClick={() => navigateToQuotesList(navigate)}
               >
                 Voir les devis →
               </button>

@@ -1,9 +1,12 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { APP_LOGO_URL } from "../utils/assets";
 import { buildDocumentPdf, getDocumentFileName } from "../utils/documentPdf";
-import { computeDepositTotals } from "../utils/documents";
+import {
+  getDocumentAmountDue,
+  getDocumentFooterTotals,
+} from "../utils/documents";
 import { getInvoicePaidAmount, getInvoiceRemaining } from "../utils/invoices";
 import { getInvoiceStyleClass } from "../utils/invoiceStyles";
 import { formatLineProductionLabel, lineHasProductionDetails } from "../utils/quoteLines";
@@ -14,6 +17,7 @@ import {
   prepareQuoteForShare,
 } from "../utils/quoteShare";
 import { showToast } from "../utils/toast";
+import { cleanupNavigationBlockers, CRM_ROUTE_CHANGE_EVENT } from "../utils/uiCleanup";
 
 function IconUser() {
   return (
@@ -54,14 +58,8 @@ export default function DocumentPreview({ doc, type, data, onClose, onDocumentSe
   const client = (data.clients || []).find((c) => c.id === doc.clientId);
   const paidAmount = getInvoicePaidAmount(doc);
   const remaining = getInvoiceRemaining(doc);
-  const deposit = computeDepositTotals(doc.totalTTC, doc.depositPercent);
-  const amountDue = isDelivery
-    ? 0
-    : doc.status === "Payée"
-      ? 0
-      : isQuote && deposit.depositPercent > 0
-        ? deposit.depositAmount
-        : remaining;
+  const footerTotals = getDocumentFooterTotals(doc, type);
+  const amountDue = getDocumentAmountDue(doc, type, { remaining });
 
   const lines = doc.lines?.length
     ? doc.lines
@@ -94,27 +92,42 @@ export default function DocumentPreview({ doc, type, data, onClose, onDocumentSe
   const documentFileName = getDocumentFileName(doc, type);
   const invoiceStyleClass = getInvoiceStyleClass();
 
-  useEffect(() => {
-    function onKeyDown(event) {
-      if (event.key === "Escape") {
-        onClose?.();
-      }
-    }
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+  const handleClose = useCallback(() => {
+    cleanupNavigationBlockers();
+    onClose?.();
   }, [onClose]);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    function onRouteChange() {
+      handleClose();
+    }
+
+    window.addEventListener(CRM_ROUTE_CHANGE_EVENT, onRouteChange);
+    return () => window.removeEventListener(CRM_ROUTE_CHANGE_EVENT, onRouteChange);
+  }, [handleClose]);
+
+  useEffect(() => {
+    document.body.classList.add("crm-modal-open");
+    return () => {
+      document.body.classList.remove("crm-modal-open");
       const wrapper = pdfWrapperRef.current;
       if (wrapper?.parentNode) {
         wrapper.parentNode.removeChild(wrapper);
         pdfWrapperRef.current = null;
       }
-    },
-    []
-  );
+    };
+  }, []);
+
+  useEffect(() => {
+    function onKeyDown(event) {
+      if (event.key === "Escape") {
+        handleClose();
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [handleClose]);
 
   async function downloadPdfNative() {
     try {
@@ -290,18 +303,19 @@ ${data.settings.companyEmail || ""}`;
     showToast("WhatsApp ouvert avec le message pré-rempli.", "info");
   }
 
-  return (
+  const modal = (
     <div
       className="modal ac-invoice-modal-wrap document-preview-overlay"
+      data-testid="document-preview-overlay"
       onClick={(event) => {
         if (event.target === event.currentTarget) {
-          onClose?.();
+          handleClose();
         }
       }}
     >
       <div className="modal-content invoice-modal ac-invoice-modal">
         <div className="no-print modal-actions ac-invoice-actions">
-          <button type="button" onClick={onClose}>
+          <button type="button" onClick={handleClose}>
             Fermer
           </button>
           {isQuote && (
@@ -424,14 +438,15 @@ ${data.settings.companyEmail || ""}`;
                         <strong>Acompte :</strong> {doc.depositPercent}%
                       </p>
                     )}
-                    {!isQuote && doc.invoiceType !== "acompte" && deposit.depositPercent > 0 && (
+                    {isQuote && footerTotals.showQuoteDepositSplit && (
                       <p>
-                        <strong>Acompte :</strong> {deposit.depositPercent}% ({money(deposit.depositAmount)})
+                        <strong>Acompte :</strong> {footerTotals.quoteDeposit.depositPercent}% (
+                        {money(footerTotals.quoteDeposit.depositAmount)})
                       </p>
                     )}
-                    {isQuote && deposit.depositPercent > 0 && (
+                    {!isQuote && doc.invoiceType === "solde" && footerTotals.depositPaidAmount > 0 && (
                       <p>
-                        <strong>Acompte :</strong> {deposit.depositPercent}% ({money(deposit.depositAmount)})
+                        <strong>Acomptes payés :</strong> {money(footerTotals.depositPaidAmount)}
                       </p>
                     )}
                     {!isQuote && doc.dueDate && (
@@ -549,19 +564,34 @@ ${data.settings.companyEmail || ""}`;
                   <span>TVA à {doc.taxRate}%</span>
                   <strong>{money(doc.taxAmount)}</strong>
                 </div>
-                {deposit.depositPercent > 0 ? (
+                {footerTotals.showQuoteDepositSplit ? (
                   <>
                     <div className="ac-total-line">
                       <span>Total TTC</span>
                       <strong>{money(doc.totalTTC)}</strong>
                     </div>
                     <div className="ac-total-line">
-                      <span>Acompte ({deposit.depositPercent}%)</span>
-                      <strong>{money(deposit.depositAmount)}</strong>
+                      <span>Acompte ({footerTotals.quoteDeposit.depositPercent}%)</span>
+                      <strong>{money(footerTotals.quoteDeposit.depositAmount)}</strong>
                     </div>
                     <div className="ac-total-line">
                       <span>Solde</span>
-                      <strong>{money(deposit.balanceAfterDeposit)}</strong>
+                      <strong>{money(footerTotals.quoteDeposit.balanceAfterDeposit)}</strong>
+                    </div>
+                  </>
+                ) : footerTotals.showSoldeBreakdown ? (
+                  <>
+                    <div className="ac-total-line">
+                      <span>Total TTC devis</span>
+                      <strong>{money(footerTotals.quoteTotalTTCForSolde)}</strong>
+                    </div>
+                    <div className="ac-total-line">
+                      <span>Acomptes payés</span>
+                      <strong>− {money(footerTotals.depositPaidAmount)}</strong>
+                    </div>
+                    <div className="ac-total-line">
+                      <span>Total TTC</span>
+                      <strong>{money(doc.totalTTC)}</strong>
                     </div>
                   </>
                 ) : (
@@ -577,7 +607,11 @@ ${data.settings.companyEmail || ""}`;
                   </div>
                 )}
                 <div className="ac-total-line ac-total-final">
-                  <span>{isQuote && deposit.depositPercent > 0 ? "À PAYER (ACOMPTE)" : "À PAYER"}</span>
+                  <span>
+                    {isQuote && footerTotals.showQuoteDepositSplit
+                      ? "À PAYER (ACOMPTE)"
+                      : "À PAYER"}
+                  </span>
                   <strong>{money(amountDue)}</strong>
                 </div>
               </div>
@@ -607,4 +641,6 @@ ${data.settings.companyEmail || ""}`;
       </div>
     </div>
   );
+
+  return modal;
 }

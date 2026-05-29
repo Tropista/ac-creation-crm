@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import DocumentPreview from "./DocumentPreview";
 import DocumentForm from "./documents/DocumentForm";
@@ -37,7 +37,16 @@ import {
   DEPOSIT_PRESETS,
 } from "../utils/invoices";
 import { computeDueDate, openInvoiceReminderMailto } from "../utils/invoiceReminders";
-import { consumeQuoteDraft } from "../utils/quoteDraft";
+import {
+  clearInvoiceDraft,
+  clearQuoteDraft,
+  consumeQuoteDraft,
+  markQuoteDraftApplied,
+  INVOICES_LIST_VIEW_EVENT,
+  QUOTES_LIST_VIEW_EVENT,
+  wasQuoteDraftApplied,
+} from "../utils/quoteDraft";
+import { cleanupNavigationBlockers, CRM_ROUTE_CHANGE_EVENT } from "../utils/uiCleanup";
 import {
   copyQuoteShareLink,
   getQuoteIdFromLocation,
@@ -109,6 +118,9 @@ const [form, setForm] = useState({
   lines: [{ ...emptyLine }],
 });
   const [attachments, setAttachments] = useState([]);
+  const [formSessionKey, setFormSessionKey] = useState(0);
+  const quotesListViewHandledKeyRef = useRef(null);
+  const invoicesListViewHandledKeyRef = useRef(null);
 
   const itemsPerPage = 25;
   const documents = data[listKey] || [];
@@ -132,13 +144,96 @@ const [form, setForm] = useState({
     );
   }, [documents, data.settings, isQuote]);
 
-  useEffect(() => {
-    if (!isQuote) return;
-    const draft = location.state?.quoteDraft || consumeQuoteDraft();
-    if (!draft?.lines?.length) return;
+  function resetDocumentsListView() {
+    if (isQuote) {
+      clearQuoteDraft();
+    } else {
+      clearInvoiceDraft();
+    }
+    setPreviewDoc(null);
+    setPreviewType(type);
+    if (!localStorage.getItem("crm_prefill_client_id")) {
+      setEditingId(null);
+      setAttachments([]);
+      setForm({
+        clientId: "",
+        status: defaultStatus,
+        globalDiscount: 0,
+        depositPercent: 0,
+        promisedDeliveryDateInput: "",
+        dateInput: isQuote ? "" : toDateInputValue(today()),
+        processType: "",
+        assignedTo: "",
+        atelierNotes: "",
+        priority: "normal",
+        lines: [{ ...emptyLine }],
+      });
+      setFormSessionKey((value) => value + 1);
+    }
+  }
 
-    if (location.state?.quoteDraft) {
-      window.history.replaceState({}, document.title);
+  useEffect(() => {
+    const listViewEvent = isQuote ? QUOTES_LIST_VIEW_EVENT : INVOICES_LIST_VIEW_EVENT;
+
+    function onListViewRequest() {
+      resetDocumentsListView();
+    }
+
+    window.addEventListener(listViewEvent, onListViewRequest);
+    return () => {
+      window.removeEventListener(listViewEvent, onListViewRequest);
+    };
+  }, [isQuote, defaultStatus]);
+
+  useEffect(
+    () => () => {
+      cleanupNavigationBlockers();
+    },
+    []
+  );
+
+  useEffect(() => {
+    function onRouteChange() {
+      setPreviewDoc(null);
+      setPreviewType(type);
+      setEditingId(null);
+      setAttachments([]);
+    }
+
+    window.addEventListener(CRM_ROUTE_CHANGE_EVENT, onRouteChange);
+    return () => window.removeEventListener(CRM_ROUTE_CHANGE_EVENT, onRouteChange);
+  }, [type]);
+
+  useEffect(() => {
+    if (!isQuote) {
+      if (location.state?.invoicesListView) {
+        if (invoicesListViewHandledKeyRef.current === location.key) {
+          return undefined;
+        }
+        invoicesListViewHandledKeyRef.current = location.key;
+        resetDocumentsListView();
+      }
+      return undefined;
+    }
+
+    if (location.state?.quotesListView) {
+      if (quotesListViewHandledKeyRef.current === location.key) {
+        return undefined;
+      }
+      quotesListViewHandledKeyRef.current = location.key;
+      resetDocumentsListView();
+      return undefined;
+    }
+
+    const stateDraft = location.state?.quoteDraft;
+    const storageDraft = stateDraft ? null : consumeQuoteDraft();
+    const draft = stateDraft || storageDraft;
+    if (!draft?.lines?.length) return undefined;
+    if (wasQuoteDraftApplied(draft)) return undefined;
+
+    markQuoteDraftApplied(draft);
+    if (stateDraft) {
+      clearQuoteDraft();
     }
 
     let cancelled = false;
@@ -191,7 +286,15 @@ const [form, setForm] = useState({
     return () => {
       cancelled = true;
     };
-  }, [isQuote, location.key]);
+  }, [
+    isQuote,
+    location.key,
+    location.state?.quoteDraft,
+    location.state?.quotesListView,
+    location.state?.invoicesListView,
+    prefilledClientId,
+    defaultStatus,
+  ]);
 
   useEffect(() => {
     if (!isQuote) return;
@@ -620,27 +723,29 @@ useEffect(() => {
   const openDocumentId = localStorage.getItem("crm_open_document_id");
   const openDocumentType = localStorage.getItem("crm_open_document_type");
 
-  if (!openDocumentId) return;
+  if (!openDocumentId) return undefined;
 
   if (
     (openDocumentType === "quote" && !isQuote) ||
     (openDocumentType === "invoice" && isQuote)
   ) {
-    return;
+    localStorage.removeItem("crm_open_document_id");
+    localStorage.removeItem("crm_open_document_type");
+    return undefined;
   }
 
-  const doc = documents.find(
-    (d) => String(d.id) === String(openDocumentId)
-  );
+  const doc = documents.find((d) => String(d.id) === String(openDocumentId));
 
-  if (!doc) return;
+  localStorage.removeItem("crm_open_document_id");
+  localStorage.removeItem("crm_open_document_type");
+
+  if (!doc) return undefined;
 
   setPreviewDoc(doc);
   setPreviewType(openDocumentType === "quote" ? "quote" : "invoice");
 
-  localStorage.removeItem("crm_open_document_id");
-  localStorage.removeItem("crm_open_document_type");
-}, []);
+  return undefined;
+}, [documents, isQuote]);
   function remove(id) {
     if (!canDeleteData(currentRole)) {
       showToast("Ton rôle ne permet pas de supprimer.", "error");
@@ -954,7 +1059,10 @@ useEffect(() => {
   }
 
   return (
-    <section className="documents-page" data-testid={isQuote ? "quotes-page" : "invoices-page"}>
+    <section
+      className={`documents-page${previewDoc ? " documents-page--preview-open" : ""}`}
+      data-testid={isQuote ? "quotes-page" : "invoices-page"}
+    >
       <div className="page-header">
         <div>
           <h2>{title}</h2>
@@ -1034,6 +1142,7 @@ useEffect(() => {
       )}
 
       <DocumentForm
+        key={formSessionKey}
         isQuote={isQuote}
         editingId={editingId}
         form={form}

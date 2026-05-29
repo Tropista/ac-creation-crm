@@ -9,6 +9,10 @@
   gap: 22px;
 }
 
+.documents-page--preview-open > *:not(.document-preview-overlay) {
+  pointer-events: none;
+}
+
 .documents-editing-badge {
   display: inline-flex;
   align-items: center;
@@ -423,15 +427,25 @@
   border-top: 1px solid #edf2f7;
 }
 
-/* Modal aperçu facture */
+/* Modal aperçu facture — portail body, ne couvre jamais la sidebar desktop */
 .modal {
   position: fixed;
-  inset: 0;
-  z-index: 999;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: var(--sidebar-width, 300px);
+  z-index: 900;
   overflow-y: auto;
   padding: 30px;
   background: rgba(15, 23, 42, 0.68);
   backdrop-filter: blur(12px);
+  pointer-events: auto;
+}
+
+@media (max-width: 900px) {
+  .modal {
+    left: 0;
+  }
 }
 
 .modal-content {
