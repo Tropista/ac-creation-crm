@@ -58,7 +58,6 @@ import { showToast } from "../utils/toast";
 import { canDeleteData } from "../services/authService";
 import {
   countUnavailableAttachments,
-  hydrateQuoteAttachments,
   hydrateQuoteAttachmentsAsync,
 } from "../utils/quoteAttachments";
 

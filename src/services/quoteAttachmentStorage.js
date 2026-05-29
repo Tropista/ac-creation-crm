@@ -124,7 +124,8 @@ async function storeQuoteAttachmentLocally(file) {
     } catch (error) {
       throw new Error(
         (error?.message || "Fichier trop lourd pour l'enregistrement local.") +
-          " Connecte-toi et configure le bucket Storage « ac-creation-attachments » (voir docs/SUPABASE.md)."
+          " Connecte-toi et configure le bucket Storage « ac-creation-attachments » (voir docs/SUPABASE.md).",
+        { cause: error }
       );
     }
   }
