@@ -8,7 +8,20 @@ import "./Vue3DTshirt.css";
 import Product3DErrorBoundary from "./3d/Product3DErrorBoundary";
 import { showToast } from "../utils/toast";
 import { TSHIRT_MODEL_URL } from "../utils/assets";
-import { buildCalculatorQuoteLine, getCrmQuotesUrl, openQuoteFromCalculator, saveQuoteDraft } from "../utils/quoteDraft";
+import {
+  buildCalculatorQuoteLine,
+  buildTshirtConfiguratorQuoteDescription,
+  buildTshirtConfiguratorWorkshopNotes,
+  getCrmQuotesUrl,
+  openQuoteFromCalculator,
+  saveQuoteDraft,
+} from "../utils/quoteDraft";
+import {
+  attachConfiguratorExportsToDraft,
+  CONFIGURATOR_ATTACHMENT_TIMEOUT_MS,
+  formatConfiguratorAttachmentErrors,
+  withTimeout,
+} from "../utils/tshirtQuoteAttachments";
 import { submitPublicLead } from "../services/leadsService";
 import { estimatePrintPriceHT } from "../utils/tshirtPricing";
 import { PUBLIC_TSHIRT_PATH } from "../utils/routes";
@@ -730,6 +743,7 @@ export default function Vue3DTshirt() {
   const [leadPhone, setLeadPhone] = useState("");
   const [leadSubmitting, setLeadSubmitting] = useState(false);
   const [pendingQuoteDraft, setPendingQuoteDraft] = useState(null);
+  const [quoteDraftBusy, setQuoteDraftBusy] = useState(false);
   const previewRef = useRef(null);
   const editorRef = useRef(null);
   const actionRef = useRef(null);
@@ -1530,26 +1544,31 @@ export default function Vue3DTshirt() {
     return files;
   }
 
+  async function buildImpressionZipBlob() {
+    const files = [];
+    const canvas = previewRef.current?.querySelector("canvas");
+
+    if (canvas) {
+      files.push({ name: "mockup-tshirt.png", blob: await canvasToBlob(canvas) });
+    }
+
+    files.push(...(await buildAutoMockupFiles()));
+    files.push(...(await buildPrintElementFiles()));
+    files.push(...(await buildVectorFiles()));
+    files.push(...(await buildFontFiles()));
+
+    if (!files.length) return null;
+    return createZipBlob(files);
+  }
+
   async function exportMockup() {
     try {
-      const files = [];
-      const canvas = previewRef.current?.querySelector("canvas");
-
-      if (canvas) {
-        files.push({ name: "mockup-tshirt.png", blob: await canvasToBlob(canvas) });
-      }
-
-      files.push(...(await buildAutoMockupFiles()));
-      files.push(...(await buildPrintElementFiles()));
-      files.push(...(await buildVectorFiles()));
-      files.push(...(await buildFontFiles()));
-
-      if (!files.length) {
+      const zipBlob = await buildImpressionZipBlob();
+      if (!zipBlob) {
         showToast("Aucun fichier à exporter.", "error");
         return;
       }
 
-      const zipBlob = await createZipBlob(files);
       downloadBlob(zipBlob, `export-tshirt-${new Date().toISOString().slice(0, 10)}.zip`);
     } catch (error) {
       console.error("Erreur export ZIP :", error);
@@ -1557,17 +1576,7 @@ export default function Vue3DTshirt() {
     }
   }
 
-  async function exportWorkshopPdf() {
-    try {
-      const printableItems = items
-        .filter((item) => !item.hidden)
-        .sort((a, b) => Number(a.z || 0) - Number(b.z || 0));
-
-      if (!printableItems.length) {
-        showToast("Ajoute au moins un logo ou un texte visible avant de générer le PDF atelier.", "error");
-        return;
-      }
-
+  function buildWorkshopPdfDocument(printableItems) {
       const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
       const pageW = pdf.internal.pageSize.getWidth();
       const pageH = pdf.internal.pageSize.getHeight();
@@ -1722,14 +1731,36 @@ export default function Vue3DTshirt() {
       y += 5;
       pdf.text("• Les calques masqués ne sont pas inclus dans l'export.", margin, y);
 
-      pdf.save(`fiche-atelier-tshirt-${new Date().toISOString().slice(0, 10)}.pdf`);
+      return pdf;
+  }
+
+  async function buildWorkshopPdfBlob() {
+    const printableItems = items
+      .filter((item) => !item.hidden)
+      .sort((a, b) => Number(a.z || 0) - Number(b.z || 0));
+
+    if (!printableItems.length) return null;
+
+    const pdf = buildWorkshopPdfDocument(printableItems);
+    return pdf.output("blob");
+  }
+
+  async function exportWorkshopPdf() {
+    try {
+      const pdfBlob = await buildWorkshopPdfBlob();
+      if (!pdfBlob) {
+        showToast("Ajoute au moins un logo ou un texte visible avant de générer le PDF atelier.", "error");
+        return;
+      }
+
+      downloadBlob(pdfBlob, `fiche-atelier-tshirt-${new Date().toISOString().slice(0, 10)}.pdf`);
     } catch (error) {
       console.error("Erreur export PDF atelier :", error);
       showToast("Export PDF atelier impossible. Vérifie la console pour plus de détails.", "error");
     }
   }
 
-  function buildQuoteDraftFromProject() {
+  async function buildQuoteDraftFromProject() {
     const visibleItems = items.filter((item) => !item.hidden);
     if (!visibleItems.length) return null;
 
@@ -1757,53 +1788,126 @@ export default function Vue3DTshirt() {
     });
 
     const totalUnitHT = printDetails.reduce((sum, entry) => sum + entry.unitPrice, 0);
+    const markingZones = printDetails.map((entry) => entry.zone).join(", ");
 
-    const customizationLines = printDetails.map(
-      (entry) =>
-        `• ${entry.zone} : ${entry.content} (${entry.tech.label}, ${entry.size.width.toFixed(1)}×${entry.size.height.toFixed(1)} cm — env. ${entry.unitPrice.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} € HT)`
-    );
+    const markingPayload = printDetails.map((entry) => ({
+      zone: entry.zone,
+      content: entry.content,
+      technique: entry.tech.shortLabel,
+      width: entry.size.width,
+      height: entry.size.height,
+      unitPrice: entry.unitPrice,
+    }));
 
-    return {
+    const baseDraft = {
       source: "configurateur t-shirt",
+      calculatorProjectId: currentProjectId || "",
+      notes: buildTshirtConfiguratorWorkshopNotes({
+        projectName: label,
+        garmentSize,
+        garmentPresetLabel: garmentPreset.label,
+        tshirtColor,
+        techniqueSummary,
+        quantity: qty,
+        totalUnitHT,
+        markings: markingPayload,
+      }),
       lines: [
         buildCalculatorQuoteLine({
-          description: `${label}
-
-Taille : ${garmentSize} (${garmentPreset.label})
-Couleur textile : ${tshirtColor}
-Techniques : ${techniqueSummary}
-Quantité : ${qty}
-Estimation marquages : ${totalUnitHT.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} € HT / pièce
-
-Personnalisations :
-${customizationLines.join("\n")}`,
+          description: buildTshirtConfiguratorQuoteDescription({ tshirtColor }),
           quantity: qty,
           priceHT: totalUnitHT,
           sku: "TSHIRT-CFG",
           category: "T-shirt",
+          taille: garmentSize,
+          couleur: tshirtColor,
+          emplacementMarquage: markingZones,
+          technique: techniqueSummary,
         }),
       ],
     };
+
+    const [zipBlob, pdfBlob] = await Promise.all([
+      withTimeout(
+        buildImpressionZipBlob(),
+        CONFIGURATOR_ATTACHMENT_TIMEOUT_MS,
+        "Export ZIP impression : délai dépassé (60 s)."
+      ).catch((error) => {
+        console.warn("[Devis] Export ZIP impression:", error);
+        return null;
+      }),
+      withTimeout(
+        buildWorkshopPdfBlob(),
+        CONFIGURATOR_ATTACHMENT_TIMEOUT_MS,
+        "Export PDF atelier : délai dépassé (60 s)."
+      ).catch((error) => {
+        console.warn("[Devis] Export PDF atelier:", error);
+        return null;
+      }),
+    ]);
+
+    return attachConfiguratorExportsToDraft(baseDraft, { zipBlob, pdfBlob });
   }
 
-  function createQuoteFromProject() {
-    const draft = buildQuoteDraftFromProject();
-    if (!draft) {
-      showToast("Ajoutez au moins un logo ou texte avant de créer un devis.", "error");
+  function notifyQuoteAttachmentResult(draft) {
+    const errors = draft?.attachmentErrors || [];
+    if (errors.length) {
+      showToast(formatConfiguratorAttachmentErrors(errors), "warning", 8000);
       return;
     }
-    setPendingQuoteDraft(draft);
-    setLeadModalOpen(true);
+    const count = draft?.attachments?.length || 0;
+    if (count >= 2) {
+      showToast("ZIP impression et PDF atelier prêts pour le devis.", "success");
+    }
   }
 
-  function openAdminQuoteWithoutLead() {
-    const draft = buildQuoteDraftFromProject();
-    if (!draft) {
-      showToast("Ajoutez au moins un logo ou texte avant de créer un devis.", "error");
-      return;
+  async function createQuoteFromProject() {
+    if (quoteDraftBusy) return;
+    setQuoteDraftBusy(true);
+    try {
+      const draft = await buildQuoteDraftFromProject();
+      if (!draft) {
+        showToast("Ajoutez au moins un logo ou texte avant de créer un devis.", "error");
+        return;
+      }
+      notifyQuoteAttachmentResult(draft);
+      setPendingQuoteDraft(draft);
+      setLeadModalOpen(true);
+    } catch (error) {
+      console.error("Erreur préparation devis :", error);
+      showToast("Impossible de préparer le devis. Réessayez.", "error");
+    } finally {
+      setQuoteDraftBusy(false);
     }
-    openQuoteFromCalculator(navigate, draft);
-    showToast("Devis pré-rempli (sans lead sur le tableau de bord).", "success");
+  }
+
+  async function openAdminQuoteWithoutLead() {
+    if (quoteDraftBusy) return;
+    setQuoteDraftBusy(true);
+    try {
+      const draft = await buildQuoteDraftFromProject();
+      if (!draft) {
+        showToast("Ajoutez au moins un logo ou texte avant de créer un devis.", "error");
+        return;
+      }
+      notifyQuoteAttachmentResult(draft);
+      openQuoteFromCalculator(navigate, draft);
+      const attachmentCount = draft.attachments?.length || 0;
+      const hasErrors = (draft.attachmentErrors || []).length > 0;
+      if (!hasErrors) {
+        showToast(
+          attachmentCount
+            ? `Devis pré-rempli avec ${attachmentCount} fichier(s) export(s).`
+            : "Devis pré-rempli (sans lead sur le tableau de bord).",
+          "success"
+        );
+      }
+    } catch (error) {
+      console.error("Erreur Devis rapide :", error);
+      showToast("Impossible d'ouvrir le devis rapide.", "error");
+    } finally {
+      setQuoteDraftBusy(false);
+    }
   }
 
   async function submitPublicLeadAndQuote(event) {
@@ -1940,10 +2044,17 @@ ${customizationLines.join("\n")}`,
           <p>Multi logos, textes, manches et polices personnalisées.</p>
         </div>
         <div className="tshirt3d-export-actions">
-          <button type="button" onClick={createQuoteFromProject}>Créer un devis</button>
+          <button type="button" onClick={createQuoteFromProject} disabled={quoteDraftBusy}>
+            {quoteDraftBusy ? "Préparation du devis…" : "Créer un devis"}
+          </button>
           {!isPublicConfigurator ? (
-            <button type="button" className="ghost" onClick={openAdminQuoteWithoutLead}>
-              Devis rapide
+            <button
+              type="button"
+              className="ghost"
+              onClick={openAdminQuoteWithoutLead}
+              disabled={quoteDraftBusy}
+            >
+              {quoteDraftBusy ? "Préparation…" : "Devis rapide"}
             </button>
           ) : null}
           <button className="primary" onClick={exportMockup}>Exporter ZIP impression</button>

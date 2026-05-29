@@ -1,4 +1,5 @@
 import { getSupabase, hasSupabaseAuthSession, isSupabaseConfigured } from "../supabase.js";
+import { storeLocalQuoteAttachmentBlob } from "../utils/quoteAttachmentLocalStore.js";
 import {
   fileToDataUrl,
   isLargeBase64Attachment,
@@ -109,25 +110,41 @@ export async function canUploadQuoteAttachments() {
   }
 }
 
+async function storeQuoteAttachmentLocally(file) {
+  const url = await fileToDataUrl(file);
+  if (isLargeBase64Attachment(url)) {
+    try {
+      const localBlobId = await storeLocalQuoteAttachmentBlob(file);
+      return {
+        url: URL.createObjectURL(file),
+        storagePath: "",
+        localBlobId,
+        source: "local-idb",
+      };
+    } catch (error) {
+      throw new Error(
+        (error?.message || "Fichier trop lourd pour l'enregistrement local.") +
+          " Connecte-toi et configure le bucket Storage « ac-creation-attachments » (voir docs/SUPABASE.md)."
+      );
+    }
+  }
+
+  return { url, storagePath: "", source: "local" };
+}
+
 export async function uploadQuoteAttachmentFileWithLocalFallback(file, { quoteId } = {}) {
   if (await canUploadQuoteAttachments()) {
     try {
       const uploaded = await uploadQuoteAttachmentFile(file, { quoteId });
       return { ...uploaded, source: "storage" };
     } catch (error) {
-      if (!isQuoteAttachmentBucketMissingError(error)) {
-        throw error;
-      }
+      const message = formatQuoteAttachmentUploadError(error);
+      console.warn(
+        `[Pièces jointes] Upload cloud échoué pour « ${file?.name || "fichier"} », repli local :`,
+        message
+      );
     }
   }
 
-  const url = await fileToDataUrl(file);
-  if (isLargeBase64Attachment(url)) {
-    throw new Error(
-      "Fichier trop lourd pour l'enregistrement local. Connecte-toi et configure le bucket Storage " +
-        "« ac-creation-attachments » (voir docs/SUPABASE.md)."
-    );
-  }
-
-  return { url, storagePath: "", source: "local" };
+  return storeQuoteAttachmentLocally(file);
 }

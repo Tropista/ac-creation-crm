@@ -59,6 +59,7 @@ import { canDeleteData } from "../services/authService";
 import {
   countUnavailableAttachments,
   hydrateQuoteAttachments,
+  hydrateQuoteAttachmentsAsync,
 } from "../utils/quoteAttachments";
 
 function Documents({ type, data, setData, currentRole = 'Admin', logActivity }) {
@@ -141,40 +142,56 @@ const [form, setForm] = useState({
       window.history.replaceState({}, document.title);
     }
 
-    setEditingId(null);
-    setAttachments([]);
-    setForm({
-      clientId: draft.clientId || prefilledClientId || "",
-      status: "Brouillon",
-      globalDiscount: 0,
-      depositPercent: 0,
-      promisedDeliveryDateInput: "",
-      dateInput: "",
-      processType: "",
-      assignedTo: "",
-      atelierNotes: "",
-      priority: "normal",
-      lines: draft.lines.map((line) => ({
-        productId: line.productId || "",
-        sku: line.sku || "",
-        category: line.category || "",
-        categoryId: line.categoryId || "",
-        description: line.description || "",
-        quantity: Number(line.quantity || 1),
-        price: Number(line.price || 0),
-        discount: Number(line.discount || 0),
-        taille: line.taille || "",
-        couleur: line.couleur || "",
-        emplacementMarquage: line.emplacementMarquage || "",
-        technique: line.technique || "",
-      })),
-    });
-    showToast(
-      draft.source
-        ? `Devis pré-rempli depuis ${draft.source}.`
-        : "Devis pré-rempli.",
-      "success"
-    );
+    let cancelled = false;
+
+    async function applyDraft() {
+      const hydratedAttachments = await hydrateQuoteAttachmentsAsync(draft.attachments || []);
+      if (cancelled) return;
+
+      setEditingId(null);
+      setAttachments(hydratedAttachments);
+      setForm({
+        clientId: draft.clientId || prefilledClientId || "",
+        status: "Brouillon",
+        globalDiscount: 0,
+        depositPercent: 0,
+        promisedDeliveryDateInput: "",
+        dateInput: "",
+        processType: "",
+        assignedTo: "",
+        atelierNotes: draft.notes || "",
+        priority: "normal",
+        lines: draft.lines.map((line) => ({
+          productId: line.productId || "",
+          sku: line.sku || "",
+          category: line.category || "",
+          categoryId: line.categoryId || "",
+          description: line.description || "",
+          quantity: Number(line.quantity || 1),
+          price: Number(line.price || 0),
+          discount: Number(line.discount || 0),
+          taille: line.taille || "",
+          couleur: line.couleur || "",
+          emplacementMarquage: line.emplacementMarquage || "",
+          technique: line.technique || "",
+        })),
+      });
+      const attachmentHint =
+        hydratedAttachments.length > 0
+          ? ` · ${hydratedAttachments.length} pièce(s) jointe(s)`
+          : "";
+      showToast(
+        draft.source
+          ? `Devis pré-rempli depuis ${draft.source}${attachmentHint}.`
+          : `Devis pré-rempli${attachmentHint}.`,
+        "success"
+      );
+    }
+
+    applyDraft();
+    return () => {
+      cancelled = true;
+    };
   }, [isQuote, location.key]);
 
   useEffect(() => {
@@ -547,7 +564,7 @@ const [form, setForm] = useState({
 reset();
   }
 
-  function edit(doc) {
+  async function edit(doc) {
     const lines = doc.lines?.length
       ? doc.lines.map((line) => ({
           productId: line.productId || "",
@@ -574,7 +591,7 @@ reset();
         ];
 
     setEditingId(doc.id);
-    const hydrated = hydrateQuoteAttachments(doc.attachments || []);
+    const hydrated = await hydrateQuoteAttachmentsAsync(doc.attachments || []);
     setAttachments(hydrated);
     if (isQuote) {
       const unavailable = countUnavailableAttachments(hydrated);

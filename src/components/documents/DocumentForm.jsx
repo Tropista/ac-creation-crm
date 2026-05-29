@@ -9,6 +9,7 @@ import {
   getAttachmentSyncLabel,
   getAttachmentSyncStatus,
   hydrateQuoteAttachments,
+  hydrateQuoteAttachmentsAsync,
   isPreviewableAttachment,
 } from "../../utils/quoteAttachments";
 import { uid } from "../../utils/documents";
@@ -40,6 +41,7 @@ export default function DocumentForm({
   const fileInputRef = useRef(null);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
   const [attachmentSyncReady, setAttachmentSyncReady] = useState(null);
+  const [resolvedAttachments, setResolvedAttachments] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -54,7 +56,24 @@ export default function DocumentForm({
     };
   }, [isQuote, onAttachmentsChange]);
 
-  const hydratedAttachments = hydrateQuoteAttachments(attachments || []);
+  useEffect(() => {
+    let cancelled = false;
+    async function resolveAttachments() {
+      if (!isQuote || !onAttachmentsChange) {
+        if (!cancelled) setResolvedAttachments([]);
+        return;
+      }
+      setResolvedAttachments(hydrateQuoteAttachments(attachments || []));
+      const hydrated = await hydrateQuoteAttachmentsAsync(attachments || []);
+      if (!cancelled) setResolvedAttachments(hydrated);
+    }
+    resolveAttachments();
+    return () => {
+      cancelled = true;
+    };
+  }, [attachments, isQuote, onAttachmentsChange]);
+
+  const hydratedAttachments = resolvedAttachments;
   const localOnlyCount = hydratedAttachments.filter(
     (entry) => getAttachmentSyncStatus(entry) === "local"
   ).length;
@@ -76,11 +95,13 @@ export default function DocumentForm({
     try {
       const quoteId = editingId || "draft";
       const uploaded = await uploadQuoteAttachmentFileWithLocalFallback(file, { quoteId });
-      const { url, storagePath, source } = uploaded;
+      const { url, storagePath, source, localBlobId } = uploaded;
       showToast(
         source === "storage"
           ? "Fichier enregistré sur Supabase Storage."
-          : "Fichier enregistré localement (bucket Storage absent ou hors ligne).",
+          : source === "local-idb"
+            ? "Fichier volumineux enregistré localement (IndexedDB)."
+            : "Fichier enregistré localement (bucket Storage absent ou hors ligne).",
         source === "storage" ? "success" : "warning"
       );
 
@@ -92,8 +113,10 @@ export default function DocumentForm({
           mimeType: file.type || "application/octet-stream",
           url,
           storagePath: storagePath || "",
+          localBlobId: localBlobId || "",
           uploadedAt: new Date().toISOString(),
-          syncStatus: source === "storage" ? "cloud" : "local",
+          syncStatus:
+            source === "storage" ? "cloud" : source === "local-idb" ? "local-idb" : "local",
         },
       ]);
     } catch (error) {
@@ -111,11 +134,13 @@ export default function DocumentForm({
     );
   }
 
-  function openAttachment(attachment) {
-    const resolved = hydrateQuoteAttachments([attachment])[0];
+  async function openAttachment(attachment) {
+    const [resolved] = await hydrateQuoteAttachmentsAsync([attachment]);
     if (!resolved?.url) {
       showToast(
-        "Fichier indisponible sur cet appareil. Connectez-vous au CRM avec Supabase ou réimportez le fichier.",
+        resolved?.localBlobId
+          ? "Fichier local introuvable (IndexedDB). Réexportez depuis le configurateur ou réimportez le fichier."
+          : "Fichier indisponible sur cet appareil. Connectez-vous au CRM avec Supabase ou réimportez le fichier.",
         "warning"
       );
       return;
@@ -408,7 +433,7 @@ export default function DocumentForm({
                     <button
                       type="button"
                       className="compact"
-                      disabled={!attachment.url}
+                      disabled={!attachment.url && !attachment.localBlobId}
                       onClick={() => openAttachment(attachment)}
                     >
                       {isPreviewableAttachment(attachment) ? "Aperçu" : "Télécharger"}

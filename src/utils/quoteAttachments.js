@@ -1,5 +1,9 @@
 export const QUOTE_ATTACHMENT_MAX_BASE64_BYTES = 500 * 1024;
 
+export function isBlobUrl(value) {
+  return /^blob:/i.test(String(value || "").trim());
+}
+
 export function isBase64DataUrl(value) {
   return /^data:[^;]+;base64,/i.test(String(value || "").trim());
 }
@@ -37,6 +41,8 @@ export function sanitizeQuoteAttachment(attachment) {
 
   if (isHttpUrl(url)) return { ...attachment, url };
 
+  if (isBlobUrl(url)) return { ...attachment, url };
+
   if (isBase64DataUrl(url) && isLargeBase64Attachment(url)) {
     return { ...attachment, url: "" };
   }
@@ -47,7 +53,10 @@ export function sanitizeQuoteAttachment(attachment) {
 export function sanitizeQuoteAttachmentsForPersistence(attachments = []) {
   return (attachments || [])
     .map(sanitizeQuoteAttachment)
-    .filter((attachment) => attachment?.url || attachment?.storagePath);
+    .filter(
+      (attachment) =>
+        attachment?.url || attachment?.storagePath || attachment?.localBlobId
+    );
 }
 
 export function sanitizeQuoteForPersistence(quote) {
@@ -77,11 +86,14 @@ export function getAttachmentSyncStatus(attachment) {
   if (!attachment) return "missing";
   const url = String(attachment.url || "").trim();
   const storagePath = String(attachment.storagePath || "").trim();
+  const localBlobId = String(attachment.localBlobId || "").trim();
 
   if (url && /^https?:\/\//i.test(url)) {
     return storagePath ? "cloud" : "cloud";
   }
+  if (isBlobUrl(url)) return localBlobId ? "local-idb" : "local";
   if (isBase64DataUrl(url)) return "local";
+  if (localBlobId) return "local-idb";
   if (storagePath) return "pending";
   if (!url && !storagePath) return "missing";
   return "local";
@@ -89,6 +101,7 @@ export function getAttachmentSyncStatus(attachment) {
 
 export function getAttachmentSyncLabel(status) {
   if (status === "cloud") return "Synchronisé (cloud)";
+  if (status === "local-idb") return "Local (fichier volumineux)";
   if (status === "local") return "Local uniquement";
   if (status === "pending") return "Cloud — rechargement…";
   return "Indisponible sur cet appareil";
@@ -97,7 +110,7 @@ export function getAttachmentSyncLabel(status) {
 export function hydrateQuoteAttachment(attachment) {
   if (!attachment || typeof attachment !== "object") return attachment;
   const url = String(attachment.url || "").trim();
-  if (url && (isHttpUrl(url) || isBase64DataUrl(url))) {
+  if (url && (isHttpUrl(url) || isBase64DataUrl(url) || isBlobUrl(url))) {
     return { ...attachment, syncStatus: getAttachmentSyncStatus(attachment) };
   }
 
@@ -111,7 +124,40 @@ export function hydrateQuoteAttachment(attachment) {
     };
   }
 
+  if (attachment.localBlobId) {
+    return { ...attachment, syncStatus: getAttachmentSyncStatus(attachment) };
+  }
+
   return { ...attachment, syncStatus: getAttachmentSyncStatus(attachment) };
+}
+
+export async function hydrateQuoteAttachmentsAsync(attachments = []) {
+  const { readLocalQuoteAttachmentBlob } = await import("./quoteAttachmentLocalStore.js");
+
+  return Promise.all(
+    (attachments || []).map(async (attachment) => {
+      const hydrated = hydrateQuoteAttachment(attachment);
+      const localBlobId = String(hydrated?.localBlobId || "").trim();
+      const url = String(hydrated?.url || "").trim();
+
+      if (localBlobId && (!url || !isBlobUrl(url))) {
+        try {
+          const blob = await readLocalQuoteAttachmentBlob(localBlobId);
+          if (blob) {
+            return {
+              ...hydrated,
+              url: URL.createObjectURL(blob),
+              syncStatus: "local-idb",
+            };
+          }
+        } catch {
+          // fallback to pending/missing below
+        }
+      }
+
+      return hydrated;
+    })
+  );
 }
 
 export function hydrateQuoteAttachments(attachments = []) {
