@@ -23,6 +23,11 @@ import {
   pageToPath,
   pathToPage,
 } from "./utils/routes";
+import {
+  loadLocalPublicLeads,
+  mergePublicLeadsIntoData,
+  PUBLIC_LEADS_UPDATED_EVENT,
+} from "./services/leadsService";
 import "./App.css";
 
 import Sidebar from "./components/Sidebar";
@@ -204,7 +209,9 @@ function CrmApp() {
 
     window.addEventListener("crm-open-page", handleOpenPage);
 
-    return () => window.removeEventListener("crm-open-page", handleOpenPage);
+    return () => {
+      window.removeEventListener("crm-open-page", handleOpenPage);
+    };
   }, [navigate]);
   const [loading, setLoading] = useState(true);
   const autoBackupStarted = useRef(false);
@@ -232,6 +239,19 @@ function CrmApp() {
   }, [data, bindDataRef]);
 
   const updateData = updateDataWithCloudSync;
+
+  useEffect(() => {
+    function mergePendingPublicLeads() {
+      if (!loadLocalPublicLeads().length) return;
+      updateData((current) => mergePublicLeadsIntoData(current));
+    }
+
+    mergePendingPublicLeads();
+    window.addEventListener(PUBLIC_LEADS_UPDATED_EVENT, mergePendingPublicLeads);
+    return () => {
+      window.removeEventListener(PUBLIC_LEADS_UPDATED_EVENT, mergePendingPublicLeads);
+    };
+  }, [updateData]);
 
   const currentRole = userRole(currentUser?.email, data.users);
   const permissions = getPermissions(currentRole);

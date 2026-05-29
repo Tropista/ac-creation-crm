@@ -73,6 +73,11 @@ export function useAtelierRealtime({
             { event: "*", schema: "public", table: "invoices" },
             scheduleRefresh
           )
+          .on(
+            "postgres_changes",
+            { event: "*", schema: "public", table: "leads" },
+            scheduleRefresh
+          )
           .subscribe();
       } catch (error) {
         console.warn("[Realtime atelier] indisponible :", error);

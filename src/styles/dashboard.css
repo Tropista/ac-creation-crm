@@ -588,6 +588,7 @@ vertical-align:middle;
 }
 
 .dashboard-public-acceptances-list,
+.dashboard-leads-list,
 .dashboard-process-stats__list{
 list-style:none;
 margin:0;
@@ -597,15 +598,45 @@ gap:8px;
 }
 
 .dashboard-public-acceptances-list li,
+.dashboard-leads-list li,
 .dashboard-process-stats__list li{
 display:flex;
 flex-wrap:wrap;
 gap:8px 12px;
 align-items:center;
+justify-content:space-between;
 padding:10px 12px;
 border-radius:12px;
 background:rgba(255,255,255,.7);
 border:1px solid var(--border);
+}
+
+.dashboard-leads-list__main{
+display:flex;
+flex-wrap:wrap;
+gap:8px 12px;
+align-items:center;
+flex:1;
+min-width:0;
+}
+
+.dashboard-leads-list__actions{
+display:flex;
+flex-wrap:wrap;
+gap:8px;
+align-items:center;
+}
+
+.dashboard-leads-list__email,
+.dashboard-leads-list__phone{
+font-weight:700;
+color:var(--primary);
+text-decoration:none;
+}
+
+.dashboard-leads-list__email:hover,
+.dashboard-leads-list__phone:hover{
+text-decoration:underline;
 }
 
 .dashboard-process-stats{

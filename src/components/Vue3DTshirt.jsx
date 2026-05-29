@@ -1729,12 +1729,9 @@ export default function Vue3DTshirt() {
     }
   }
 
-  function createQuoteFromProject() {
+  function buildQuoteDraftFromProject() {
     const visibleItems = items.filter((item) => !item.hidden);
-    if (!visibleItems.length) {
-      showToast("Ajoutez au moins un logo ou texte avant de créer un devis.", "error");
-      return;
-    }
+    if (!visibleItems.length) return null;
 
     const qty = Math.max(1, Number(orderQuantity) || 1);
     const label = projectName.trim() || `T-shirt ${garmentPreset.label}`;
@@ -1766,7 +1763,7 @@ export default function Vue3DTshirt() {
         `• ${entry.zone} : ${entry.content} (${entry.tech.label}, ${entry.size.width.toFixed(1)}×${entry.size.height.toFixed(1)} cm — env. ${entry.unitPrice.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} € HT)`
     );
 
-    const draft = {
+    return {
       source: "configurateur t-shirt",
       lines: [
         buildCalculatorQuoteLine({
@@ -1787,15 +1784,26 @@ ${customizationLines.join("\n")}`,
         }),
       ],
     };
+  }
 
-    if (isPublicConfigurator) {
-      setPendingQuoteDraft(draft);
-      setLeadModalOpen(true);
+  function createQuoteFromProject() {
+    const draft = buildQuoteDraftFromProject();
+    if (!draft) {
+      showToast("Ajoutez au moins un logo ou texte avant de créer un devis.", "error");
       return;
     }
+    setPendingQuoteDraft(draft);
+    setLeadModalOpen(true);
+  }
 
+  function openAdminQuoteWithoutLead() {
+    const draft = buildQuoteDraftFromProject();
+    if (!draft) {
+      showToast("Ajoutez au moins un logo ou texte avant de créer un devis.", "error");
+      return;
+    }
     openQuoteFromCalculator(navigate, draft);
-    showToast("Devis pré-rempli depuis le configurateur.", "success");
+    showToast("Devis pré-rempli (sans lead sur le tableau de bord).", "success");
   }
 
   async function submitPublicLeadAndQuote(event) {
@@ -1817,12 +1825,24 @@ ${customizationLines.join("\n")}`,
       });
       saveQuoteDraft(pendingQuoteDraft);
       setLeadModalOpen(false);
-      setQuoteSavedModal(true);
-      showToast(
-        "Merci ! Votre projet est enregistré. Ouvrez le CRM → Devis pour finaliser.",
-        "success",
-        7000
-      );
+      setLeadEmail("");
+      setLeadPhone("");
+
+      if (isPublicConfigurator) {
+        setQuoteSavedModal(true);
+        showToast(
+          "Merci ! Votre projet est enregistré. Ouvrez le CRM → Devis pour finaliser.",
+          "success",
+          7000
+        );
+      } else {
+        openQuoteFromCalculator(navigate, pendingQuoteDraft);
+        showToast(
+          "Contact enregistré — devis pré-rempli. Le lead apparaît sur le tableau de bord.",
+          "success"
+        );
+      }
+      setPendingQuoteDraft(null);
     } catch (error) {
       showToast(error.message || "Impossible d'enregistrer votre contact.", "error");
     } finally {
@@ -1847,8 +1867,14 @@ ${customizationLines.join("\n")}`,
       {leadModalOpen ? (
         <div className="tshirt3d-quote-modal" role="dialog" aria-labelledby="tshirt-lead-modal-title">
           <div className="tshirt3d-quote-modal-card">
-            <h3 id="tshirt-lead-modal-title">Recevoir votre devis</h3>
-            <p>Laissez votre email pour enregistrer le projet et être recontacté par AC Creation.</p>
+            <h3 id="tshirt-lead-modal-title">
+              {isPublicConfigurator ? "Recevoir votre devis" : "Contact client"}
+            </h3>
+            <p>
+              {isPublicConfigurator
+                ? "Laissez votre email pour enregistrer le projet et être recontacté par AC Creation."
+                : "Indiquez l'email du client pour créer un lead sur le tableau de bord et ouvrir le devis pré-rempli."}
+            </p>
             <form className="tshirt3d-lead-form" onSubmit={submitPublicLeadAndQuote}>
               <label>
                 Email *
@@ -1872,7 +1898,11 @@ ${customizationLines.join("\n")}`,
               </label>
               <div className="tshirt3d-quote-modal-actions">
                 <button type="submit" className="primary" disabled={leadSubmitting}>
-                  {leadSubmitting ? "Envoi…" : "Enregistrer mon projet"}
+                  {leadSubmitting
+                    ? "Envoi…"
+                    : isPublicConfigurator
+                      ? "Enregistrer mon projet"
+                      : "Enregistrer et ouvrir le devis"}
                 </button>
                 <button type="button" onClick={() => setLeadModalOpen(false)}>
                   Annuler
@@ -1911,6 +1941,11 @@ ${customizationLines.join("\n")}`,
         </div>
         <div className="tshirt3d-export-actions">
           <button type="button" onClick={createQuoteFromProject}>Créer un devis</button>
+          {!isPublicConfigurator ? (
+            <button type="button" className="ghost" onClick={openAdminQuoteWithoutLead}>
+              Devis rapide
+            </button>
+          ) : null}
           <button className="primary" onClick={exportMockup}>Exporter ZIP impression</button>
           <button type="button" onClick={exportWorkshopPdf}>Exporter PDF atelier</button>
         </div>

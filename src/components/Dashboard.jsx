@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   clientName,
@@ -41,7 +41,20 @@ import { isExpenseInMonth, getExpenseDate } from "../utils/expenseSuppliers";
 import { exportInvoicesCsv, exportLowStockPurchaseOrderCsv, buildPurchaseOrderText } from "../utils/exportCsv";
 import MonthlyAccountingExport from "./MonthlyAccountingExport";
 import { getStaleDraftQuotes, markDocumentReminder } from "../utils/documentTracking";
-import { countUnreadLeads, markLeadRead } from "../services/leadsService";
+import {
+  buildLeadMailtoHref,
+  buildLeadTelHref,
+  convertLeadToClientAndQuote,
+  countActiveLeads,
+  countUnreadLeads,
+  getActiveLeads,
+  LEAD_STATUS,
+  loadLocalPublicLeads,
+  markLeadRead,
+  mergePublicLeadsIntoData,
+  PUBLIC_LEADS_UPDATED_EVENT,
+} from "../services/leadsService";
+import { openQuoteFromCalculator } from "../utils/quoteDraft";
 import { showToast } from "../utils/toast";
 import { useAtelierRealtime } from "../hooks/useAtelierRealtime";
 import {
@@ -104,6 +117,8 @@ export default function Dashboard({
   const permissions = getPermissions(currentRole);
   const canManageInvoices = permissions.pages.includes("invoices");
   const canManageQuotes = permissions.pages.includes("quotes");
+  const canManageClients = permissions.pages.includes("clients");
+  const canConvertLeads = canManageQuotes && canManageClients;
   const canManageProducts = permissions.pages.includes("products");
   const canManageExpenses = permissions.pages.includes("expenses");
 
@@ -113,6 +128,27 @@ export default function Dashboard({
     alertPublicAcceptances: canManageQuotes,
     syncToastMessage: "Tableau de bord synchronisé (temps réel)",
   });
+
+  useEffect(() => {
+    function syncPendingLeads() {
+      if (!loadLocalPublicLeads().length || typeof setData !== "function") return;
+      setData((current) => mergePublicLeadsIntoData(current));
+    }
+
+    syncPendingLeads();
+    window.addEventListener("focus", syncPendingLeads);
+    window.addEventListener(PUBLIC_LEADS_UPDATED_EVENT, syncPendingLeads);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") syncPendingLeads();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      window.removeEventListener("focus", syncPendingLeads);
+      window.removeEventListener(PUBLIC_LEADS_UPDATED_EVENT, syncPendingLeads);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [setData]);
 
   const invoices = data.invoices || [];
   const quotes = data.quotes || [];
@@ -201,10 +237,9 @@ export default function Dashboard({
   );
   const deliveryWeekCount = countWeekDeliveries(deliveryWeekCalendar);
   const staleDraftQuotes = getStaleDraftQuotes(quotes).slice(0, 8);
-  const unreadLeads = (leads || []).filter(
-    (lead) => String(lead?.status || "nouveau") === "nouveau"
-  );
+  const activeLeads = getActiveLeads(leads);
   const unreadLeadCount = countUnreadLeads(leads);
+  const activeLeadCount = countActiveLeads(leads);
   const recentPublicAcceptances = getRecentPublicAcceptances(quotes);
 
   const unpaidCount = invoices.filter((i) => i.status !== "Payée").length;
@@ -417,6 +452,36 @@ export default function Dashboard({
       localStorage.setItem(QUOTES_STATUS_FILTER_KEY, status);
     }
     navigate(pageToPath("quotes"));
+  }
+
+  function handleConvertLead(lead) {
+    try {
+      const result = convertLeadToClientAndQuote(data, lead.id);
+      setData(result.data);
+      logActivity?.(
+        result.isNewClient
+          ? "Conversion lead → client + devis"
+          : "Conversion lead → devis (client existant)",
+        lead.email
+      );
+      openQuoteFromCalculator(navigate, result.draft);
+      showToast(
+        result.isNewClient
+          ? "Client créé et devis pré-rempli."
+          : "Devis pré-rempli pour le client existant.",
+        "success"
+      );
+    } catch (error) {
+      showToast(error.message || "Conversion impossible.", "error");
+    }
+  }
+
+  function handleMarkLeadRead(leadId) {
+    setData((current) => ({
+      ...current,
+      leads: markLeadRead(current.leads || [], leadId),
+    }));
+    showToast("Lead marqué comme traité.", "success");
   }
 
   function goToProducts({ stock, kind } = {}) {
@@ -1108,34 +1173,87 @@ export default function Dashboard({
           </div>
         )}
 
-        {unreadLeadCount > 0 && (
+        {canConvertLeads && (
           <div className="card dashboard-action-card" data-testid="dashboard-leads">
             <div className="dashboard-action-card__header">
               <div>
-                <h3>Nouveaux leads configurateur</h3>
+                <h3>
+                  Leads configurateur
+                  {unreadLeadCount > 0 ? (
+                    <span className="dashboard-badge">{unreadLeadCount}</span>
+                  ) : null}
+                </h3>
                 <p className="muted">
-                  {unreadLeadCount} contact(s) depuis le configurateur public.
+                  {activeLeadCount === 0
+                    ? "Aucun contact configurateur en attente."
+                    : `${activeLeadCount} contact(s) à traiter${
+                        unreadLeadCount > 0 && unreadLeadCount < activeLeadCount
+                          ? ` (${unreadLeadCount} nouveau(x))`
+                          : ""
+                      }.`}
                 </p>
               </div>
             </div>
+            {activeLeadCount === 0 ? (
+              <p className="muted">
+                Les emails laissés sur le configurateur t-shirt apparaissent ici avec le bouton
+                « Créer client + devis ».
+              </p>
+            ) : (
             <ul className="dashboard-leads-list">
-              {unreadLeads.slice(0, 6).map((lead) => (
-                <li key={lead.id}>
-                  <strong>{lead.email}</strong>
-                  {lead.phone ? <span>{lead.phone}</span> : null}
-                  <span className="muted">{lead.source || "configurateur"}</span>
-                  <button
-                    type="button"
-                    className="compact"
-                    onClick={() =>
-                      setData({ ...data, leads: markLeadRead(leads, lead.id) })
-                    }
-                  >
-                    Marquer lu
-                  </button>
-                </li>
-              ))}
+              {activeLeads.slice(0, 6).map((lead) => {
+                const mailtoHref = buildLeadMailtoHref(lead);
+                const telHref = buildLeadTelHref(lead);
+                const isUnread = String(lead.status || LEAD_STATUS.NEW) === LEAD_STATUS.NEW;
+                const projectName = String(lead.metadata?.projectName || "").trim();
+
+                return (
+                  <li key={lead.id}>
+                    <div className="dashboard-leads-list__main">
+                      {mailtoHref ? (
+                        <a href={mailtoHref} className="dashboard-leads-list__email">
+                          {lead.email}
+                        </a>
+                      ) : (
+                        <strong>{lead.email}</strong>
+                      )}
+                      {telHref ? (
+                        <a href={telHref} className="dashboard-leads-list__phone">
+                          {lead.phone}
+                        </a>
+                      ) : lead.phone ? (
+                        <span>{lead.phone}</span>
+                      ) : null}
+                      {projectName ? <span>{projectName}</span> : null}
+                      <span className="muted">{lead.source || "configurateur"}</span>
+                      {!isUnread ? <span className="muted">Traité</span> : null}
+                    </div>
+                    <div className="dashboard-leads-list__actions">
+                      {canConvertLeads ? (
+                        <button
+                          type="button"
+                          className="compact primary"
+                          onClick={() => handleConvertLead(lead)}
+                          data-testid={`convert-lead-${lead.id}`}
+                        >
+                          Créer client + devis
+                        </button>
+                      ) : null}
+                      {isUnread ? (
+                        <button
+                          type="button"
+                          className="compact"
+                          onClick={() => handleMarkLeadRead(lead.id)}
+                        >
+                          Marquer lu
+                        </button>
+                      ) : null}
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
+            )}
           </div>
         )}
 
