@@ -1,4 +1,10 @@
 import { getSupabase } from "../supabase";
+import {
+  dbRowToFilament,
+  dbRowToMovement,
+  filamentToDbRow,
+  movementToDbRow,
+} from "./filamentService";
 import { sanitizeProductsForPersistence } from "../utils/productImages";
 import {
   clearSyncedDeletionTombstones,
@@ -277,6 +283,43 @@ function rowsToItems(rows) {
   }));
 }
 
+async function fetchStructuredTableRows(supabase, tableName, mapper) {
+  const res = await supabase
+    .from(tableName)
+    .select("*")
+    .order("created_at", { ascending: true, nullsFirst: true })
+    .order("id", { ascending: true });
+
+  if (res.error && isMissingTableError(res.error)) {
+    console.warn(
+      `Table Supabase "${tableName}" introuvable — utilisation d'un tableau vide. Voir docs/SUPABASE.md.`,
+      res.error
+    );
+    return [];
+  }
+
+  if (res.error) {
+    throw formatSupabaseCollectionError(tableName, res.error);
+  }
+
+  return (res.data || []).map(mapper);
+}
+
+async function upsertStructuredRowsBatched(supabase, tableName, rows = []) {
+  const payload = (rows || []).filter((row) => row?.id);
+  if (!payload.length) return 0;
+
+  let written = 0;
+  for (let offset = 0; offset < payload.length; offset += UPSERT_CHUNK_SIZE) {
+    const chunk = payload.slice(offset, offset + UPSERT_CHUNK_SIZE);
+    const { error } = await supabase.from(tableName).upsert(chunk, { onConflict: "id" });
+    if (error) throw formatSupabaseCollectionError(tableName, error);
+    written += chunk.length;
+  }
+
+  return written;
+}
+
 async function upsertRowsBatched(supabase, table, items = []) {
   const payload = (items || [])
     .filter((item) => item?.id)
@@ -453,6 +496,22 @@ export async function syncSupabaseData(nextData, previousData = {}) {
     safeOptionalCollectionWrite("payments", () =>
       upsertCollectionDelta("payments", previousData.payments, syncedData.payments)
     ),
+    safeOptionalCollectionWrite("filaments", () =>
+      upsertStructuredRowsBatched(
+        supabase,
+        "filaments",
+        getCollectionDelta(previousData.filaments, syncedData.filaments).map(filamentToDbRow)
+      )
+    ),
+    safeOptionalCollectionWrite("filament_movements", () =>
+      upsertStructuredRowsBatched(
+        supabase,
+        "filament_movements",
+        getCollectionDelta(previousData.filamentMovements, syncedData.filamentMovements).map(
+          movementToDbRow
+        )
+      )
+    ),
     upsertCollection("quotes", syncedData.quotes),
     upsertCollection("invoices", syncedData.invoices),
     upsertCollection("crm_logs", syncedData.logs),
@@ -562,6 +621,24 @@ export async function syncSupabaseData(nextData, previousData = {}) {
         getTombstoneIds(syncedData.settings, "payments")
       )
     ),
+    safeOptionalCollectionWrite("filaments", () =>
+      trackDelete(
+        "filaments",
+        "filaments",
+        syncedData.filaments,
+        previousData.filaments,
+        getTombstoneIds(syncedData.settings, "filaments")
+      )
+    ),
+    safeOptionalCollectionWrite("filament_movements", () =>
+      trackDelete(
+        "filamentMovements",
+        "filament_movements",
+        syncedData.filamentMovements,
+        previousData.filamentMovements,
+        getTombstoneIds(syncedData.settings, "filamentMovements")
+      )
+    ),
     trackDelete(
       "quotes",
       "quotes",
@@ -630,6 +707,8 @@ export async function loadSupabaseData({
     quotesRes,
     invoicesRes,
     logsRes,
+    filamentsRows,
+    filamentMovementsRows,
   ] = await Promise.all([
     fetchCollectionRows(supabase, "users").then((data) => ({ data, error: null })),
     fetchCollectionRows(supabase, "backups").then((data) => ({ data, error: null })),
@@ -646,6 +725,8 @@ export async function loadSupabaseData({
     fetchCollectionRows(supabase, "quotes").then((data) => ({ data, error: null })),
     fetchCollectionRows(supabase, "invoices").then((data) => ({ data, error: null })),
     fetchCollectionRows(supabase, "crm_logs").then((data) => ({ data, error: null })),
+    fetchStructuredTableRows(supabase, "filaments", dbRowToFilament).catch(() => []),
+    fetchStructuredTableRows(supabase, "filament_movements", dbRowToMovement).catch(() => []),
   ]);
 
   const resolvedSuppliersRes = resolveCollectionResult(suppliersRes, "suppliers");
@@ -701,6 +782,11 @@ export async function loadSupabaseData({
       rowsToItems(resolvedPaymentsRes.data),
       tombstones.payments
     ),
+    filaments: filterCollectionByTombstones(filamentsRows, tombstones.filaments),
+    filamentMovements: filterCollectionByTombstones(
+      filamentMovementsRows,
+      tombstones.filamentMovements
+    ),
     quotes: filterCollectionByTombstones(rowsToItems(quotesRes.data), tombstones.quotes),
     invoices: filterCollectionByTombstones(rowsToItems(invoicesRes.data), tombstones.invoices),
     logs: filterCollectionByTombstones(rowsToItems(logsRes.data), tombstones.logs),
@@ -723,6 +809,8 @@ export async function loadSupabaseData({
         resolvedCreditNotesRes.data?.length ||
         resolvedAfterSalesRes.data?.length ||
         resolvedPaymentsRes.data?.length ||
+        filamentsRows?.length ||
+        filamentMovementsRows?.length ||
         quotesRes.data?.length ||
         invoicesRes.data?.length
     ),

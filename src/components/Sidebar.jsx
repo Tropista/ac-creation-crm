@@ -68,6 +68,7 @@ const pageIcons = {
   labels: Tag,
   scan: ScanLine,
   print3dcalc: Calculator,
+  impression3dpro: Box,
   lasercalc: Flame,
   dtfcalc: Shirt,
   uvdtfcalc: Smartphone,
@@ -114,6 +115,7 @@ const menuGroups = [
     label: "Atelier / Outils",
     items: [
       { page: "print3dcalc", label: "Calculateur 3D", type: "page" },
+      { page: "impression3dpro", label: "Impression 3D Pro", type: "page" },
       { page: "lasercalc", label: "Calculateur Laser", type: "page" },
       { page: "dtfcalc", label: "Calculateur DTF", type: "page" },
       { page: "uvdtfcalc", label: "Calculateur UV-DTF", type: "page" },

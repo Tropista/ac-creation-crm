@@ -184,6 +184,8 @@ export const emptyData = {
   creditNotes: [],
   afterSalesCases: [],
   payments: [],
+  filaments: [],
+  filamentMovements: [],
   backups: [],
   logs: [],
 };
@@ -279,6 +281,14 @@ export function normalizeData(data) {
 
     payments: dedupeItemsById(
       rest?.payments || []
+    ),
+
+    filaments: dedupeItemsById(
+      rest?.filaments || []
+    ),
+
+    filamentMovements: dedupeItemsById(
+      rest?.filamentMovements || []
     ),
 
     backups: dedupeItemsById(
