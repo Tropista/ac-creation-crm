@@ -13,6 +13,7 @@
     "build": "vite build",
     "predist": "npm run clean:release",
     "predist:win": "npm run clean:release",
+    "postinstall": "npm ci --prefix tools/bambu-bridge",
     "lint": "eslint .",
     "test": "vitest run && npm test --prefix tools/bambu-bridge",
     "test:watch": "vitest",
