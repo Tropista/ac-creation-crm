@@ -1,0 +1,108 @@
+.credit-notes-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.credit-notes-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.credit-notes-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+}
+
+.credit-notes-stats .stat {
+  text-align: left;
+}
+
+.credit-notes-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.credit-notes-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.credit-notes-table th,
+.credit-notes-table td {
+  padding: 0.55rem 0.65rem;
+  border-bottom: 1px solid var(--border, #e5e7eb);
+  text-align: left;
+  font-size: 0.9rem;
+}
+
+.credit-notes-table tr:hover {
+  background: rgba(236, 72, 153, 0.04);
+}
+
+.credit-notes-form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.credit-notes-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+}
+
+.credit-notes-form input,
+.credit-notes-form select,
+.credit-notes-form textarea {
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--border, #d1d5db);
+  border-radius: 8px;
+}
+
+.credit-notes-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.credit-notes-actions button {
+  font-size: 0.82rem;
+}
+
+.credit-notes-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1200;
+  padding: 1rem;
+}
+
+.credit-notes-modal {
+  background: #fff;
+  border-radius: 14px;
+  padding: 1.25rem;
+  width: min(480px, 100%);
+  max-height: 90vh;
+  overflow: auto;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.2);
+}
+
+.credit-notes-modal h3 {
+  margin: 0 0 0.75rem;
+}
+
+.credit-notes-empty {
+  padding: 2rem;
+  text-align: center;
+  color: #64748b;
+}

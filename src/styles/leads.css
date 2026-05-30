@@ -1,0 +1,50 @@
+.leads-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.leads-filters button {
+  border-radius: 999px;
+}
+
+.leads-filters button.active {
+  background: var(--primary);
+  color: #fff;
+}
+
+.leads-empty {
+  padding: 24px;
+}
+
+.leads-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.leads-status {
+  display: inline-flex;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.leads-status--nouveau {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.leads-status--lu {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.leads-status--converti {
+  background: #f3f4f6;
+  color: #374151;
+}

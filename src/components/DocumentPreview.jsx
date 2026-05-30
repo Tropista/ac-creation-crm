@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { APP_LOGO_URL } from "../utils/assets";
@@ -18,6 +19,9 @@ import {
 } from "../utils/quoteShare";
 import { showToast } from "../utils/toast";
 import { cleanupNavigationBlockers, CRM_ROUTE_CHANGE_EVENT } from "../utils/uiCleanup";
+import { isQuoteSigned, getSignatureDisplayLabel } from "../utils/quoteSignature";
+import { formatPaymentDate } from "../utils/payments";
+import QuoteSignaturePanel from "./QuoteSignaturePanel";
 
 function IconUser() {
   return (
@@ -51,7 +55,16 @@ function IconInfo() {
   );
 }
 
-export default function DocumentPreview({ doc, type, data, onClose, onDocumentSent, onQuoteSharePrepared }) {
+export default function DocumentPreview({
+  doc,
+  type,
+  data,
+  onClose,
+  onDocumentSent,
+  onQuoteSharePrepared,
+  onQuoteAccept,
+  paymentSummary,
+}) {
   const pdfWrapperRef = useRef(null);
   const isQuote = type === "quote";
   const isDelivery = type === "delivery";
@@ -93,8 +106,8 @@ export default function DocumentPreview({ doc, type, data, onClose, onDocumentSe
   const invoiceStyleClass = getInvoiceStyleClass();
 
   const handleClose = useCallback(() => {
-    cleanupNavigationBlockers();
     onClose?.();
+    cleanupNavigationBlockers();
   }, [onClose]);
 
   useEffect(() => {
@@ -606,6 +619,18 @@ ${data.settings.companyEmail || ""}`;
                     <strong>{money(paidAmount)}</strong>
                   </div>
                 )}
+                {!isQuote && paymentSummary?.depositPaid > 0.01 && (
+                  <div className="ac-total-line">
+                    <span>Acompte payé</span>
+                    <strong>{money(paymentSummary.depositPaid)}</strong>
+                  </div>
+                )}
+                {!isQuote && paymentSummary?.remaining > 0.01 && (
+                  <div className="ac-total-line">
+                    <span>Reste à payer</span>
+                    <strong>{money(paymentSummary.remaining)}</strong>
+                  </div>
+                )}
                 <div className="ac-total-line ac-total-final">
                   <span>
                     {isQuote && footerTotals.showQuoteDepositSplit
@@ -618,6 +643,35 @@ ${data.settings.companyEmail || ""}`;
             </div>
           </div>
           )}
+
+          {!isQuote && paymentSummary?.paymentHistory?.length > 0 && (
+            <div className="invoice-payment-history">
+              <strong>Historique des paiements</strong>
+              <ul>
+                {paymentSummary.paymentHistory.map((payment) => (
+                  <li key={payment.id}>
+                    {formatPaymentDate(payment.date)} — {money(payment.amount)} · {payment.method}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {isQuote && isQuoteSigned(doc) && (
+            <div className="quote-signature-preview quote-signature-preview--compact">
+              <strong>Acceptation client</strong>
+              <p>{getSignatureDisplayLabel(doc)}</p>
+              {doc.signature?.dataUrl ? (
+                <img src={doc.signature.dataUrl} alt="Signature" className="quote-signature-image" />
+              ) : null}
+            </div>
+          )}
+
+          {isQuote && onQuoteAccept ? (
+            <div className="no-print">
+              <QuoteSignaturePanel quote={doc} onAccept={onQuoteAccept} compact />
+            </div>
+          ) : null}
 
           <div className="ac-thanks">
             <div className="ac-icon"><IconInfo /></div>
@@ -642,5 +696,9 @@ ${data.settings.companyEmail || ""}`;
     </div>
   );
 
-  return modal;
+  if (typeof document === "undefined") {
+    return null;
+  }
+
+  return createPortal(modal, document.body);
 }

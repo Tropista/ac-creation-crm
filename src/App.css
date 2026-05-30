@@ -932,13 +932,13 @@ tbody tr:hover td { background: var(--table-hover); }
   .invoice-template,
   .invoice-pink-template { width: 190mm !important; min-height: auto !important; margin: 0 auto !important; padding: 10mm !important; box-shadow: none !important; border-radius: 0 !important; overflow: visible !important; font-size: 11.5px !important; }
 
-  /* Document preview: collapse app shell (100vh) so only invoice prints */
+  /* Document preview: preview is portaled to body, hide CRM shell entirely */
+  body:has(.document-preview-overlay) > *:not(.document-preview-overlay) {
+    display: none !important;
+  }
+
   html:has(.document-preview-overlay),
-  body:has(.document-preview-overlay),
-  #root:has(.document-preview-overlay),
-  .app:has(.document-preview-overlay),
-  .content:has(.document-preview-overlay),
-  section:has(.document-preview-overlay) {
+  body:has(.document-preview-overlay) {
     width: auto !important;
     min-height: 0 !important;
     height: auto !important;
@@ -946,11 +946,6 @@ tbody tr:hover td { background: var(--table-hover); }
     margin: 0 !important;
     padding: 0 !important;
     overflow: visible !important;
-  }
-
-  body:has(.document-preview-overlay) .sidebar,
-  body:has(.document-preview-overlay) .content > section > *:not(.document-preview-overlay) {
-    display: none !important;
   }
 
   .document-preview-overlay,
@@ -962,28 +957,27 @@ tbody tr:hover td { background: var(--table-hover); }
 
   .document-preview-overlay .ac-invoice-v2,
   #document-preview.ac-invoice-v2 {
-    display: flex !important;
-    flex-direction: column !important;
+    display: block !important;
     width: 100% !important;
-    min-height: calc(297mm - 16mm) !important;
+    min-height: 0 !important;
     height: auto !important;
     margin: 0 !important;
-    padding: 5mm !important;
+    padding: 8mm !important;
     box-sizing: border-box !important;
     box-shadow: none !important;
-    page-break-after: avoid !important;
-    break-after: avoid !important;
+    page-break-before: avoid !important;
+    break-before: avoid !important;
   }
 
-  .document-preview-overlay .ac-invoice-top {
-    flex: 0 0 auto !important;
-  }
-
+  .document-preview-overlay .ac-invoice-top,
   .document-preview-overlay .ac-invoice-bottom {
-    margin-top: auto !important;
-    flex: 0 0 auto !important;
-    display: flex !important;
-    flex-direction: column !important;
+    flex: none !important;
+    margin-top: 0 !important;
+    display: block !important;
+  }
+
+  .quote-signature-panel {
+    display: none !important;
   }
 }
 body,

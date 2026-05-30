@@ -700,3 +700,124 @@
     grid-template-columns: 1fr 1fr;
   }
 }
+
+.atelier-planning {
+  overflow-x: auto;
+}
+
+.atelier-planning__head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.atelier-planning__nav {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.atelier-planning__grid {
+  min-width: 720px;
+}
+
+.atelier-planning__row {
+  display: grid;
+  grid-template-columns: 140px repeat(7, minmax(90px, 1fr));
+  gap: 8px;
+  align-items: stretch;
+  margin-bottom: 8px;
+}
+
+.atelier-planning__row--head {
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.atelier-planning__operator {
+  padding: 8px;
+  font-weight: 700;
+}
+
+.atelier-planning__day-head,
+.atelier-planning__cell {
+  padding: 8px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid var(--border);
+  min-height: 52px;
+}
+
+.atelier-planning__quote {
+  display: block;
+  width: 100%;
+  margin-bottom: 4px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  background: #fdf2f8;
+  border: 1px solid #fbcfe8;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.atelier-production-panel {
+  margin-top: 8px;
+  border-top: 1px dashed var(--border);
+  padding-top: 8px;
+}
+
+.atelier-production-toggle {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: #be185d;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.atelier-production-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.atelier-production-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.atelier-production-grid label,
+.atelier-production-note {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.atelier-production-grid input,
+.atelier-production-grid select,
+.atelier-production-note textarea {
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.atelier-production-checklist ul {
+  list-style: none;
+  padding: 0;
+  margin: 4px 0 0;
+}
+
+.atelier-production-files ul {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  font-size: 12px;
+}

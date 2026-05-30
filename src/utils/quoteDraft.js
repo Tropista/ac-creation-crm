@@ -107,15 +107,48 @@ export function consumeQuoteDraft() {
   return draft;
 }
 
-export function openQuoteFromCalculator(navigate, draft) {
-  const payload = {
+/** Payload léger pour localStorage + state React Router (évite dépassement history.state). */
+export function buildQuoteDraftPayload(draft) {
+  const attachments = sanitizeQuoteAttachmentsForPersistence(draft.attachments || []);
+  return {
     clientId: draft.clientId || "",
-    lines: draft.lines || [],
-    attachments: draft.attachments || [],
+    lines: Array.isArray(draft.lines) ? draft.lines : [],
+    attachments,
     source: draft.source || "calculateur",
     notes: draft.notes || "",
     calculatorProjectId: draft.calculatorProjectId || "",
+    savedAt: Date.now(),
   };
+}
+
+/** Fusionne le brouillon navigation et localStorage (localBlobId, lignes). */
+export function mergeQuoteDraftSources(stateDraft, storageDraft) {
+  const state = stateDraft && typeof stateDraft === "object" ? stateDraft : null;
+  const storage = storageDraft && typeof storageDraft === "object" ? storageDraft : null;
+  if (!state && !storage) return null;
+  if (!state) return storage;
+  if (!storage) return state;
+
+  return {
+    ...storage,
+    ...state,
+    lines: state.lines?.length ? state.lines : storage.lines || [],
+    attachments: state.attachments?.length ? state.attachments : storage.attachments || [],
+    notes: state.notes || storage.notes || "",
+    clientId: state.clientId || storage.clientId || "",
+    calculatorProjectId: state.calculatorProjectId || storage.calculatorProjectId || "",
+  };
+}
+
+/** Lit le brouillon sans le retirer du localStorage (consommé après application réussie). */
+export function resolveQuoteDraftForApply(locationState) {
+  const stateDraft = locationState?.quoteDraft;
+  const storageDraft = peekQuoteDraft();
+  return mergeQuoteDraftSources(stateDraft, storageDraft);
+}
+
+export function openQuoteFromCalculator(navigate, draft) {
+  const payload = buildQuoteDraftPayload(draft);
   saveQuoteDraft(payload);
   navigate(pageToPath("quotes"), { state: { quoteDraft: payload } });
 }

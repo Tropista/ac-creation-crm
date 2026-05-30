@@ -24,6 +24,10 @@ import {
   pageToPath,
   pathToPage,
 } from "./utils/routes";
+import {
+  buildQuoteOpenPath,
+  parseQuoteOpenIdFromLocation,
+} from "./utils/quoteOpenUrl";
 import { INVOICES_LIST_NAV_STATE, QUOTES_LIST_NAV_STATE } from "./utils/quoteDraft";
 import {
   loadLocalPublicLeads,
@@ -48,6 +52,10 @@ import Backups from "./components/Backups";
 import AuthPage from "./components/auth/AuthPage";
 import AccessDenied from "./components/auth/AccessDenied";
 import PublicQuoteView from "./components/PublicQuoteView";
+import Leads from "./components/Leads";
+import CreditNotes from "./components/CreditNotes";
+import AfterSales from "./components/AfterSales";
+import AutomationCenter from "./components/AutomationCenter";
 
 import {
   createCloudBackup
@@ -92,6 +100,10 @@ import "./styles/products-erp.css";
 import "./styles/suppliers.css";
 import "./styles/expenses.css";
 import "./styles/labels.css";
+import "./styles/leads.css";
+import "./styles/credit-notes.css";
+import "./styles/after-sales.css";
+import "./styles/automations.css";
 const Vue3D = lazy(() =>
   import("./components/Vue3D")
 );
@@ -200,10 +212,13 @@ function CrmApp() {
   useLayoutEffect(() => {
     if (typeof window === "undefined") return;
     if (pathname === location.pathname) return;
+    // Ne pas annuler configurateur → Devis (brouillon dans location.state).
+    if (location.state?.quoteDraft) return;
     navigate(`${pathname}${window.location.search}${window.location.hash}`, {
       replace: true,
+      state: location.state,
     });
-  }, [pathname, location.pathname, navigate]);
+  }, [pathname, location.pathname, location.state, navigate]);
 
   const setPage = (pageKey, options = {}) => {
     const path = pageToPath(pageKey);
@@ -222,9 +237,17 @@ function CrmApp() {
   const [authNotice, setAuthNotice] = useState(initialAuth.notice);
 
   useEffect(() => {
-    cleanupNavigationBlockers();
+    cleanupNavigationBlockers({ removePreviewOverlay: true });
     dispatchRouteChange(pathname);
   }, [pathname]);
+
+  // QR fiche atelier / lien ?open= : normaliser vers /devis (BrowserRouter Vercel).
+  useEffect(() => {
+    const openId = parseQuoteOpenIdFromLocation(location);
+    if (!openId || page === "quotes") return;
+
+    navigate(buildQuoteOpenPath(openId), { replace: true });
+  }, [location.pathname, location.search, location.hash, page, navigate]);
 
   useEffect(() => {
     function handleOpenPage(event) {
@@ -620,6 +643,19 @@ function CrmApp() {
               }
             />
             <Route
+              path={pageToPath("leads")}
+              element={
+                canAccessPage(currentRole, "leads") ? (
+                  <Leads
+                    data={data}
+                    setData={updateData}
+                    currentRole={currentRole}
+                    logActivity={handleLogActivity}
+                  />
+                ) : null
+              }
+            />
+            <Route
               path={pageToPath("atelier")}
               element={
                 canAccessPage(currentRole, "atelier") ? (
@@ -645,6 +681,40 @@ function CrmApp() {
                     currentRole={currentRole}
                     logActivity={handleLogActivity}
                   />
+                ) : null
+              }
+            />
+            <Route
+              path={pageToPath("creditnotes")}
+              element={
+                canAccessPage(currentRole, "creditnotes") ? (
+                  <CreditNotes
+                    data={data}
+                    setData={updateData}
+                    currentRole={currentRole}
+                    logActivity={handleLogActivity}
+                  />
+                ) : null
+              }
+            />
+            <Route
+              path={pageToPath("sav")}
+              element={
+                canAccessPage(currentRole, "sav") ? (
+                  <AfterSales
+                    data={data}
+                    setData={updateData}
+                    currentRole={currentRole}
+                    logActivity={handleLogActivity}
+                  />
+                ) : null
+              }
+            />
+            <Route
+              path={pageToPath("automations")}
+              element={
+                canAccessPage(currentRole, "automations") ? (
+                  <AutomationCenter data={data} />
                 ) : null
               }
             />

@@ -7,6 +7,7 @@ import {
   getDocumentFooterTotals,
 } from "./documents";
 import { formatLineDescriptionWithProduction } from "./quoteLines";
+import { isQuoteSigned } from "./quoteSignature";
 
 const PAGE_WIDTH = 210;
 const PAGE_HEIGHT = 297;
@@ -777,7 +778,10 @@ export function buildDocumentPdf({ doc, type, data, logoDataUrl = null }) {
   const style = getPdfStyleConfig();
   const lines = normalizeLines(doc);
   const paidAmount = Number(doc.paidAmount || 0);
-  const remaining = doc.remaining != null ? Number(doc.remaining) : null;
+  const remaining =
+    doc.remaining != null
+      ? Number(doc.remaining)
+      : Math.max(0, Number(doc.totalTTC || 0) - paidAmount);
   const footerTotals = getDocumentFooterTotals(doc, type);
   const amountDue = getDocumentAmountDue(doc, type, { remaining });
   const documentTitle =
@@ -834,6 +838,12 @@ export function buildDocumentPdf({ doc, type, data, logoDataUrl = null }) {
   if (paidAmount > 0.01 && amountDue > 0.01) {
     totals.push(["Déjà payé", `${formatPdfMoney(paidAmount)} €`]);
   }
+  if (!isQuote && Number(doc.depositPaidAmount || 0) > 0.01) {
+    totals.push(["Acompte payé", `${formatPdfMoney(doc.depositPaidAmount)} €`]);
+  }
+  if (!isQuote && remaining > 0.01 && paidAmount > 0.01) {
+    totals.push(["Reste à payer", `${formatPdfMoney(remaining)} €`]);
+  }
   totals.push([
     isQuote && footerTotals.showQuoteDepositSplit ? "À PAYER (ACOMPTE)" : "À PAYER",
     `${formatPdfMoney(amountDue)} €`,
@@ -853,6 +863,27 @@ export function buildDocumentPdf({ doc, type, data, logoDataUrl = null }) {
   const mentionsEnd = drawMentionsCard(pdf, MARGIN, paymentEnd + 2, leftColumnWidth, style);
   const totalsEnd = drawTotalsCard(pdf, totals, totalsX, blockStartY, totalsWidth, style);
   y = Math.max(mentionsEnd, totalsEnd) + GAP;
+
+  if (isQuote && isQuoteSigned(doc) && doc.signature?.dataUrl) {
+    try {
+      pdf.addImage(doc.signature.dataUrl, "PNG", MARGIN, y, 50, 18);
+      pdf.setFont("helvetica", "normal");
+      pdf.setFontSize(7);
+      pdf.text(
+        `Accepté le ${new Date(doc.acceptedAt || doc.signature.acceptedAt).toLocaleDateString("fr-FR")}`,
+        MARGIN,
+        y + 22
+      );
+      y += 26;
+    } catch {
+      // Signature optionnelle
+    }
+  } else if (isQuote && isQuoteSigned(doc) && doc.signature?.typedName) {
+    pdf.setFont("helvetica", "italic");
+    pdf.setFontSize(9);
+    pdf.text(`Signé : ${doc.signature.typedName}`, MARGIN, y + 6);
+    y += 12;
+  }
 
   y = drawThanksBlock(pdf, y, style);
   drawDocumentFooter(pdf, settings, y, style);

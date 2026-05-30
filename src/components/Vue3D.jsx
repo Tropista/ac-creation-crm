@@ -1,13 +1,27 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Canvas } from "@react-three/fiber";
 import { Bounds, Center, OrbitControls, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
+import jsPDF from "jspdf";
 import "./Vue3D.css";
 import Product3DErrorBoundary from "./3d/Product3DErrorBoundary";
 import { MUG_MODEL_URL } from "../utils/assets";
 import { showToast } from "../utils/toast";
 import CalculatorProjectLibrary from "./CalculatorProjectLibrary";
 import { CALCULATOR_TYPES } from "../utils/calculatorProjects";
+import {
+  buildCalculatorQuoteLine,
+  openQuoteFromCalculator,
+  saveQuoteDraft,
+} from "../utils/quoteDraft";
+import {
+  attachConfiguratorExportsToDraft,
+  CONFIGURATOR_ATTACHMENT_TIMEOUT_MS,
+  formatConfiguratorAttachmentErrors,
+  withTimeout,
+} from "../utils/tshirtQuoteAttachments";
+import { submitPublicLead } from "../services/leadsService";
 
 const MODEL_URL = MUG_MODEL_URL;
 const CANVAS_WIDTH = 1400;
@@ -724,10 +738,17 @@ function DesignEditor({ items, setItems, selectedId, setSelectedId }) {
 }
 
 export default function Vue3D() {
+  const navigate = useNavigate();
   const [items, setItems] = useState([]);
   const [selectedId, setSelectedId] = useState("");
   const [customFonts, setCustomFonts] = useState([]);
   const [projectName, setProjectName] = useState("");
+  const [orderQuantity, setOrderQuantity] = useState(1);
+  const [quoteDraftBusy, setQuoteDraftBusy] = useState(false);
+  const [leadModalOpen, setLeadModalOpen] = useState(false);
+  const [leadEmail, setLeadEmail] = useState("");
+  const [leadPhone, setLeadPhone] = useState("");
+  const [pendingQuoteDraft, setPendingQuoteDraft] = useState(null);
   const previewRef = useRef(null);
 
   const builtInFonts = [
@@ -887,24 +908,205 @@ export default function Vue3D() {
       });
   }
 
+  async function buildMugZipBlob() {
+    const files = [];
+    const canvas = previewRef.current?.querySelector("canvas");
+
+    if (canvas) {
+      files.push({ name: "mockup-mug.png", blob: await canvasToBlob(canvas) });
+    }
+
+    files.push(...(await buildMugPrintElementFiles()));
+    files.push(...(await buildMugFontFiles()));
+
+    if (!files.length) return null;
+    return createZipBlob(files);
+  }
+
+  async function buildMugWorkshopPdfBlob() {
+    if (!items.length) return null;
+    const canvas = previewRef.current?.querySelector("canvas");
+    if (!canvas) return null;
+
+    const pdf = new jsPDF("p", "mm", "a4");
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(14);
+    pdf.text("Fiche atelier — Mug configuré", 14, 16);
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(10);
+    pdf.text(projectName.trim() || "Projet mug", 14, 24);
+    pdf.text(`Quantité : ${Math.max(1, Number(orderQuantity) || 1)}`, 14, 30);
+    pdf.text(`Éléments : ${items.length}`, 14, 36);
+
+    try {
+      const mockupData = canvas.toDataURL("image/png");
+      pdf.addImage(mockupData, "PNG", 14, 42, 90, 45);
+    } catch {
+      // mockup optional
+    }
+
+    return pdf.output("blob");
+  }
+
+  function buildMugQuoteDescription() {
+    const label = projectName.trim() || "Mug personnalisé";
+    const parts = items.map((item, index) => {
+      if (item.type === "text") return `${index + 1}. Texte « ${item.text || "Texte"} »`;
+      return `${index + 1}. Image ${item.name || "logo"}`;
+    });
+    return [label, ...parts].join("\n");
+  }
+
+  function buildMugWorkshopNotes() {
+    const qty = Math.max(1, Number(orderQuantity) || 1);
+    const label = projectName.trim() || "Mug personnalisé";
+    const elements = items
+      .map((item) =>
+        item.type === "text"
+          ? `Texte : "${item.text || "Texte"}" (${item.color || "#fff"})`
+          : `Image : ${item.name || "logo"}`
+      )
+      .join("\n");
+    return `${label}\nQté ${qty}\nZone impression 210×90 mm\n${elements}`;
+  }
+
+  async function buildQuoteDraftFromProject() {
+    if (!items.length) return null;
+
+    const qty = Math.max(1, Number(orderQuantity) || 1);
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    const baseDraft = {
+      source: "configurateur mug",
+      notes: buildMugWorkshopNotes(),
+      lines: [
+        buildCalculatorQuoteLine({
+          description: buildMugQuoteDescription(),
+          quantity: qty,
+          priceHT: 0,
+          sku: "MUG-CFG",
+          category: "Mug",
+          technique: "Sublimation / impression mug",
+        }),
+      ],
+    };
+
+    const [zipBlob, pdfBlob] = await Promise.all([
+      withTimeout(
+        buildMugZipBlob(),
+        CONFIGURATOR_ATTACHMENT_TIMEOUT_MS,
+        "Export ZIP mug : délai dépassé (60 s)."
+      ).catch((error) => {
+        console.warn("[Devis] Export ZIP mug:", error);
+        return null;
+      }),
+      withTimeout(
+        buildMugWorkshopPdfBlob(),
+        CONFIGURATOR_ATTACHMENT_TIMEOUT_MS,
+        "Export PDF atelier mug : délai dépassé (60 s)."
+      ).catch((error) => {
+        console.warn("[Devis] Export PDF atelier mug:", error);
+        return null;
+      }),
+    ]);
+
+    return attachConfiguratorExportsToDraft(baseDraft, {
+      zipBlob,
+      pdfBlob,
+      zipFileName: `export-mug-${dateStamp}.zip`,
+      pdfFileName: `fiche-atelier-mug-${dateStamp}.pdf`,
+      sourceLabel: "configurateur mug",
+    });
+  }
+
+  function notifyQuoteAttachmentResult(draft) {
+    const errors = draft?.attachmentErrors || [];
+    if (errors.length) {
+      showToast(formatConfiguratorAttachmentErrors(errors), "warning", 8000);
+      return;
+    }
+    const count = draft?.attachments?.length || 0;
+    if (count >= 2) {
+      showToast("ZIP et PDF atelier prêts pour le devis.", "success");
+    }
+  }
+
+  async function createQuoteFromProject() {
+    if (quoteDraftBusy) return;
+    setQuoteDraftBusy(true);
+    try {
+      const draft = await buildQuoteDraftFromProject();
+      if (!draft) {
+        showToast("Ajoutez au moins un élément avant de créer un devis.", "error");
+        return;
+      }
+      notifyQuoteAttachmentResult(draft);
+      setPendingQuoteDraft(draft);
+      setLeadModalOpen(true);
+    } catch (error) {
+      console.error("Erreur préparation devis mug :", error);
+      showToast("Impossible de préparer le devis.", "error");
+    } finally {
+      setQuoteDraftBusy(false);
+    }
+  }
+
+  async function openAdminQuoteWithoutLead() {
+    if (quoteDraftBusy) return;
+    setQuoteDraftBusy(true);
+    try {
+      const draft = await buildQuoteDraftFromProject();
+      if (!draft) {
+        showToast("Ajoutez au moins un élément avant le devis rapide.", "error");
+        return;
+      }
+      notifyQuoteAttachmentResult(draft);
+      openQuoteFromCalculator(navigate, draft);
+      showToast("Devis mug pré-rempli.", "success");
+    } catch (error) {
+      console.error("Erreur Devis rapide mug :", error);
+      showToast("Impossible d'ouvrir le devis rapide.", "error");
+    } finally {
+      setQuoteDraftBusy(false);
+    }
+  }
+
+  async function submitPublicLeadAndQuote(event) {
+    event.preventDefault();
+    if (!pendingQuoteDraft) return;
+
+    setQuoteDraftBusy(true);
+    try {
+      await submitPublicLead({
+        email: leadEmail,
+        phone: leadPhone,
+        source: "configurateur-mug",
+        metadata: {
+          projectName: projectName.trim() || "Mug configuré",
+          quantity: orderQuantity,
+        },
+      });
+      saveQuoteDraft(pendingQuoteDraft);
+      setLeadModalOpen(false);
+      setLeadEmail("");
+      setLeadPhone("");
+      openQuoteFromCalculator(navigate, pendingQuoteDraft);
+      setPendingQuoteDraft(null);
+      showToast("Contact enregistré — devis pré-rempli.", "success");
+    } catch (error) {
+      showToast(error.message || "Impossible d'enregistrer le contact.", "error");
+    } finally {
+      setQuoteDraftBusy(false);
+    }
+  }
+
   async function exportMockupZip() {
     try {
-      const files = [];
-      const canvas = previewRef.current?.querySelector("canvas");
-
-      if (canvas) {
-        files.push({ name: "mockup-mug.png", blob: await canvasToBlob(canvas) });
-      }
-
-      files.push(...(await buildMugPrintElementFiles()));
-      files.push(...(await buildMugFontFiles()));
-
-      if (!files.length) {
+      const zipBlob = await buildMugZipBlob();
+      if (!zipBlob) {
         showToast("Aucun fichier à exporter.", "error");
         return;
       }
 
-      const zipBlob = await createZipBlob(files);
       downloadBlob(zipBlob, `export-mug-${new Date().toISOString().slice(0, 10)}.zip`);
     } catch (error) {
       console.error("Erreur export ZIP mug :", error);
@@ -933,10 +1135,54 @@ export default function Vue3D() {
           <h2>Vue 3D</h2>
           <p>Éditeur type Zakeke : compose ton visuel sur le gabarit 210 × 90 mm et vois le rendu sur le mug.</p>
         </div>
-        <button className="primary" type="button" onClick={exportMockupZip}>
-          Exporter mockup + fichiers impression
-        </button>
+        <div className="vue3d-header-actions">
+          <button type="button" onClick={openAdminQuoteWithoutLead} disabled={quoteDraftBusy}>
+            Devis rapide
+          </button>
+          <button type="button" onClick={createQuoteFromProject} disabled={quoteDraftBusy}>
+            Créer un devis
+          </button>
+          <button className="primary" type="button" onClick={exportMockupZip}>
+            Exporter mockup + fichiers impression
+          </button>
+        </div>
       </div>
+
+      {leadModalOpen ? (
+        <div className="vue3d-quote-modal" role="dialog" aria-labelledby="mug-lead-modal-title">
+          <div className="vue3d-quote-modal-card">
+            <h3 id="mug-lead-modal-title">Contact client</h3>
+            <p>Indiquez l&apos;email du client pour créer un lead et ouvrir le devis pré-rempli.</p>
+            <form className="vue3d-lead-form" onSubmit={submitPublicLeadAndQuote}>
+              <label>
+                Email *
+                <input
+                  type="email"
+                  required
+                  value={leadEmail}
+                  onChange={(event) => setLeadEmail(event.target.value)}
+                />
+              </label>
+              <label>
+                Téléphone
+                <input
+                  type="tel"
+                  value={leadPhone}
+                  onChange={(event) => setLeadPhone(event.target.value)}
+                />
+              </label>
+              <div className="vue3d-quote-modal-actions">
+                <button type="button" onClick={() => setLeadModalOpen(false)}>
+                  Annuler
+                </button>
+                <button type="submit" className="primary" disabled={quoteDraftBusy}>
+                  Enregistrer et ouvrir le devis
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
 
       <div className="vue3d-zakeke-layout">
         <div className="card vue3d-preview-card">
@@ -1087,14 +1333,25 @@ Tu peux importer tes propres polices avec le bouton “+ Importer police” : TT
           <CalculatorProjectLibrary
             calculatorType={CALCULATOR_TYPES.vue3d}
             currentName={projectName}
-            getFormSnapshot={() => ({ items, selectedId, customFonts, projectName })}
+            getFormSnapshot={() => ({ items, selectedId, customFonts, projectName, orderQuantity })}
             onLoadForm={(snapshot) => {
               setItems(Array.isArray(snapshot.items) ? snapshot.items : []);
               setSelectedId(snapshot.selectedId || "");
               setCustomFonts(Array.isArray(snapshot.customFonts) ? snapshot.customFonts : []);
               setProjectName(snapshot.projectName || "");
+              setOrderQuantity(Number(snapshot.orderQuantity) || 1);
             }}
           />
+
+          <label className="vue3d-quantity-field">
+            Quantité commande
+            <input
+              type="number"
+              min="1"
+              value={orderQuantity}
+              onChange={(event) => setOrderQuantity(Math.max(1, Number(event.target.value) || 1))}
+            />
+          </label>
         </div>
       </div>
     </section>

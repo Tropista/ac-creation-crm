@@ -81,18 +81,21 @@ async function blobToQuoteAttachment(blob, name, mimeType, quoteId = "draft") {
  */
 
 export async function attachConfiguratorExportsToDraft(
-
   draft,
-
-  { zipBlob = null, pdfBlob = null, quoteId = "draft" } = {}
-
+  {
+    zipBlob = null,
+    pdfBlob = null,
+    quoteId = "draft",
+    zipFileName = null,
+    pdfFileName = null,
+    sourceLabel = "configurateur t-shirt",
+  } = {}
 ) {
-
   const attachments = [...(draft.attachments || [])];
-
   const attachmentErrors = [];
-
   const dateStamp = new Date().toISOString().slice(0, 10);
+  const zipName = zipFileName || `export-tshirt-${dateStamp}.zip`;
+  const pdfName = pdfFileName || `fiche-atelier-tshirt-${dateStamp}.pdf`;
 
 
 
@@ -116,7 +119,7 @@ export async function attachConfiguratorExportsToDraft(
       attachments.push(
         await blobToQuoteAttachment(
           zipBlob,
-          `export-tshirt-${dateStamp}.zip`,
+          zipName,
           "application/zip",
           quoteId
         )
@@ -156,7 +159,7 @@ export async function attachConfiguratorExportsToDraft(
 
           pdfBlob,
 
-          `fiche-atelier-tshirt-${dateStamp}.pdf`,
+          pdfName,
 
           "application/pdf",
 
@@ -193,25 +196,15 @@ export async function attachConfiguratorExportsToDraft(
   let notes = String(draft.notes || "").trim();
 
   if (hasZip && hasPdf) {
-
     notes =
-
       notes ||
-
-      "ZIP impression et PDF atelier joints depuis le configurateur t-shirt.";
-
+      `ZIP impression et PDF atelier joints depuis le ${sourceLabel}.`;
   } else if (hasZip || hasPdf) {
-
     const joined = hasZip ? "ZIP impression" : "PDF atelier";
-
     const missing = !hasZip ? "ZIP impression" : "PDF atelier";
-
     notes =
-
       notes ||
-
-      `${joined} joint depuis le configurateur t-shirt. ${missing} manquant — réexportez depuis le configurateur si besoin.`;
-
+      `${joined} joint depuis le ${sourceLabel}. ${missing} manquant — réexportez depuis le configurateur si besoin.`;
   }
 
 

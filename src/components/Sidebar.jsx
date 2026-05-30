@@ -30,6 +30,9 @@ import {
   Users,
   Wrench,
   X,
+  Bell,
+  FileMinus,
+  Headphones,
 } from "lucide-react";
 
 import { APP_LOGO_URL } from "../utils/assets";
@@ -43,6 +46,7 @@ import {
 } from "../utils/quoteDraft";
 import { formatLastSyncRelative } from "../services/syncMerge";
 import { cleanupNavigationBlockers, dispatchRouteChange } from "../utils/uiCleanup";
+import { getSidebarAutomationBadgeCount } from "../utils/automations";
 import { useSyncedPathname } from "../hooks/useSyncedPathname";
 
 const SECTIONS_STORAGE_KEY = "crm_sidebar_sections_v1";
@@ -51,6 +55,10 @@ const pageIcons = {
   dashboard: LayoutDashboard,
   clients: Users,
   quotes: FileText,
+  leads: Users,
+  creditnotes: FileMinus,
+  sav: Headphones,
+  automations: Bell,
   invoices: Receipt,
   atelier: Wrench,
   products: Box,
@@ -81,7 +89,11 @@ const menuGroups = [
       { page: "dashboard", label: "Tableau de bord", type: "page" },
       { page: "clients", label: "Clients", type: "page" },
       { page: "quotes", label: "Devis", type: "page" },
+      { page: "leads", label: "Leads", type: "page" },
       { page: "invoices", label: "Factures", type: "page" },
+      { page: "creditnotes", label: "Avoirs", type: "page" },
+      { page: "sav", label: "SAV", type: "page" },
+      { page: "automations", label: "Automatisations", type: "page" },
       { page: "atelier", label: "Atelier", type: "page" },
     ],
   },
@@ -205,7 +217,7 @@ export default function Sidebar({
   }
 
   function handleNavClick(event, item) {
-    cleanupNavigationBlockers();
+    cleanupNavigationBlockers({ removePreviewOverlay: true });
     setMobileOpen(false);
 
     const path = pageToPath(item.page);
@@ -261,6 +273,14 @@ export default function Sidebar({
     }, 30_000);
     return () => clearInterval(interval);
   }, [lastSyncAt]);
+
+  const automationBadge = getSidebarAutomationBadgeCount(data);
+
+  function navBadge(pageKey) {
+    if (pageKey === "automations" && automationBadge) return automationBadge;
+    if (pageKey === "dashboard" && automationBadge) return automationBadge;
+    return "";
+  }
 
   const visibleGroups = menuGroups
     .map((group) => ({
@@ -384,6 +404,9 @@ export default function Sidebar({
                         >
                           <NavIcon page={item.page} />
                           {item.label}
+                          {navBadge(item.page) ? (
+                            <span className="sidebar-nav-badge">{navBadge(item.page)}</span>
+                          ) : null}
                         </Link>
                       ))}
                     </div>

@@ -32,7 +32,6 @@ import {
   isInvoiceOverdue,
   isPaidInvoice,
   isCancelledInvoice,
-  applyPartialPayment,
   getInvoiceRemaining,
   DEPOSIT_PRESETS,
 } from "../utils/invoices";
@@ -40,8 +39,8 @@ import { computeDueDate, openInvoiceReminderMailto } from "../utils/invoiceRemin
 import {
   clearInvoiceDraft,
   clearQuoteDraft,
-  consumeQuoteDraft,
   markQuoteDraftApplied,
+  resolveQuoteDraftForApply,
   INVOICES_LIST_VIEW_EVENT,
   QUOTES_LIST_VIEW_EVENT,
   wasQuoteDraftApplied,
@@ -64,11 +63,17 @@ import {
   markDocumentSent,
 } from "../utils/documentTracking";
 import { showToast } from "../utils/toast";
+import { parseQuoteOpenIdFromLocation } from "../utils/quoteOpenUrl";
 import { canDeleteData } from "../services/authService";
 import {
   countUnavailableAttachments,
   hydrateQuoteAttachmentsAsync,
 } from "../utils/quoteAttachments";
+import {
+  recordInvoicePayment,
+  buildPaymentSummary,
+  PAYMENT_METHODS,
+} from "../utils/payments";
 
 function Documents({ type, data, setData, currentRole = 'Admin', logActivity }) {
   const location = useLocation();
@@ -216,7 +221,7 @@ const [form, setForm] = useState({
       return undefined;
     }
 
-    if (location.state?.quotesListView) {
+    if (location.state?.quotesListView && !location.state?.quoteDraft) {
       if (quotesListViewHandledKeyRef.current === location.key) {
         return undefined;
       }
@@ -225,21 +230,36 @@ const [form, setForm] = useState({
       return undefined;
     }
 
-    const stateDraft = location.state?.quoteDraft;
-    const storageDraft = stateDraft ? null : consumeQuoteDraft();
-    const draft = stateDraft || storageDraft;
+    const draft = resolveQuoteDraftForApply(location.state);
     if (!draft?.lines?.length) return undefined;
     if (wasQuoteDraftApplied(draft)) return undefined;
 
-    markQuoteDraftApplied(draft);
-    if (stateDraft) {
-      clearQuoteDraft();
-    }
-
     let cancelled = false;
 
+    function draftLinesToForm(lines) {
+      return (lines || []).map((line) => ({
+        productId: line.productId || "",
+        sku: line.sku || "",
+        category: line.category || "",
+        categoryId: line.categoryId || "",
+        description: line.description || "",
+        quantity: Number(line.quantity || 1),
+        price: Number(line.price || 0),
+        discount: Number(line.discount || 0),
+        taille: line.taille || "",
+        couleur: line.couleur || "",
+        emplacementMarquage: line.emplacementMarquage || "",
+        technique: line.technique || "",
+      }));
+    }
+
     async function applyDraft() {
-      const hydratedAttachments = await hydrateQuoteAttachmentsAsync(draft.attachments || []);
+      let hydratedAttachments = [];
+      try {
+        hydratedAttachments = await hydrateQuoteAttachmentsAsync(draft.attachments || []);
+      } catch (error) {
+        console.error("Hydratation pièces jointes brouillon devis :", error);
+      }
       if (cancelled) return;
 
       setEditingId(null);
@@ -255,21 +275,11 @@ const [form, setForm] = useState({
         assignedTo: "",
         atelierNotes: draft.notes || "",
         priority: "normal",
-        lines: draft.lines.map((line) => ({
-          productId: line.productId || "",
-          sku: line.sku || "",
-          category: line.category || "",
-          categoryId: line.categoryId || "",
-          description: line.description || "",
-          quantity: Number(line.quantity || 1),
-          price: Number(line.price || 0),
-          discount: Number(line.discount || 0),
-          taille: line.taille || "",
-          couleur: line.couleur || "",
-          emplacementMarquage: line.emplacementMarquage || "",
-          technique: line.technique || "",
-        })),
+        lines: draftLinesToForm(draft.lines),
       });
+      setFormSessionKey((value) => value + 1);
+      markQuoteDraftApplied(draft);
+      clearQuoteDraft();
       const attachmentHint =
         hydratedAttachments.length > 0
           ? ` · ${hydratedAttachments.length} pièce(s) jointe(s)`
@@ -719,33 +729,42 @@ reset();
     });
   }
 
-useEffect(() => {
-  const openDocumentId = localStorage.getItem("crm_open_document_id");
-  const openDocumentType = localStorage.getItem("crm_open_document_type");
+  useEffect(() => {
+    const openFromUrl = isQuote ? parseQuoteOpenIdFromLocation(location) : "";
+    const openDocumentId =
+      localStorage.getItem("crm_open_document_id") || openFromUrl;
+    const openDocumentType =
+      localStorage.getItem("crm_open_document_type") ||
+      (openFromUrl ? "quote" : "");
 
-  if (!openDocumentId) return undefined;
+    if (!openDocumentId) return undefined;
 
-  if (
-    (openDocumentType === "quote" && !isQuote) ||
-    (openDocumentType === "invoice" && isQuote)
-  ) {
+    if (
+      (openDocumentType === "quote" && !isQuote) ||
+      (openDocumentType === "invoice" && isQuote)
+    ) {
+      localStorage.removeItem("crm_open_document_id");
+      localStorage.removeItem("crm_open_document_type");
+      return undefined;
+    }
+
+    const doc = documents.find((d) => String(d.id) === String(openDocumentId));
+
     localStorage.removeItem("crm_open_document_id");
     localStorage.removeItem("crm_open_document_type");
+
+    if (!doc) {
+      if (openFromUrl && documents.length > 0) {
+        showToast(`Devis introuvable (${openDocumentId}).`, "warning");
+      }
+      return undefined;
+    }
+
+    setPreviewDoc(doc);
+    setPreviewType(openDocumentType === "quote" ? "quote" : "invoice");
+
     return undefined;
-  }
-
-  const doc = documents.find((d) => String(d.id) === String(openDocumentId));
-
-  localStorage.removeItem("crm_open_document_id");
-  localStorage.removeItem("crm_open_document_type");
-
-  if (!doc) return undefined;
-
-  setPreviewDoc(doc);
-  setPreviewType(openDocumentType === "quote" ? "quote" : "invoice");
-
-  return undefined;
-}, [documents, isQuote]);
+  }, [documents, isQuote, location.search, location.hash, location.pathname]);
   function remove(id) {
     if (!canDeleteData(currentRole)) {
       showToast("Ton rôle ne permet pas de supprimer.", "error");
@@ -869,6 +888,12 @@ useEffect(() => {
     showToast("WhatsApp ouvert avec le message pré-rempli.", "info");
   }
 
+  function closePreview() {
+    setPreviewDoc(null);
+    setPreviewType(type);
+    cleanupNavigationBlockers();
+  }
+
   function openPreview(doc, docType = isQuote ? "quote" : "invoice") {
     setPreviewDoc(doc);
     setPreviewType(docType);
@@ -913,9 +938,9 @@ useEffect(() => {
     openPreview(note, "delivery");
   }
 
-  function downloadProductionSheet(quote) {
+  async function downloadProductionSheet(quote) {
     try {
-      downloadProductionSheetPdf({ quote, data });
+      await downloadProductionSheetPdf({ quote, data });
       logActivity?.("Fiche atelier PDF", quote.number);
       showToast(`Fiche atelier ${quote.number} téléchargée.`, "success");
     } catch (error) {
@@ -982,18 +1007,43 @@ useEffect(() => {
       return;
     }
 
-    const updated = applyPartialPayment(invoice, amount);
-    const nextInvoices = documents.map((doc) =>
-      String(doc.id) === String(invoice.id) ? updated : doc
+    const method =
+      window.prompt(
+        `Mode de paiement (${PAYMENT_METHODS.join(", ")})`,
+        "Virement"
+      ) || "Virement";
+
+    try {
+      const result = recordInvoicePayment(data, invoice, {
+        amount,
+        method: PAYMENT_METHODS.includes(method) ? method : "Autre",
+        notes: "",
+        isDeposit: invoice.invoiceType === "acompte",
+      });
+      setData(result);
+      logActivity?.(
+        "Paiement facture",
+        invoice.number,
+        `${money(amount)} · ${method}`
+      );
+      showToast(
+        result.invoice.status === "Payée"
+          ? `${invoice.number} entièrement payée.`
+          : `Paiement enregistré — reste ${money(getInvoiceRemaining(result.invoice))}.`,
+        "success"
+      );
+    } catch (error) {
+      showToast(error.message || "Impossible d'enregistrer le paiement.", "error");
+    }
+  }
+
+  function handleQuoteSignatureAccept(signedQuote) {
+    const nextQuotes = documents.map((entry) =>
+      String(entry.id) === String(signedQuote.id) ? signedQuote : entry
     );
-    setData({ ...data, invoices: nextInvoices });
-    logActivity?.("Paiement partiel facture", invoice.number, money(amount));
-    showToast(
-      updated.status === "Payée"
-        ? `${invoice.number} entièrement payée.`
-        : `Paiement enregistré — reste ${money(getInvoiceRemaining(updated))}.`,
-      "success"
-    );
+    setData({ ...data, quotes: nextQuotes });
+    setPreviewDoc(signedQuote);
+    logActivity?.("Signature devis", signedQuote.number, signedQuote.signature?.clientEmail || "");
   }
 
   function handleDocumentSent(doc) {
@@ -1217,10 +1267,7 @@ useEffect(() => {
           doc={previewDoc}
           type={previewType}
           data={data}
-          onClose={() => {
-            setPreviewDoc(null);
-            setPreviewType(type);
-          }}
+          onClose={closePreview}
           onDocumentSent={handleDocumentSent}
           onQuoteSharePrepared={(prepared) => {
             if (!isQuote) return;
@@ -1234,6 +1281,10 @@ useEffect(() => {
               setPreviewDoc(prepared);
             }
           }}
+          onQuoteAccept={isQuote ? handleQuoteSignatureAccept : undefined}
+          paymentSummary={
+            !isQuote ? buildPaymentSummary(previewDoc, data.payments) : null
+          }
         />
       )}
     </section>

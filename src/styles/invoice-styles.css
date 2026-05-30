@@ -551,15 +551,16 @@
 @media print {
   @page {
     size: A4;
-    margin: 8mm;
+    margin: 0;
+  }
+
+  /* Preview is portaled to body (sibling of #root), not inside the app shell */
+  body:has(.document-preview-overlay) > *:not(.document-preview-overlay) {
+    display: none !important;
   }
 
   html:has(.document-preview-overlay),
-  body:has(.document-preview-overlay),
-  #root:has(.document-preview-overlay),
-  .app:has(.document-preview-overlay),
-  .content:has(.document-preview-overlay),
-  section:has(.document-preview-overlay) {
+  body:has(.document-preview-overlay) {
     width: auto !important;
     min-height: 0 !important;
     height: auto !important;
@@ -572,23 +573,10 @@
     print-color-adjust: exact;
   }
 
-  body:has(.document-preview-overlay) .sidebar,
-  body:has(.document-preview-overlay) .content > section > *:not(.document-preview-overlay) {
-    display: none !important;
-  }
-
-  body:has(.document-preview-overlay) * {
-    visibility: hidden;
-  }
-
-  body:has(.document-preview-overlay) #document-preview,
-  body:has(.document-preview-overlay) #document-preview * {
-    visibility: visible !important;
-  }
-
   .no-print,
   .ac-invoice-actions,
-  .modal-actions {
+  .modal-actions,
+  .quote-signature-panel {
     display: none !important;
   }
 
@@ -618,29 +606,26 @@
 
   .document-preview-overlay .ac-invoice-v2,
   #document-preview.ac-invoice-v2 {
-    display: flex !important;
-    flex-direction: column !important;
+    display: block !important;
     width: 100% !important;
-    min-height: calc(297mm - 16mm) !important;
+    min-height: 0 !important;
     height: auto !important;
     margin: 0 !important;
-    padding: 5mm !important;
+    padding: 8mm !important;
     box-sizing: border-box !important;
     box-shadow: none !important;
     transform: none !important;
-    page-break-after: avoid !important;
-    break-after: avoid !important;
+    page-break-before: avoid !important;
+    break-before: avoid !important;
+    page-break-after: auto !important;
+    break-after: auto !important;
   }
 
-  .document-preview-overlay .ac-invoice-top {
-    flex: 0 0 auto !important;
-  }
-
+  .document-preview-overlay .ac-invoice-top,
   .document-preview-overlay .ac-invoice-bottom {
-    margin-top: auto !important;
-    flex: 0 0 auto !important;
-    display: flex !important;
-    flex-direction: column !important;
+    flex: none !important;
+    margin-top: 0 !important;
+    display: block !important;
   }
 
   .document-preview-overlay .ac-after-table {

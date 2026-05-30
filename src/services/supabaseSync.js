@@ -436,6 +436,23 @@ export async function syncSupabaseData(nextData, previousData = {}) {
         syncedData.deliveryNotes
       )
     ),
+    safeOptionalCollectionWrite("credit_notes", () =>
+      upsertCollectionDelta(
+        "credit_notes",
+        previousData.creditNotes,
+        syncedData.creditNotes
+      )
+    ),
+    safeOptionalCollectionWrite("after_sales_cases", () =>
+      upsertCollectionDelta(
+        "after_sales_cases",
+        previousData.afterSalesCases,
+        syncedData.afterSalesCases
+      )
+    ),
+    safeOptionalCollectionWrite("payments", () =>
+      upsertCollectionDelta("payments", previousData.payments, syncedData.payments)
+    ),
     upsertCollection("quotes", syncedData.quotes),
     upsertCollection("invoices", syncedData.invoices),
     upsertCollection("crm_logs", syncedData.logs),
@@ -518,6 +535,33 @@ export async function syncSupabaseData(nextData, previousData = {}) {
         getTombstoneIds(syncedData.settings, "deliveryNotes")
       )
     ),
+    safeOptionalCollectionWrite("credit_notes", () =>
+      trackDelete(
+        "creditNotes",
+        "credit_notes",
+        syncedData.creditNotes,
+        previousData.creditNotes,
+        getTombstoneIds(syncedData.settings, "creditNotes")
+      )
+    ),
+    safeOptionalCollectionWrite("after_sales_cases", () =>
+      trackDelete(
+        "afterSalesCases",
+        "after_sales_cases",
+        syncedData.afterSalesCases,
+        previousData.afterSalesCases,
+        getTombstoneIds(syncedData.settings, "afterSalesCases")
+      )
+    ),
+    safeOptionalCollectionWrite("payments", () =>
+      trackDelete(
+        "payments",
+        "payments",
+        syncedData.payments,
+        previousData.payments,
+        getTombstoneIds(syncedData.settings, "payments")
+      )
+    ),
     trackDelete(
       "quotes",
       "quotes",
@@ -580,6 +624,9 @@ export async function loadSupabaseData({
     expensesRes,
     leadsRes,
     deliveryNotesRes,
+    creditNotesRes,
+    afterSalesRes,
+    paymentsRes,
     quotesRes,
     invoicesRes,
     logsRes,
@@ -593,6 +640,9 @@ export async function loadSupabaseData({
     fetchCollectionRows(supabase, "expenses").then((data) => ({ data, error: null })),
     fetchCollectionRows(supabase, "leads").then((data) => ({ data, error: null })),
     fetchCollectionRows(supabase, "delivery_notes").then((data) => ({ data, error: null })),
+    fetchCollectionRows(supabase, "credit_notes").then((data) => ({ data, error: null })),
+    fetchCollectionRows(supabase, "after_sales_cases").then((data) => ({ data, error: null })),
+    fetchCollectionRows(supabase, "payments").then((data) => ({ data, error: null })),
     fetchCollectionRows(supabase, "quotes").then((data) => ({ data, error: null })),
     fetchCollectionRows(supabase, "invoices").then((data) => ({ data, error: null })),
     fetchCollectionRows(supabase, "crm_logs").then((data) => ({ data, error: null })),
@@ -602,6 +652,9 @@ export async function loadSupabaseData({
   const resolvedExpensesRes = resolveCollectionResult(expensesRes, "expenses");
   const resolvedLeadsRes = resolveCollectionResult(leadsRes, "leads");
   const resolvedDeliveryNotesRes = resolveCollectionResult(deliveryNotesRes, "delivery_notes");
+  const resolvedCreditNotesRes = resolveCollectionResult(creditNotesRes, "credit_notes");
+  const resolvedAfterSalesRes = resolveCollectionResult(afterSalesRes, "after_sales_cases");
+  const resolvedPaymentsRes = resolveCollectionResult(paymentsRes, "payments");
 
   const cloudSettings = settingsRes.data?.data || emptyData.settings;
   const tombstones = mergeDeletionTombstones(
@@ -636,6 +689,18 @@ export async function loadSupabaseData({
       rowsToItems(resolvedDeliveryNotesRes.data),
       tombstones.deliveryNotes
     ),
+    creditNotes: filterCollectionByTombstones(
+      rowsToItems(resolvedCreditNotesRes.data),
+      tombstones.creditNotes
+    ),
+    afterSalesCases: filterCollectionByTombstones(
+      rowsToItems(resolvedAfterSalesRes.data),
+      tombstones.afterSalesCases
+    ),
+    payments: filterCollectionByTombstones(
+      rowsToItems(resolvedPaymentsRes.data),
+      tombstones.payments
+    ),
     quotes: filterCollectionByTombstones(rowsToItems(quotesRes.data), tombstones.quotes),
     invoices: filterCollectionByTombstones(rowsToItems(invoicesRes.data), tombstones.invoices),
     logs: filterCollectionByTombstones(rowsToItems(logsRes.data), tombstones.logs),
@@ -655,6 +720,9 @@ export async function loadSupabaseData({
         resolvedExpensesRes.data?.length ||
         resolvedLeadsRes.data?.length ||
         resolvedDeliveryNotesRes.data?.length ||
+        resolvedCreditNotesRes.data?.length ||
+        resolvedAfterSalesRes.data?.length ||
+        resolvedPaymentsRes.data?.length ||
         quotesRes.data?.length ||
         invoicesRes.data?.length
     ),

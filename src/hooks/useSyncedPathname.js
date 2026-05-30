@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
+import { CRM_ROUTE_CHANGE_EVENT } from "../utils/uiCleanup";
 
 /**
  * Pathname aligné sur l'URL réelle du navigateur.
@@ -37,11 +38,13 @@ export function useSyncedPathname() {
     };
 
     window.addEventListener("popstate", syncFromBrowser);
+    window.addEventListener(CRM_ROUTE_CHANGE_EVENT, syncFromBrowser);
 
     return () => {
       history.pushState = pushState;
       history.replaceState = replaceState;
       window.removeEventListener("popstate", syncFromBrowser);
+      window.removeEventListener(CRM_ROUTE_CHANGE_EVENT, syncFromBrowser);
     };
   }, []);
 

@@ -44,6 +44,19 @@ test.describe("Factures — navigation sidebar", () => {
     await expect(page.locator(".product-picker__list--fixed")).toHaveCount(0);
   });
 
+  test("ferme l'aperçu facture et réaffiche la liste", async ({ page }) => {
+    await page.goto("/factures");
+    await expect(page.getByTestId("invoices-page")).toBeVisible();
+
+    await page.getByRole("button", { name: "Voir" }).first().click();
+    await expect(page.getByTestId("document-preview-overlay")).toBeVisible();
+
+    await page.getByRole("button", { name: "Fermer" }).click();
+    await expect(page.locator(".document-preview-overlay")).toHaveCount(0);
+    await expect(page.getByTestId("invoices-page")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Voir" }).first()).toBeVisible();
+  });
+
   test("quitte Factures avec aperçu ouvert", async ({ page }) => {
     await page.goto("/factures");
     await page.getByRole("button", { name: "Voir" }).first().click();

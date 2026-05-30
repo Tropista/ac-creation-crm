@@ -25,6 +25,16 @@ export function formatTrackingDate(value) {
   return date.toLocaleDateString("fr-FR");
 }
 
+function parseQuoteAgeDate(raw) {
+  if (!raw) return null;
+  const parts = String(raw).split("/");
+  const parsed =
+    parts.length === 3
+      ? new Date(`${parts[2]}-${parts[1]}-${parts[0]}`)
+      : new Date(raw);
+  return Number.isFinite(parsed.getTime()) ? parsed : null;
+}
+
 export function getStaleDraftQuotes(quotes = [], { minAgeDays = 7 } = {}) {
   const cutoff = Date.now() - minAgeDays * 24 * 60 * 60 * 1000;
 
@@ -32,15 +42,22 @@ export function getStaleDraftQuotes(quotes = [], { minAgeDays = 7 } = {}) {
     if (String(quote?.status || "").trim() !== "Brouillon") return false;
     if (quote?.sentAt) return false;
 
-    const raw = quote?.date || quote?.createdAt;
-    if (!raw) return false;
+    const parsed = parseQuoteAgeDate(quote?.date || quote?.createdAt);
+    return parsed && parsed.getTime() <= cutoff;
+  });
+}
 
-    const parts = String(raw).split("/");
-    const parsed =
-      parts.length === 3
-        ? new Date(`${parts[2]}-${parts[1]}-${parts[0]}`)
-        : new Date(raw);
+/** Devis « Envoyé » avec sentAt, sans réponse client (pas Accepté / Refusé). */
+export function getStaleSentQuotes(quotes = [], { minAgeDays = 7 } = {}) {
+  const cutoff = Date.now() - minAgeDays * 24 * 60 * 60 * 1000;
 
-    return Number.isFinite(parsed.getTime()) && parsed.getTime() <= cutoff;
+  return (quotes || []).filter((quote) => {
+    if (String(quote?.status || "").trim() !== "Envoyé") return false;
+    if (!quote?.sentAt) return false;
+    if (quote?.acceptedAt) return false;
+
+    const sentDate = new Date(quote.sentAt);
+    if (!Number.isFinite(sentDate.getTime())) return false;
+    return sentDate.getTime() <= cutoff;
   });
 }

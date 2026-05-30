@@ -1,8 +1,11 @@
 import { jsPDF } from "jspdf";
+import QRCode from "qrcode";
 import { APP_LOGO_URL } from "./assets";
 import { clientName } from "./documents";
 import { formatPdfQuantity } from "./documentPdf";
 import { resolveProcessType } from "./production";
+import { buildQuoteOpenUrl } from "./quoteOpenUrl";
+import { normalizeProductionSheet } from "./profitability";
 
 const PAGE_WIDTH = 210;
 const PAGE_HEIGHT = 297;
@@ -43,9 +46,10 @@ function normalizeLines(quote) {
   ];
 }
 
-export function buildProductionSheetPdf({ quote, data, logoDataUrl = null }) {
+export function buildProductionSheetPdf({ quote, data, logoDataUrl = null, qrDataUrl = null }) {
   const settings = data?.settings || {};
   const process = resolveProcessType(quote);
+  const sheet = normalizeProductionSheet(quote);
   const lines = normalizeLines(quote);
   const logoUrl =
     logoDataUrl ||
@@ -78,6 +82,10 @@ export function buildProductionSheetPdf({ quote, data, logoDataUrl = null }) {
     ["Client", clientName(data, quote.clientId)],
     ["Statut", quote.status || "—"],
     ["Processus", process.label],
+    ["Machine", sheet.machine || "—"],
+    ["Matériau", sheet.material || "—"],
+    ["Temps estimé", sheet.estimatedMinutes ? `${sheet.estimatedMinutes} min` : "—"],
+    ["Temps réel", sheet.realMinutes ? `${sheet.realMinutes} min` : "—"],
     ["Livraison prévue", quote.promisedDeliveryDate || "—"],
   ];
   if (quote.priority && quote.priority !== "normal") {
@@ -101,7 +109,7 @@ export function buildProductionSheetPdf({ quote, data, logoDataUrl = null }) {
 
   y += 4;
 
-  if (quote.atelierNotes) {
+  if (quote.atelierNotes || sheet.productionNote) {
     pdf.setDrawColor(...COLORS.border);
     pdf.setLineWidth(0.2);
     pdf.rect(MARGIN, y, CONTENT_WIDTH, 14);
@@ -112,10 +120,38 @@ export function buildProductionSheetPdf({ quote, data, logoDataUrl = null }) {
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(8.5);
     pdf.setTextColor(...COLORS.text);
-    wrapText(pdf, quote.atelierNotes, CONTENT_WIDTH - 6).forEach((line, index) => {
-      pdf.text(line, MARGIN + 3, y + 9 + index * 4);
-    });
+    wrapText(pdf, sheet.productionNote || quote.atelierNotes, CONTENT_WIDTH - 6).forEach(
+      (line, index) => {
+        pdf.text(line, MARGIN + 3, y + 9 + index * 4);
+      }
+    );
     y += 18;
+  }
+
+  const doneChecks = sheet.checklist.filter((item) => item.done).length;
+  if (sheet.checklist.length) {
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(8);
+    pdf.text(`Checklist (${doneChecks}/${sheet.checklist.length})`, MARGIN, y + 4);
+    y += 6;
+    pdf.setFont("helvetica", "normal");
+    sheet.checklist.forEach((item) => {
+      pdf.text(`${item.done ? "[x]" : "[ ]"} ${item.label}`, MARGIN + 2, y + 4);
+      y += 5;
+    });
+    y += 2;
+  }
+
+  if (sheet.files.length) {
+    pdf.setFont("helvetica", "bold");
+    pdf.text("Fichiers", MARGIN, y + 4);
+    y += 5;
+    pdf.setFont("helvetica", "normal");
+    sheet.files.forEach((file) => {
+      pdf.text(`• ${file.name}`, MARGIN + 2, y + 4);
+      y += 5;
+    });
+    y += 2;
   }
 
   const colWidths = {
@@ -186,6 +222,17 @@ export function buildProductionSheetPdf({ quote, data, logoDataUrl = null }) {
   y += 6;
   pdf.setFontSize(7);
   pdf.setTextColor(...COLORS.muted);
+
+  if (qrDataUrl) {
+    try {
+      pdf.setFontSize(6);
+      pdf.text("Scanner → devis", PAGE_WIDTH - MARGIN - 22, PAGE_HEIGHT - MARGIN - 24);
+      pdf.addImage(qrDataUrl, "PNG", PAGE_WIDTH - MARGIN - 22, PAGE_HEIGHT - MARGIN - 22, 20, 20);
+    } catch {
+      // QR optional
+    }
+  }
+
   pdf.text(
     `Généré le ${new Date().toLocaleDateString("fr-FR")} — ${settings.companyName || "AC Creation"}`,
     MARGIN,
@@ -195,7 +242,26 @@ export function buildProductionSheetPdf({ quote, data, logoDataUrl = null }) {
   return pdf;
 }
 
-export function downloadProductionSheetPdf({ quote, data }) {
-  const pdf = buildProductionSheetPdf({ quote, data });
+export async function buildProductionSheetQrDataUrl(quote, options = {}) {
+  if (!quote?.id) return null;
+  try {
+    return await QRCode.toDataURL(
+      buildQuoteOpenUrl(quote.id, { settings: options.settings }),
+      {
+        margin: 1,
+        width: 160,
+        errorCorrectionLevel: "M",
+      }
+    );
+  } catch {
+    return null;
+  }
+}
+
+export async function downloadProductionSheetPdf({ quote, data }) {
+  const qrDataUrl = await buildProductionSheetQrDataUrl(quote, {
+    settings: data?.settings,
+  });
+  const pdf = buildProductionSheetPdf({ quote, data, qrDataUrl });
   pdf.save(getProductionSheetFileName(quote));
 }

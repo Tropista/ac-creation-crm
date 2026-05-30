@@ -58,6 +58,12 @@ describe("uiCleanup", () => {
     expect(mockDocument.body.style.removeProperty).toHaveBeenCalledWith("pointer-events");
     expect(mockDocument.removedNodes).toContain(".ac-doc-pdf-root");
     expect(mockDocument.removedNodes).toContain(".product-picker__list--fixed");
+    expect(mockDocument.removedNodes).not.toContain(".document-preview-overlay");
+  });
+
+  it("retire l'aperçu document seulement en navigation forcée", () => {
+    cleanupNavigationBlockers({ removePreviewOverlay: true });
+
     expect(mockDocument.removedNodes).toContain(".document-preview-overlay");
   });
 

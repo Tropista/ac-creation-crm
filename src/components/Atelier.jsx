@@ -23,6 +23,12 @@ import { showToast } from "../utils/toast";
 import { canDeleteData } from "../services/authService";
 import { useAtelierRealtime } from "../hooks/useAtelierRealtime";
 import { openOrderReadyWhatsApp } from "../utils/quoteShare";
+import {
+  buildOperatorWeekPlanning,
+  filterPlanningByOperator,
+} from "../utils/atelierPlanning";
+import { addDays, startOfWeekMonday } from "../utils/quoteDeliveryCalendar";
+import AtelierProductionPanel from "./AtelierProductionPanel";
 
 const PROCESS_ICONS = {
   laser: "🔥",
@@ -143,6 +149,7 @@ function AtelierCard({
   onPreviewBl,
   onDownloadProductionSheet,
   onUpdateQuote,
+  onUpdateProductionSheet,
   onNotifyReady,
   canDelete = true,
   variant = "kanban",
@@ -297,6 +304,13 @@ function AtelierCard({
         </ul>
       )}
 
+      <AtelierProductionPanel
+        quote={quote}
+        data={data}
+        onUpdate={onUpdateProductionSheet}
+        onDownloadPdf={onDownloadProductionSheet}
+      />
+
       <div className={`atelier-card__actions${isList ? " atelier-card__actions--list" : ""}`}>
         {nextLabel ? (
           <button
@@ -412,6 +426,7 @@ export default function Atelier({
   const [viewMode, setViewMode] = useState("status");
   const [layoutMode, setLayoutMode] = useState("list");
   const [assigneeFilter, setAssigneeFilter] = useState("all");
+  const [planningWeekOffset, setPlanningWeekOffset] = useState(0);
   const [dragOverStatus, setDragOverStatus] = useState("");
   const [previewBl, setPreviewBl] = useState(null);
   const quotes = data.quotes || [];
@@ -436,6 +451,14 @@ export default function Atelier({
   const showListLayout = isCompact && layoutMode === "list";
   const overdueDeliveries = filteredQuotes.filter(isQuoteDeliveryOverdue);
   const quotesToLaunchToday = getQuotesToLaunchToday(filteredQuotes);
+  const planningWeekStart = useMemo(
+    () => addDays(startOfWeekMonday(new Date()), planningWeekOffset * 7),
+    [planningWeekOffset]
+  );
+  const operatorPlanning = useMemo(() => {
+    const planning = buildOperatorWeekPlanning(filteredQuotes, activeUsers, planningWeekStart);
+    return filterPlanningByOperator(planning, assigneeFilter);
+  }, [filteredQuotes, activeUsers, planningWeekStart, assigneeFilter]);
 
   useAtelierRealtime({
     enabled: cloudAvailable && typeof onCloudResync === "function",
@@ -462,6 +485,13 @@ export default function Atelier({
   function patchQuote(quote, changes) {
     const nextQuotes = quotes.map((entry) =>
       String(entry.id) === String(quote.id) ? { ...entry, ...changes } : entry
+    );
+    setData({ ...data, quotes: nextQuotes });
+  }
+
+  function updateProductionSheet(quote, nextQuote) {
+    const nextQuotes = quotes.map((entry) =>
+      String(entry.id) === String(quote.id) ? nextQuote : entry
     );
     setData({ ...data, quotes: nextQuotes });
   }
@@ -569,9 +599,9 @@ export default function Atelier({
     setPreviewBl(note);
   }
 
-  function handleDownloadProductionSheet(quote) {
+  async function handleDownloadProductionSheet(quote) {
     try {
-      downloadProductionSheetPdf({ quote, data });
+      await downloadProductionSheetPdf({ quote, data });
       logActivity?.("Fiche atelier PDF", quote.number);
       showToast(`Fiche atelier ${quote.number} téléchargée.`, "success");
     } catch (error) {
@@ -663,6 +693,16 @@ export default function Atelier({
             >
               Par processus
             </button>
+            <button
+              type="button"
+              className={viewMode === "planning" ? "active" : ""}
+              onClick={() => setViewMode("planning")}
+              role="tab"
+              aria-selected={viewMode === "planning"}
+              data-testid="atelier-view-planning"
+            >
+              Planning
+            </button>
           </div>
 
           <label className="atelier-assignee-filter">
@@ -752,7 +792,67 @@ export default function Atelier({
         </div>
       </div>
 
-      {board.total === 0 ? (
+      {viewMode === "planning" ? (
+        <div className="card atelier-planning" data-testid="atelier-planning">
+          <div className="atelier-planning__head">
+            <div>
+              <h3>Planning atelier</h3>
+              <p className="muted">Semaine du {operatorPlanning.weekLabel}</p>
+            </div>
+            <div className="atelier-planning__nav">
+              <button type="button" className="ghost" onClick={() => setPlanningWeekOffset((v) => v - 1)}>
+                ←
+              </button>
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => setPlanningWeekOffset(0)}
+                disabled={planningWeekOffset === 0}
+              >
+                Cette semaine
+              </button>
+              <button type="button" className="ghost" onClick={() => setPlanningWeekOffset((v) => v + 1)}>
+                →
+              </button>
+            </div>
+          </div>
+          <div className="atelier-planning__grid">
+            <div className="atelier-planning__row atelier-planning__row--head">
+              <div className="atelier-planning__operator">Opérateur</div>
+              {operatorPlanning.days.map((day) => (
+                <div key={day.toISOString()} className="atelier-planning__day-head">
+                  {day.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" })}
+                </div>
+              ))}
+            </div>
+            {[...operatorPlanning.operators, operatorPlanning.unassigned].map((row) => (
+              <div key={row.user?.id || "unassigned"} className="atelier-planning__row">
+                <div className="atelier-planning__operator">
+                  {row.user?.name || row.user?.email || row.label}
+                </div>
+                {row.days.map((day) => (
+                  <div key={day.date.toISOString()} className="atelier-planning__cell">
+                    {day.quotes.length === 0 ? (
+                      <span className="muted">—</span>
+                    ) : (
+                      day.quotes.map((quote) => (
+                        <button
+                          key={quote.id}
+                          type="button"
+                          className="atelier-planning__quote"
+                          onClick={() => openQuote(quote)}
+                        >
+                          {quote.number}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : board.total === 0 ? (
         <div className="card atelier-empty">
           <h3>Aucune commande en file</h3>
           <p className="muted">
@@ -846,6 +946,7 @@ export default function Atelier({
                       onPreviewBl={handlePreviewBl}
                       onDownloadProductionSheet={handleDownloadProductionSheet}
                       onUpdateQuote={patchQuote}
+                      onUpdateProductionSheet={updateProductionSheet}
                       onNotifyReady={handleNotifyReady}
                       canDelete={canDeleteData(currentRole)}
                     />
@@ -884,6 +985,7 @@ export default function Atelier({
                       onPreviewBl={handlePreviewBl}
                       onDownloadProductionSheet={handleDownloadProductionSheet}
                       onUpdateQuote={patchQuote}
+                      onUpdateProductionSheet={updateProductionSheet}
                       onNotifyReady={handleNotifyReady}
                       canDelete={canDeleteData(currentRole)}
                     />

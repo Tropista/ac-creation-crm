@@ -104,6 +104,9 @@ export function normalizeData(data) {
     quotes: data.quotes || [],
     invoices: data.invoices || [],
     deliveryNotes: data.deliveryNotes || [],
+    creditNotes: data.creditNotes || [],
+    afterSalesCases: data.afterSalesCases || [],
+    payments: data.payments || [],
 
     backups: data.backups || [],
     logs: data.logs || [],

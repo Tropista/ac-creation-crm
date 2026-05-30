@@ -42,9 +42,18 @@ describe("productionPdf", () => {
     );
   });
 
-  it("produit un PDF fiche atelier sur une page", () => {
+  it("produit un PDF fiche atelier sur une page", async () => {
     const pdf = buildProductionSheetPdf({ quote: sampleQuote, data: sampleData });
     expect(pdf.getNumberOfPages()).toBe(1);
     expect(typeof pdf.output).toBe("function");
+  });
+
+  it("accepte un QR code optionnel", () => {
+    const pdf = buildProductionSheetPdf({
+      quote: sampleQuote,
+      data: sampleData,
+      qrDataUrl: "data:image/png;base64,iVBORw0KGgo=",
+    });
+    expect(pdf.getNumberOfPages()).toBe(1);
   });
 });

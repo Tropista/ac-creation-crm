@@ -9,7 +9,7 @@
   gap: 22px;
 }
 
-.documents-page--preview-open > *:not(.document-preview-overlay) {
+.documents-page--preview-open > * {
   pointer-events: none;
 }
 
@@ -791,6 +791,149 @@
   font-family: "Segoe Script", "Brush Script MT", cursive;
 }
 
+.quote-signature-panel {
+  margin: 16px 0;
+  padding: 14px;
+  border: 1px solid #fbcfe8;
+  border-radius: 12px;
+  background: #fdf2f8;
+}
+
+.quote-signature-panel--compact {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 0.88rem;
+}
+
+.quote-signature-panel--compact h4,
+.quote-signature-panel--compact p {
+  margin: 0 0 4px;
+}
+
+.quote-signature-panel--collapsed {
+  padding-bottom: 6px;
+}
+
+.quote-signature-toggle {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #be185d;
+  cursor: pointer;
+}
+
+.quote-signature-toggle:hover {
+  text-decoration: underline;
+}
+
+.quote-signature-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.quote-signature-panel--compact .quote-signature-tabs {
+  margin-bottom: 6px;
+}
+
+.quote-signature-panel--compact .quote-signature-tabs button {
+  padding: 4px 8px;
+  font-size: 0.82rem;
+}
+
+.quote-signature-tabs button.active {
+  background: #ec4899;
+  color: #fff;
+}
+
+.quote-signature-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.quote-signature-panel--compact .quote-signature-field {
+  margin-bottom: 6px;
+}
+
+.quote-signature-panel--compact .quote-signature-field input {
+  padding: 4px 8px;
+  font-size: 0.85rem;
+}
+
+.quote-signature-canvas-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.quote-signature-canvas {
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  touch-action: none;
+  max-width: 100%;
+}
+
+.quote-signature-panel--compact .quote-signature-canvas {
+  border-radius: 6px;
+}
+
+.quote-signature-submit {
+  margin-top: 8px;
+}
+
+.quote-signature-panel--compact .quote-signature-submit {
+  margin-top: 4px;
+  padding: 6px 10px;
+  font-size: 0.85rem;
+}
+
+.quote-signature-image {
+  max-width: 220px;
+  max-height: 80px;
+  margin-top: 8px;
+}
+
+.quote-signature-panel--compact .quote-signature-image,
+.quote-signature-preview--compact .quote-signature-image {
+  max-width: 140px;
+  max-height: 48px;
+  margin-top: 4px;
+}
+
+.quote-signature-preview,
+.invoice-payment-history {
+  margin: 12px 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.quote-signature-preview--compact {
+  margin: 6px 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 0.88rem;
+}
+
+.quote-signature-preview--compact p {
+  margin: 2px 0 0;
+}
+
+.invoice-payment-history ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
 .invoice-modern-footer {
   display: grid;
   gap: 3px;
@@ -966,13 +1109,13 @@
     gap: 14px !important;
   }
 
-  /* Document preview: natural height, no phantom page 2 */
+  /* Document preview: preview is portaled to body, hide CRM shell entirely */
+  body:has(.document-preview-overlay) > *:not(.document-preview-overlay) {
+    display: none !important;
+  }
+
   html:has(.document-preview-overlay),
-  body:has(.document-preview-overlay),
-  #root:has(.document-preview-overlay),
-  .app:has(.document-preview-overlay),
-  .content:has(.document-preview-overlay),
-  section:has(.document-preview-overlay) {
+  body:has(.document-preview-overlay) {
     width: auto !important;
     min-height: 0 !important;
     height: auto !important;
@@ -980,11 +1123,6 @@
     margin: 0 !important;
     padding: 0 !important;
     overflow: visible !important;
-  }
-
-  body:has(.document-preview-overlay) .sidebar,
-  body:has(.document-preview-overlay) .content > section > *:not(.document-preview-overlay) {
-    display: none !important;
   }
 
   .document-preview-overlay,
@@ -1002,28 +1140,27 @@
 
   .document-preview-overlay .ac-invoice-v2,
   #document-preview.ac-invoice-v2 {
-    display: flex !important;
-    flex-direction: column !important;
+    display: block !important;
     width: 100% !important;
-    min-height: calc(297mm - 16mm) !important;
+    min-height: 0 !important;
     height: auto !important;
     margin: 0 !important;
-    padding: 5mm !important;
+    padding: 8mm !important;
     box-sizing: border-box !important;
     box-shadow: none !important;
-    page-break-after: avoid !important;
-    break-after: avoid !important;
+    page-break-before: avoid !important;
+    break-before: avoid !important;
   }
 
-  .document-preview-overlay .ac-invoice-top {
-    flex: 0 0 auto !important;
-  }
-
+  .document-preview-overlay .ac-invoice-top,
   .document-preview-overlay .ac-invoice-bottom {
-    margin-top: auto !important;
-    flex: 0 0 auto !important;
-    display: flex !important;
-    flex-direction: column !important;
+    flex: none !important;
+    margin-top: 0 !important;
+    display: block !important;
+  }
+
+  .quote-signature-panel {
+    display: none !important;
   }
 
 }

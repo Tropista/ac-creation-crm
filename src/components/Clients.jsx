@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import PaginationControls from "./PaginationControls";
 import { canDeleteData } from "../services/authService";
 import { showToast } from "../utils/toast";
+import { filterCreditNotesByClient } from "../utils/creditNotes";
+import { filterAfterSalesByClient } from "../utils/afterSales";
 
 function statusClass(status) {
   const value = String(status || "").toLowerCase();
@@ -162,6 +164,16 @@ export default function Clients({
       .sort((a, b) => new Date(docDate(b) || 0) - new Date(docDate(a) || 0));
   }, [data.deliveryNotes, selectedClient]);
 
+  const selectedClientCreditNotes = useMemo(() => {
+    if (!selectedClient) return [];
+    return filterCreditNotesByClient(data.creditNotes, selectedClient.id);
+  }, [data.creditNotes, selectedClient]);
+
+  const selectedClientSavCases = useMemo(() => {
+    if (!selectedClient) return [];
+    return filterAfterSalesByClient(data.afterSalesCases, selectedClient.id);
+  }, [data.afterSalesCases, selectedClient]);
+
   const clientHistory = useMemo(() => {
     const quotes = selectedClientQuotes.map((quote) => ({
       id: `quote-${quote.id}`,
@@ -213,7 +225,31 @@ export default function Clients({
         ]
       : [];
 
-    return [...quotes, ...invoices, ...deliveryNotes, ...created].sort(
+    const creditNotes = selectedClientCreditNotes.map((note) => ({
+      id: `credit-${note.id}`,
+      type: "Avoir",
+      docType: "credit",
+      doc: note,
+      icon: "📉",
+      title: note.number || "Avoir",
+      status: note.status || "brouillon",
+      date: note.date || note.createdAt,
+      total: -docTotal(note),
+    }));
+
+    const savCases = selectedClientSavCases.map((entry) => ({
+      id: `sav-${entry.id}`,
+      type: "SAV",
+      docType: "sav",
+      doc: entry,
+      icon: "🔧",
+      title: entry.subject || entry.type || "SAV",
+      status: entry.status || "Ouvert",
+      date: entry.openedAt || entry.updatedAt,
+      total: 0,
+    }));
+
+    return [...quotes, ...invoices, ...deliveryNotes, ...creditNotes, ...savCases, ...created].sort(
       (a, b) => new Date(b.date || 0) - new Date(a.date || 0)
     );
   }, [
@@ -221,6 +257,8 @@ export default function Clients({
     selectedClientInvoices,
     selectedClientQuotes,
     selectedClientDeliveryNotes,
+    selectedClientCreditNotes,
+    selectedClientSavCases,
   ]);
 
   const selectedClientInvoiceTotal = selectedClientInvoices.reduce(

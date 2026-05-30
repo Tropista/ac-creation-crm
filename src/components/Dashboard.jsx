@@ -24,6 +24,7 @@ import {
   parseAccountingMonthInput,
 } from "../utils/exportCsv";
 import { openInvoiceReminderMailto } from "../utils/invoiceReminders";
+import { openQuoteReminderMailto } from "../utils/quoteReminders";
 import { getProductionQueue, QUOTES_STATUS_FILTER_KEY } from "../utils/production";
 import { getOverdueQuotes, getQuotesToLaunchToday } from "../utils/quoteDelivery";
 import DeliveryUrgencyBadge from "./DeliveryUrgencyBadge";
@@ -40,7 +41,10 @@ import { getPermissions } from "../utils/permissions";
 import { isExpenseInMonth, getExpenseDate } from "../utils/expenseSuppliers";
 import { exportInvoicesCsv, exportLowStockPurchaseOrderCsv, buildPurchaseOrderText } from "../utils/exportCsv";
 import MonthlyAccountingExport from "./MonthlyAccountingExport";
-import { getStaleDraftQuotes, markDocumentReminder } from "../utils/documentTracking";
+import { getStaleDraftQuotes, getStaleSentQuotes, markDocumentReminder, formatTrackingDate } from "../utils/documentTracking";
+import { buildMondayWorkQueue, MONDAY_QUEUE_KINDS } from "../utils/mondayWorkQueue";
+import { collectAnnualYears, computeAnnualStats } from "../utils/annualStats";
+import { downloadPurchaseOrderPdf } from "../utils/purchaseOrderPdf";
 import {
   buildLeadMailtoHref,
   buildLeadTelHref,
@@ -69,6 +73,10 @@ import {
   allocateExpensesByProcessRevenue,
   computeProcessTypeStats,
 } from "../utils/processTypeStats";
+import {
+  buildDashboardProfitability,
+} from "../utils/profitability";
+import AutomationCenter from "./AutomationCenter";
 import {
   countLowStockByKind,
   getLowStockProductsByKind,
@@ -115,6 +123,9 @@ export default function Dashboard({
     )
   );
   const [billingYear, setBillingYear] = useState(() =>
+    String(new Date().getFullYear())
+  );
+  const [annualStatsYear, setAnnualStatsYear] = useState(() =>
     String(new Date().getFullYear())
   );
   const [, setPublicAcceptanceDismissTick] = useState(0);
@@ -241,6 +252,23 @@ export default function Dashboard({
   );
   const deliveryWeekCount = countWeekDeliveries(deliveryWeekCalendar);
   const staleDraftQuotes = getStaleDraftQuotes(quotes).slice(0, 8);
+  const staleSentQuotes = getStaleSentQuotes(quotes).slice(0, 8);
+  const mondayWorkQueue = useMemo(
+    () => buildMondayWorkQueue({ quotes, invoices, data }),
+    [quotes, invoices, data]
+  );
+  const annualYearOptions = collectAnnualYears(
+    quotes,
+    invoices,
+    data.expenses || []
+  );
+  const annualStats = computeAnnualStats({
+    quotes,
+    invoices,
+    expenses: data.expenses || [],
+    data,
+    year: Number(annualStatsYear) || new Date().getFullYear(),
+  });
   const activeLeads = getActiveLeads(leads);
   const unreadLeadCount = countUnreadLeads(leads);
   const activeLeadCount = countActiveLeads(leads);
@@ -436,8 +464,83 @@ export default function Dashboard({
     1
   );
 
+  function openQuote(quote) {
+    localStorage.setItem("crm_open_document_id", quote.id);
+    localStorage.setItem("crm_open_document_type", "quote");
+    navigate(pageToPath("quotes"));
+  }
+
+  function handleExportPurchaseOrderPdf() {
+    if (lowStockCount === 0) {
+      showToast("Aucun produit en stock bas à commander.", "info");
+      return;
+    }
+    downloadPurchaseOrderPdf({ products, suppliers, settings });
+    logActivity?.("Export bon de commande PDF", `${lowStockCount} produit(s)`);
+    showToast(`Bon de commande PDF (${lowStockCount} ligne(s))`, "success");
+  }
+
+  function sendQuoteReminder(quote) {
+    const client = clients.find((c) => c.id === quote.clientId);
+    const result = openQuoteReminderMailto(quote, client, settings);
+    if (!result.ok) {
+      showToast("Ce client n'a pas d'adresse email enregistrée.", "error");
+      return;
+    }
+
+    const nextQuotes = quotes.map((doc) =>
+      String(doc.id) === String(quote.id) ? markDocumentReminder(doc) : doc
+    );
+    setData({ ...data, quotes: nextQuotes });
+    logActivity?.("Relance devis", quote.number, client?.name || "");
+    showToast(`Relance n°${result.reminderNumber || 1} préparée pour ${quote.number}.`, "success");
+  }
+
+  function handleMondayQueueAction(item) {
+    if (item.kind === MONDAY_QUEUE_KINDS.INVOICE_OVERDUE) {
+      const invoice = invoices.find((entry) => String(entry.id) === String(item.invoiceId));
+      if (invoice) sendInvoiceReminder(invoice);
+      return;
+    }
+    if (item.quoteId) {
+      const quote = quotes.find((entry) => String(entry.id) === String(item.quoteId));
+      if (!quote) return;
+      if (item.kind === MONDAY_QUEUE_KINDS.QUOTE_FOLLOWUP) {
+        sendQuoteReminder(quote);
+        return;
+      }
+      if (item.kind === MONDAY_QUEUE_KINDS.MISSING_DEPOSIT) {
+        openQuote(quote);
+        return;
+      }
+      if (item.kind === MONDAY_QUEUE_KINDS.LAUNCH_TODAY) {
+        goToAtelier();
+      }
+    }
+  }
+
+  function mondayQueueActionLabel(item) {
+    if (item.kind === MONDAY_QUEUE_KINDS.QUOTE_FOLLOWUP) return "Relancer";
+    if (item.kind === MONDAY_QUEUE_KINDS.INVOICE_OVERDUE) return "Relancer";
+    if (item.kind === MONDAY_QUEUE_KINDS.MISSING_DEPOSIT) return "Ouvrir devis";
+    if (item.kind === MONDAY_QUEUE_KINDS.LAUNCH_TODAY) return "Atelier";
+    return "Voir";
+  }
+
+  function mondayQueueKindLabel(kind) {
+    if (kind === MONDAY_QUEUE_KINDS.QUOTE_FOLLOWUP) return "Devis envoyé";
+    if (kind === MONDAY_QUEUE_KINDS.INVOICE_OVERDUE) return "Facture en retard";
+    if (kind === MONDAY_QUEUE_KINDS.MISSING_DEPOSIT) return "Acompte manquant";
+    if (kind === MONDAY_QUEUE_KINDS.LAUNCH_TODAY) return "Commande à lancer";
+    return "Action";
+  }
+
   function goToAtelier() {
     navigate(pageToPath("atelier"));
+  }
+
+  function goToLeadsPage() {
+    navigate(pageToPath("leads"));
   }
 
   function goToInvoices(filter) {
@@ -598,6 +701,17 @@ export default function Dashboard({
     showToast(`${invoices.length} facture(s) exportée(s).`, "success");
   }
 
+  const dashboardProfitability = useMemo(
+    () => buildDashboardProfitability(data),
+    [data]
+  );
+
+  const profitabilityByClient = dashboardProfitability.byClient.slice(0, 5);
+  const profitabilityByMachine = dashboardProfitability.byMachine.slice(0, 5);
+  const hasProfitabilityData =
+    dashboardProfitability.paidInvoiceCount > 0 ||
+    dashboardProfitability.supplementalQuoteCount > 0;
+
   function sendInvoiceReminder(invoice) {
     const client = clients.find((c) => c.id === invoice.clientId);
     const result = openInvoiceReminderMailto(invoice, client, data.settings || {});
@@ -628,6 +742,55 @@ export default function Dashboard({
             Exporter factures CSV
           </button>
         )}
+      </div>
+
+      {(canManageQuotes || canManageInvoices) && mondayWorkQueue.length > 0 && (
+        <div
+          className="card dashboard-monday-queue"
+          data-testid="dashboard-monday-queue"
+        >
+          <div className="dashboard-monday-queue__head">
+            <div>
+              <h3>File de travail</h3>
+              <p className="muted">
+                {mondayWorkQueue.length} action(s) prioritaire(s) — devis à relancer, factures,
+                acomptes et commandes à lancer.
+              </p>
+            </div>
+          </div>
+          <ul className="dashboard-monday-queue__list">
+            {mondayWorkQueue.slice(0, 12).map((item) => (
+              <li key={item.id}>
+                <span className="dashboard-monday-queue__kind">
+                  {mondayQueueKindLabel(item.kind)}
+                </span>
+                <strong>{item.label}</strong>
+                <span className="muted">{item.detail}</span>
+                {item.amount != null ? <span>{money(item.amount)}</span> : null}
+                <button
+                  type="button"
+                  className="compact"
+                  onClick={() => handleMondayQueueAction(item)}
+                >
+                  {mondayQueueActionLabel(item)}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <div className="card dashboard-automations-card">
+        <div className="dashboard-annual-stats__head">
+          <div>
+            <h3>Alertes automatisations</h3>
+            <p className="muted">Devis sans suite, impayés, stock bas, commandes prêtes, SAV.</p>
+          </div>
+          <button type="button" onClick={() => navigate(pageToPath("automations"))}>
+            Voir tout
+          </button>
+        </div>
+        <AutomationCenter data={data} compact limit={6} />
       </div>
 
       {(canManageExpenses || canManageInvoices || canManageQuotes) && (
@@ -893,6 +1056,128 @@ export default function Dashboard({
           </div>
         ) : null}
       </div>
+
+      {(canManageInvoices || canManageQuotes) && (
+        <div className="card dashboard-annual-stats" data-testid="dashboard-annual-stats">
+          <div className="dashboard-annual-stats__head">
+            <div>
+              <h3>Statistiques annuelles</h3>
+              <p className="muted">
+                CA HT, marge, taux d&apos;acceptation des devis et top clients.
+              </p>
+            </div>
+            <label className="accounting-export-month" htmlFor="dashboard-annual-year">
+              <span>Année</span>
+              <select
+                id="dashboard-annual-year"
+                value={annualStatsYear}
+                onChange={(event) => setAnnualStatsYear(event.target.value)}
+                data-testid="dashboard-annual-year"
+              >
+                {annualYearOptions.map((year) => (
+                  <option key={year} value={String(year)}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <div className="dashboard-annual-stats__kpis">
+            <div>
+              <span className="muted">CA HT</span>
+              <strong>{money(annualStats.revenueHT)}</strong>
+            </div>
+            <div>
+              <span className="muted">Marge HT</span>
+              <strong className={annualStats.marginHT < 0 ? "stat--danger" : ""}>
+                {money(annualStats.marginHT)}
+              </strong>
+            </div>
+            <div>
+              <span className="muted">Taux acceptation devis</span>
+              <strong>
+                {annualStats.acceptance.rate == null
+                  ? "—"
+                  : `${Math.round(annualStats.acceptance.rate * 100)} %`}
+              </strong>
+              <em className="stat-detail">
+                {annualStats.acceptance.acceptedCount}/{annualStats.acceptance.sentCount} acceptés
+              </em>
+            </div>
+          </div>
+          <div className="dashboard-annual-stats__grid">
+            <div>
+              <h4>CA HT par mois</h4>
+              <ul className="dashboard-annual-monthly">
+                {annualStats.monthlyRevenue.map((entry) => (
+                  <li key={entry.month}>
+                    <span>{entry.label}</span>
+                    <strong>{money(entry.ht)}</strong>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h4>Top clients</h4>
+              {annualStats.topClients.length === 0 ? (
+                <p className="muted">Aucune facture sur cette année.</p>
+              ) : (
+                <ul className="dashboard-annual-top-clients">
+                  {annualStats.topClients.map((client) => (
+                    <li key={client.clientId}>
+                      <span>{client.name}</span>
+                      <strong>{money(client.revenueHT)} HT</strong>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {canManageQuotes && hasProfitabilityData && (
+        <div className="card dashboard-profitability" data-testid="dashboard-profitability">
+          <div className="dashboard-annual-stats__head">
+            <div>
+              <h3>Rentabilité</h3>
+              <p className="muted">
+                Marge HT sur {dashboardProfitability.paidInvoiceCount} facture(s) payée(s)
+                {dashboardProfitability.supplementalQuoteCount > 0
+                  ? ` + ${dashboardProfitability.supplementalQuoteCount} commande(s) atelier en cours`
+                  : ""}
+                . Coûts atelier si fiche production, sinon prix d&apos;achat produits.
+              </p>
+            </div>
+          </div>
+          <div className="dashboard-annual-stats__grid">
+            <div>
+              <h4>Par client</h4>
+              <ul className="dashboard-annual-top-clients">
+                {profitabilityByClient.map((row) => (
+                  <li key={row.clientId}>
+                    <span>{row.name}</span>
+                    <strong>
+                      {money(row.marginHT)} ({row.marginRate} %)
+                    </strong>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <h4>Par machine / process</h4>
+              <ul className="dashboard-annual-top-clients">
+                {profitabilityByMachine.map((row) => (
+                  <li key={row.machine}>
+                    <span>{row.machine}</span>
+                    <strong>{money(row.marginHT)}</strong>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="stats">
         <DashboardStatCard
@@ -1177,6 +1462,67 @@ export default function Dashboard({
           </div>
         )}
 
+        {canManageQuotes && staleSentQuotes.length > 0 && (
+          <div className="card dashboard-action-card dashboard-action-card--warning">
+            <div className="dashboard-action-card__header">
+              <div>
+                <h3>Devis envoyés à relancer</h3>
+                <p className="muted">
+                  Devis « Envoyé » datant de plus de 7 jours sans retour client.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => goToQuotes("Envoyé")}
+              >
+                Voir les devis →
+              </button>
+            </div>
+            <div className="table compact-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>N°</th>
+                    <th>Client</th>
+                    <th>Envoyé le</th>
+                    <th>Total TTC</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {staleSentQuotes.map((quote) => (
+                    <tr key={quote.id}>
+                      <td>{quote.number}</td>
+                      <td>{clientName(data, quote.clientId)}</td>
+                      <td>{formatTrackingDate(quote.sentAt)}</td>
+                      <td>{money(quote.totalTTC)}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="compact"
+                          onClick={() => openQuote(quote)}
+                        >
+                          Ouvrir
+                        </button>
+                        <button
+                          type="button"
+                          className="compact"
+                          onClick={() => sendQuoteReminder(quote)}
+                        >
+                          {Number(quote.reminderCount || 0) > 0
+                            ? `Relance n°${Number(quote.reminderCount || 0) + 1}`
+                            : "Relancer"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         {canConvertLeads && (
           <div className="card dashboard-action-card" data-testid="dashboard-leads">
             <div className="dashboard-action-card__header">
@@ -1197,6 +1543,9 @@ export default function Dashboard({
                       }.`}
                 </p>
               </div>
+              <button type="button" className="ghost" onClick={goToLeadsPage}>
+                Page leads →
+              </button>
             </div>
             {activeLeadCount === 0 ? (
               <p className="muted">
@@ -1494,6 +1843,9 @@ export default function Dashboard({
                   </button>
                   <button type="button" className="ghost" onClick={handleExportPurchaseOrder}>
                     Exporter bon de commande CSV
+                  </button>
+                  <button type="button" className="ghost" onClick={handleExportPurchaseOrderPdf}>
+                    Exporter bon de commande PDF
                   </button>
                   <button type="button" className="ghost" onClick={handleCopyPurchaseOrderText}>
                     Copier bon de commande
