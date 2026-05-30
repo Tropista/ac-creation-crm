@@ -16,6 +16,8 @@ import {
   enrichFilament,
   getStockLevel,
   applyFilamentForPrint,
+  isLegacyFilamentWeightCalc,
+  migrateLegacyFilamentWeights,
 } from "./filamentService";
 
 const baseFilament = {
@@ -23,21 +25,29 @@ const baseFilament = {
   name: "PLA Noir",
   spoolWeightFullG: 1000,
   spoolWeightEmptyG: 200,
-  remainingWeightG: 800,
+  remainingWeightG: 1000,
   purchasePrice: 20,
   alertThresholdG: 100,
 };
 
 describe("filamentService calculations", () => {
-  it("calcule le poids utilisable et le prix au gramme", () => {
-    expect(calcUsableWeightG(baseFilament)).toBe(800);
-    expect(calcPricePerGram(baseFilament)).toBeCloseTo(0.025, 4);
+  it("calcule le poids utilisable (net filament) et le prix au gramme", () => {
+    expect(calcUsableWeightG(baseFilament)).toBe(1000);
+    expect(calcPricePerGram(baseFilament)).toBeCloseTo(0.02, 4);
+  });
+
+  it("n'utilise pas le poids bobine vide dans le calcul utilisable", () => {
+    expect(calcUsableWeightG({ spoolWeightFullG: 1000, spoolWeightEmptyG: 200 })).toBe(1000);
+    expect(calcPricePerGram({ spoolWeightFullG: 1000, spoolWeightEmptyG: 200, purchasePrice: 20 })).toBeCloseTo(
+      0.02,
+      4
+    );
   });
 
   it("enrichit une bobine avec pourcentage et valeur restante", () => {
     const enriched = enrichFilament(baseFilament);
-    expect(enriched.usableWeightG).toBe(800);
-    expect(enriched.pricePerGram).toBeCloseTo(0.025, 4);
+    expect(enriched.usableWeightG).toBe(1000);
+    expect(enriched.pricePerGram).toBeCloseTo(0.02, 4);
     expect(enriched.remainingPercent).toBe(100);
     expect(enriched.remainingValue).toBeCloseTo(20, 2);
     expect(enriched.stockLevel).toBe(STOCK_LEVEL.OK);
@@ -63,12 +73,42 @@ describe("filamentService calculations", () => {
       vatRate: 17,
     });
 
-    expect(quote.filamentCost).toBeCloseTo(2.5, 2);
+    expect(quote.filamentCost).toBeCloseTo(2, 2);
     expect(quote.electricityCost).toBeCloseTo(0.08, 2);
     expect(quote.laborCost).toBeCloseTo(10, 2);
-    expect(quote.productionCost).toBeCloseTo(13.58, 2);
-    expect(quote.totalHT).toBeCloseTo(27.16, 2);
+    expect(quote.productionCost).toBeCloseTo(13.08, 2);
+    expect(quote.totalHT).toBeCloseTo(26.16, 2);
     expect(quote.totalTTC).toBeGreaterThan(quote.totalHT);
+  });
+});
+
+describe("filamentService legacy migration", () => {
+  const legacyFilament = {
+    id: "legacy-1",
+    spoolWeightFullG: 1000,
+    spoolWeightEmptyG: 200,
+    remainingWeightG: 750,
+    purchasePrice: 20,
+    pricePerGram: 0.025,
+  };
+
+  it("détecte l'ancienne formule full − empty", () => {
+    expect(isLegacyFilamentWeightCalc(legacyFilament)).toBe(true);
+    expect(isLegacyFilamentWeightCalc(baseFilament)).toBe(false);
+  });
+
+  it("corrige le reste en ajoutant le poids bobine vide", () => {
+    const migrated = migrateLegacyFilamentWeights(legacyFilament);
+    expect(migrated.remainingWeightG).toBe(950);
+  });
+
+  it("applique la migration à l'enrichissement", () => {
+    const enriched = enrichFilament(legacyFilament);
+    expect(enriched.remainingWeightG).toBe(950);
+    expect(enriched.usableWeightG).toBe(1000);
+    expect(enriched.pricePerGram).toBeCloseTo(0.02, 4);
+    expect(enriched.remainingPercent).toBeCloseTo(95, 0);
+    expect(enriched.remainingValue).toBeCloseTo(19, 2);
   });
 });
 
@@ -85,10 +125,10 @@ describe("filamentService stock movements", () => {
     });
   });
 
-  it("crée une bobine avec reste initial = poids utilisable", () => {
+  it("crée une bobine avec reste initial = poids net du filament", () => {
     const filament = data.filaments[0];
-    expect(filament.remainingWeightG).toBe(800);
-    expect(filament.pricePerGram).toBeCloseTo(0.02, 4);
+    expect(filament.remainingWeightG).toBe(1000);
+    expect(filament.pricePerGram).toBeCloseTo(0.016, 4);
   });
 
   it("applyFilamentForPrint déduit le stock et journalise le mouvement", () => {
@@ -98,11 +138,11 @@ describe("filamentService stock movements", () => {
       projectName: "Support téléphone",
     });
 
-    expect(result.filament.remainingWeightG).toBe(750);
+    expect(result.filament.remainingWeightG).toBe(950);
     expect(result.movement.type).toBe(MOVEMENT_TYPES.USE);
     expect(result.movement.quantityG).toBe(50);
-    expect(result.movement.materialCost).toBeCloseTo(1, 2);
-    expect(result.movement.stockAfterG).toBe(750);
+    expect(result.movement.materialCost).toBeCloseTo(0.8, 2);
+    expect(result.movement.stockAfterG).toBe(950);
     expect(result.filamentMovements).toHaveLength(1);
   });
 
@@ -110,7 +150,7 @@ describe("filamentService stock movements", () => {
     expect(() =>
       applyFilamentForPrint(data, {
         filamentId: data.filaments[0].id,
-        grams: 900,
+        grams: 1100,
         projectName: "Trop gros",
       })
     ).toThrow(/Stock insuffisant/i);
@@ -120,7 +160,7 @@ describe("filamentService stock movements", () => {
     const lowStockData = createFilamentMovement(data, {
       filamentId: data.filaments[0].id,
       type: MOVEMENT_TYPES.USE,
-      quantityG: 750,
+      quantityG: 920,
       printJobName: "Gros print",
     });
 

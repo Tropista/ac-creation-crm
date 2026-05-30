@@ -1,0 +1,17 @@
+{
+  "name": "ac-crm-bambu-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pont MQTT LAN Bambu Lab → jobs CRM / Supabase",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "simulate": "node index.js --simulate-finish",
+    "validate": "node index.js --validate-config",
+    "test": "node --test mqttConfig.test.js index.test.js amsSync.test.js"
+  },
+  "dependencies": {
+    "mqtt": "^5.10.4"
+  }
+}

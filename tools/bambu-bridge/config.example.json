@@ -1,0 +1,9 @@
+{
+  "host": "192.168.178.21",
+  "serial": "31B8BP611200939",
+  "accessCode": "a9d0351d",
+  "model": "H2C",
+  "gramsDefault": 50,
+  "supabaseUrl": "",
+  "supabaseServiceKey": ""
+}

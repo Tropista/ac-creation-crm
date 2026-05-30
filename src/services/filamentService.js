@@ -25,8 +25,15 @@ function n(value) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+/**
+ * Poids net de filament utilisable (g) à l'achat.
+ * `spoolWeightFullG` = filament neuf seul, sans la bobine vide (ex. 1000 g sur l'étiquette).
+ * `spoolWeightEmptyG` sert uniquement à la pesée sur balance (bobine vide), pas soustrait ici.
+ *
+ * Ancienne formule (v1) : full − empty — incorrecte si full était déjà le net filament.
+ */
 export function calcUsableWeightG(filament = {}) {
-  return Math.max(0, n(filament.spoolWeightFullG) - n(filament.spoolWeightEmptyG));
+  return Math.max(0, n(filament.spoolWeightFullG));
 }
 
 export function calcPricePerGram(filament = {}) {
@@ -35,22 +42,62 @@ export function calcPricePerGram(filament = {}) {
   return n(filament.purchasePrice) / usable;
 }
 
+/**
+ * Détecte les bobines enregistrées avec l'ancienne formule (full − empty).
+ * Signal : price_per_gram stocké = prix / (full − empty) alors que le nouveau calcul diffère.
+ */
+export function isLegacyFilamentWeightCalc(filament = {}) {
+  const full = n(filament.spoolWeightFullG);
+  const empty = n(filament.spoolWeightEmptyG);
+  const purchase = n(filament.purchasePrice);
+  const storedPrice = n(filament.pricePerGram);
+
+  if (empty <= 0 || full <= empty || purchase <= 0 || storedPrice <= 0) return false;
+
+  const legacyUsable = full - empty;
+  const legacyPrice = purchase / legacyUsable;
+  const newPrice = purchase / full;
+
+  return (
+    Math.abs(storedPrice - legacyPrice) < 0.00001 &&
+    Math.abs(storedPrice - newPrice) > 0.00001
+  );
+}
+
+/**
+ * Corrige le reste si l'ancienne formule avait soustrait la bobine vide du net filament :
+ * reste réel = reste_enregistré + poids_bobine_vide (plafonné au net d'achat).
+ */
+export function migrateLegacyFilamentWeights(filament = {}) {
+  if (!isLegacyFilamentWeightCalc(filament)) return filament;
+
+  const full = n(filament.spoolWeightFullG);
+  const empty = n(filament.spoolWeightEmptyG);
+  const remaining = n(filament.remainingWeightG);
+
+  return {
+    ...filament,
+    remainingWeightG: Math.min(full, remaining + empty),
+  };
+}
+
 export function enrichFilament(filament = {}) {
-  const usableWeightG = calcUsableWeightG(filament);
-  const pricePerGram = calcPricePerGram({ ...filament, spoolWeightFullG: filament.spoolWeightFullG, spoolWeightEmptyG: filament.spoolWeightEmptyG, purchasePrice: filament.purchasePrice });
-  const remainingWeightG = n(filament.remainingWeightG);
+  const migrated = migrateLegacyFilamentWeights(filament);
+  const usableWeightG = calcUsableWeightG(migrated);
+  const pricePerGram = calcPricePerGram(migrated);
+  const remainingWeightG = n(migrated.remainingWeightG);
   const remainingPercent =
     usableWeightG > 0 ? Math.min(100, Math.max(0, (remainingWeightG / usableWeightG) * 100)) : 0;
   const remainingValue = remainingWeightG * pricePerGram;
 
   return {
-    ...filament,
+    ...migrated,
     usableWeightG,
-    pricePerGram: filament.pricePerGram != null ? n(filament.pricePerGram) : pricePerGram,
+    pricePerGram,
     remainingWeightG,
     remainingPercent,
     remainingValue,
-    stockLevel: getStockLevel({ ...filament, remainingWeightG, alertThresholdG: filament.alertThresholdG }),
+    stockLevel: getStockLevel({ ...migrated, remainingWeightG, alertThresholdG: migrated.alertThresholdG }),
   };
 }
 
@@ -139,7 +186,7 @@ function normalizeFilamentInput(payload = {}, existing = null) {
         ? n(payload.remainingWeightG)
         : existing?.remainingWeightG != null
           ? n(existing.remainingWeightG)
-          : Math.max(0, spoolWeightFullG - spoolWeightEmptyG),
+          : Math.max(0, spoolWeightFullG),
     purchasePrice,
     supplier: String(payload.supplier ?? existing?.supplier ?? "").trim(),
     storageLocation: String(payload.storageLocation ?? existing?.storageLocation ?? "").trim(),

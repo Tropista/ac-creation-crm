@@ -8,8 +8,8 @@ CREATE TABLE IF NOT EXISTS public.filaments (
   material text,
   color text,
   diameter numeric DEFAULT 1.75,
-  spool_weight_full_g numeric NOT NULL DEFAULT 1000,
-  spool_weight_empty_g numeric NOT NULL DEFAULT 0,
+  spool_weight_full_g numeric NOT NULL DEFAULT 1000, -- net filament neuf (sans bobine vide)
+  spool_weight_empty_g numeric NOT NULL DEFAULT 0, -- bobine vide seule (référence balance, non soustrait)
   remaining_weight_g numeric NOT NULL DEFAULT 0,
   purchase_price numeric NOT NULL DEFAULT 0,
   price_per_gram numeric NOT NULL DEFAULT 0,
