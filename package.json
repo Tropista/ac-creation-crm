@@ -14,7 +14,7 @@
     "predist": "npm run clean:release",
     "predist:win": "npm run clean:release",
     "lint": "eslint .",
-    "test": "vitest run",
+    "test": "vitest run && npm test --prefix tools/bambu-bridge",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "preview": "vite preview",
