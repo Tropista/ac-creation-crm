@@ -1,6 +1,5 @@
 import { getBankApiUrl } from "../utils/bankApi";
 import { buildDocumentPdf, getDocumentFileName } from "../utils/documentPdf";
-import { buildInvoiceReminderEmail } from "../utils/invoiceReminders";
 import { buildEmailFromTemplate, buildDocVars } from "../utils/emailTemplates";
 
 export async function sendDocumentByEmail({ doc, type, data, client }) {
