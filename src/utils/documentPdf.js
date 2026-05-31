@@ -420,6 +420,7 @@ function drawPaymentCard(pdf, settings, x, y, width, style) {
   return y + contentHeight;
 }
 
+
 const DEFAULT_MENTIONS_BODY =
   "Document généré électroniquement. Aucun escompte accordé sauf indication contraire. En cas de retard de paiement, des pénalités peuvent être appliquées selon les conditions convenues.";
 

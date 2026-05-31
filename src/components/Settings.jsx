@@ -468,6 +468,69 @@ e.target.value
 }
 />
 
+
+<label style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+  <span style={{ fontSize: "12px", color: "var(--text-muted, #6b7280)" }}>
+    Adresse Gmail (expéditeur des emails)
+  </span>
+  <input
+    type="email"
+    placeholder="contact@accreation.lu"
+    value={form.smtpEmail || ""}
+    onChange={(e) => setForm({ ...form, smtpEmail: e.target.value })}
+  />
+</label>
+
+<label style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+  <span style={{ fontSize: "12px", color: "var(--text-muted, #6b7280)" }}>
+    Mot de passe d'application Google
+  </span>
+  <input
+    type="password"
+    placeholder="xxxx xxxx xxxx xxxx"
+    value={form.smtpAppPassword || ""}
+    onChange={(e) => setForm({ ...form, smtpAppPassword: e.target.value })}
+  />
+  <span style={{ fontSize: "11px", color: "var(--text-muted, #6b7280)" }}>
+    Google → Compte → Sécurité → Validation en 2 étapes → Mots de passe des applications
+  </span>
+</label>
+
+{(form.smtpEmail || form.smtpAppPassword) && (
+  <button
+    type="button"
+    onClick={async () => {
+      if (!form.smtpEmail || !form.smtpAppPassword) {
+        showToast("Remplis d'abord les deux champs Gmail.", "error");
+        return;
+      }
+      showToast("Test en cours…", "info");
+      try {
+        const apiUrl = import.meta.env.VITE_BANK_API_URL || "http://127.0.0.1:3001";
+        const res = await fetch(`${apiUrl}/send-email`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            to: form.smtpEmail,
+            subject: "Test connexion CRM",
+            text: "Si tu reçois cet email, la connexion Gmail fonctionne.",
+            smtpEmail: form.smtpEmail,
+            smtpAppPassword: form.smtpAppPassword,
+            fromName: form.companyName || "CRM",
+          }),
+        });
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(payload.error || "Erreur inconnue");
+        showToast("Email de test envoyé ! Vérifie ta boîte Gmail.", "success");
+      } catch (err) {
+        showToast(`Échec : ${err.message}`, "error");
+      }
+    }}
+  >
+    Tester la connexion Gmail
+  </button>
+)}
+
 <button className="primary">
 
 Sauvegarder

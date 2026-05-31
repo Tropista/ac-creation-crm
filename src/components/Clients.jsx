@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import PaginationControls from "./PaginationControls";
+import ClientFileLibrary from "./ClientFileLibrary";
 import { canDeleteData } from "../services/authService";
 import { showToast } from "../utils/toast";
 import { filterCreditNotesByClient } from "../utils/creditNotes";
@@ -891,6 +892,7 @@ h1{
                 <button type="button" className={clientTab === "address" ? "active" : ""} onClick={() => setClientTab("address")}>📍 Adresse</button>
                 <button type="button" className={clientTab === "documents" ? "active" : ""} onClick={() => setClientTab("documents")}>📄 Documents</button>
                 <button type="button" className={clientTab === "history" ? "active" : ""} onClick={() => setClientTab("history")}>🕘 Historique</button>
+                <button type="button" className={clientTab === "files" ? "active" : ""} onClick={() => setClientTab("files")}>📂 Fichiers</button>
               </div>
 
               <div className="client-card">
@@ -1002,6 +1004,16 @@ h1{
                   <Timeline items={clientHistory} onOpen={openDocument} />
                 )}
 
+                {clientTab === "files" && (
+                  <ClientFileLibrary
+                    clientId={selectedClient.id}
+                    files={(data.clientFiles || []).filter((f) => String(f.clientId) === String(selectedClient.id))}
+                    onFilesChange={(updated) => {
+                      const others = (data.clientFiles || []).filter((f) => String(f.clientId) !== String(selectedClient.id));
+                      setData({ ...data, clientFiles: [...others, ...updated] });
+                    }}
+                  />
+                )}
 
               </div>
             </>

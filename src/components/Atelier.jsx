@@ -28,6 +28,7 @@ import {
   buildOperatorWeekPlanning,
   filterPlanningByOperator,
 } from "../utils/atelierPlanning";
+import AtelierGantt from "./AtelierGantt";
 import { addDays, startOfWeekMonday } from "../utils/quoteDeliveryCalendar";
 import AtelierProductionPanel from "./AtelierProductionPanel";
 
@@ -763,6 +764,15 @@ export default function Atelier({
             >
               Planning
             </button>
+            <button
+              type="button"
+              className={viewMode === "gantt" ? "active" : ""}
+              onClick={() => setViewMode("gantt")}
+              role="tab"
+              aria-selected={viewMode === "gantt"}
+            >
+              Gantt
+            </button>
           </div>
 
           <label className="atelier-assignee-filter">
@@ -954,6 +964,12 @@ export default function Atelier({
             ))}
           </div>
         </div>
+      ) : viewMode === "gantt" ? (
+        <AtelierGantt
+          quotes={filteredQuotes}
+          data={data}
+          onQuoteClick={(q) => openQuote(q)}
+        />
       ) : board.total === 0 ? (
         <div className="card atelier-empty">
           <h3>Aucune commande en file</h3>

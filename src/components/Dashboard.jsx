@@ -77,6 +77,8 @@ import {
   buildDashboardProfitability,
 } from "../utils/profitability";
 import AutomationCenter from "./AutomationCenter";
+import DashboardCharts from "./DashboardCharts";
+import ErrorBoundary from "./ErrorBoundary";
 import {
   countLowStockByKind,
   getLowStockProductsByKind,
@@ -1067,6 +1069,20 @@ export default function Dashboard({
           </div>
         ) : null}
       </div>
+
+      {(canManageInvoices || canManageQuotes) && (
+        <ErrorBoundary>
+          <DashboardCharts
+            annualStats={annualStats}
+            processTypeStats={processTypeStats}
+            leads={leads}
+            quotes={quotes}
+            invoices={invoices}
+            expenses={data.expenses || []}
+            year={Number(annualStatsYear) || new Date().getFullYear()}
+          />
+        </ErrorBoundary>
+      )}
 
       {(canManageInvoices || canManageQuotes) && (
         <div className="card dashboard-annual-stats" data-testid="dashboard-annual-stats">

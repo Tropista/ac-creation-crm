@@ -2,6 +2,7 @@ import dotenv from "dotenv";
 import express from "express";
 import cors from "cors";
 import axios from "axios";
+import nodemailer from "nodemailer";
 import { execSync } from "child_process";
 import fs from "fs";
 import path from "path";
@@ -51,7 +52,7 @@ function pidsOnPort(port) {
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 
 const PORT = Number(process.env.PORT || 3001);
 const HOST = process.env.BANK_HOST || "127.0.0.1";
@@ -277,6 +278,45 @@ app.get("/api/bank/transactions", async (req, res) => {
       error: err.response?.data?.message || err.message,
       manualFallback: true,
     });
+  }
+});
+
+app.post("/send-email", async (req, res) => {
+  const { to, subject, text, html, attachmentBase64, attachmentName, smtpEmail, smtpAppPassword, fromName } = req.body || {};
+
+  if (!to || !subject || !smtpEmail || !smtpAppPassword) {
+    return res.status(400).json({ error: "Paramètres manquants (to, subject, smtpEmail, smtpAppPassword)." });
+  }
+
+  try {
+    const transporter = nodemailer.createTransport({
+      host: "smtp.gmail.com",
+      port: 587,
+      secure: false,
+      auth: { user: smtpEmail, pass: smtpAppPassword },
+    });
+
+    const mailOptions = {
+      from: fromName ? `"${fromName}" <${smtpEmail}>` : smtpEmail,
+      to,
+      subject,
+      text: text || "",
+      html: html || (text || "").replace(/\n/g, "<br>"),
+      ...(attachmentBase64 ? {
+        attachments: [{
+          filename: attachmentName || "document.pdf",
+          content: attachmentBase64,
+          encoding: "base64",
+          contentType: "application/pdf",
+        }],
+      } : {}),
+    };
+
+    await transporter.sendMail(mailOptions);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[send-email]", err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 

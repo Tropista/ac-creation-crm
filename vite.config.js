@@ -11,6 +11,9 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
   },
+  optimizeDeps: {
+    include: ["recharts"],
+  },
   test: {
     environment: "node",
     exclude: ["**/node_modules/**", "**/dist/**", "e2e/**"],

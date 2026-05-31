@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { APP_LOGO_URL } from "../utils/assets";
 import { buildDocumentPdf, getDocumentFileName } from "../utils/documentPdf";
+import { sendDocumentByEmail } from "../services/emailService";
 import {
   getDocumentAmountDue,
   getDocumentFooterTotals,
@@ -66,6 +67,7 @@ export default function DocumentPreview({
   paymentSummary,
 }) {
   const pdfWrapperRef = useRef(null);
+  const [sending, setSending] = useState(false);
   const isQuote = type === "quote";
   const isDelivery = type === "delivery";
   const client = (data.clients || []).find((c) => c.id === doc.clientId);
@@ -258,37 +260,25 @@ export default function DocumentPreview({
   }
 
 
-  function sendEmail() {
+  async function sendEmail() {
     if (!client?.email) {
       showToast("Ce client n'a pas d'adresse email enregistrée.", "error");
       return;
     }
-
-    const documentName = isDelivery ? "bon de livraison" : isQuote ? "devis" : "facture";
-    const subject = `${documentTitle} ${doc.number} - ${data.settings.companyName}`;
-    const body = `Bonjour ${client?.name || ""},
-
-Veuillez trouver ci-dessous les informations de votre ${documentName}.
-
-${documentTitle} : ${doc.number}
-Date : ${doc.date}
-Montant total TTC : ${isDelivery ? "—" : money(doc.totalTTC)}
-Statut : ${doc.status}
-
-${data.settings.paymentTerms || ""}
-
-${data.settings.bankInfo || ""}
-
-Cordialement,
-${data.settings.companyName}
-${data.settings.companyPhone || ""}
-${data.settings.companyEmail || ""}`;
-
-    window.location.href = `mailto:${encodeURIComponent(
-      client.email
-    )}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-
-    onDocumentSent?.(doc);
+    if (!data.settings?.smtpEmail || !data.settings?.smtpAppPassword) {
+      showToast("Configure ton adresse Gmail dans Paramètres avant d'envoyer.", "error");
+      return;
+    }
+    setSending(true);
+    try {
+      await sendDocumentByEmail({ doc, type, data, client });
+      showToast(`Email envoyé à ${client.email} avec le PDF en pièce jointe.`, "success");
+      onDocumentSent?.(doc);
+    } catch (err) {
+      showToast(err.message || "Erreur lors de l'envoi.", "error");
+    } finally {
+      setSending(false);
+    }
   }
 
   async function copyQuoteLink() {
@@ -341,8 +331,8 @@ ${data.settings.companyEmail || ""}`;
               </button>
             </>
           )}
-          <button type="button" onClick={sendEmail}>
-            Envoyer par email
+          <button type="button" onClick={sendEmail} disabled={sending}>
+            {sending ? "Envoi en cours…" : "Envoyer par email"}
           </button>
           <button type="button" onClick={() => window.print()}>
             Imprimer
