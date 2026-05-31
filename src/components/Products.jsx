@@ -17,6 +17,8 @@ import {
   applyProductStockChange,
   isBlankProduct,
   isConsumableProduct,
+  isLowStock,
+  isOutOfStock,
   PRODUCTS_KIND_FILTER_KEY,
   PRODUCTS_STOCK_FILTER_KEY,
 } from "../utils/stock";
@@ -1090,6 +1092,38 @@ function openLinkedDocument(doc) {
         </div>
 
         <div className="filters-bottom-row">
+          <div className="products-quick-filters">
+            <button
+              type="button"
+              className={stockFilter === "low" ? "active" : ""}
+              onClick={() => {
+                setStockFilter("low");
+                setCurrentPage(1);
+              }}
+            >
+              Stock faible
+            </button>
+            <button
+              type="button"
+              className={stockFilter === "out" ? "active" : ""}
+              onClick={() => {
+                setStockFilter("out");
+                setCurrentPage(1);
+              }}
+            >
+              Rupture
+            </button>
+            <button
+              type="button"
+              className={stockFilter === "available" ? "active" : ""}
+              onClick={() => {
+                setStockFilter("available");
+                setCurrentPage(1);
+              }}
+            >
+              Disponibles
+            </button>
+          </div>
           <button type="button" className="filters-reset-button" onClick={resetProductFilters}>
             ↺ Réinitialiser
           </button>
@@ -1154,19 +1188,15 @@ function openLinkedDocument(doc) {
           {visibleProducts.map((product) => {
             const stock = Number(product.stock || 0);
             const minStock = Number(product.stockMin || product.minStock || 0);
-            const _stockLevel = Math.min(100, Math.max(0, stock));
-            const _stockClass =
-              stock <= 0
-                ? "danger"
-                : minStock > 0 && stock <= minStock
-                  ? "warning"
-                  : "success";
+            const lowStock = isLowStock(product);
+            const outOfStock = isOutOfStock(product);
+            const stockClass = outOfStock ? "product-stock-out" : lowStock ? "product-stock-low" : "";
 
             const cardImageUrl = getProductDisplayImageUrl(product);
 
             return (
               <article
-                className={`product-premium-card ${
+                className={`product-premium-card ${stockClass} ${
                   selectedProductIds.includes(product.id) ? "selected" : ""
                 } ${selectedProduct?.id === product.id ? "active-product-card" : ""} ${product.archived ? "archived-product-card" : ""}`}
                 key={product.id}
@@ -1198,7 +1228,13 @@ function openLinkedDocument(doc) {
 
                   <div className="product-tags-row">
                     <span>SKU : {product.sku || "Sans SKU"}</span>
-                    <span>Prix HT : {money(product.price)}</span>
+                    <span className={`product-price-col${Number(product.price) > 0 ? "" : " muted"}`}>
+                      Prix HT : {money(product.price)}
+                    </span>
+                    <span className={`product-stock-col${outOfStock ? " product-stock-col--out" : lowStock ? " product-stock-col--low" : ""}`}>
+                      Stock : {stock}
+                      {minStock > 0 ? ` / min ${minStock}` : ""}
+                    </span>
                   </div>
 
                   {product.description && (

@@ -6,6 +6,7 @@ import {
   filterCollectionByTombstones,
   formatLastSyncRelative,
   formatSyncConflictMessage,
+  formatUserFriendlySyncError,
   getLastSyncAt,
   isItemTombstoned,
   mergeCloudWithLocal,
@@ -343,6 +344,12 @@ describe("syncMerge", () => {
     const outcome = resolveCloudInitError({ cloudAlreadySynced: false });
     expect(outcome.cloudAvailable).toBe(false);
     expect(outcome.syncStatus).toBe(SYNC_STATUS.LOCAL_UNAVAILABLE);
-    expect(outcome.toast?.message).toContain("Sync cloud indisponible");
+    expect(outcome.toast?.message).toContain("Resynchroniser");
+  });
+
+  it("formatUserFriendlySyncError traduit les erreurs réseau", () => {
+    const message = formatUserFriendlySyncError(new Error("Failed to fetch"));
+    expect(message).toContain("réseau");
+    expect(message).toContain("Resynchroniser");
   });
 });

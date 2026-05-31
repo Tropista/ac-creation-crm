@@ -1,19 +1,4 @@
 import { getSupabase } from "../supabase";
-import {
-  dbRowToFilament,
-  dbRowToMovement,
-  filamentToDbRow,
-  movementToDbRow,
-} from "./filamentService";
-import {
-  dbRowToJob,
-  dbRowToMapping,
-  dbRowToPrinter,
-  dbRowToTray,
-  jobToDbRow,
-  mappingToDbRow,
-  printerToDbRow,
-} from "./bambuBridgeService";
 import { sanitizeProductsForPersistence } from "../utils/productImages";
 import {
   clearSyncedDeletionTombstones,
@@ -292,43 +277,6 @@ function rowsToItems(rows) {
   }));
 }
 
-async function fetchStructuredTableRows(supabase, tableName, mapper) {
-  const res = await supabase
-    .from(tableName)
-    .select("*")
-    .order("created_at", { ascending: true, nullsFirst: true })
-    .order("id", { ascending: true });
-
-  if (res.error && isMissingTableError(res.error)) {
-    console.warn(
-      `Table Supabase "${tableName}" introuvable — utilisation d'un tableau vide. Voir docs/SUPABASE.md.`,
-      res.error
-    );
-    return [];
-  }
-
-  if (res.error) {
-    throw formatSupabaseCollectionError(tableName, res.error);
-  }
-
-  return (res.data || []).map(mapper);
-}
-
-async function upsertStructuredRowsBatched(supabase, tableName, rows = []) {
-  const payload = (rows || []).filter((row) => row?.id);
-  if (!payload.length) return 0;
-
-  let written = 0;
-  for (let offset = 0; offset < payload.length; offset += UPSERT_CHUNK_SIZE) {
-    const chunk = payload.slice(offset, offset + UPSERT_CHUNK_SIZE);
-    const { error } = await supabase.from(tableName).upsert(chunk, { onConflict: "id" });
-    if (error) throw formatSupabaseCollectionError(tableName, error);
-    written += chunk.length;
-  }
-
-  return written;
-}
-
 async function upsertRowsBatched(supabase, table, items = []) {
   const payload = (items || [])
     .filter((item) => item?.id)
@@ -505,45 +453,6 @@ export async function syncSupabaseData(nextData, previousData = {}) {
     safeOptionalCollectionWrite("payments", () =>
       upsertCollectionDelta("payments", previousData.payments, syncedData.payments)
     ),
-    safeOptionalCollectionWrite("filaments", () =>
-      upsertStructuredRowsBatched(
-        supabase,
-        "filaments",
-        getCollectionDelta(previousData.filaments, syncedData.filaments).map(filamentToDbRow)
-      )
-    ),
-    safeOptionalCollectionWrite("filament_movements", () =>
-      upsertStructuredRowsBatched(
-        supabase,
-        "filament_movements",
-        getCollectionDelta(previousData.filamentMovements, syncedData.filamentMovements).map(
-          movementToDbRow
-        )
-      )
-    ),
-    safeOptionalCollectionWrite("bambu_printers", () =>
-      upsertStructuredRowsBatched(
-        supabase,
-        "bambu_printers",
-        getCollectionDelta(previousData.bambuPrinters, syncedData.bambuPrinters).map(printerToDbRow)
-      )
-    ),
-    safeOptionalCollectionWrite("ams_slot_mappings", () =>
-      upsertStructuredRowsBatched(
-        supabase,
-        "ams_slot_mappings",
-        getCollectionDelta(previousData.amsSlotMappings, syncedData.amsSlotMappings).map(
-          mappingToDbRow
-        )
-      )
-    ),
-    safeOptionalCollectionWrite("bambu_print_jobs", () =>
-      upsertStructuredRowsBatched(
-        supabase,
-        "bambu_print_jobs",
-        getCollectionDelta(previousData.bambuPrintJobs, syncedData.bambuPrintJobs).map(jobToDbRow)
-      )
-    ),
     upsertCollection("quotes", syncedData.quotes),
     upsertCollection("invoices", syncedData.invoices),
     upsertCollection("crm_logs", syncedData.logs),
@@ -653,51 +562,6 @@ export async function syncSupabaseData(nextData, previousData = {}) {
         getTombstoneIds(syncedData.settings, "payments")
       )
     ),
-    safeOptionalCollectionWrite("filaments", () =>
-      trackDelete(
-        "filaments",
-        "filaments",
-        syncedData.filaments,
-        previousData.filaments,
-        getTombstoneIds(syncedData.settings, "filaments")
-      )
-    ),
-    safeOptionalCollectionWrite("filament_movements", () =>
-      trackDelete(
-        "filamentMovements",
-        "filament_movements",
-        syncedData.filamentMovements,
-        previousData.filamentMovements,
-        getTombstoneIds(syncedData.settings, "filamentMovements")
-      )
-    ),
-    safeOptionalCollectionWrite("bambu_printers", () =>
-      trackDelete(
-        "bambuPrinters",
-        "bambu_printers",
-        syncedData.bambuPrinters,
-        previousData.bambuPrinters,
-        getTombstoneIds(syncedData.settings, "bambuPrinters")
-      )
-    ),
-    safeOptionalCollectionWrite("ams_slot_mappings", () =>
-      trackDelete(
-        "amsSlotMappings",
-        "ams_slot_mappings",
-        syncedData.amsSlotMappings,
-        previousData.amsSlotMappings,
-        getTombstoneIds(syncedData.settings, "amsSlotMappings")
-      )
-    ),
-    safeOptionalCollectionWrite("bambu_print_jobs", () =>
-      trackDelete(
-        "bambuPrintJobs",
-        "bambu_print_jobs",
-        syncedData.bambuPrintJobs,
-        previousData.bambuPrintJobs,
-        getTombstoneIds(syncedData.settings, "bambuPrintJobs")
-      )
-    ),
     trackDelete(
       "quotes",
       "quotes",
@@ -766,12 +630,6 @@ export async function loadSupabaseData({
     quotesRes,
     invoicesRes,
     logsRes,
-    filamentsRows,
-    filamentMovementsRows,
-    bambuPrintersRows,
-    amsSlotMappingsRows,
-    bambuPrintJobsRows,
-    bambuAmsTraysRows,
   ] = await Promise.all([
     fetchCollectionRows(supabase, "users").then((data) => ({ data, error: null })),
     fetchCollectionRows(supabase, "backups").then((data) => ({ data, error: null })),
@@ -788,12 +646,6 @@ export async function loadSupabaseData({
     fetchCollectionRows(supabase, "quotes").then((data) => ({ data, error: null })),
     fetchCollectionRows(supabase, "invoices").then((data) => ({ data, error: null })),
     fetchCollectionRows(supabase, "crm_logs").then((data) => ({ data, error: null })),
-    fetchStructuredTableRows(supabase, "filaments", dbRowToFilament).catch(() => []),
-    fetchStructuredTableRows(supabase, "filament_movements", dbRowToMovement).catch(() => []),
-    fetchStructuredTableRows(supabase, "bambu_printers", dbRowToPrinter).catch(() => []),
-    fetchStructuredTableRows(supabase, "ams_slot_mappings", dbRowToMapping).catch(() => []),
-    fetchStructuredTableRows(supabase, "bambu_print_jobs", dbRowToJob).catch(() => []),
-    fetchStructuredTableRows(supabase, "bambu_ams_trays", dbRowToTray).catch(() => []),
   ]);
 
   const resolvedSuppliersRes = resolveCollectionResult(suppliersRes, "suppliers");
@@ -849,18 +701,6 @@ export async function loadSupabaseData({
       rowsToItems(resolvedPaymentsRes.data),
       tombstones.payments
     ),
-    filaments: filterCollectionByTombstones(filamentsRows, tombstones.filaments),
-    filamentMovements: filterCollectionByTombstones(
-      filamentMovementsRows,
-      tombstones.filamentMovements
-    ),
-    bambuPrinters: filterCollectionByTombstones(bambuPrintersRows, tombstones.bambuPrinters),
-    amsSlotMappings: filterCollectionByTombstones(
-      amsSlotMappingsRows,
-      tombstones.amsSlotMappings
-    ),
-    bambuPrintJobs: filterCollectionByTombstones(bambuPrintJobsRows, tombstones.bambuPrintJobs),
-    bambuAmsTrays: filterCollectionByTombstones(bambuAmsTraysRows, tombstones.bambuAmsTrays),
     quotes: filterCollectionByTombstones(rowsToItems(quotesRes.data), tombstones.quotes),
     invoices: filterCollectionByTombstones(rowsToItems(invoicesRes.data), tombstones.invoices),
     logs: filterCollectionByTombstones(rowsToItems(logsRes.data), tombstones.logs),
@@ -883,12 +723,6 @@ export async function loadSupabaseData({
         resolvedCreditNotesRes.data?.length ||
         resolvedAfterSalesRes.data?.length ||
         resolvedPaymentsRes.data?.length ||
-        filamentsRows?.length ||
-        filamentMovementsRows?.length ||
-        bambuPrintersRows?.length ||
-        amsSlotMappingsRows?.length ||
-        bambuPrintJobsRows?.length ||
-        bambuAmsTraysRows?.length ||
         quotesRes.data?.length ||
         invoicesRes.data?.length
     ),

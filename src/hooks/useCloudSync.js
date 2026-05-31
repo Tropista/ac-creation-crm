@@ -14,6 +14,7 @@ import { mergePublicLeadsIntoData } from "../services/leadsService";
 import { mergeSettingsCalculatorProjects } from "../utils/calculatorProjects";
 import {
   formatSyncConflictMessage,
+  formatUserFriendlySyncError,
   getLastSyncAt,
   getLastSyncConflictCount,
   mergeCloudWithLocal,
@@ -286,12 +287,7 @@ export function useCloudSync({ currentUserEmail, setData, setLoading }) {
             setCloudAvailable(false);
             setSyncStatus(SYNC_STATUS.LOCAL_UNAVAILABLE);
           }
-          showToast(
-            error?.message
-              ? `Erreur de sauvegarde Supabase : ${error.message}`
-              : "Erreur de sauvegarde Supabase — données conservées localement",
-            "error"
-          );
+          showToast(formatUserFriendlySyncError(error), "error");
           throw error;
         }
       } else {

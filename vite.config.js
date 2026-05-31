@@ -13,13 +13,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    exclude: [
-      "**/node_modules/**",
-      "**/dist/**",
-      "e2e/**",
-      // node:test runner (see tools/bambu-bridge/package.json)
-      "tools/bambu-bridge/**",
-    ],
+    exclude: ["**/node_modules/**", "**/dist/**", "e2e/**"],
   },
   build: {
     rollupOptions: {

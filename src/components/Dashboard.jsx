@@ -89,6 +89,17 @@ import {
   PRODUCTS_STOCK_FILTER_KEY,
 } from "../utils/stock";
 
+function leadStatusMeta(lead) {
+  const status = String(lead?.status || LEAD_STATUS.NEW);
+  if (status === LEAD_STATUS.CONVERTED) {
+    return { label: "Converti", className: "dashboard-lead-status dashboard-lead-status--converted" };
+  }
+  if (status === LEAD_STATUS.READ) {
+    return { label: "Lu", className: "dashboard-lead-status dashboard-lead-status--read" };
+  }
+  return { label: "Nouveau", className: "dashboard-lead-status dashboard-lead-status--new" };
+}
+
 function DashboardStatCard({ label, value, onClick, className = "", detail }) {
   return (
     <button
@@ -1544,8 +1555,18 @@ export default function Dashboard({
                 </p>
               </div>
               <button type="button" className="ghost" onClick={goToLeadsPage}>
-                Page leads →
+                Tous les leads →
               </button>
+              {activeLeadCount > 0 ? (
+                <button
+                  type="button"
+                  className="primary compact"
+                  onClick={goToLeadsPage}
+                  data-testid="dashboard-leads-cta"
+                >
+                  Traiter {activeLeadCount} lead(s)
+                </button>
+              ) : null}
             </div>
             {activeLeadCount === 0 ? (
               <p className="muted">
@@ -1559,10 +1580,12 @@ export default function Dashboard({
                 const telHref = buildLeadTelHref(lead);
                 const isUnread = String(lead.status || LEAD_STATUS.NEW) === LEAD_STATUS.NEW;
                 const projectName = String(lead.metadata?.projectName || "").trim();
+                const statusMeta = leadStatusMeta(lead);
 
                 return (
-                  <li key={lead.id}>
+                  <li key={lead.id} className={isUnread ? "dashboard-leads-list__item--new" : ""}>
                     <div className="dashboard-leads-list__main">
+                      <span className={statusMeta.className}>{statusMeta.label}</span>
                       {mailtoHref ? (
                         <a href={mailtoHref} className="dashboard-leads-list__email">
                           {lead.email}
@@ -1579,17 +1602,16 @@ export default function Dashboard({
                       ) : null}
                       {projectName ? <span>{projectName}</span> : null}
                       <span className="muted">{lead.source || "configurateur"}</span>
-                      {!isUnread ? <span className="muted">Traité</span> : null}
                     </div>
                     <div className="dashboard-leads-list__actions">
-                      {canConvertLeads ? (
+                      {canConvertLeads && statusMeta.label !== "Converti" ? (
                         <button
                           type="button"
                           className="compact primary"
                           onClick={() => handleConvertLead(lead)}
                           data-testid={`convert-lead-${lead.id}`}
                         >
-                          Créer client + devis
+                          Convertir → devis
                         </button>
                       ) : null}
                       {isUnread ? (

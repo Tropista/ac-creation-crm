@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { clientName, statusClass, createDeliveryNoteFromQuote, getDeliveryNoteForQuote, isQuoteDeliveryNoteEligible } from "../utils/documents";
+import { clientName, statusClass, createDeliveryNoteFromQuote, getDeliveryNoteForQuote, getQuoteDepositSummary, isQuoteDeliveryNoteEligible } from "../utils/documents";
 import {
   ATELIER_PIPELINE_STATUSES,
   QUOTE_PRIORITY_OPTIONS,
   advanceProductionStatus,
   getAtelierBoard,
   getAtelierStatusBoard,
+  isAtelierPipelineQuote,
   resolveProcessType,
 } from "../utils/production";
-import { syncQuoteProductionStock } from "../utils/stock";
+import { syncQuoteProductionStock, countLowStockProducts } from "../utils/stock";
 import { isQuoteDeliveryOverdue, getQuotesToLaunchToday } from "../utils/quoteDelivery";
 import DeliveryUrgencyBadge from "./DeliveryUrgencyBadge";
 import { summarizeQuoteProductionLines } from "../utils/quoteLines";
@@ -70,6 +71,37 @@ function priorityLabel(priority) {
   return QUOTE_PRIORITY_OPTIONS.find((entry) => entry.value === priority)?.label || "Normale";
 }
 
+function atelierStatusBadgeClass(status) {
+  const normalized = String(status || "").toLowerCase();
+  if (normalized.includes("accept")) return "atelier-status-badge atelier-status-badge--accepted";
+  if (normalized.includes("production")) return "atelier-status-badge atelier-status-badge--production";
+  if (normalized.includes("pret") || normalized.includes("prêt")) return "atelier-status-badge atelier-status-badge--ready";
+  if (normalized.includes("livre") || normalized.includes("livré")) return "atelier-status-badge atelier-status-badge--delivered";
+  return `atelier-status-badge ${statusClass(status)}`;
+}
+
+function DepositBadge({ data, quote }) {
+  const summary = getQuoteDepositSummary(data, quote);
+  if (!summary.hasDeposits) return null;
+
+  const percent = Number(quote.depositPercent || 0);
+  const paid = summary.paidDeposit > 0.01;
+  const invoiced = summary.invoicedDeposit > 0.01;
+
+  let label = percent > 0 ? `Acompte ${percent}%` : "Acompte";
+  if (paid) label = `Acompte payé (${summary.paidDeposit.toLocaleString("fr-FR")} €)`;
+  else if (invoiced) label = `Acompte facturé (${summary.invoicedDeposit.toLocaleString("fr-FR")} €)`;
+
+  return (
+    <span
+      className={`atelier-deposit-badge${paid ? " atelier-deposit-badge--paid" : ""}`}
+      title={paid ? "Acompte encaissé" : invoiced ? "Facture d'acompte émise" : "Acompte prévu sur le devis"}
+    >
+      {label}
+    </span>
+  );
+}
+
 function AtelierMobileSimpleCard({
   data,
   quote,
@@ -89,7 +121,7 @@ function AtelierMobileSimpleCard({
       </button>
       <p className="atelier-mobile-card__client">{clientName(data, quote.clientId)}</p>
       <div className="atelier-mobile-card__meta">
-        <span className={statusClass(quote.status)}>{quote.status}</span>
+        <span className={atelierStatusBadgeClass(quote.status)}>{quote.status}</span>
         <span className="atelier-process-badge">
           {PROCESS_ICONS[process.key] || "📋"} {process.label}
         </span>
@@ -200,7 +232,8 @@ function AtelierCard({
           {quote.number}
         </button>
         <div className="atelier-card__top-actions">
-          <span className={statusClass(quote.status)}>{quote.status}</span>
+          <span className={atelierStatusBadgeClass(quote.status)}>{quote.status}</span>
+          <DepositBadge data={data} quote={quote} />
           {canDelete && (
             <button
               type="button"
@@ -237,10 +270,12 @@ function AtelierCard({
         <span className="atelier-process-badge">
           {PROCESS_ICONS[process.key] || "📋"} {process.label}
         </span>
-        <span className="muted atelier-card__date">{quote.date || "—"}</span>
+        <span className="atelier-card__key-date" title="Date du devis">
+          Devis : {quote.date || "—"}
+        </span>
         {quote.promisedDeliveryDate && (
           <span
-            className={`atelier-card__delivery${urgencyClass}`}
+            className={`atelier-card__delivery atelier-card__key-date${urgencyClass}`}
             title={
               deliveryOverdue
                 ? "Date de livraison dépassée"
@@ -426,16 +461,19 @@ export default function Atelier({
   const [viewMode, setViewMode] = useState("status");
   const [layoutMode, setLayoutMode] = useState("list");
   const [assigneeFilter, setAssigneeFilter] = useState("all");
+  const [priorityFilter, setPriorityFilter] = useState("all");
   const [planningWeekOffset, setPlanningWeekOffset] = useState(0);
   const [dragOverStatus, setDragOverStatus] = useState("");
   const [previewBl, setPreviewBl] = useState(null);
   const quotes = data.quotes || [];
   const settings = data.settings || {};
+  const products = data.products || [];
+  const lowStockCount = countLowStockProducts(products);
   const activeUsers = (data.users || []).filter(
     (user) => String(user?.status || "Actif") !== "Désactivé"
   );
 
-  const filteredQuotes = useMemo(() => {
+  const assigneeFilteredQuotes = useMemo(() => {
     if (assigneeFilter === "all") return quotes;
     if (assigneeFilter === "unassigned") {
       return quotes.filter((quote) => !quote.assignedTo);
@@ -444,6 +482,28 @@ export default function Atelier({
       (quote) => String(quote.assignedTo || "") === String(assigneeFilter)
     );
   }, [assigneeFilter, quotes]);
+
+  const launchTodayIds = useMemo(
+    () => new Set(getQuotesToLaunchToday(assigneeFilteredQuotes).map((q) => String(q.id))),
+    [assigneeFilteredQuotes]
+  );
+
+  const filteredQuotes = useMemo(() => {
+    switch (priorityFilter) {
+      case "today":
+        return assigneeFilteredQuotes.filter((quote) =>
+          launchTodayIds.has(String(quote.id))
+        );
+      case "overdue":
+        return assigneeFilteredQuotes.filter(isQuoteDeliveryOverdue);
+      case "production":
+        return assigneeFilteredQuotes.filter((quote) => quote.status === "En production");
+      case "waiting":
+        return assigneeFilteredQuotes.filter((quote) => quote.status === "Accepté");
+      default:
+        return assigneeFilteredQuotes;
+    }
+  }, [assigneeFilteredQuotes, priorityFilter, launchTodayIds]);
 
   const statusBoard = getAtelierStatusBoard(filteredQuotes);
   const processBoard = getAtelierBoard(filteredQuotes);
@@ -725,7 +785,49 @@ export default function Atelier({
         </div>
       </div>
 
-      {quotesToLaunchToday.length > 0 && (
+      <div className="atelier-priority-bar" role="tablist" aria-label="Filtres priorité atelier">
+        {[
+          { id: "all", label: "Toutes", count: assigneeFilteredQuotes.filter(isAtelierPipelineQuote).length },
+          { id: "today", label: "Aujourd'hui", count: launchTodayIds.size },
+          { id: "overdue", label: "En retard", count: assigneeFilteredQuotes.filter(isQuoteDeliveryOverdue).length },
+          { id: "production", label: "En production", count: assigneeFilteredQuotes.filter((q) => q.status === "En production").length },
+          { id: "waiting", label: "En attente", count: assigneeFilteredQuotes.filter((q) => q.status === "Accepté").length },
+        ].map((entry) => (
+          <button
+            key={entry.id}
+            type="button"
+            role="tab"
+            aria-selected={priorityFilter === entry.id}
+            className={`atelier-priority-chip${priorityFilter === entry.id ? " active" : ""}${
+              entry.id === "overdue" && entry.count > 0 ? " atelier-priority-chip--alert" : ""
+            }`}
+            onClick={() => setPriorityFilter(entry.id)}
+            data-testid={`atelier-filter-${entry.id}`}
+          >
+            {entry.label}
+            {entry.count > 0 ? <span className="atelier-priority-chip__count">{entry.count}</span> : null}
+          </button>
+        ))}
+      </div>
+
+      {lowStockCount > 0 ? (
+        <div className="card atelier-stock-alert" data-testid="atelier-stock-alert">
+          <strong>{lowStockCount} produit(s) en stock faible</strong>
+          <span className="muted">Vérifiez les consommables avant de lancer la production.</span>
+          <button
+            type="button"
+            className="compact"
+            onClick={() => {
+              localStorage.setItem("crm_products_stock_filter", "low");
+              navigate(pageToPath("products"));
+            }}
+          >
+            Voir produits →
+          </button>
+        </div>
+      ) : null}
+
+      {quotesToLaunchToday.length > 0 && priorityFilter !== "today" ? (
         <div className="card atelier-launch-today" data-testid="atelier-launch-today">
           <div className="atelier-launch-today__header">
             <strong>À lancer aujourd&apos;hui ({quotesToLaunchToday.length})</strong>
@@ -758,9 +860,9 @@ export default function Atelier({
             ))}
           </ul>
         </div>
-      )}
+      ) : null}
 
-      {overdueDeliveries.length > 0 && (
+      {overdueDeliveries.length > 0 && priorityFilter !== "overdue" ? (
         <div className="card atelier-overdue-alert" data-testid="atelier-overdue-alert">
           <strong>Livraisons en retard ({overdueDeliveries.length})</strong>
           <ul>
@@ -772,12 +874,12 @@ export default function Atelier({
                 <span>{clientName(data, quote.clientId)}</span>
                 <em>{quote.promisedDeliveryDate}</em>
                 <DeliveryUrgencyBadge quote={quote} />
-                <span className={statusClass(quote.status)}>{quote.status}</span>
+                <span className={atelierStatusBadgeClass(quote.status)}>{quote.status}</span>
               </li>
             ))}
           </ul>
         </div>
-      )}
+      ) : null}
 
       <div className="atelier-stats">
         {ATELIER_PIPELINE_STATUSES.map((status) => (

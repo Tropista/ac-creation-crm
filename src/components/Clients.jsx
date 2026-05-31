@@ -106,9 +106,34 @@ export default function Clients({
 
   const itemsPerPage = 25;
 
+  const clientDocIndex = useMemo(() => {
+    const map = new Map();
+
+    function append(clientId, value) {
+      if (!clientId || !value) return;
+      const key = String(clientId);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key).push(String(value).toLowerCase());
+    }
+
+    for (const quote of data.quotes || []) {
+      append(quote.clientId, quote.number);
+      append(quote.clientId, quote.reference);
+    }
+    for (const invoice of data.invoices || []) {
+      append(invoice.clientId, invoice.number);
+      append(invoice.clientId, invoice.reference);
+    }
+
+    return map;
+  }, [data.quotes, data.invoices]);
+
   const clients = (data.clients || [])
-    .filter((client) =>
-      [
+    .filter((client) => {
+      const term = search.trim().toLowerCase();
+      if (!term) return true;
+
+      const baseMatch = [
         client.name,
         client.email,
         client.phone,
@@ -124,8 +149,13 @@ export default function Clients({
       ]
         .join(" ")
         .toLowerCase()
-        .includes(search.trim().toLowerCase())
-    )
+        .includes(term);
+
+      if (baseMatch) return true;
+
+      const docNumbers = clientDocIndex.get(String(client.id)) || [];
+      return docNumbers.some((entry) => entry.includes(term));
+    })
     .sort((a, b) => {
       if (sortBy === "nameAsc") return String(a.name || "").localeCompare(String(b.name || ""));
       if (sortBy === "nameDesc") return String(b.name || "").localeCompare(String(a.name || ""));
@@ -548,7 +578,7 @@ AC Creation`;
       <div className="clients-toolbar">
         <input
           className="search"
-          placeholder="Rechercher un client..."
+          placeholder="Rechercher : nom, email, téléphone, n° devis/facture…"
           value={search}
           onChange={(e) => {
             setSearch(e.target.value);
@@ -915,6 +945,9 @@ h1{
                     <div className="client-doc-actions">
                       <button onClick={()=>goToDocumentPage("quotes")}>🧾 Nouveau devis</button>
                       <button onClick={()=>goToDocumentPage("invoices")}>💶 Nouvelle facture</button>
+                      <button type="button" className="ghost" onClick={() => setClientTab("history")}>
+                        🕘 Historique complet ({clientHistory.length})
+                      </button>
                       {selectedClientUnpaidInvoices.length>0 && (
                         <button className="danger" onClick={()=>remindClient("mail")}>✉ Relancer</button>
                       )}

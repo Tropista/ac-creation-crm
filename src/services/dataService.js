@@ -184,12 +184,6 @@ export const emptyData = {
   creditNotes: [],
   afterSalesCases: [],
   payments: [],
-  filaments: [],
-  filamentMovements: [],
-  bambuPrinters: [],
-  amsSlotMappings: [],
-  bambuPrintJobs: [],
-  bambuAmsTrays: [],
   backups: [],
   logs: [],
 };
@@ -286,19 +280,6 @@ export function normalizeData(data) {
     payments: dedupeItemsById(
       rest?.payments || []
     ),
-
-    filaments: dedupeItemsById(
-      rest?.filaments || []
-    ),
-
-    filamentMovements: dedupeItemsById(
-      rest?.filamentMovements || []
-    ),
-
-    bambuPrinters: dedupeItemsById(rest?.bambuPrinters || []),
-    amsSlotMappings: dedupeItemsById(rest?.amsSlotMappings || []),
-    bambuPrintJobs: dedupeItemsById(rest?.bambuPrintJobs || []),
-    bambuAmsTrays: dedupeItemsById(rest?.bambuAmsTrays || []),
 
     backups: dedupeItemsById(
       rest?.backups || []

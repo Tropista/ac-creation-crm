@@ -68,7 +68,6 @@ const pageIcons = {
   labels: Tag,
   scan: ScanLine,
   print3dcalc: Calculator,
-  impression3dpro: Box,
   lasercalc: Flame,
   dtfcalc: Shirt,
   uvdtfcalc: Smartphone,
@@ -89,13 +88,26 @@ const menuGroups = [
     items: [
       { page: "dashboard", label: "Tableau de bord", type: "page" },
       { page: "clients", label: "Clients", type: "page" },
-      { page: "quotes", label: "Devis", type: "page" },
-      { page: "leads", label: "Leads", type: "page" },
-      { page: "invoices", label: "Factures", type: "page" },
+      { page: "quotes", label: "Devis & e-signature", type: "page" },
+      { page: "leads", label: "Leads configurateur", type: "page" },
+    ],
+  },
+  {
+    id: "finance",
+    label: "Finance & suivi",
+    items: [
+      { page: "invoices", label: "Factures & paiements", type: "page" },
       { page: "creditnotes", label: "Avoirs", type: "page" },
-      { page: "sav", label: "SAV", type: "page" },
-      { page: "automations", label: "Automatisations", type: "page" },
-      { page: "atelier", label: "Atelier", type: "page" },
+      { page: "banque", label: "Banque", type: "page" },
+      { page: "automations", label: "Automatisations & relances", type: "page" },
+    ],
+  },
+  {
+    id: "production",
+    label: "Production & SAV",
+    items: [
+      { page: "atelier", label: "Atelier & fiches prod.", type: "page" },
+      { page: "sav", label: "SAV / après-vente", type: "page" },
     ],
   },
   {
@@ -115,7 +127,6 @@ const menuGroups = [
     label: "Atelier / Outils",
     items: [
       { page: "print3dcalc", label: "Calculateur 3D", type: "page" },
-      { page: "impression3dpro", label: "Impression 3D Pro", type: "page" },
       { page: "lasercalc", label: "Calculateur Laser", type: "page" },
       { page: "dtfcalc", label: "Calculateur DTF", type: "page" },
       { page: "uvdtfcalc", label: "Calculateur UV-DTF", type: "page" },
@@ -127,7 +138,6 @@ const menuGroups = [
     id: "admin",
     label: "Admin",
     items: [
-      { page: "banque", label: "Banque", type: "page" },
       { page: "users", label: "Utilisateurs", permission: "canManageUsers" },
       { page: "settings", label: "Paramètres", permission: "canEditSettings" },
       { page: "import", label: "Import Excel", permission: "canImport" },

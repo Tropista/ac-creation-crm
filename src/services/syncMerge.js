@@ -12,6 +12,38 @@ export const SYNC_STATUS = {
   SAVE_ERROR: "Erreur de sauvegarde Supabase",
 };
 
+export function formatUserFriendlySyncError(error) {
+  const message = String(error?.message || error || "").trim();
+  const lower = message.toLowerCase();
+
+  if (!message) {
+    return "Synchronisation impossible — vos données restent disponibles en local. Cliquez « Resynchroniser » dans le menu.";
+  }
+  if (/supabase non configur/i.test(message)) {
+    return "Cloud non configuré — ajoutez VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY dans .env, puis relancez l'application.";
+  }
+  if (/jwt|session|not authenticated|invalid login|refresh token/i.test(lower)) {
+    return "Session expirée — reconnectez-vous, puis cliquez « Resynchroniser » dans le menu.";
+  }
+  if (/42501|permission|policy|row-level security/i.test(lower)) {
+    return "Accès Supabase refusé — reconnectez-vous au CRM ou demandez à l'administrateur de vérifier les droits RLS.";
+  }
+  if (/57014|statement timeout|canceling statement|timeout|timed out/i.test(lower)) {
+    return "Supabase met trop de temps à répondre — réessayez « Resynchroniser » dans quelques instants.";
+  }
+  if (/500|502|503|504|429|too many requests|service unavailable/i.test(lower)) {
+    return "Supabase est temporairement indisponible — vos modifications sont en local. Réessayez plus tard.";
+  }
+  if (/network|fetch failed|failed to fetch|offline/i.test(lower)) {
+    return "Connexion réseau interrompue — vérifiez Internet puis cliquez « Resynchroniser ».";
+  }
+  if (/quota|storage|localstorage/i.test(lower)) {
+    return "Espace de stockage local saturé — vos données cloud restent la source de vérité si la sync a réussi.";
+  }
+
+  return `${message} — vos données restent en local. Utilisez « Resynchroniser » si le problème persiste.`;
+}
+
 export function resolveCloudInitError({
   cloudAlreadySynced,
   error = null,
@@ -31,9 +63,7 @@ export function resolveCloudInitError({
     cloudAvailable: false,
     syncStatus: isConfigError ? SYNC_STATUS.LOCAL_NO_CONFIG : SYNC_STATUS.LOCAL_UNAVAILABLE,
     toast: {
-      message: isConfigError
-        ? "Supabase non configuré — vérifiez VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY"
-        : "Sync cloud indisponible — données locales utilisées",
+      message: formatUserFriendlySyncError(error),
       type: "info",
     },
   };

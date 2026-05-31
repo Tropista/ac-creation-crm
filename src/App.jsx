@@ -132,10 +132,6 @@ const Print3DCalculator = lazy(() =>
   import("./components/Print3DCalculator")
 );
 
-const Impression3DPro = lazy(() =>
-  import("./components/Impression3DPro")
-);
-
 const LaserCalculator = lazy(() =>
   import("./components/LaserCalculator")
 );
@@ -223,6 +219,10 @@ function CrmApp() {
       state: location.state,
     });
   }, [pathname, location.pathname, location.state, navigate]);
+
+  useEffect(() => {
+    cleanupNavigationBlockers({ removePreviewOverlay: true });
+  }, [pathname]);
 
   const setPage = (pageKey, options = {}) => {
     const path = pageToPath(pageKey);
@@ -796,19 +796,6 @@ function CrmApp() {
                   <Print3DCalculator
                     data={data}
                     setData={updateData}
-                    logActivity={handleLogActivity}
-                  />
-                ) : null
-              }
-            />
-            <Route
-              path={pageToPath("impression3dpro")}
-              element={
-                canAccessPage(currentRole, "impression3dpro") ? (
-                  <Impression3DPro
-                    data={data}
-                    setData={updateData}
-                    currentRole={currentRole}
                     logActivity={handleLogActivity}
                   />
                 ) : null

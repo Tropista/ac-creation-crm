@@ -49,7 +49,6 @@ export default defineConfig([
       'playwright.config.js',
       'eslint.config.js',
       'e2e/**/*.js',
-      'tools/bambu-bridge/**/*.js',
     ],
     languageOptions: {
       globals: globals.node,

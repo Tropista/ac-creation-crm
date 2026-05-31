@@ -821,3 +821,118 @@
   padding-left: 16px;
   font-size: 12px;
 }
+
+/* Priority filters & status badges */
+.atelier-priority-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.atelier-priority-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.atelier-priority-chip.active {
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  border-color: transparent;
+  color: #fff;
+}
+
+.atelier-priority-chip--alert:not(.active) {
+  border-color: #fca5a5;
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.atelier-priority-chip__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.08);
+  font-size: 11px;
+}
+
+.atelier-priority-chip.active .atelier-priority-chip__count {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.atelier-status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.atelier-status-badge--accepted {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.atelier-status-badge--production {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.atelier-status-badge--ready {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.atelier-status-badge--delivered {
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
+.atelier-deposit-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #fff7ed;
+  color: #c2410c;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.atelier-deposit-badge--paid {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.atelier-card__key-date {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.atelier-stock-alert {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  border-left: 4px solid #f59e0b;
+  background: linear-gradient(90deg, #fffbeb, var(--surface));
+}
+
+.atelier-stock-alert strong {
+  color: #b45309;
+}
