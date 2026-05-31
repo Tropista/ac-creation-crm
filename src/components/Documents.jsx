@@ -75,7 +75,7 @@ import {
   PAYMENT_METHODS,
 } from "../utils/payments";
 
-function Documents({ type, data, setData, currentRole = 'Admin', logActivity }) {
+function Documents({ type, data, setData, currentRole = 'Admin', logActivity, pendingOpenDoc = null, onClearPendingOpenDoc }) {
   const location = useLocation();
   const isQuote = type === "quote";
   const listKey = isQuote ? "quotes" : "invoices";
@@ -305,6 +305,16 @@ const [form, setForm] = useState({
     prefilledClientId,
     defaultStatus,
   ]);
+
+  useEffect(() => {
+    if (!pendingOpenDoc) return;
+    const doc = documents.find((d) => String(d.id) === String(pendingOpenDoc.id));
+    if (doc) {
+      setPreviewDoc(doc);
+      setPreviewType(isQuote ? "quote" : "invoice");
+      onClearPendingOpenDoc?.();
+    }
+  }, [pendingOpenDoc, documents]);
 
   useEffect(() => {
     if (!isQuote) return;
@@ -730,12 +740,12 @@ reset();
   }
 
   useEffect(() => {
-    const openFromUrl = isQuote ? parseQuoteOpenIdFromLocation(location) : "";
+    const openFromUrl = parseQuoteOpenIdFromLocation(location);
     const openDocumentId =
       localStorage.getItem("crm_open_document_id") || openFromUrl;
     const openDocumentType =
       localStorage.getItem("crm_open_document_type") ||
-      (openFromUrl ? "quote" : "");
+      (openFromUrl ? (isQuote ? "quote" : "invoice") : "");
 
     if (!openDocumentId) return undefined;
 
@@ -765,6 +775,27 @@ reset();
 
     return undefined;
   }, [documents, isQuote, location.search, location.hash, location.pathname]);
+  function duplicate(doc) {
+    const newId  = crypto.randomUUID();
+    const newNum = nextDocumentNumber(documents, prefix);
+    const copy   = {
+      ...doc,
+      id:          newId,
+      number:      newNum,
+      status:      "Brouillon",
+      date:        today(),
+      acceptedAt:  null,
+      sentAt:      null,
+      signature:   null,
+      shareToken:  null,
+      convertedToInvoiceId: null,
+      attachments: [],
+    };
+    setData({ ...data, [listKey]: [...documents, copy] });
+    logActivity?.(`Duplication devis`, `${doc.number} → ${newNum}`);
+    showToast(`Devis ${newNum} créé depuis ${doc.number}.`, "success");
+  }
+
   function remove(id) {
     if (!canDeleteData(currentRole)) {
       showToast("Ton rôle ne permet pas de supprimer.", "error");
@@ -1251,6 +1282,7 @@ reset();
         onCreateDeposit={createDepositInvoice}
         onCreateBalance={createBalanceInvoice}
         onRecordPayment={recordPartialPayment}
+        onDuplicate={isQuote ? duplicate : undefined}
         depositPresets={DEPOSIT_PRESETS}
       />
 

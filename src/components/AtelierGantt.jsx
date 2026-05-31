@@ -122,7 +122,7 @@ export default function AtelierGantt({ quotes = [], data = {}, onQuoteClick }) {
 
       {/* Day headers */}
       <div style={{ display: "grid", gridTemplateColumns: "180px 1fr", borderBottom: "1px solid var(--border, #e5e7eb)" }}>
-        <div style={{ padding: "6px 12px", fontSize: 11, color: "var(--text-muted, #6b7280)", fontWeight: 600, background: "var(--surface, #f8fafc)" }}>
+        <div style={{ padding: "6px 12px", fontSize: 11, color: "var(--text-muted, #6b7280)", fontWeight: 600, background: "var(--surface-2)" }}>
           Commande
         </div>
         <div style={{ position: "relative", display: "grid", gridTemplateColumns: `repeat(${DAYS_SHOWN}, 1fr)` }}>
@@ -136,8 +136,8 @@ export default function AtelierGantt({ quotes = [], data = {}, onQuoteClick }) {
                 textAlign: "center",
                 fontWeight: isToday ? 700 : 400,
                 color: isToday ? "#ec4899" : isWeekend ? "var(--text-muted, #9ca3af)" : "var(--text, #374151)",
-                background: isWeekend ? "var(--surface, #f8fafc)" : "transparent",
-                borderLeft: "1px solid var(--border, #f1f5f9)",
+                background: isWeekend ? "var(--surface-2)" : "transparent",
+                borderLeft: "1px solid var(--border)",
               }}>
                 {day.toLocaleDateString("fr-FR", { weekday: "short" })}
                 <br />
@@ -161,7 +161,7 @@ export default function AtelierGantt({ quotes = [], data = {}, onQuoteClick }) {
               style={{ display: "grid", gridTemplateColumns: "180px 1fr", borderBottom: "1px solid var(--border, #f1f5f9)", minHeight: 38 }}
             >
               {/* Label column */}
-              <div style={{ padding: "6px 12px", fontSize: 12, display: "flex", flexDirection: "column", justifyContent: "center", borderRight: "1px solid var(--border, #e5e7eb)", background: "var(--card-bg, #fff)" }}>
+              <div style={{ padding: "6px 12px", fontSize: 12, display: "flex", flexDirection: "column", justifyContent: "center", borderRight: "1px solid var(--border, #e5e7eb)", background: "var(--surface)" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                   <span style={{ width: 7, height: 7, borderRadius: "50%", background: STATUS_DOT[q.status] || "#94a3b8", flexShrink: 0 }} />
                   <strong style={{ fontSize: 11 }}>{q.number}</strong>
@@ -170,10 +170,10 @@ export default function AtelierGantt({ quotes = [], data = {}, onQuoteClick }) {
               </div>
 
               {/* Bar column */}
-              <div style={{ position: "relative", background: "var(--card-bg, #fff)" }}>
+              <div style={{ position: "relative", background: "var(--surface)" }}>
                 {/* Weekend shading */}
                 {days.map((day, i) => (day.getDay() === 0 || day.getDay() === 6) && (
-                  <div key={i} style={{ position: "absolute", top: 0, bottom: 0, left: `${(i / DAYS_SHOWN) * 100}%`, width: `${(1 / DAYS_SHOWN) * 100}%`, background: "var(--surface, #f8fafc)" }} />
+                  <div key={i} style={{ position: "absolute", top: 0, bottom: 0, left: `${(i / DAYS_SHOWN) * 100}%`, width: `${(1 / DAYS_SHOWN) * 100}%`, background: "var(--surface-2)" }} />
                 ))}
 
                 {/* Today line */}

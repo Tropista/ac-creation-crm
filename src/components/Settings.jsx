@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { DEFAULT_EMAIL_TEMPLATES, TEMPLATE_VARS } from "../utils/emailTemplates";
 import { APP_VERSION } from "../utils/appVersion";
 import {
   MAX_PAYMENT_DAYS,
@@ -531,6 +532,73 @@ e.target.value
   </button>
 )}
 
+<EmailTemplatesEditor
+  templates={form.emailTemplates || {}}
+  onChange={(tpls) => setForm({ ...form, emailTemplates: tpls })}
+/>
+
+{(form.smtpEmail && form.smtpAppPassword) && (
+  <button
+    type="button"
+    onClick={async () => {
+      showToast("Envoi du test de relance…", "info");
+      try {
+        const apiUrl = import.meta.env.VITE_BANK_API_URL || "http://127.0.0.1:3001";
+        const res = await fetch(`${apiUrl}/send-email`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            to: form.smtpEmail,
+            subject: "Test relance — Facture FAC-TEST-0001",
+            text: `Bonjour,\n\nCeci est un email de test pour vérifier que les relances automatiques fonctionnent correctement.\n\nCordialement,\n${form.companyName || "AC Creation"}`,
+            smtpEmail: form.smtpEmail,
+            smtpAppPassword: form.smtpAppPassword,
+            fromName: form.companyName || "CRM",
+          }),
+        });
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(payload.error || "Erreur inconnue");
+        showToast("Email de test relance envoyé ! Vérifie ta boîte Gmail.", "success");
+      } catch (err) {
+        showToast(`Échec : ${err.message}`, "error");
+      }
+    }}
+  >
+    Tester l'envoi d'une relance
+  </button>
+)}
+
+<label style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+  <span style={{ fontSize: "12px", color: "var(--text-muted, #6b7280)" }}>
+    Relances automatiques factures impayées
+  </span>
+  <select
+    value={form.autoReminderEnabled === false ? "off" : "on"}
+    onChange={(e) => setForm({ ...form, autoReminderEnabled: e.target.value === "on" })}
+  >
+    <option value="on">Activées</option>
+    <option value="off">Désactivées</option>
+  </select>
+</label>
+
+<label style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+  <span style={{ fontSize: "12px", color: "var(--text-muted, #6b7280)" }}>
+    Calendrier des relances (jours après échéance, séparés par virgule)
+  </span>
+  <input
+    type="text"
+    placeholder="7, 14, 30"
+    value={Array.isArray(form.autoReminderSchedule) ? form.autoReminderSchedule.join(", ") : (form.autoReminderSchedule || "7, 14, 30")}
+    onChange={(e) => {
+      const vals = e.target.value.split(",").map((v) => parseInt(v.trim(), 10)).filter((n) => n > 0);
+      setForm({ ...form, autoReminderSchedule: vals.length ? vals : [7, 14, 30] });
+    }}
+  />
+  <span style={{ fontSize: "11px", color: "var(--text-muted, #9ca3af)" }}>
+    Par défaut : J+7, J+14, J+30 après la date d'échéance
+  </span>
+</label>
+
 <button className="primary">
 
 Sauvegarder
@@ -543,4 +611,85 @@ Sauvegarder
 
 );
 
+}
+
+const TEMPLATE_KEYS = Object.keys(DEFAULT_EMAIL_TEMPLATES);
+
+function EmailTemplatesEditor({ templates, onChange }) {
+  const [openKey, setOpenKey] = useState(null);
+
+  function update(key, field, value) {
+    onChange({
+      ...templates,
+      [key]: { ...(templates[key] || {}), [field]: value },
+    });
+  }
+
+  function reset(key) {
+    const { [key]: _, ...rest } = templates;
+    onChange(rest);
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+      <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text)" }}>
+        Modèles d'email
+      </span>
+      <span style={{ fontSize: "11px", color: "var(--muted)" }}>
+        Variables disponibles : {TEMPLATE_VARS.map((v) => <code key={v.key} style={{ marginRight: 4 }}>{`{{${v.key}}}`}</code>)}
+      </span>
+      {TEMPLATE_KEYS.map((key) => {
+        const defaults = DEFAULT_EMAIL_TEMPLATES[key];
+        const custom   = templates[key] || {};
+        const isOpen   = openKey === key;
+        const isEdited = !!(custom.subject || custom.body);
+        return (
+          <div key={key} style={{ border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden" }}>
+            <button
+              type="button"
+              onClick={() => setOpenKey(isOpen ? null : key)}
+              style={{
+                width: "100%", textAlign: "left", padding: "8px 12px",
+                background: isOpen ? "var(--surface-2)" : "var(--surface)",
+                border: "none", cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center",
+                fontSize: 13, fontWeight: 600, color: "var(--text)",
+              }}
+            >
+              <span>{defaults.label} {isEdited && <span style={{ color: "var(--pink)", fontSize: 10 }}>● modifié</span>}</span>
+              <span>{isOpen ? "▲" : "▼"}</span>
+            </button>
+
+            {isOpen && (
+              <div style={{ padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8, background: "var(--surface)" }}>
+                <label style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                  <span style={{ fontSize: 11, color: "var(--muted)" }}>Objet</span>
+                  <input
+                    type="text"
+                    value={custom.subject ?? defaults.subject}
+                    onChange={(e) => update(key, "subject", e.target.value)}
+                    style={{ fontSize: 12 }}
+                  />
+                </label>
+                <label style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                  <span style={{ fontSize: 11, color: "var(--muted)" }}>Corps</span>
+                  <textarea
+                    rows={8}
+                    value={custom.body ?? defaults.body}
+                    onChange={(e) => update(key, "body", e.target.value)}
+                    style={{ fontSize: 12, fontFamily: "monospace", resize: "vertical" }}
+                  />
+                </label>
+                {isEdited && (
+                  <button type="button" style={{ alignSelf: "flex-end", fontSize: 11, color: "var(--muted)", background: "none", border: "none", cursor: "pointer" }}
+                    onClick={() => reset(key)}>
+                    ↺ Rétablir les valeurs par défaut
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 }

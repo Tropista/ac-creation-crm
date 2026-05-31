@@ -101,7 +101,7 @@ export default function ClientFileLibrary({ clientId, files = [], onFilesChange 
           textAlign: "center",
           cursor: "pointer",
           marginBottom: 16,
-          background: dragOver ? "#fff1f8" : "var(--surface, #f9fafb)",
+          background: dragOver ? "var(--table-hover)" : "var(--surface-2)",
           transition: "all .15s",
         }}
       >
@@ -131,17 +131,17 @@ export default function ClientFileLibrary({ clientId, files = [], onFilesChange 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: 10 }}>
           {files.map((f) => (
             <div key={f.id} style={{
-              border: "1px solid var(--border, #e5e7eb)",
+              border: "1px solid var(--border)",
               borderRadius: 8,
               overflow: "hidden",
-              background: "var(--card-bg, #fff)",
+              background: "var(--surface)",
               display: "flex",
               flexDirection: "column",
             }}>
               {/* Thumbnail or icon */}
               <div style={{
                 height: 90,
-                background: "var(--surface, #f8fafc)",
+                background: "var(--surface-2)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
@@ -170,7 +170,7 @@ export default function ClientFileLibrary({ clientId, files = [], onFilesChange 
               </div>
 
               {/* Actions */}
-              <div style={{ display: "flex", borderTop: "1px solid var(--border, #f1f5f9)", padding: "4px 6px", gap: 4 }}>
+              <div style={{ display: "flex", borderTop: "1px solid var(--border)", padding: "4px 6px", gap: 4 }}>
                 <a
                   href={f.url}
                   download={f.name}

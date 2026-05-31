@@ -20,7 +20,7 @@ function euroFormatter(value) {
 function ChartCard({ title, children }) {
   return (
     <div style={{
-      background: "var(--card-bg, #fff)",
+      background: "var(--surface)",
       border: "1px solid var(--border, #e5e7eb)",
       borderRadius: 8,
       padding: "16px",
@@ -115,7 +115,7 @@ export default function DashboardCharts({
         ) : (
           <ResponsiveContainer width="100%" height={200}>
             <LineChart data={monthlyData} margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
               <XAxis dataKey="label" tick={{ fontSize: 11 }} />
               <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11 }} width={36} />
               <Tooltip formatter={euroFormatter} />
@@ -134,7 +134,7 @@ export default function DashboardCharts({
         ) : (
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={processData} layout="vertical" margin={{ top: 0, right: 24, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
               <XAxis type="number" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11 }} />
               <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={72} />
               <Tooltip formatter={euroFormatter} />
@@ -157,7 +157,7 @@ export default function DashboardCharts({
                   <span style={{ color: "var(--text-muted, #6b7280)" }}>{step.name}</span>
                   <strong style={{ color: step.fill }}>{step.value}</strong>
                 </div>
-                <div style={{ background: "#e5e7eb", borderRadius: 4, height: 8 }}>
+                <div style={{ background: "var(--border)", borderRadius: 4, height: 8 }}>
                   <div style={{ width: `${pct}%`, minWidth: pct > 0 ? 4 : 0, background: step.fill, borderRadius: 4, height: "100%", transition: "width .4s" }} />
                 </div>
               </div>
@@ -193,7 +193,7 @@ export default function DashboardCharts({
                     </span>
                     <strong>{euroFormatter(entry.value)}</strong>
                   </div>
-                  <div style={{ background: "#e5e7eb", borderRadius: 4, height: 6 }}>
+                  <div style={{ background: "var(--border)", borderRadius: 4, height: 6 }}>
                     <div style={{ width: `${Math.round((entry.value / totalTTC) * 100)}%`, background: entry.fill, borderRadius: 4, height: "100%" }} />
                   </div>
                 </div>

@@ -32,6 +32,7 @@ export default function DocumentList({
   onCreateDeposit,
   onCreateBalance,
   onRecordPayment,
+  onDuplicate,
   depositPresets = [30, 50, 70],
 }) {
   return (
@@ -222,6 +223,11 @@ export default function DocumentList({
                       <button type="button" className="compact" onClick={() => onEdit(d)}>
                         Modifier
                       </button>
+                      {isQuote && onDuplicate && (
+                        <button type="button" className="compact" onClick={() => onDuplicate(d)} title="Dupliquer ce devis">
+                          Dupliquer
+                        </button>
+                      )}
                       {isQuote &&
                         (converted ? (
                           <span className="documents-converted-tag">Facturé</span>

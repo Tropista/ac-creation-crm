@@ -79,6 +79,8 @@ import {
 import AutomationCenter from "./AutomationCenter";
 import DashboardCharts from "./DashboardCharts";
 import ErrorBoundary from "./ErrorBoundary";
+import { getInvoicesDueForReminder } from "../utils/autoReminderEngine";
+import { sendReminderEmail } from "../services/emailService";
 import {
   countLowStockByKind,
   getLowStockProductsByKind,
@@ -141,6 +143,7 @@ export default function Dashboard({
   const [annualStatsYear, setAnnualStatsYear] = useState(() =>
     String(new Date().getFullYear())
   );
+  const [sendingReminders, setSendingReminders] = useState(false);
   const [, setPublicAcceptanceDismissTick] = useState(0);
   const permissions = getPermissions(currentRole);
   const canManageInvoices = permissions.pages.includes("invoices");
@@ -288,6 +291,55 @@ export default function Dashboard({
   const recentPublicAcceptances = getRecentPublicAcceptances(quotes);
 
   const unpaidCount = invoices.filter((i) => i.status !== "Payée").length;
+
+  const remindersDue = useMemo(
+    () => getInvoicesDueForReminder(invoices, data.clients || [], data.settings || {}),
+    [invoices, data.clients, data.settings]
+  );
+
+  async function sendAllReminders() {
+    if (!data.settings?.smtpEmail || !data.settings?.smtpAppPassword) {
+      showToast("Configure Gmail dans Paramètres avant d'envoyer des relances.", "error");
+      return;
+    }
+    if (remindersDue.length === 0) return;
+    setSendingReminders(true);
+    let sent = 0;
+    let nextInvoices = [...invoices];
+    for (const { invoice, client, reminderNumber } of remindersDue) {
+      try {
+        await sendReminderEmail({ invoice, client, settings: data.settings, reminderNumber });
+        nextInvoices = nextInvoices.map((inv) =>
+          String(inv.id) === String(invoice.id) ? markDocumentReminder(inv) : inv
+        );
+        sent++;
+        logActivity?.("Relance automatique", invoice.number, client?.name || "");
+      } catch (err) {
+        showToast(`Erreur relance ${invoice.number} : ${err.message}`, "error");
+      }
+    }
+    setData({ ...data, invoices: nextInvoices });
+    if (sent > 0) showToast(`${sent} relance(s) envoyée(s).`, "success");
+    setSendingReminders(false);
+  }
+
+  async function sendSingleReminder(invoice, client, reminderNumber) {
+    if (!data.settings?.smtpEmail || !data.settings?.smtpAppPassword) {
+      showToast("Configure Gmail dans Paramètres avant d'envoyer des relances.", "error");
+      return;
+    }
+    try {
+      await sendReminderEmail({ invoice, client, settings: data.settings, reminderNumber });
+      const nextInvoices = invoices.map((inv) =>
+        String(inv.id) === String(invoice.id) ? markDocumentReminder(inv) : inv
+      );
+      setData({ ...data, invoices: nextInvoices });
+      logActivity?.("Relance automatique", invoice.number, client?.name || "");
+      showToast(`Relance n°${reminderNumber} envoyée pour ${invoice.number}.`, "success");
+    } catch (err) {
+      showToast(`Erreur : ${err.message}`, "error");
+    }
+  }
 
   const billingPeriod = useMemo(() => {
     const today = new Date();
@@ -875,6 +927,48 @@ export default function Dashboard({
                   </button>
                 )}
               </div>
+            </div>
+          )}
+
+          {canManageInvoices && remindersDue.length > 0 && (
+            <div className="card dashboard-visual-kpi">
+              <div className="dashboard-visual-kpi__head">
+                <h3>📬 Relances à envoyer</h3>
+                <span className="muted">{remindersDue.length} facture(s) en attente</span>
+              </div>
+              <ul style={{ margin: "0 0 10px", padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 6 }}>
+                {remindersDue.slice(0, 5).map(({ invoice, client, reminderNumber, daysOverdue }) => (
+                  <li key={invoice.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                    <span style={{ flex: 1 }}>
+                      <strong>{invoice.number}</strong>
+                      <span className="muted"> · {client.name} · {daysOverdue}j de retard</span>
+                    </span>
+                    <span style={{ color: "var(--orange)", fontWeight: 600, fontSize: 11 }}>
+                      Relance n°{reminderNumber}
+                    </span>
+                    <button
+                      type="button"
+                      className="compact"
+                      onClick={() => sendSingleReminder(invoice, client, reminderNumber)}
+                      disabled={sendingReminders}
+                    >
+                      Envoyer
+                    </button>
+                  </li>
+                ))}
+                {remindersDue.length > 5 && (
+                  <li className="muted" style={{ fontSize: 12 }}>+ {remindersDue.length - 5} autre(s)…</li>
+                )}
+              </ul>
+              <button
+                type="button"
+                className="primary"
+                onClick={sendAllReminders}
+                disabled={sendingReminders}
+                style={{ width: "100%" }}
+              >
+                {sendingReminders ? "Envoi en cours…" : `Envoyer toutes les relances (${remindersDue.length})`}
+              </button>
             </div>
           )}
 

@@ -36,6 +36,8 @@ import {
 } from "./services/leadsService";
 import "./App.css";
 
+import GlobalSearch from "./components/GlobalSearch";
+import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import Sidebar from "./components/Sidebar";
 import Clients from "./components/Clients";
 import Products from "./components/Products";
@@ -236,6 +238,15 @@ function CrmApp() {
   const [data, setData] = useState(loadData);
   const dataRef = useRef(data);
   dataRef.current = data;
+  const [globalSearchOpen, setGlobalSearchOpen] = useState(false);
+  const [pendingOpenDoc, setPendingOpenDoc] = useState(null);
+
+  useGlobalShortcuts([
+    { key: "k", ctrl: true,  handler: () => setGlobalSearchOpen(true) },
+    { key: "n", ctrl: false, handler: () => { if (navigate) navigate(pageToPath("quotes")); } },
+    { key: "f", ctrl: false, handler: () => { if (navigate) navigate(pageToPath("invoices")); } },
+  ]);
+
   const initialAuth = getInitialAuthState();
   const [currentUser, setCurrentUser] = useState(initialAuth.user);
   const [authNotice, setAuthNotice] = useState(initialAuth.notice);
@@ -642,6 +653,8 @@ function CrmApp() {
                     setData={updateData}
                     currentRole={currentRole}
                     logActivity={handleLogActivity}
+                    pendingOpenDoc={pendingOpenDoc?.type === "quote" ? pendingOpenDoc : null}
+                    onClearPendingOpenDoc={() => setPendingOpenDoc(null)}
                   />
                 ) : null
               }
@@ -684,6 +697,8 @@ function CrmApp() {
                     setData={updateData}
                     currentRole={currentRole}
                     logActivity={handleLogActivity}
+                    pendingOpenDoc={pendingOpenDoc?.type === "invoice" ? pendingOpenDoc : null}
+                    onClearPendingOpenDoc={() => setPendingOpenDoc(null)}
                   />
                 ) : null
               }
@@ -868,6 +883,12 @@ function CrmApp() {
           </Routes>
         </Suspense>
       </main>
+      <GlobalSearch
+        isOpen={globalSearchOpen}
+        onClose={() => setGlobalSearchOpen(false)}
+        data={data}
+        onOpenDoc={(doc) => { setPendingOpenDoc(doc); setGlobalSearchOpen(false); }}
+      />
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import PaginationControls from "./PaginationControls";
 import ClientFileLibrary from "./ClientFileLibrary";
 import { canDeleteData } from "../services/authService";
@@ -97,7 +97,24 @@ export default function Clients({
   setPage,
 }) {
   const [search, setSearch] = useState("");
-  const [selectedClientId, setSelectedClientId] = useState(null);
+  const [selectedClientId, setSelectedClientId] = useState(() => {
+    const pending = localStorage.getItem("crm_open_client_id");
+    if (pending) { localStorage.removeItem("crm_open_client_id"); return pending; }
+    return null;
+  });
+
+  useEffect(() => {
+    function onOpenClient(e) {
+      const id = e.detail?.id;
+      if (id) {
+        localStorage.removeItem("crm_open_client_id");
+        setSelectedClientId(id);
+        setClientTab("infos");
+      }
+    }
+    window.addEventListener("crm:openClient", onOpenClient);
+    return () => window.removeEventListener("crm:openClient", onOpenClient);
+  }, []);
   const [editing, setEditing] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [sortBy, setSortBy] = useState("nameAsc");

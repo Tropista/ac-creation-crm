@@ -1,5 +1,7 @@
 import { getBankApiUrl } from "../utils/bankApi";
 import { buildDocumentPdf, getDocumentFileName } from "../utils/documentPdf";
+import { buildInvoiceReminderEmail } from "../utils/invoiceReminders";
+import { buildEmailFromTemplate, buildDocVars } from "../utils/emailTemplates";
 
 export async function sendDocumentByEmail({ doc, type, data, client }) {
   const settings = data.settings || {};
@@ -16,26 +18,9 @@ export async function sendDocumentByEmail({ doc, type, data, client }) {
   const pdfFilename = getDocumentFileName(doc, type);
 
   const isQuote = type === "quote";
-  const docLabel = isQuote ? "devis" : "facture";
-  const docTitle = isQuote ? "Devis" : "Facture";
-
-  const subject = `${docTitle} ${doc.number} — ${settings.companyName || ""}`.trim();
-
-  const text = `Bonjour ${client.name || ""},
-
-Veuillez trouver en pièce jointe votre ${docLabel} ${doc.number}.
-
-Montant TTC : ${Number(doc.totalTTC || 0).toLocaleString("fr-FR", { minimumFractionDigits: 2 })} €
-Statut : ${doc.status || "—"}
-
-${settings.paymentTerms || ""}
-
-${settings.bankInfo || ""}
-
-Cordialement,
-${settings.companyName || ""}
-${settings.companyPhone || ""}
-${settings.companyEmail || ""}`;
+  const templateKey = isQuote ? "quote" : "invoice";
+  const vars = buildDocVars(doc, client, settings);
+  const { subject, body: text } = buildEmailFromTemplate(templateKey, vars, settings);
 
   const apiUrl = getBankApiUrl();
   const response = await fetch(`${apiUrl}/send-email`, {
@@ -68,4 +53,43 @@ ${settings.companyEmail || ""}`;
     throw new Error(detail || `Erreur ${response.status} lors de l'envoi.`);
   }
   return payload;
+}
+
+async function callSendEmail({ to, subject, text, settings }) {
+  const apiUrl = getBankApiUrl();
+  const response = await fetch(`${apiUrl}/send-email`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      to,
+      subject,
+      text,
+      smtpEmail: settings.smtpEmail,
+      smtpAppPassword: settings.smtpAppPassword,
+      fromName: settings.companyName || "",
+    }),
+  });
+  if (response.status === 413) throw new Error("Email trop volumineux.");
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const detail = payload.error || "";
+    if (detail.toLowerCase().includes("invalid login") || detail.toLowerCase().includes("username and password")) {
+      throw new Error("Identifiants Gmail incorrects.");
+    }
+    throw new Error(detail || `Erreur ${response.status}`);
+  }
+  return payload;
+}
+
+export async function sendReminderEmail({ invoice, client, settings, reminderNumber }) {
+  if (!settings.smtpEmail || !settings.smtpAppPassword) {
+    throw new Error("Gmail non configuré dans les Paramètres.");
+  }
+  if (!client?.email) {
+    throw new Error(`Le client ${client?.name || ""} n'a pas d'adresse email.`);
+  }
+  const key = `reminder${Math.min(reminderNumber, 3)}`;
+  const vars = buildDocVars(invoice, client, settings);
+  const { subject, body } = buildEmailFromTemplate(key, vars, settings);
+  return callSendEmail({ to: client.email, subject, text: body, settings });
 }
