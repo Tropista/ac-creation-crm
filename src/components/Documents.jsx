@@ -33,6 +33,7 @@ import {
   isPaidInvoice,
   isCancelledInvoice,
   getInvoiceRemaining,
+  parseDocumentDate,
   DEPOSIT_PRESETS,
 } from "../utils/invoices";
 import { computeDueDate, openInvoiceReminderMailto } from "../utils/invoiceReminders";
@@ -105,6 +106,8 @@ function Documents({ type, data, setData, currentRole = 'Admin', logActivity, pe
   const [unpaidOnly, setUnpaidOnly] = useState(false);
   const [paidOnly, setPaidOnly] = useState(false);
   const [statusFilter, setStatusFilter] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const prefilledClientId =
   localStorage.getItem(
     "crm_prefill_client_id"
@@ -365,6 +368,17 @@ const [form, setForm] = useState({
       }
       if (paidOnly && !isQuote && !isPaidInvoice(doc)) return false;
 
+      if (dateFrom || dateTo) {
+        const docDate = parseDocumentDate(doc.date);
+        if (!docDate) return false;
+        if (dateFrom && docDate < new Date(dateFrom)) return false;
+        if (dateTo) {
+          const end = new Date(dateTo);
+          end.setHours(23, 59, 59, 999);
+          if (docDate > end) return false;
+        }
+      }
+
       if (!query) return true;
 
       const client = clientName(data, doc.clientId).toLowerCase();
@@ -406,7 +420,7 @@ const [form, setForm] = useState({
       if (sortBy === "statusDesc") return String(b.status || "").localeCompare(String(a.status || ""));
       return 0;
     });
-  }, [documents, sortBy, data, overdueOnly, unpaidOnly, paidOnly, statusFilter, isQuote, search]);
+  }, [documents, sortBy, data, overdueOnly, unpaidOnly, paidOnly, statusFilter, isQuote, search, dateFrom, dateTo]);
 
   const documentTotalPages = Math.max(1, Math.ceil(sortedDocuments.length / itemsPerPage));
   const documentPage = Math.min(currentPage, documentTotalPages);
@@ -1078,11 +1092,12 @@ reset();
   }
 
   function handleDocumentSent(doc) {
+    const updatedDoc = { ...markDocumentSent(doc), ...(doc.emailSentAt ? { emailSentAt: doc.emailSentAt } : {}) };
     const nextDocuments = documents.map((entry) =>
-      String(entry.id) === String(doc.id) ? markDocumentSent(entry) : entry
+      String(entry.id) === String(doc.id) ? updatedDoc : entry
     );
     setData({ ...data, [listKey]: nextDocuments });
-    setPreviewDoc(markDocumentSent(doc));
+    setPreviewDoc(updatedDoc);
     logActivity?.(
       `Envoi ${isQuote ? "devis" : "facture"}`,
       doc.number,
@@ -1283,6 +1298,15 @@ reset();
         onCreateBalance={createBalanceInvoice}
         onRecordPayment={recordPartialPayment}
         onDuplicate={isQuote ? duplicate : undefined}
+        onMarkEmailRead={(doc) => {
+          const key = isQuote ? "quotes" : "invoices";
+          setData({ ...data, [key]: documents.map((d) => String(d.id) === String(doc.id) ? { ...d, emailReadAt: new Date().toISOString() } : d) });
+          showToast(`${doc.number} marqué comme lu.`, "success");
+        }}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        onDateFromChange={(v) => { setDateFrom(v); setCurrentPage(1); }}
+        onDateToChange={(v) => { setDateTo(v); setCurrentPage(1); }}
         depositPresets={DEPOSIT_PRESETS}
       />
 

@@ -196,6 +196,32 @@ export default function Clients({
       .sort((a, b) => new Date(docDate(b) || 0) - new Date(docDate(a) || 0));
   }, [data.invoices, selectedClient]);
 
+  const clientPriceHistory = useMemo(() => {
+    if (!selectedClient) return [];
+    const map = new Map();
+    for (const inv of selectedClientInvoices) {
+      for (const line of (inv.lines || [])) {
+        const key = line.description || line.productId || "?";
+        if (!map.has(key)) map.set(key, { description: key, prices: [], dates: [] });
+        const entry = map.get(key);
+        if (line.price != null) entry.prices.push(Number(line.price));
+        if (inv.date) entry.dates.push(inv.date);
+      }
+    }
+    return [...map.values()]
+      .filter((e) => e.prices.length > 0)
+      .map((e) => ({
+        description: e.description,
+        count: e.prices.length,
+        avgPrice: e.prices.reduce((s, p) => s + p, 0) / e.prices.length,
+        minPrice: Math.min(...e.prices),
+        maxPrice: Math.max(...e.prices),
+        lastPrice: e.prices[0],
+        lastDate: e.dates[0] || "",
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [selectedClientInvoices, selectedClient]);
+
   const selectedClientQuotes = useMemo(() => {
     if (!selectedClient) return [];
 
@@ -910,6 +936,8 @@ h1{
                 <button type="button" className={clientTab === "documents" ? "active" : ""} onClick={() => setClientTab("documents")}>📄 Documents</button>
                 <button type="button" className={clientTab === "history" ? "active" : ""} onClick={() => setClientTab("history")}>🕘 Historique</button>
                 <button type="button" className={clientTab === "files" ? "active" : ""} onClick={() => setClientTab("files")}>📂 Fichiers</button>
+                <button type="button" className={clientTab === "notes" ? "active" : ""} onClick={() => setClientTab("notes")}>📝 Notes</button>
+                <button type="button" className={clientTab === "prices" ? "active" : ""} onClick={() => setClientTab("prices")}>💰 Historique prix</button>
               </div>
 
               <div className="client-card">
@@ -1032,12 +1060,115 @@ h1{
                   />
                 )}
 
+                {clientTab === "prices" && (
+                  <div>
+                    {clientPriceHistory.length === 0 ? (
+                      <p style={{ color: "var(--muted)", fontSize: 13 }}>Aucune facture enregistrée pour ce client.</p>
+                    ) : (
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                        <thead>
+                          <tr style={{ borderBottom: "2px solid var(--border)" }}>
+                            <th style={{ textAlign: "left", padding: "6px 8px", color: "var(--muted)", fontWeight: 600, fontSize: 11 }}>Produit / Prestation</th>
+                            <th style={{ textAlign: "right", padding: "6px 8px", color: "var(--muted)", fontWeight: 600, fontSize: 11 }}>Commandes</th>
+                            <th style={{ textAlign: "right", padding: "6px 8px", color: "var(--muted)", fontWeight: 600, fontSize: 11 }}>Dernier prix</th>
+                            <th style={{ textAlign: "right", padding: "6px 8px", color: "var(--muted)", fontWeight: 600, fontSize: 11 }}>Prix moyen</th>
+                            <th style={{ textAlign: "right", padding: "6px 8px", color: "var(--muted)", fontWeight: 600, fontSize: 11 }}>Min / Max</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {clientPriceHistory.map((row, i) => (
+                            <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
+                              <td style={{ padding: "7px 8px", fontWeight: 500 }}>{row.description}</td>
+                              <td style={{ textAlign: "right", padding: "7px 8px", color: "var(--muted)" }}>{row.count}</td>
+                              <td style={{ textAlign: "right", padding: "7px 8px", fontWeight: 700, color: "var(--pink, #ec4899)" }}>
+                                {row.lastPrice.toLocaleString("fr-FR", { minimumFractionDigits: 2 })} €
+                              </td>
+                              <td style={{ textAlign: "right", padding: "7px 8px" }}>
+                                {row.avgPrice.toLocaleString("fr-FR", { minimumFractionDigits: 2 })} €
+                              </td>
+                              <td style={{ textAlign: "right", padding: "7px 8px", color: "var(--muted)", fontSize: 11 }}>
+                                {row.minPrice.toLocaleString("fr-FR", { minimumFractionDigits: 2 })} / {row.maxPrice.toLocaleString("fr-FR", { minimumFractionDigits: 2 })} €
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                )}
+
+                {clientTab === "notes" && (
+                  <ClientNotes
+                    clientId={selectedClient.id}
+                    notes={(data.clientNotes || []).filter((n) => String(n.clientId) === String(selectedClient.id))}
+                    onNotesChange={(updated) => {
+                      const others = (data.clientNotes || []).filter((n) => String(n.clientId) !== String(selectedClient.id));
+                      setData({ ...data, clientNotes: [...others, ...updated] });
+                    }}
+                  />
+                )}
+
               </div>
             </>
           )}
         </div>
       </div>
     </section>
+  );
+}
+
+function ClientNotes({ clientId, notes = [], onNotesChange }) {
+  const [text, setText] = useState("");
+
+  function addNote() {
+    const t = text.trim();
+    if (!t) return;
+    onNotesChange([...notes, { id: crypto.randomUUID(), clientId, text: t, createdAt: new Date().toISOString() }]);
+    setText("");
+  }
+
+  function deleteNote(id) {
+    onNotesChange(notes.filter((n) => n.id !== id));
+  }
+
+  const sorted = [...notes].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", gap: 8 }}>
+        <textarea
+          rows={3}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Ajouter une note…"
+          style={{ flex: 1, resize: "vertical", fontSize: 13 }}
+          onKeyDown={(e) => { if (e.key === "Enter" && e.ctrlKey) addNote(); }}
+        />
+        <button type="button" className="primary" onClick={addNote} style={{ alignSelf: "flex-end" }}>
+          Ajouter
+        </button>
+      </div>
+      {sorted.length === 0 ? (
+        <p style={{ color: "var(--muted)", fontSize: 13, margin: 0 }}>Aucune note pour ce client.</p>
+      ) : (
+        <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 8 }}>
+          {sorted.map((n) => (
+            <li key={n.id} style={{ background: "var(--surface-2)", borderRadius: 8, padding: "10px 12px", display: "flex", gap: 10 }}>
+              <div style={{ flex: 1 }}>
+                <p style={{ margin: "0 0 4px", fontSize: 13, whiteSpace: "pre-wrap" }}>{n.text}</p>
+                <span style={{ fontSize: 11, color: "var(--muted)" }}>
+                  {new Date(n.createdAt).toLocaleString("fr-FR", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                </span>
+              </div>
+              <button type="button" onClick={() => deleteNote(n.id)}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: 14, alignSelf: "flex-start" }}>
+                ✕
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

@@ -106,7 +106,7 @@ export default function DashboardCharts({
   ];
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 16, marginBottom: 24 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 16, marginBottom: 24 }}>
 
       {/* ── Courbe CA 12 mois ── */}
       <ChartCard title={`Évolution mensuelle ${safeYear}`}>

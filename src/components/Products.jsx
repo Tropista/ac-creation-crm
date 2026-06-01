@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { downloadCataloguePdf } from "../utils/cataloguePdf";
 import {
   canDeleteData
 } from "../services/authService";
@@ -900,6 +901,12 @@ function openLinkedDocument(doc) {
           <h2>Produits</h2>
           <p>Gère tes produits, prix, références et stocks.</p>
         </div>
+        <button
+          type="button"
+          onClick={() => downloadCataloguePdf({ products: data.products || [], categories: data.categories || [], settings: data.settings || {} })}
+        >
+          📄 Exporter catalogue PDF
+        </button>
       </div>
 
       <form className="card form-grid" onSubmit={submit}>

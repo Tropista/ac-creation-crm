@@ -897,7 +897,7 @@ tbody tr:hover td { background: var(--table-hover); }
 @media (max-width: 850px) {
   .app { flex-direction: column; }
   .sidebar { position: relative; width: 100%; height: auto; flex: none; }
-  .content { height: auto; min-height: 100vh; padding: 18px; }
+  .content { height: auto; min-height: 100vh; padding: 12px; }
   .filters-row,
   .clients-toolbar,
   .filters-main-row { grid-template-columns: 1fr; }
@@ -909,6 +909,31 @@ tbody tr:hover td { background: var(--table-hover); }
   .brand-icon { margin-left: auto; margin-right: auto; }
   .feature-item { text-align: left; }
   .modern-auth-card { padding: 32px 24px; }
+
+  /* Dashboard mobile */
+  .dashboard-stats-grid { grid-template-columns: repeat(2, 1fr) !important; gap: 8px !important; }
+  .dashboard-annual-stats__kpis { grid-template-columns: 1fr 1fr !important; }
+  .dashboard-visual-kpi { padding: 12px !important; }
+  .stat { padding: 12px !important; min-height: 70px !important; }
+  .stat strong { font-size: 1.4rem !important; }
+
+  /* Atelier Gantt mobile */
+  .atelier-gantt-table { overflow-x: auto; }
+
+  /* Documents toolbar mobile */
+  .documents-toolbar { flex-wrap: wrap; gap: 6px !important; }
+  .documents-toolbar-controls { flex-wrap: wrap; gap: 6px !important; }
+  .documents-search { width: 100% !important; }
+
+  /* Client tabs mobile */
+  .client-tabs { flex-wrap: wrap; gap: 4px; }
+  .client-tabs button { font-size: 11px !important; padding: 6px 8px !important; }
+
+  /* Tableaux mobile : scroll horizontal */
+  .card table { display: block; overflow-x: auto; white-space: nowrap; }
+
+  /* Boutons action mobile : plus grands pour le touch */
+  button.compact { min-height: 36px; padding: 6px 10px !important; }
 }
 
 /* =========================================================

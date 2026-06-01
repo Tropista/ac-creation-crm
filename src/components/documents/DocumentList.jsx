@@ -22,6 +22,7 @@ export default function DocumentList({
   onEdit,
   onRemove,
   onUpdateStatus,
+  onMarkEmailRead,
   onSendReminder,
   onConvertQuote,
   onCopyQuoteLink,
@@ -33,6 +34,10 @@ export default function DocumentList({
   onCreateBalance,
   onRecordPayment,
   onDuplicate,
+  dateFrom = "",
+  dateTo = "",
+  onDateFromChange,
+  onDateToChange,
   depositPresets = [30, 50, 70],
 }) {
   return (
@@ -57,6 +62,22 @@ export default function DocumentList({
             onChange={(e) => onSearchChange?.(e.target.value)}
             aria-label={`Rechercher ${isQuote ? "un devis" : "une facture"}`}
           />
+          <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12 }}>
+            <span style={{ color: "var(--muted)" }}>Du</span>
+            <input type="date" value={dateFrom} onChange={(e) => onDateFromChange?.(e.target.value)}
+              style={{ fontSize: 12, padding: "4px 6px", border: "1px solid var(--border)", borderRadius: 6, background: "var(--input-bg)", color: "var(--text)" }} />
+          </label>
+          <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12 }}>
+            <span style={{ color: "var(--muted)" }}>Au</span>
+            <input type="date" value={dateTo} onChange={(e) => onDateToChange?.(e.target.value)}
+              style={{ fontSize: 12, padding: "4px 6px", border: "1px solid var(--border)", borderRadius: 6, background: "var(--input-bg)", color: "var(--text)" }} />
+          </label>
+          {(dateFrom || dateTo) && (
+            <button type="button" style={{ fontSize: 11, padding: "4px 8px" }}
+              onClick={() => { onDateFromChange?.(""); onDateToChange?.(""); }}>
+              ✕ Dates
+            </button>
+          )}
           {!isQuote && (
             <button type="button" onClick={onExportCsv}>
               Exporter CSV
@@ -178,6 +199,19 @@ export default function DocumentList({
                       </td>
                     )}
                     <td>
+                      {d.emailSentAt && (
+                        <div style={{ marginBottom: 3 }}>
+                          {d.emailReadAt ? (
+                            <span style={{ fontSize: 10, color: "#10b981", fontWeight: 600 }}>✓ Lu</span>
+                          ) : (
+                            <button type="button" onClick={() => onMarkEmailRead?.(d)}
+                              title={`Email envoyé le ${new Date(d.emailSentAt).toLocaleDateString("fr-FR")}`}
+                              style={{ fontSize: 10, background: "none", border: "none", cursor: "pointer", color: "var(--muted)", padding: 0 }}>
+                              📧 Marquer lu
+                            </button>
+                          )}
+                        </div>
+                      )}
                       <div className="documents-status-cell">
                         <span className={statusClass(d.status)}>{d.status}</span>
                         <select

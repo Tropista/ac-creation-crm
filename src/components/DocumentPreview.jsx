@@ -271,9 +271,9 @@ export default function DocumentPreview({
     }
     setSending(true);
     try {
-      await sendDocumentByEmail({ doc, type, data, client });
+      const result = await sendDocumentByEmail({ doc, type, data, client });
+      onDocumentSent?.({ ...doc, emailSentAt: result.sentAt || new Date().toISOString() });
       showToast(`Email envoyé à ${client.email} avec le PDF en pièce jointe.`, "success");
-      onDocumentSent?.(doc);
     } catch (err) {
       showToast(err.message || "Erreur lors de l'envoi.", "error");
     } finally {
@@ -334,7 +334,15 @@ export default function DocumentPreview({
           <button type="button" onClick={sendEmail} disabled={sending}>
             {sending ? "Envoi en cours…" : "Envoyer par email"}
           </button>
-          <button type="button" onClick={() => window.print()}>
+          <button type="button" onClick={async () => {
+            try {
+              const pdf = buildDocumentPdf({ doc, type, data });
+              pdf.autoPrint();
+              window.open(pdf.output("bloburl"), "_blank");
+            } catch {
+              window.print();
+            }
+          }}>
             Imprimer
           </button>
           <button type="button" className="primary" onClick={downloadPdfNative}>

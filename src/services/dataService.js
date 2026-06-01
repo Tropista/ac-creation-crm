@@ -185,6 +185,7 @@ export const emptyData = {
   afterSalesCases: [],
   payments: [],
   clientFiles: [],
+  clientNotes: [],
   backups: [],
   logs: [],
 };

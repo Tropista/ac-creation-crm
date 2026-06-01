@@ -51,7 +51,7 @@ export async function sendDocumentByEmail({ doc, type, data, client }) {
     }
     throw new Error(detail || `Erreur ${response.status} lors de l'envoi.`);
   }
-  return payload;
+  return { ...payload, sentAt: new Date().toISOString() };
 }
 
 async function callSendEmail({ to, subject, text, settings }) {
