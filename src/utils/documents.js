@@ -41,6 +41,13 @@ export function statusClass(status) {
       .toLowerCase()
       .replaceAll(" ", "-")
       .replaceAll("é", "e")
+      .replaceAll("è", "e")
+      .replaceAll("ê", "e")
+      .replaceAll("à", "a")
+      .replaceAll("â", "a")
+      .replaceAll("û", "u")
+      .replaceAll("î", "i")
+      .replaceAll("ô", "o")
   );
 }
 

@@ -69,6 +69,7 @@ export default function DocumentPreview({
 }) {
   const pdfWrapperRef = useRef(null);
   const [sending, setSending] = useState(false);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
   const [emailPreview, setEmailPreview] = useState(null); // { subject, body }
   const isQuote = type === "quote";
   const isDelivery = type === "delivery";
@@ -149,7 +150,7 @@ export default function DocumentPreview({
   async function downloadPdf() {
     const source = document.getElementById("document-preview");
     if (!source) return showToast("Zone PDF introuvable.", "error");
-    showToast("Génération du PDF en cours…", "info");
+    setGeneratingPdf(true);
 
     const wrapper = document.createElement("div");
     wrapper.className = "ac-doc-pdf-root";
@@ -237,11 +238,12 @@ export default function DocumentPreview({
       }
 
       pdf.save(documentFileName);
-      showToast("PDF généré avec succès.", "success");
+      showToast("PDF généré.", "success");
     } catch (error) {
       console.error(error);
       showToast("Impossible de générer le PDF.", "error");
     } finally {
+      setGeneratingPdf(false);
       if (wrapper.parentNode) {
         wrapper.parentNode.removeChild(wrapper);
       }
@@ -332,8 +334,8 @@ export default function DocumentPreview({
           <button type="button" onClick={() => window.print()}>
             Imprimer
           </button>
-          <button type="button" className="primary" onClick={downloadPdf}>
-            Télécharger PDF
+          <button type="button" className="primary" onClick={downloadPdf} disabled={generatingPdf}>
+            {generatingPdf ? "Génération…" : "Télécharger PDF"}
           </button>
         </div>
 

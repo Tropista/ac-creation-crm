@@ -354,6 +354,16 @@ tbody tr:hover td { background: var(--table-hover); }
 .badge.en-attente,
 .badge.en-attente-de-paiement { background: #ffedd5; color: #9a3412; }
 
+/* Statuts devis */
+.badge.brouillon { background: #f1f5f9; color: #475569; }
+.badge.en-production { background: #ede9fe; color: #5b21b6; }
+.badge.pret { background: #d1fae5; color: #065f46; }
+.badge.livre { background: #bbf7d0; color: #14532d; }
+
+/* Statuts facture */
+.badge.partiellement-payee { background: #ffedd5; color: #c2410c; }
+.badge.annulee { background: #f1f5f9; color: #64748b; text-decoration: line-through; }
+
 .link-button {
   background: transparent !important;
   color: var(--blue);

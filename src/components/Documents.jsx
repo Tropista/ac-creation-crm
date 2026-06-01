@@ -189,6 +189,19 @@ const [form, setForm] = useState({
   }
 
   useEffect(() => {
+    function onNewItem(e) {
+      e.preventDefault();
+      reset();
+      setTimeout(() => {
+        document.querySelector(`[data-testid="${isQuote ? "quote-form" : "invoice-form"}"] select`)?.focus();
+        document.querySelector(`[data-testid="${isQuote ? "quote-form" : "invoice-form"}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 50);
+    }
+    window.addEventListener("crm:new-item", onNewItem);
+    return () => window.removeEventListener("crm:new-item", onNewItem);
+  }, [isQuote]);
+
+  useEffect(() => {
     const listViewEvent = isQuote ? QUOTES_LIST_VIEW_EVENT : INVOICES_LIST_VIEW_EVENT;
 
     function onListViewRequest() {

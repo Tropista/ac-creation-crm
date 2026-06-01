@@ -291,6 +291,20 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
   }));
 
   useEffect(() => {
+    function onNewItem(e) {
+      e.preventDefault();
+      setEditing(null);
+      // Scroll vers le formulaire produit
+      setTimeout(() => {
+        document.querySelector(".form-grid input")?.focus();
+        document.querySelector(".form-grid")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 50);
+    }
+    window.addEventListener("crm:new-item", onNewItem);
+    return () => window.removeEventListener("crm:new-item", onNewItem);
+  }, []);
+
+  useEffect(() => {
     const stock = localStorage.getItem(PRODUCTS_STOCK_FILTER_KEY);
     const kind = localStorage.getItem(PRODUCTS_KIND_FILTER_KEY);
     if (stock) {

@@ -112,8 +112,17 @@ export default function Clients({
         setClientTab("infos");
       }
     }
+    function onNewItem(e) {
+      e.preventDefault();
+      setShowClientForm(true);
+      setSelectedClientId(null);
+    }
     window.addEventListener("crm:openClient", onOpenClient);
-    return () => window.removeEventListener("crm:openClient", onOpenClient);
+    window.addEventListener("crm:new-item", onNewItem);
+    return () => {
+      window.removeEventListener("crm:openClient", onOpenClient);
+      window.removeEventListener("crm:new-item", onNewItem);
+    };
   }, []);
   const [editing, setEditing] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);

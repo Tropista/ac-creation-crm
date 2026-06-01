@@ -243,8 +243,15 @@ function CrmApp() {
 
   useGlobalShortcuts([
     { key: "k", ctrl: true,  handler: () => setGlobalSearchOpen(true) },
-    { key: "n", ctrl: false, handler: () => { if (navigate) navigate(pageToPath("quotes")); } },
     { key: "f", ctrl: false, handler: () => { if (navigate) navigate(pageToPath("invoices")); } },
+    {
+      key: "n", ctrl: false, handler: () => {
+        // Si on est sur une page qui gère son propre "nouveau", on dispatch un événement
+        const handled = window.dispatchEvent(new CustomEvent("crm:new-item", { cancelable: true }));
+        // Si personne n'a annulé l'événement → fallback vers nouveau devis
+        if (handled) navigate(pageToPath("quotes"));
+      },
+    },
   ]);
 
   const initialAuth = getInitialAuthState();
