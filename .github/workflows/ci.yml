@@ -29,6 +29,9 @@ jobs:
       - name: Tests unitaires
         run: npm test
 
+      - name: Vérification RLS Supabase
+        run: node scripts/verify-rls.mjs
+
       - name: Install Playwright Chromium
         run: npx playwright install chromium --with-deps
 
