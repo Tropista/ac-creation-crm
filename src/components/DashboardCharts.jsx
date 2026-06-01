@@ -7,11 +7,11 @@ import {
 } from "recharts";
 import { getExpenseDate } from "../utils/expenseSuppliers";
 
-const ROSE   = "#ec4899";
-const ORANGE = "#f97316";
-const TEAL   = "#14b8a6";
-const BLUE   = "#3b82f6";
-const SLATE  = "#94a3b8";
+const ROSE   = "#c084fc";
+const ORANGE = "#f472b6";
+const TEAL   = "#38bdf8";
+const BLUE   = "#818cf8";
+const SLATE  = "rgba(255,255,255,0.3)";
 
 function euroFormatter(value) {
   return `${Number(value || 0).toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 0 })} €`;
@@ -20,13 +20,14 @@ function euroFormatter(value) {
 function ChartCard({ title, children }) {
   return (
     <div style={{
-      background: "var(--surface)",
-      border: "1px solid var(--border, #e5e7eb)",
-      borderRadius: 8,
+      background: "rgba(255,255,255,0.05)",
+      border: "1px solid rgba(255,255,255,0.1)",
+      borderRadius: 16,
       padding: "16px",
       minHeight: 260,
+      backdropFilter: "blur(8px)",
     }}>
-      <h3 style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 700, color: "var(--text, #111827)" }}>
+      <h3 style={{ margin: "0 0 14px", fontSize: 10, fontWeight: 600, color: "rgba(255,255,255,0.4)", textTransform: "uppercase", letterSpacing: "2px" }}>
         {title}
       </h3>
       {children}
@@ -115,11 +116,11 @@ export default function DashboardCharts({
         ) : (
           <ResponsiveContainer width="100%" height={200}>
             <LineChart data={monthlyData} margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-              <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11 }} width={36} />
-              <Tooltip formatter={euroFormatter} />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+              <XAxis dataKey="label" tick={{ fontSize: 10, fill: "rgba(255,255,255,0.3)" }} axisLine={false} tickLine={false} />
+              <YAxis tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 10, fill: "rgba(255,255,255,0.3)" }} width={36} axisLine={false} tickLine={false} />
+              <Tooltip contentStyle={{ background: "rgba(20,10,40,0.95)", border: "1px solid rgba(192,132,252,0.4)", borderRadius: 10, color: "#c084fc", fontSize: 11 }} formatter={euroFormatter} />
+              <Legend wrapperStyle={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }} />
               <Line type="monotone" dataKey="CA HT"       stroke={ROSE}   strokeWidth={2} dot={false} />
               <Line type="monotone" dataKey="Dépenses HT" stroke={ORANGE} strokeWidth={2} dot={false} strokeDasharray="4 2" />
             </LineChart>
@@ -134,11 +135,11 @@ export default function DashboardCharts({
         ) : (
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={processData} layout="vertical" margin={{ top: 0, right: 24, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
-              <XAxis type="number" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 11 }} />
-              <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={72} />
-              <Tooltip formatter={euroFormatter} />
-              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" horizontal={false} />
+              <XAxis type="number" tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 10, fill: "rgba(255,255,255,0.3)" }} axisLine={false} tickLine={false} />
+              <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: "rgba(255,255,255,0.4)" }} width={72} axisLine={false} tickLine={false} />
+              <Tooltip contentStyle={{ background: "rgba(20,10,40,0.95)", border: "1px solid rgba(192,132,252,0.4)", borderRadius: 10, color: "#c084fc", fontSize: 11 }} formatter={euroFormatter} />
+              <Legend wrapperStyle={{ fontSize: 11, color: "rgba(255,255,255,0.5)" }} />
               <Bar dataKey="CA HT"    fill={ROSE} radius={[0, 4, 4, 0]} />
               <Bar dataKey="Marge HT" fill={TEAL} radius={[0, 4, 4, 0]} />
             </BarChart>

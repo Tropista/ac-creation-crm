@@ -20,15 +20,11 @@
 
   color: #ffffff;
 
-  background:
-    linear-gradient(
-      180deg,
-      #4c1d95 0%,
-      #312e81 42%,
-      #172554 100%
-    );
+  background: rgba(255,255,255,0.04);
+  border-right: 1px solid rgba(255,255,255,0.08);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 
-  box-shadow: 10px 0 40px rgba(15, 23, 42, 0.18);
   overflow: hidden;
 }
 
@@ -255,9 +251,10 @@
 
 .sidebar button.active,
 .sidebar-nav a.active {
-  background: rgba(255, 255, 255, 0.18);
-  border-color: rgba(255, 255, 255, 0.25);
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.22);
+  background: rgba(192,132,252,0.15);
+  border-color: rgba(192,132,252,0.3);
+  color: #c084fc;
+  box-shadow: 0 4px 16px rgba(192,132,252,0.15);
 }
 
 .sidebar-nav-badge {

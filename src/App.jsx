@@ -520,7 +520,10 @@ function CrmApp() {
   }
 
   return (
-    <div className="app">
+    <div className="app" style={{ position: "relative", overflow: "hidden" }}>
+      {/* Blobs décoratifs glassmorphism */}
+      <div style={{ position: "fixed", top: "-50px", right: "-50px", width: 300, height: 300, borderRadius: "50%", background: "radial-gradient(circle, rgba(192,132,252,0.2) 0%, transparent 70%)", pointerEvents: "none", zIndex: 0 }} />
+      <div style={{ position: "fixed", bottom: "-30px", left: "-30px", width: 200, height: 200, borderRadius: "50%", background: "radial-gradient(circle, rgba(56,189,248,0.15) 0%, transparent 70%)", pointerEvents: "none", zIndex: 0 }} />
       <Sidebar
         data={data}
         currentUser={currentUser}

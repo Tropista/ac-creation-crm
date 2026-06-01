@@ -136,8 +136,8 @@
 }
 
 .atelier-delete-btn:hover {
-  background: #fee2e2;
-  border-color: #fecaca;
+  background: rgba(248,113,113,0.15);
+  border-color: rgba(248,113,113,0.3);
   transform: translateY(-1px);
 }
 
@@ -232,12 +232,12 @@
   flex: 0 0 auto;
   min-height: 36px;
   padding: 6px 10px;
-  border: 1px solid #f5d0fe;
+  border: 1px solid rgba(192,132,252,0.3);
   border-radius: 12px;
-  background: linear-gradient(135deg, #fff1f7, #fdf4ff);
-  color: #be185d;
+  background: rgba(192,132,252,0.15);
+  color: #c084fc;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 700;
   cursor: pointer;
 }
 
@@ -249,9 +249,9 @@
 }
 
 .atelier-wa-btn {
-  border-color: #bbf7d0;
-  background: linear-gradient(135deg, #ecfdf5, #f0fdf4);
-  color: #047857;
+  border-color: rgba(74,222,128,0.3);
+  background: rgba(74,222,128,0.15);
+  color: #4ade80;
 }
 
 .atelier-assignee-filter {
@@ -263,10 +263,11 @@
 
 .atelier-assignee-filter select {
   min-height: 38px;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(255,255,255,0.12);
   border-radius: 12px;
   padding: 8px 10px;
-  background: #fff;
+  background: rgba(255,255,255,0.07);
+  color: #fff;
   font: inherit;
 }
 
@@ -287,8 +288,8 @@
   gap: 8px;
   padding: 6px;
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.12);
 }
 
 .atelier-header-actions {
@@ -304,8 +305,8 @@
   gap: 8px;
   padding: 6px;
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.12);
 }
 
 .atelier-layout-toggle button {
@@ -404,33 +405,33 @@
 }
 
 .delivery-urgency--overdue {
-  color: #991b1b;
-  background: #fee2e2;
-  border: 1px solid #fecaca;
+  color: #f87171;
+  background: rgba(248,113,113,0.15);
+  border: 1px solid rgba(248,113,113,0.3);
 }
 
 .delivery-urgency--today {
-  color: #c2410c;
-  background: #ffedd5;
-  border: 1px solid #fed7aa;
+  color: #fb923c;
+  background: rgba(251,146,60,0.15);
+  border: 1px solid rgba(251,146,60,0.3);
 }
 
 .delivery-urgency--thisWeek {
-  color: #15803d;
-  background: #dcfce7;
-  border: 1px solid #bbf7d0;
+  color: #4ade80;
+  background: rgba(74,222,128,0.15);
+  border: 1px solid rgba(74,222,128,0.3);
 }
 
 .delivery-urgency--later {
-  color: #475569;
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
+  color: rgba(255,255,255,0.5);
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.12);
 }
 
 .atelier-launch-today {
   margin-bottom: 16px;
-  border-color: #fed7aa;
-  background: linear-gradient(180deg, #fffbeb 0%, #fff 100%);
+  border-color: rgba(251,146,60,0.3);
+  background: rgba(251,146,60,0.08);
 }
 
 .atelier-launch-today__header {
@@ -455,13 +456,14 @@
   font-size: 13px;
   padding: 10px 12px;
   border-radius: 12px;
-  background: #fff;
-  border: 1px solid rgba(251, 146, 60, 0.25);
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(251,146,60,0.2);
+  color: rgba(255,255,255,0.85);
 }
 
 .atelier-launch-today__item em {
   font-style: normal;
-  color: #64748b;
+  color: rgba(255,255,255,0.4);
 }
 
 .atelier-card__lines {
@@ -476,8 +478,8 @@
 
 .atelier-overdue-alert {
   margin-bottom: 16px;
-  border-color: #fecaca;
-  background: #fff5f5;
+  border-color: rgba(248,113,113,0.3);
+  background: rgba(248,113,113,0.08);
 }
 
 .atelier-overdue-alert ul {
@@ -507,11 +509,12 @@
   align-items: center;
   gap: 6px;
   padding: 4px 10px;
-  border-radius: 999px;
-  background: rgba(238, 242, 255, 0.9);
-  color: #4338ca;
+  border-radius: 99px;
+  background: rgba(192,132,252,0.15);
+  border: 1px solid rgba(192,132,252,0.3);
+  color: #c084fc;
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .atelier-list {
@@ -674,23 +677,23 @@
 
   .atelier-mobile-fiche {
     min-height: 48px;
-    border: 1px solid #f5d0fe;
+    border: 1px solid rgba(192,132,252,0.3);
     border-radius: 14px;
-    background: linear-gradient(135deg, #fff1f7, #fdf4ff);
-    color: #be185d;
+    background: rgba(192,132,252,0.15);
+    color: #c084fc;
     font-size: 14px;
-    font-weight: 800;
+    font-weight: 700;
     cursor: pointer;
   }
 
   .atelier-mobile-card__actions .atelier-wa-btn {
     min-height: 48px;
-    border: 1px solid #bbf7d0;
+    border: 1px solid rgba(74,222,128,0.3);
     border-radius: 14px;
-    background: linear-gradient(135deg, #ecfdf5, #f0fdf4);
-    color: #047857;
+    background: rgba(74,222,128,0.15);
+    color: #4ade80;
     font-size: 14px;
-    font-weight: 800;
+    font-weight: 700;
     cursor: pointer;
   }
 }
@@ -746,9 +749,11 @@
 .atelier-planning__cell {
   padding: 8px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.7);
-  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.1);
   min-height: 52px;
+  color: rgba(255,255,255,0.7);
+  backdrop-filter: blur(8px);
 }
 
 .atelier-planning__quote {
@@ -757,11 +762,12 @@
   margin-bottom: 4px;
   padding: 4px 6px;
   border-radius: 8px;
-  background: #fdf2f8;
-  border: 1px solid #fbcfe8;
+  background: rgba(192,132,252,0.15);
+  border: 1px solid rgba(192,132,252,0.3);
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
+  color: #c084fc;
 }
 
 .atelier-production-panel {
@@ -849,9 +855,9 @@
 }
 
 .atelier-priority-chip--alert:not(.active) {
-  border-color: #fca5a5;
-  background: #fef2f2;
-  color: #b91c1c;
+  border-color: rgba(248,113,113,0.35);
+  background: rgba(248,113,113,0.12);
+  color: #f87171;
 }
 
 .atelier-priority-chip__count {
@@ -882,39 +888,45 @@
 }
 
 .atelier-status-badge--accepted {
-  background: #dbeafe;
-  color: #1d4ed8;
+  background: rgba(56,189,248,0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56,189,248,0.3);
 }
 
 .atelier-status-badge--production {
-  background: #fef3c7;
-  color: #b45309;
+  background: rgba(251,146,60,0.15);
+  color: #fb923c;
+  border: 1px solid rgba(251,146,60,0.3);
 }
 
 .atelier-status-badge--ready {
-  background: #dcfce7;
-  color: #15803d;
+  background: rgba(74,222,128,0.15);
+  color: #4ade80;
+  border: 1px solid rgba(74,222,128,0.3);
 }
 
 .atelier-status-badge--delivered {
-  background: #f3f4f6;
-  color: #4b5563;
+  background: rgba(255,255,255,0.07);
+  color: rgba(255,255,255,0.45);
+  border: 1px solid rgba(255,255,255,0.12);
 }
 
 .atelier-deposit-badge {
   display: inline-flex;
   align-items: center;
   padding: 3px 8px;
-  border-radius: 999px;
-  background: #fff7ed;
-  color: #c2410c;
+  border-radius: 99px;
+  background: rgba(251,146,60,0.15);
+  border: 1px solid rgba(251,146,60,0.3);
+  color: #fb923c;
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 700;
 }
 
 .atelier-deposit-badge--paid {
-  background: #ecfdf5;
-  color: #047857;
+  background: rgba(74,222,128,0.15);
+  border-color: rgba(74,222,128,0.3);
+  color: #4ade80;
 }
 
 .atelier-card__key-date {
@@ -929,10 +941,10 @@
   align-items: center;
   gap: 12px;
   padding: 14px 18px;
-  border-left: 4px solid #f59e0b;
-  background: linear-gradient(90deg, #fffbeb, var(--surface));
+  border-left: 4px solid #fb923c;
+  background: rgba(251,146,60,0.08);
 }
 
 .atelier-stock-alert strong {
-  color: #b45309;
+  color: #fb923c;
 }

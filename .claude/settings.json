@@ -14,7 +14,11 @@
       "Bash(sort -t'│' -k2 -rn)",
       "Bash(grep -E \"[0-9]{3,}\\\\.[0-9]{2} kB\")",
       "Bash(VITE_SUPABASE_URL=https://example.supabase.co VITE_SUPABASE_ANON_KEY=ci npx vite build)",
-      "Bash(xargs -I{} sh -c 'echo \"$\\(wc -c < {}\\) {}\"')"
+      "Bash(xargs -I{} sh -c 'echo \"$\\(wc -c < {}\\) {}\"')",
+      "Bash(git commit -m 'fix\\(e2e\\): stabiliser tests global-search \\(body.click avant Ctrl+K, waitFor\\) *)",
+      "Bash(xargs grep \"ENABLE ROW LEVEL SECURITY\")",
+      "Bash(git checkout *)",
+      "Bash(grep -n \"background.*#fff\\\\|background.*white\\\\|background.*#f[0-9a-f]\\\\|background.*rgba\\(255.*0\\\\.[6-9]\\\\|background.*#e[0-9a-f]\\\\|color.*#[0-9a-f]\\\\{3,6\\\\}\" src/styles/documents.css)"
     ]
   }
 }
