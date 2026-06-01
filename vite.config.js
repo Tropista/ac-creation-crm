@@ -27,6 +27,11 @@ export default defineConfig({
           if (normalized.includes("/node_modules/@supabase/")) {
             return "supabase-vendor";
           }
+          if (normalized.includes("/node_modules/recharts") ||
+              normalized.includes("/node_modules/d3-") ||
+              normalized.includes("/node_modules/victory-")) {
+            return "recharts-vendor";
+          }
           if (
             normalized.includes("/node_modules/three/") ||
             normalized.includes("/node_modules/three-stdlib/") ||

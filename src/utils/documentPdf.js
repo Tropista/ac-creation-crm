@@ -892,7 +892,5 @@ export function buildDocumentPdf({ doc, type, data, logoDataUrl = null }) {
   return pdf;
 }
 
-export async function downloadDocumentPdf({ doc, type, data }) {
-  const pdf = buildDocumentPdf({ doc, type, data });
-  pdf.save(getDocumentFileName(doc, type));
-}
+// Note : buildDocumentPdf est utilisé uniquement pour générer les pièces jointes email.
+// Les téléchargements PDF utilisent html2canvas (DocumentPreview.jsx → downloadPdf).

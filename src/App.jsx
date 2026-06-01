@@ -39,25 +39,26 @@ import "./App.css";
 import GlobalSearch from "./components/GlobalSearch";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import Sidebar from "./components/Sidebar";
-import Clients from "./components/Clients";
-import Products from "./components/Products";
-import Documents from "./components/Documents";
-import Dashboard from "./components/Dashboard";
-import Atelier from "./components/Atelier";
-import Settings from "./components/Settings";
-import Categories from "./components/Categories";
-import Suppliers from "./components/Suppliers";
-import Expenses from "./components/Expenses";
-import UsersAdmin from "./components/UsersAdmin";
-import ActivityLogs from "./components/ActivityLogs";
-import Backups from "./components/Backups";
 import AuthPage from "./components/auth/AuthPage";
 import AccessDenied from "./components/auth/AccessDenied";
-import PublicQuoteView from "./components/PublicQuoteView";
-import Leads from "./components/Leads";
-import CreditNotes from "./components/CreditNotes";
-import AfterSales from "./components/AfterSales";
-import AutomationCenter from "./components/AutomationCenter";
+
+const Clients         = lazy(() => import("./components/Clients"));
+const Products        = lazy(() => import("./components/Products"));
+const Documents       = lazy(() => import("./components/Documents"));
+const Dashboard       = lazy(() => import("./components/Dashboard"));
+const Atelier         = lazy(() => import("./components/Atelier"));
+const Settings        = lazy(() => import("./components/Settings"));
+const Categories      = lazy(() => import("./components/Categories"));
+const Suppliers       = lazy(() => import("./components/Suppliers"));
+const Expenses        = lazy(() => import("./components/Expenses"));
+const UsersAdmin      = lazy(() => import("./components/UsersAdmin"));
+const ActivityLogs    = lazy(() => import("./components/ActivityLogs"));
+const Backups         = lazy(() => import("./components/Backups"));
+const PublicQuoteView = lazy(() => import("./components/PublicQuoteView"));
+const Leads           = lazy(() => import("./components/Leads"));
+const CreditNotes     = lazy(() => import("./components/CreditNotes"));
+const AfterSales      = lazy(() => import("./components/AfterSales"));
+const AutomationCenter = lazy(() => import("./components/AutomationCenter"));
 
 import {
   createCloudBackup
