@@ -69,6 +69,8 @@ jobs:
       # Build Electron décompressé (--dir) : vérifie le packaging sans NSIS complet
       - name: Smoke test packaging Electron
         run: npx electron-builder --win --dir --config.directories.output=release-ci
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
 
   deploy-vercel:
     runs-on: ubuntu-latest
