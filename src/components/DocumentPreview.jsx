@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
 import { APP_LOGO_URL } from "../utils/assets";
-import { buildDocumentPdf, getDocumentFileName } from "../utils/documentPdf";
+import { getDocumentFileName } from "../utils/documentPdf";
 import { sendDocumentByEmail } from "../services/emailService";
 import { buildEmailFromTemplate, buildDocVars } from "../utils/emailTemplates";
 import {
@@ -146,21 +146,10 @@ export default function DocumentPreview({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [handleClose]);
 
-  async function downloadPdfNative() {
-    try {
-      const pdf = buildDocumentPdf({ doc, type, data });
-      pdf.save(documentFileName);
-      showToast("PDF généré avec succès.", "success");
-    } catch (error) {
-      console.error(error);
-      showToast("Génération native échouée, bascule sur capture HTML…", "info");
-      await downloadPdfFallback();
-    }
-  }
-
-  async function downloadPdfFallback() {
+  async function downloadPdf() {
     const source = document.getElementById("document-preview");
     if (!source) return showToast("Zone PDF introuvable.", "error");
+    showToast("Génération du PDF en cours…", "info");
 
     const wrapper = document.createElement("div");
     wrapper.className = "ac-doc-pdf-root";
@@ -248,6 +237,7 @@ export default function DocumentPreview({
       }
 
       pdf.save(documentFileName);
+      showToast("PDF généré avec succès.", "success");
     } catch (error) {
       console.error(error);
       showToast("Impossible de générer le PDF.", "error");
@@ -339,18 +329,10 @@ export default function DocumentPreview({
           <button type="button" onClick={openEmailPreview} disabled={sending}>
             Envoyer par email
           </button>
-          <button type="button" onClick={async () => {
-            try {
-              const pdf = buildDocumentPdf({ doc, type, data });
-              pdf.autoPrint();
-              window.open(pdf.output("bloburl"), "_blank");
-            } catch {
-              window.print();
-            }
-          }}>
+          <button type="button" onClick={() => window.print()}>
             Imprimer
           </button>
-          <button type="button" className="primary" onClick={downloadPdfNative}>
+          <button type="button" className="primary" onClick={downloadPdf}>
             Télécharger PDF
           </button>
         </div>

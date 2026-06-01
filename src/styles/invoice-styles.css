@@ -261,11 +261,6 @@
 
 .ac-table th:nth-child(5),
 .ac-table td:nth-child(5) {
-  width: 14mm;
-}
-
-.ac-table th:nth-child(6),
-.ac-table td:nth-child(6) {
   width: 22mm;
 }
 

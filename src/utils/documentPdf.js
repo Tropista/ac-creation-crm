@@ -167,7 +167,7 @@ function drawCompanyBox(pdf, settings, logoUrl, x, y, width, style) {
     // Logo optional
   }
 
-  let contentY = y + padding;
+  let contentY = y + padding + 4;
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(style.companyNameSize);
   pdf.setTextColor(...style.textPrimary);

@@ -11,6 +11,7 @@ import {
   nextDocumentNumber,
   nextInvoiceNumber,
   detectInvoiceNumberGaps,
+  detectDocumentNumberGaps,
   currentDocumentYear,
   convertQuoteToInvoiceData,
   isQuoteConvertible,
@@ -123,6 +124,7 @@ const [form, setForm] = useState({
   assignedTo: "",
   atelierNotes: "",
   priority: "normal",
+  numberOverride: "",
   lines: [{ ...emptyLine }],
 });
   const [attachments, setAttachments] = useState([]);
@@ -144,13 +146,18 @@ const [form, setForm] = useState({
   );
 
   const invoiceNumberGaps = useMemo(() => {
-    if (isQuote) return [];
-    return detectInvoiceNumberGaps(
-      documents,
-      data.settings || {},
-      currentDocumentYear()
-    );
-  }, [documents, data.settings, isQuote]);
+    if (isQuote) {
+      return detectDocumentNumberGaps(documents, prefix, currentDocumentYear());
+    }
+    return detectInvoiceNumberGaps(documents, data.settings || {}, currentDocumentYear());
+  }, [documents, data.settings, isQuote, prefix]);
+
+  const nextAutoNumber = useMemo(() => {
+    if (editingId) return "";
+    return isQuote
+      ? nextDocumentNumber(documents, prefix)
+      : nextInvoiceNumber(documents, data.settings);
+  }, [documents, data.settings, isQuote, editingId, prefix]);
 
   function resetDocumentsListView() {
     if (isQuote) {
@@ -174,6 +181,7 @@ const [form, setForm] = useState({
         assignedTo: "",
         atelierNotes: "",
         priority: "normal",
+        numberOverride: "",
         lines: [{ ...emptyLine }],
       });
       setFormSessionKey((value) => value + 1);
@@ -645,9 +653,7 @@ const [form, setForm] = useState({
     } else {
       const doc = {
         id: uid(),
-        number: isQuote
-          ? nextDocumentNumber(documents, prefix)
-          : nextInvoiceNumber(documents, data.settings),
+        number: form.numberOverride?.trim() || nextAutoNumber,
         date: isQuote ? today() : invoiceDate,
         taxRate: effectiveTaxRate,
         clientId: form.clientId,
@@ -1232,15 +1238,28 @@ reset();
         )}
       </div>
 
-      {!isQuote && invoiceNumberGaps.length > 0 && (
+      {invoiceNumberGaps.length > 0 && (
         <div className="card documents-gap-warning">
           <strong>Numérotation {currentDocumentYear()} — trous détectés</strong>
           <p className="muted">
-            Numéros manquants dans la série : {invoiceNumberGaps.slice(0, 8).join(", ")}
-            {invoiceNumberGaps.length > 8
-              ? ` … (+${invoiceNumberGaps.length - 8})`
-              : ""}
+            Numéros manquants : {invoiceNumberGaps.slice(0, 8).join(", ")}
+            {invoiceNumberGaps.length > 8 ? ` … (+${invoiceNumberGaps.length - 8})` : ""}
           </p>
+          {!editingId && (
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+              {invoiceNumberGaps.slice(0, 4).map((gap) => (
+                <button
+                  key={gap}
+                  type="button"
+                  className="compact"
+                  onClick={() => setForm((f) => ({ ...f, numberOverride: gap }))}
+                  title={`Utiliser le numéro manquant ${gap}`}
+                >
+                  Utiliser {gap}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -1265,6 +1284,7 @@ reset();
         depositPresets={DEPOSIT_PRESETS}
         attachments={isQuote ? attachments : undefined}
         onAttachmentsChange={isQuote ? setAttachments : undefined}
+        nextAutoNumber={nextAutoNumber}
       />
 
       <DocumentList

@@ -173,14 +173,9 @@ export function nextInvoiceNumber(invoices, settings, year = currentDocumentYear
   return nextDocumentNumber(invoices, prefix, year, { padding });
 }
 
-export function detectInvoiceNumberGaps(
-  invoices,
-  settings,
-  year = currentDocumentYear()
-) {
-  const { prefix, padding } = getInvoiceNumberSettings(settings);
-  const sequences = (invoices || [])
-    .map((invoice) => parseDocumentSequence(invoice.number, prefix, year, padding))
+export function detectDocumentNumberGaps(docs, prefix, year = currentDocumentYear(), padding = 4) {
+  const sequences = (docs || [])
+    .map((doc) => parseDocumentSequence(doc.number, prefix, year, padding))
     .filter((value) => value != null)
     .sort((a, b) => a - b);
 
@@ -197,6 +192,11 @@ export function detectInvoiceNumberGaps(
   }
 
   return missing;
+}
+
+export function detectInvoiceNumberGaps(invoices, settings, year = currentDocumentYear()) {
+  const { prefix, padding } = getInvoiceNumberSettings(settings);
+  return detectDocumentNumberGaps(invoices, prefix, year, padding);
 }
 
 export function isFullInvoiceFromQuote(invoice, quoteNumber) {

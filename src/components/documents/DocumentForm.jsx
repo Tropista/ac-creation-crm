@@ -37,6 +37,7 @@ export default function DocumentForm({
   depositPresets = [],
   attachments = [],
   onAttachmentsChange,
+  nextAutoNumber = "",
 }) {
   const fileInputRef = useRef(null);
   const resolvedAttachmentsRef = useRef([]);
@@ -245,6 +246,19 @@ export default function DocumentForm({
               value={form.dateInput || ""}
               onChange={(e) => setForm({ ...form, dateInput: e.target.value })}
               data-testid="invoice-date-input"
+            />
+          </label>
+        )}
+
+        {!editingId && (
+          <label className="documents-field">
+            <span>N° {isQuote ? "devis" : "facture"}</span>
+            <input
+              type="text"
+              placeholder={nextAutoNumber || "Automatique"}
+              value={form.numberOverride || ""}
+              onChange={(e) => setForm({ ...form, numberOverride: e.target.value })}
+              title="Laisser vide pour numérotation automatique"
             />
           </label>
         )}
