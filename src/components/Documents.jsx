@@ -791,23 +791,30 @@ reset();
   }, [documents, isQuote, location.search, location.hash, location.pathname]);
   function duplicate(doc) {
     const newId  = crypto.randomUUID();
-    const newNum = nextDocumentNumber(documents, prefix);
-    const copy   = {
+    const newNum = isQuote
+      ? nextDocumentNumber(documents, prefix)
+      : nextInvoiceNumber(documents, data.settings);
+    const base = {
       ...doc,
       id:          newId,
       number:      newNum,
-      status:      "Brouillon",
       date:        today(),
       acceptedAt:  null,
       sentAt:      null,
       signature:   null,
       shareToken:  null,
       convertedToInvoiceId: null,
+      emailSentAt: null,
+      emailReadAt: null,
       attachments: [],
     };
+    const copy = isQuote
+      ? { ...base, status: "Brouillon" }
+      : { ...base, status: "Non payée", paidAmount: 0, remaining: Number(doc.totalTTC || 0), dueDate: computeDueDate(today(), data.settings?.paymentDays) };
     setData({ ...data, [listKey]: [...documents, copy] });
-    logActivity?.(`Duplication devis`, `${doc.number} → ${newNum}`);
-    showToast(`Devis ${newNum} créé depuis ${doc.number}.`, "success");
+    const label = isQuote ? "Devis" : "Facture";
+    logActivity?.(`Duplication ${label.toLowerCase()}`, `${doc.number} → ${newNum}`);
+    showToast(`${label} ${newNum} créée depuis ${doc.number}.`, "success");
   }
 
   function remove(id) {
@@ -1297,7 +1304,7 @@ reset();
         onCreateDeposit={createDepositInvoice}
         onCreateBalance={createBalanceInvoice}
         onRecordPayment={recordPartialPayment}
-        onDuplicate={isQuote ? duplicate : undefined}
+        onDuplicate={duplicate}
         onMarkEmailRead={(doc) => {
           const key = isQuote ? "quotes" : "invoices";
           setData({ ...data, [key]: documents.map((d) => String(d.id) === String(doc.id) ? { ...d, emailReadAt: new Date().toISOString() } : d) });

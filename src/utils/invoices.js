@@ -52,6 +52,7 @@ export function isInvoiceOverdue(invoice, referenceDate = new Date()) {
   }
 
   const status = String(invoice.status || "").toLowerCase();
+  if (status.includes("attente")) return false; // En attente de paiement = pas en retard
   if (status.includes("retard")) return true;
 
   const due = parseDocumentDate(invoice.dueDate);

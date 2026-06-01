@@ -5,6 +5,7 @@ import jsPDF from "jspdf";
 import { APP_LOGO_URL } from "../utils/assets";
 import { buildDocumentPdf, getDocumentFileName } from "../utils/documentPdf";
 import { sendDocumentByEmail } from "../services/emailService";
+import { buildEmailFromTemplate, buildDocVars } from "../utils/emailTemplates";
 import {
   getDocumentAmountDue,
   getDocumentFooterTotals,
@@ -68,6 +69,7 @@ export default function DocumentPreview({
 }) {
   const pdfWrapperRef = useRef(null);
   const [sending, setSending] = useState(false);
+  const [emailPreview, setEmailPreview] = useState(null); // { subject, body }
   const isQuote = type === "quote";
   const isDelivery = type === "delivery";
   const client = (data.clients || []).find((c) => c.id === doc.clientId);
@@ -260,20 +262,23 @@ export default function DocumentPreview({
   }
 
 
+  function openEmailPreview() {
+    if (!client?.email) { showToast("Ce client n'a pas d'adresse email enregistrée.", "error"); return; }
+    if (!data.settings?.smtpEmail || !data.settings?.smtpAppPassword) { showToast("Configure ton adresse Gmail dans Paramètres avant d'envoyer.", "error"); return; }
+    const key = isQuote ? "quote" : "invoice";
+    const vars = buildDocVars(doc, client, data.settings || {});
+    const { subject, body } = buildEmailFromTemplate(key, vars, data.settings || {});
+    setEmailPreview({ subject, body });
+  }
+
   async function sendEmail() {
-    if (!client?.email) {
-      showToast("Ce client n'a pas d'adresse email enregistrée.", "error");
-      return;
-    }
-    if (!data.settings?.smtpEmail || !data.settings?.smtpAppPassword) {
-      showToast("Configure ton adresse Gmail dans Paramètres avant d'envoyer.", "error");
-      return;
-    }
+    if (!emailPreview) return;
     setSending(true);
     try {
-      const result = await sendDocumentByEmail({ doc, type, data, client });
+      const result = await sendDocumentByEmail({ doc, type, data, client, overrideSubject: emailPreview.subject, overrideBody: emailPreview.body });
       onDocumentSent?.({ ...doc, emailSentAt: result.sentAt || new Date().toISOString() });
       showToast(`Email envoyé à ${client.email} avec le PDF en pièce jointe.`, "success");
+      setEmailPreview(null);
     } catch (err) {
       showToast(err.message || "Erreur lors de l'envoi.", "error");
     } finally {
@@ -331,8 +336,8 @@ export default function DocumentPreview({
               </button>
             </>
           )}
-          <button type="button" onClick={sendEmail} disabled={sending}>
-            {sending ? "Envoi en cours…" : "Envoyer par email"}
+          <button type="button" onClick={openEmailPreview} disabled={sending}>
+            Envoyer par email
           </button>
           <button type="button" onClick={async () => {
             try {
@@ -694,9 +699,47 @@ export default function DocumentPreview({
     </div>
   );
 
-  if (typeof document === "undefined") {
-    return null;
-  }
+  if (typeof document === "undefined") return null;
 
-  return createPortal(modal, document.body);
+  const emailPreviewModal = emailPreview ? createPortal(
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 9100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
+      onClick={() => !sending && setEmailPreview(null)}>
+      <div style={{ background: "var(--surface)", borderRadius: 12, width: "min(640px,96vw)", maxHeight: "90vh", overflow: "auto", boxShadow: "var(--shadow)" }}
+        onClick={(e) => e.stopPropagation()}>
+        <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <strong style={{ fontSize: 15 }}>Aperçu de l'email</strong>
+          <span style={{ fontSize: 12, color: "var(--muted)" }}>À : {client?.email}</span>
+        </div>
+        <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+          <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <span style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600 }}>Objet</span>
+            <input value={emailPreview.subject} onChange={(e) => setEmailPreview({ ...emailPreview, subject: e.target.value })}
+              style={{ fontSize: 13 }} />
+          </label>
+          <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            <span style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600 }}>Corps</span>
+            <textarea rows={12} value={emailPreview.body} onChange={(e) => setEmailPreview({ ...emailPreview, body: e.target.value })}
+              style={{ fontSize: 13, fontFamily: "inherit", resize: "vertical" }} />
+          </label>
+          <p style={{ fontSize: 11, color: "var(--muted)", margin: 0 }}>
+            📎 Le PDF sera joint automatiquement à l'envoi.
+          </p>
+        </div>
+        <div style={{ padding: "12px 20px", borderTop: "1px solid var(--border)", display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button type="button" onClick={() => setEmailPreview(null)} disabled={sending}>Annuler</button>
+          <button type="button" className="primary" onClick={sendEmail} disabled={sending}>
+            {sending ? "Envoi en cours…" : "✉ Envoyer"}
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  ) : null;
+
+  return (
+    <>
+      {createPortal(modal, document.body)}
+      {emailPreviewModal}
+    </>
+  );
 }

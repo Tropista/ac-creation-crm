@@ -351,7 +351,8 @@ tbody tr:hover td { background: var(--table-hover); }
 .badge.envoye,
 .badge.prospect { background: #dbeafe; color: #1e40af; }
 .badge.warning,
-.badge.en-attente { background: #ffedd5; color: #9a3412; }
+.badge.en-attente,
+.badge.en-attente-de-paiement { background: #ffedd5; color: #9a3412; }
 
 .link-button {
   background: transparent !important;

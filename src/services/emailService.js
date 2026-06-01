@@ -2,7 +2,7 @@ import { getBankApiUrl } from "../utils/bankApi";
 import { buildDocumentPdf, getDocumentFileName } from "../utils/documentPdf";
 import { buildEmailFromTemplate, buildDocVars } from "../utils/emailTemplates";
 
-export async function sendDocumentByEmail({ doc, type, data, client }) {
+export async function sendDocumentByEmail({ doc, type, data, client, overrideSubject, overrideBody }) {
   const settings = data.settings || {};
 
   if (!settings.smtpEmail || !settings.smtpAppPassword) {
@@ -19,7 +19,9 @@ export async function sendDocumentByEmail({ doc, type, data, client }) {
   const isQuote = type === "quote";
   const templateKey = isQuote ? "quote" : "invoice";
   const vars = buildDocVars(doc, client, settings);
-  const { subject, body: text } = buildEmailFromTemplate(templateKey, vars, settings);
+  const { subject: tplSubject, body: tplBody } = buildEmailFromTemplate(templateKey, vars, settings);
+  const subject = overrideSubject ?? tplSubject;
+  const text = overrideBody ?? tplBody;
 
   const apiUrl = getBankApiUrl();
   const response = await fetch(`${apiUrl}/send-email`, {

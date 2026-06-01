@@ -1,49 +1,82 @@
-/* Service worker minimal — PWA shell (no cache on index.html to avoid stale chunk 404s) */
-const CACHE = "ac-crm-shell-v2";
-const STATIC_ASSETS = ["./manifest.json", "./logo.png"];
+/* Service worker — PWA cache-first pour assets JS/CSS, network-first pour HTML */
+const CACHE = "ac-crm-v3";
+const SHELL = ["./manifest.json", "./logo.png", "./icon.ico"];
 
-function isHtmlRequest(request) {
-  if (request.mode === "navigate") return true;
-  const path = new URL(request.url).pathname;
-  return path === "/" || path.endsWith(".html");
+function isHtmlRequest(req) {
+  if (req.mode === "navigate") return true;
+  const p = new URL(req.url).pathname;
+  return p === "/" || p.endsWith(".html");
 }
 
-self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches
-      .open(CACHE)
-      .then((cache) => cache.addAll(STATIC_ASSETS))
-      .then(() => self.skipWaiting()),
+function isStaticAsset(req) {
+  const url = new URL(req.url);
+  // Assets Vite : noms hachés .js/.css/.woff2/.png dans /assets/
+  return /\/assets\/.*\.(js|css|woff2?|png|jpg|svg|webp)(\?.*)?$/.test(url.pathname);
+}
+
+self.addEventListener("install", (e) => {
+  e.waitUntil(
+    caches.open(CACHE)
+      .then((c) => c.addAll(SHELL))
+      .then(() => self.skipWaiting())
   );
 });
 
-self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    caches
-      .keys()
+self.addEventListener("activate", (e) => {
+  e.waitUntil(
+    caches.keys()
       .then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k))))
-      .then(() => self.clients.claim()),
+      .then(() => self.clients.claim())
   );
 });
 
-self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") return;
+self.addEventListener("fetch", (e) => {
+  if (e.request.method !== "GET") return;
 
-  if (isHtmlRequest(event.request)) {
-    event.respondWith(
-      fetch(event.request).catch(() => caches.match(event.request)),
+  const url = new URL(e.request.url);
+
+  // Requêtes Supabase/API : toujours réseau
+  if (url.hostname !== self.location.hostname) {
+    return; // pas d'interception
+  }
+
+  // HTML : network-first, fallback cache
+  if (isHtmlRequest(e.request)) {
+    e.respondWith(
+      fetch(e.request)
+        .then((res) => {
+          const clone = res.clone();
+          caches.open(CACHE).then((c) => c.put(e.request, clone));
+          return res;
+        })
+        .catch(() => caches.match(e.request).then((r) => r || caches.match("./")))
     );
     return;
   }
 
-  const path = new URL(event.request.url).pathname;
-  const isStaticShell = STATIC_ASSETS.some((asset) => path.endsWith(asset.replace("./", "")));
-  if (isStaticShell) {
-    event.respondWith(
-      caches.match(event.request).then((cached) => cached || fetch(event.request)),
+  // Assets statiques Vite (hachés) : cache-first
+  if (isStaticAsset(e.request)) {
+    e.respondWith(
+      caches.match(e.request).then((cached) => {
+        if (cached) return cached;
+        return fetch(e.request).then((res) => {
+          const clone = res.clone();
+          caches.open(CACHE).then((c) => c.put(e.request, clone));
+          return res;
+        });
+      })
     );
     return;
   }
 
-  event.respondWith(fetch(event.request));
+  // Shell statique (manifest, logo)
+  if (SHELL.some((a) => url.pathname.endsWith(a.replace("./", "")))) {
+    e.respondWith(
+      caches.match(e.request).then((r) => r || fetch(e.request))
+    );
+    return;
+  }
+
+  // Tout le reste : réseau simple
+  e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
 });
