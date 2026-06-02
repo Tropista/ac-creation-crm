@@ -1,0 +1,11 @@
+Model Information:
+* title:	POLO SHIRT
+* source:	https://sketchfab.com/3d-models/polo-shirt-ad89121b65184d52acd2769cc5664a53
+* author:	arvintriyoga (https://sketchfab.com/arvintriyoga)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "POLO SHIRT" (https://sketchfab.com/3d-models/polo-shirt-ad89121b65184d52acd2769cc5664a53) by arvintriyoga (https://sketchfab.com/arvintriyoga) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

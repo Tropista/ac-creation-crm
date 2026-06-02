@@ -7,7 +7,12 @@ import jsPDF from "jspdf";
 import "./Vue3DTshirt.css";
 import Product3DErrorBoundary from "./3d/Product3DErrorBoundary";
 import { showToast } from "../utils/toast";
-import { TSHIRT_MODEL_URL } from "../utils/assets";
+import { PRODUCT_CONFIGS, PRODUCT_OPTIONS, getProductConfig } from "../utils/productConfigs";
+import { resolveAssetUrl } from "../utils/assets";
+
+// Fallbacks module-level pour les fonctions utilitaires (shadowed par le composant via productConfig)
+const PRINT_ZONES         = PRODUCT_CONFIGS.tshirt.printZones;
+const PRINT_ZONE_SIZES_CM = PRODUCT_CONFIGS.tshirt.printZoneSizesCm;
 import {
   buildCalculatorQuoteLine,
   buildTshirtConfiguratorQuoteDescription,
@@ -26,24 +31,7 @@ import { submitPublicLead } from "../services/leadsService";
 import { estimatePrintPriceHT } from "../utils/tshirtPricing";
 import { PUBLIC_TSHIRT_PATH } from "../utils/routes";
 
-const MODEL_URL = TSHIRT_MODEL_URL;
 const TEXTURE_SIZE = 2048;
-
-const PRINT_ZONES = {
-  front: { label: "Avant", x: 0.075, y: 0.095, w: 0.42, h: 0.50 },
-  back: { label: "Dos", x: 0.515, y: 0.095, w: 0.42, h: 0.50 },
-  leftSleeve: { label: "Manche gauche", x: 0.112, y: 0.765, w: 0.35, h: 0.195 },
-  rightSleeve: { label: "Manche droite", x: 0.528, y: 0.765, w: 0.35, h: 0.195 },
-};
-
-// Dimensions réelles des zones imprimables utilisées pour l'export impression.
-// Modifie ces valeurs si tu veux adapter ton flux DTF / sublimation / sérigraphie.
-const PRINT_ZONE_SIZES_CM = {
-  front: { width: 29, height: 40 },
-  back: { width: 29, height: 40 },
-  leftSleeve: { width: 12, height: 12 },
-  rightSleeve: { width: 12, height: 12 },
-};
 
 // Limites de travail dans l'éditeur : le visuel reste dans la zone pointillée.
 const MAX_PRINT_WIDTH_CM = 29;
@@ -51,26 +39,6 @@ const EDITOR_PRINT_INSET = 0.07;
 const EDITOR_PRINT_SIZE = 1 - EDITOR_PRINT_INSET * 2;
 const SNAP_THRESHOLD = 0.025;
 
-const PRINT_SIZE_PRESETS = [
-  { label: "DTF poitrine 28 × 35 cm", width: 28, height: 35 },
-  { label: "A4 portrait 21 × 29,7 cm", width: 21, height: 29.7 },
-  { label: "A3 portrait 29 × 42 cm", width: 29, height: 42 },
-  { label: "Manche 12 × 12 cm", width: 12, height: 12 },
-];
-
-const GARMENT_SIZE_PRESETS = {
-  XS: { label: "XS", chest: 46, length: 64, scale: [0.88, 0.94, 0.88], note: "Aperçu plus petit : logo visuellement plus présent." },
-  S: { label: "S", chest: 49, length: 67, scale: [0.94, 0.98, 0.94], note: "Petite taille adulte." },
-  M: { label: "M", chest: 52, length: 70, scale: [1, 1, 1], note: "Taille de référence." },
-  L: { label: "L", chest: 55, length: 73, scale: [1.06, 1.03, 1.06], note: "Aperçu légèrement plus large." },
-  XL: { label: "XL", chest: 58, length: 76, scale: [1.12, 1.06, 1.12], note: "Grande taille adulte." },
-  "2XL": { label: "2XL", chest: 61, length: 79, scale: [1.18, 1.09, 1.18], note: "Visuel proportionnellement plus petit." },
-  "3XL": { label: "3XL", chest: 64, length: 82, scale: [1.24, 1.12, 1.24], note: "Très grande taille." },
-  "4XL": { label: "4XL", chest: 67, length: 85, scale: [1.30, 1.15, 1.30], note: "Aperçu très large." },
-  "5XL": { label: "5XL", chest: 70, length: 88, scale: [1.36, 1.18, 1.36], note: "Taille maximale d’aperçu." },
-};
-
-const GARMENT_SIZE_OPTIONS = Object.keys(GARMENT_SIZE_PRESETS);
 
 const TECHNIQUE_PRESETS = {
   dtf: {
@@ -228,28 +196,24 @@ function getRulerTicks(totalCm, maxTicks = 12) {
   return ticks;
 }
 
-function getSnapGuides(area) {
-  const sleeve = area === "leftSleeve" || area === "rightSleeve";
+function getSnapGuides(area, snapGuidesConfig) {
+  // Si une config produit est fournie, on l'utilise
+  if (snapGuidesConfig?.[area]) return snapGuidesConfig[area];
 
+  // Fallback : comportement d'origine (t-shirt)
+  const sleeve = area === "leftSleeve" || area === "rightSleeve";
   if (sleeve) {
     return {
-      x: [
-        { value: 0.5, label: "Centre manche" },
-      ],
-      y: [
-        { value: 0.5, label: "Milieu manche" },
-      ],
+      x: [{ value: 0.5, label: "Centre manche" }],
+      y: [{ value: 0.5, label: "Milieu manche" }],
     };
   }
-
   return {
-    x: [
-      { value: 0.5, label: "Centre" },
-    ],
+    x: [{ value: 0.5, label: "Centre" }],
     y: [
       { value: 0.18, label: "Col" },
       { value: 0.35, label: "Poitrine" },
-      { value: 0.5, label: "Milieu" },
+      { value: 0.5,  label: "Milieu" },
     ],
   };
 }
@@ -269,10 +233,10 @@ function snapValue(value, guides, threshold = SNAP_THRESHOLD) {
   return { value: snapped, guide: activeGuide };
 }
 
-function applySnapToPosition(item, patch, enabled = true) {
+function applySnapToPosition(item, patch, enabled = true, snapGuidesConfig) {
   if (!enabled) return { patch, preview: null };
 
-  const guides = getSnapGuides(item.area || "front");
+  const guides = getSnapGuides(item.area || "front", snapGuidesConfig);
   const snappedX = snapValue(Number(patch.x ?? item.x ?? 0.5), guides.x);
   const snappedY = snapValue(Number(patch.y ?? item.y ?? 0.5), guides.y);
 
@@ -617,20 +581,17 @@ function useItemImages(items) {
   return images;
 }
 
-function drawItem(ctx, item, zone, logoImage) {
+function drawItem(ctx, item, zone, logoImage, uvFlipY = false) {
   const zoneX = zone.x * TEXTURE_SIZE;
   const zoneY = zone.y * TEXTURE_SIZE;
   const zoneW = zone.w * TEXTURE_SIZE;
   const zoneH = zone.h * TEXTURE_SIZE;
 
-  // Correction UV du modèle fourni :
-  // - L’axe X doit rester normal : droite dans l’éditeur = droite sur le t-shirt.
-  // - L’axe Y du modèle est inversé : haut dans l’éditeur = on dessine plus bas dans l’UV.
-  // - On pré-inverse verticalement le contenu pour que logo et texte apparaissent droits.
   const itemX = clamp(Number(item.x ?? 0.5), 0, 1);
   const itemY = clamp(Number(item.y ?? 0.5), 0, 1);
   const cx = zoneX + itemX * zoneW;
-  const cy = zoneY + (1 - itemY) * zoneH;
+  // uvFlipY=true : le modèle a V=0 en bas → annuler le (1-y) du t-shirt
+  const cy = zoneY + (uvFlipY ? itemY : (1 - itemY)) * zoneH;
 
   const drawW = Math.max(30, Number(item.width || 0.25) * zoneW);
   const drawH = Math.max(20, Number(item.height || 0.18) * zoneH);
@@ -655,15 +616,29 @@ function drawItem(ctx, item, zone, logoImage) {
   ctx.restore();
 }
 
-function makeUvTexture(itemImages, items, tshirtColor) {
+
+function makeUvTexture(itemImages, items, tshirtColor, baseImage = null, uvFlipY = false) {
   const canvas = document.createElement("canvas");
   canvas.width = TEXTURE_SIZE;
   canvas.height = TEXTURE_SIZE;
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, TEXTURE_SIZE, TEXTURE_SIZE);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.fillStyle = tshirtColor || "#ffffff";
-  ctx.fillRect(0, 0, TEXTURE_SIZE, TEXTURE_SIZE);
+
+  if (baseImage) {
+    // Fond = texture originale du produit (polo, etc.)
+    ctx.drawImage(baseImage, 0, 0, TEXTURE_SIZE, TEXTURE_SIZE);
+    // Teinte couleur textile en mode multiply léger (optionnel)
+    if (tshirtColor && tshirtColor !== "#ffffff") {
+      ctx.globalAlpha = 0.25;
+      ctx.fillStyle = tshirtColor;
+      ctx.fillRect(0, 0, TEXTURE_SIZE, TEXTURE_SIZE);
+      ctx.globalAlpha = 1;
+    }
+  } else {
+    ctx.fillStyle = tshirtColor || "#ffffff";
+    ctx.fillRect(0, 0, TEXTURE_SIZE, TEXTURE_SIZE);
+  }
 
   const drawableItems = items
     .filter((item) => !item.hidden)
@@ -671,17 +646,17 @@ function makeUvTexture(itemImages, items, tshirtColor) {
 
   for (const item of drawableItems) {
     const zone = PRINT_ZONES[item.area] || PRINT_ZONES.front;
-    drawItem(ctx, item, zone, itemImages[item.id]);
+    drawItem(ctx, item, zone, itemImages[item.id], uvFlipY);
   }
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.flipY = false;
   texture.colorSpace = THREE.SRGBColorSpace;
 
-  // Important : ne pas inverser la texture Three.js globalement.
-  // Sinon les zones avant/dos sont échangées et des traits noirs peuvent apparaître.
-  texture.wrapS = THREE.ClampToEdgeWrapping;
-  texture.wrapT = THREE.ClampToEdgeWrapping;
+  // RepeatWrapping : les UV négatifs wrappent dans 0-1 (ex: -0.5 → 0.5)
+  // Nécessaire pour les modèles Sketchfab/CLO3D avec UV hors 0-1
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
   texture.repeat.set(1, 1);
   texture.offset.set(0, 0);
 
@@ -689,8 +664,8 @@ function makeUvTexture(itemImages, items, tshirtColor) {
   return texture;
 }
 
-function TshirtModel({ texture, garmentScale = [1, 1, 1] }) {
-  const { scene } = useGLTF(MODEL_URL);
+function TshirtModel({ texture, garmentScale = [1, 1, 1], modelUrl, garmentColor = "#ffffff" }) {
+  const { scene } = useGLTF(modelUrl || PRODUCT_CONFIGS.tshirt.modelUrl);
 
   const clonedScene = useMemo(() => {
     const clone = scene.clone(true);
@@ -703,7 +678,7 @@ function TshirtModel({ texture, garmentScale = [1, 1, 1] }) {
 
       child.material = new THREE.MeshStandardMaterial({
         map: texture,
-        color: "#ffffff",
+        color: garmentColor,
         roughness: 0.72,
         metalness: 0,
         side: THREE.DoubleSide,
@@ -713,7 +688,7 @@ function TshirtModel({ texture, garmentScale = [1, 1, 1] }) {
     });
 
     return clone;
-  }, [scene, texture]);
+  }, [scene, texture, garmentColor]);
 
   return <primitive object={clonedScene} scale={garmentScale} />;
 }
@@ -722,6 +697,17 @@ export default function Vue3DTshirt() {
   const navigate = useNavigate();
   const location = useLocation();
   const isPublicConfigurator = location.pathname.includes(PUBLIC_TSHIRT_PATH);
+  // ── Sélection du produit ──────────────────────────────────────────
+  const [selectedProduct, setSelectedProduct] = useState("tshirt");
+  const productConfig = useMemo(() => getProductConfig(selectedProduct), [selectedProduct]);
+
+  // Aliases dynamiques vers la config produit active
+  const PRINT_ZONES         = productConfig.printZones;
+  const PRINT_ZONE_SIZES_CM = productConfig.printZoneSizesCm;
+  const GARMENT_SIZE_PRESETS = productConfig.sizePresets;
+  const GARMENT_SIZE_OPTIONS = Object.keys(productConfig.sizePresets);
+  const PRINT_SIZE_PRESETS   = productConfig.printSizePresets;
+
   const [items, setItems] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [activeArea, setActiveArea] = useState("front");
@@ -730,7 +716,7 @@ export default function Vue3DTshirt() {
   const [snapEnabled, setSnapEnabled] = useState(true);
   const [snapPreview, setSnapPreview] = useState(null);
   const [customFonts, setCustomFonts] = useState([]);
-  const [printZoneSizes, setPrintZoneSizes] = useState(PRINT_ZONE_SIZES_CM);
+  const [printZoneSizes, setPrintZoneSizes] = useState(() => getProductConfig("tshirt").printZoneSizesCm);
   const [defaultTechnique, setDefaultTechnique] = useState("dtf");
   const [garmentSize, setGarmentSize] = useState("M");
   const [savedProjects, setSavedProjects] = useState([]);
@@ -744,6 +730,19 @@ export default function Vue3DTshirt() {
   const [leadSubmitting, setLeadSubmitting] = useState(false);
   const [pendingQuoteDraft, setPendingQuoteDraft] = useState(null);
   const [quoteDraftBusy, setQuoteDraftBusy] = useState(false);
+  const [baseTextureImage, setBaseTextureImage] = useState(null);
+
+  // Charge la texture de base du produit (ex: polo) pour l'utiliser comme fond du canvas UV
+  useEffect(() => {
+    const url = productConfig.baseTextureUrl;
+    if (!url) { setBaseTextureImage(null); return; }
+    const fullUrl = resolveAssetUrl(url);
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload  = () => setBaseTextureImage(img);
+    img.onerror = () => { console.warn("[configurateur] texture base introuvable:", fullUrl); setBaseTextureImage(null); };
+    img.src = fullUrl;
+  }, [productConfig.baseTextureUrl]);
   const previewRef = useRef(null);
   const editorRef = useRef(null);
   const actionRef = useRef(null);
@@ -760,12 +759,12 @@ export default function Vue3DTshirt() {
   const selectedTechniqueWarnings = selectedItem ? getTechniqueWarnings(selectedItem, printZoneSizes) : [];
   const rulerXTicks = getRulerTicks(activeZoneSize.width);
   const rulerYTicks = getRulerTicks(activeZoneSize.height);
-  const snapGuides = getSnapGuides(activeArea);
+  const snapGuides = getSnapGuides(activeArea, productConfig.snapGuides);
   const garmentPreset = GARMENT_SIZE_PRESETS[garmentSize] || GARMENT_SIZE_PRESETS.M;
 
   const printTexture = useMemo(
-    () => makeUvTexture(itemImages, items, tshirtColor),
-    [itemImages, items, tshirtColor]
+    () => makeUvTexture(itemImages, items, tshirtColor, baseTextureImage, productConfig.uvFlipY ?? false),
+    [itemImages, items, tshirtColor, baseTextureImage, productConfig.uvFlipY]
   );
 
   useEffect(() => {
@@ -927,7 +926,7 @@ export default function Vue3DTshirt() {
         x: action.startItem.x + dx,
         y: action.startItem.y + dy,
       };
-      const snapped = applySnapToPosition(action.startItem, nextPatch, snapEnabled);
+      const snapped = applySnapToPosition(action.startItem, nextPatch, snapEnabled, productConfig.snapGuides);
       setSnapPreview(snapped.preview);
       updateItem(action.id, snapped.patch);
     }
@@ -1100,8 +1099,9 @@ export default function Vue3DTshirt() {
   function buildProjectSnapshot(name) {
     return {
       id: uid(),
-      name: makeLayerName(name, `Projet T-shirt ${new Date().toLocaleDateString("fr-FR")}`),
+      name: makeLayerName(name, `Projet ${productConfig.label} ${new Date().toLocaleDateString("fr-FR")}`),
       savedAt: new Date().toISOString(),
+      selectedProduct,
       activeArea,
       tshirtColor,
       showPrintZone,
@@ -1569,7 +1569,7 @@ export default function Vue3DTshirt() {
         return;
       }
 
-      downloadBlob(zipBlob, `export-tshirt-${new Date().toISOString().slice(0, 10)}.zip`);
+      downloadBlob(zipBlob, `export-${selectedProduct}-${new Date().toISOString().slice(0, 10)}.zip`);
     } catch (error) {
       console.error("Erreur export ZIP :", error);
       showToast("Export ZIP impossible. Vérifie la console pour plus de détails.", "error");
@@ -1753,7 +1753,7 @@ export default function Vue3DTshirt() {
         return;
       }
 
-      downloadBlob(pdfBlob, `fiche-atelier-tshirt-${new Date().toISOString().slice(0, 10)}.pdf`);
+      downloadBlob(pdfBlob, `fiche-atelier-${selectedProduct}-${new Date().toISOString().slice(0, 10)}.pdf`);
     } catch (error) {
       console.error("Erreur export PDF atelier :", error);
       showToast("Export PDF atelier impossible. Vérifie la console pour plus de détails.", "error");
@@ -2066,7 +2066,7 @@ export default function Vue3DTshirt() {
         <div className="card tshirt3d-preview-card">
           <div className="tshirt3d-preview" ref={previewRef}>
             <Product3DErrorBoundary
-              resetKey={MODEL_URL}
+              resetKey={productConfig.modelUrl}
               title="Aperçu 3D indisponible"
               message="Impossible de charger le modèle du t-shirt. Rechargez la page (Ctrl+F5) ou relancez l'application après un rebuild."
             >
@@ -2076,7 +2076,12 @@ export default function Vue3DTshirt() {
                 <Suspense fallback={null}>
                   <Bounds fit clip observe margin={1.15}>
                     <Center>
-                      <TshirtModel texture={printTexture} garmentScale={garmentPreset.scale} />
+                      <TshirtModel
+                        texture={printTexture}
+                        garmentScale={garmentPreset.scale}
+                        modelUrl={productConfig.modelUrl}
+                        garmentColor={productConfig.baseTextureUrl ? tshirtColor : "#ffffff"}
+                      />
                     </Center>
                   </Bounds>
                   <Environment preset="studio" />
@@ -2090,6 +2095,35 @@ export default function Vue3DTshirt() {
 
         <div className="card tshirt3d-editor-card">
           <h3>Personnalisation</h3>
+
+          {/* ── Sélecteur de produit ── */}
+          <div className="tshirt3d-product-selector">
+            <label>Produit</label>
+            <div className="tshirt3d-product-buttons">
+              {PRODUCT_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  className={`tshirt3d-product-btn${selectedProduct === opt.value ? " active" : ""}`}
+                  onClick={() => {
+                    if (opt.value === selectedProduct) return;
+                    if (items.length > 0) {
+                      const confirmed = window.confirm(
+                        `Changer de produit effacera la personnalisation en cours. Continuer ?`
+                      );
+                      if (!confirmed) return;
+                      setItems([]);
+                    }
+                    setSelectedProduct(opt.value);
+                    setPrintZoneSizes(getProductConfig(opt.value).printZoneSizesCm);
+                    setGarmentSize("M");
+                  }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
           <div className="tshirt3d-form-grid">
             <label>
@@ -2141,156 +2175,6 @@ export default function Vue3DTshirt() {
               ))}
             </div>
             <p className="muted">{garmentPreset.note} Les dimensions d’impression restent celles définies en cm : seul l’aperçu 3D change pour visualiser les proportions.</p>
-          </div>
-
-          <div className="tshirt3d-tech-panel">
-            <strong>Zones techniques atelier</strong>
-            <div className="tshirt3d-tech-grid">
-              {Object.entries(TECHNIQUE_PRESETS).map(([key, preset]) => (
-                <div key={key} className={`tshirt3d-tech-card technique-${key}`}>
-                  <span className="tshirt3d-tech-badge">{preset.label}</span>
-                  <p>{preset.help}</p>
-                  <small>Minimum : {formatCm(preset.minWidth)} × {formatCm(preset.minHeight)} cm{preset.maxWidth ? ` · Max conseillé : ${formatCm(preset.maxWidth)} × ${formatCm(preset.maxHeight)} cm` : ""}</small>
-                  <em>{preset.note}</em>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="tshirt3d-project-panel">
-            <div className="tshirt3d-project-header">
-              <strong>Sauvegarde projet client</strong>
-              <span>{savedProjects.length} sauvegarde{savedProjects.length > 1 ? "s" : ""}</span>
-            </div>
-            <div className="tshirt3d-project-controls">
-              <input
-                type="text"
-                value={projectName}
-                onChange={(e) => setProjectName(e.target.value)}
-                placeholder="Nom client / commande"
-              />
-              <label className="tshirt3d-qty-field">
-                Qté
-                <input
-                  type="number"
-                  min="1"
-                  value={orderQuantity}
-                  onChange={(e) => setOrderQuantity(e.target.value)}
-                />
-              </label>
-              <button type="button" onClick={saveCurrentProject}>Sauvegarder</button>
-              <button type="button" onClick={exportProjectJson}>Exporter projet</button>
-              <label className="tshirt3d-project-import">
-                Importer projet
-                <input type="file" accept="application/json,.json" onChange={importProjectJson} />
-              </label>
-            </div>
-            {savedProjects.length ? (
-              <div className="tshirt3d-project-list">
-                {savedProjects.map((project) => (
-                  <div key={project.id} className="tshirt3d-project-row">
-                    <div>
-                      <strong>{project.name}</strong>
-                      <small>{new Date(project.savedAt).toLocaleString("fr-FR")}</small>
-                    </div>
-                    <button type="button" onClick={() => loadProject(project.id)}>Reprendre</button>
-                    <button type="button" className="danger" onClick={() => deleteProject(project.id)}>Supprimer</button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="muted">Aucun projet sauvegardé pour le moment.</p>
-            )}
-          </div>
-
-          <div className="tshirt3d-real-size-panel">
-            <strong>Zone réelle : {PRINT_ZONES[activeArea]?.label} — {formatCm(activeZoneSize.width)} × {formatCm(activeZoneSize.height)} cm</strong>
-            <div className="tshirt3d-real-size-fields">
-              <label>
-  Largeur zone (cm)
-  <input
-    type="number"
-    value={activeZoneSize.width}
-    readOnly
-    disabled
-  />
-</label>
-
-<label>
-  Hauteur zone (cm)
-  <input
-    type="number"
-    value={activeZoneSize.height}
-    readOnly
-    disabled
-  />
-</label>
-            </div>
-          </div>
-
-          <div className="tshirt3d-toolbar">
-            <label className="tshirt3d-upload-button">
-              Ajouter logo(s)
-              <input type="file" multiple accept="image/png,image/jpeg,image/webp" onChange={handleLogoUpload} />
-            </label>
-            <button onClick={addText}>Ajouter un texte</button>
-            <label className="tshirt3d-upload-button secondary">
-              Importer police
-              <input type="file" accept=".ttf,.otf,.woff,.woff2" onChange={handleFontUpload} />
-            </label>
-            <button disabled={!selectedItem} onClick={duplicateSelected}>Dupliquer</button>
-            <button className="danger" disabled={!selectedItem || selectedItem.locked} onClick={deleteSelected}>Supprimer</button>
-          </div>
-
-          <div className="tshirt3d-align-tools">
-            <label className="tshirt3d-checkbox compact">
-              <input type="checkbox" checked={snapEnabled} onChange={(e) => setSnapEnabled(e.target.checked)} />
-              Aimants d’alignement
-            </label>
-            <span>Repères : centre, poitrine, col et centre manche.</span>
-          </div>
-
-          <div className="tshirt3d-layers-panel">
-            <div className="tshirt3d-layers-header">
-              <strong>Calques</strong>
-              <span>{layerItems.length} élément{layerItems.length > 1 ? "s" : ""} dans {PRINT_ZONES[activeArea]?.label}</span>
-            </div>
-            {layerItems.length ? (
-              <div className="tshirt3d-layers-list">
-                {layerItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className={`tshirt3d-layer-row ${item.id === selectedId ? "active" : ""} ${item.hidden ? "is-hidden" : ""} ${item.locked ? "is-locked" : ""}`}
-                  >
-                    <button
-                      type="button"
-                      className="tshirt3d-layer-select"
-                      onClick={() => { if (!item.hidden) setSelectedId(item.id); }}
-                      title="Sélectionner le calque"
-                    >
-                      <span className="tshirt3d-layer-type">{item.type === "image" ? "🖼️" : "T"}</span>
-                    </button>
-                    <span className="tshirt3d-layer-tech">{getTechniquePreset(item).shortLabel}</span>
-                    <input
-                      className="tshirt3d-layer-name"
-                      value={defaultLayerName(item)}
-                      onChange={(e) => renameLayer(item.id, e.target.value)}
-                      title="Renommer le calque"
-                    />
-                    <button type="button" onClick={() => toggleLayerHidden(item.id)} title={item.hidden ? "Afficher" : "Masquer"}>
-                      {item.hidden ? "🙈" : "👁"}
-                    </button>
-                    <button type="button" onClick={() => toggleLayerLocked(item.id)} title={item.locked ? "Déverrouiller" : "Verrouiller"}>
-                      {item.locked ? "🔒" : "🔓"}
-                    </button>
-                    <button type="button" onClick={() => moveLayer(item.id, "up")} title="Monter le calque">↑</button>
-                    <button type="button" onClick={() => moveLayer(item.id, "down")} title="Descendre le calque">↓</button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="muted">Aucun calque dans cette zone.</p>
-            )}
           </div>
 
           <div
@@ -2421,6 +2305,110 @@ export default function Vue3DTshirt() {
             ))}
           </div>
 
+          <div className="tshirt3d-real-size-panel">
+            <strong>Zone réelle : {PRINT_ZONES[activeArea]?.label} — {formatCm(activeZoneSize.width)} × {formatCm(activeZoneSize.height)} cm</strong>
+            <div className="tshirt3d-real-size-fields">
+              <label>
+  Largeur zone (cm)
+  <input
+    type="number"
+    value={activeZoneSize.width}
+    readOnly
+    disabled
+  />
+</label>
+
+<label>
+  Hauteur zone (cm)
+  <input
+    type="number"
+    value={activeZoneSize.height}
+    readOnly
+    disabled
+  />
+</label>
+            </div>
+          </div>
+
+          <div className="tshirt3d-toolbar">
+            <label className="tshirt3d-upload-button">
+              Ajouter logo(s)
+              <input type="file" multiple accept="image/png,image/jpeg,image/webp" onChange={handleLogoUpload} />
+            </label>
+            <button onClick={addText}>Ajouter un texte</button>
+            <label className="tshirt3d-upload-button secondary">
+              Importer police
+              <input type="file" accept=".ttf,.otf,.woff,.woff2" onChange={handleFontUpload} />
+            </label>
+            <button disabled={!selectedItem} onClick={duplicateSelected}>Dupliquer</button>
+            <button className="danger" disabled={!selectedItem || selectedItem.locked} onClick={deleteSelected}>Supprimer</button>
+          </div>
+
+          <div className="tshirt3d-align-tools">
+            <label className="tshirt3d-checkbox compact">
+              <input type="checkbox" checked={snapEnabled} onChange={(e) => setSnapEnabled(e.target.checked)} />
+              Aimants d’alignement
+            </label>
+            <span>Repères : centre, poitrine, col et centre manche.</span>
+          </div>
+
+          <div className="tshirt3d-layers-panel">
+            <div className="tshirt3d-layers-header">
+              <strong>Calques</strong>
+              <span>{layerItems.length} élément{layerItems.length > 1 ? "s" : ""} dans {PRINT_ZONES[activeArea]?.label}</span>
+            </div>
+            {layerItems.length ? (
+              <div className="tshirt3d-layers-list">
+                {layerItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className={`tshirt3d-layer-row ${item.id === selectedId ? "active" : ""} ${item.hidden ? "is-hidden" : ""} ${item.locked ? "is-locked" : ""}`}
+                  >
+                    <button
+                      type="button"
+                      className="tshirt3d-layer-select"
+                      onClick={() => { if (!item.hidden) setSelectedId(item.id); }}
+                      title="Sélectionner le calque"
+                    >
+                      <span className="tshirt3d-layer-type">{item.type === "image" ? "🖼️" : "T"}</span>
+                    </button>
+                    <span className="tshirt3d-layer-tech">{getTechniquePreset(item).shortLabel}</span>
+                    <input
+                      className="tshirt3d-layer-name"
+                      value={defaultLayerName(item)}
+                      onChange={(e) => renameLayer(item.id, e.target.value)}
+                      title="Renommer le calque"
+                    />
+                    <button type="button" onClick={() => toggleLayerHidden(item.id)} title={item.hidden ? "Afficher" : "Masquer"}>
+                      {item.hidden ? "🙈" : "👁"}
+                    </button>
+                    <button type="button" onClick={() => toggleLayerLocked(item.id)} title={item.locked ? "Déverrouiller" : "Verrouiller"}>
+                      {item.locked ? "🔒" : "🔓"}
+                    </button>
+                    <button type="button" onClick={() => moveLayer(item.id, "up")} title="Monter le calque">↑</button>
+                    <button type="button" onClick={() => moveLayer(item.id, "down")} title="Descendre le calque">↓</button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="muted">Aucun calque dans cette zone.</p>
+            )}
+          </div>
+
+          <div className="tshirt3d-tech-panel">
+            <strong>Zones techniques atelier</strong>
+            <div className="tshirt3d-tech-grid">
+              {Object.entries(TECHNIQUE_PRESETS).map(([key, preset]) => (
+                <div key={key} className={`tshirt3d-tech-card technique-${key}`}>
+                  <span className="tshirt3d-tech-badge">{preset.label}</span>
+                  <p>{preset.help}</p>
+                  <small>Minimum : {formatCm(preset.minWidth)} × {formatCm(preset.minHeight)} cm{preset.maxWidth ? ` · Max conseillé : ${formatCm(preset.maxWidth)} × ${formatCm(preset.maxHeight)} cm` : ""}</small>
+                  <em>{preset.note}</em>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {selectedItem ? (
             <div className="tshirt3d-selected-panel">
               <strong>Élément sélectionné : {defaultLayerName(selectedItem)} {selectedItem.locked ? "— verrouillé" : ""}</strong>
@@ -2523,4 +2511,6 @@ export default function Vue3DTshirt() {
   );
 }
 
-useGLTF.preload(MODEL_URL);
+// Précharger les deux modèles au démarrage pour éviter le lag au switch
+useGLTF.preload(PRODUCT_CONFIGS.tshirt.modelUrl);
+useGLTF.preload(PRODUCT_CONFIGS.polo.modelUrl);

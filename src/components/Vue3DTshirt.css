@@ -1099,3 +1099,87 @@
   min-height: 40px;
 }
 
+
+/* ── Sélecteur de produit ── */
+.tshirt3d-product-selector {
+  margin-bottom: 16px;
+}
+
+.tshirt3d-product-selector label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: rgba(255,255,255,0.4);
+  margin-bottom: 8px;
+}
+
+.tshirt3d-product-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tshirt3d-product-btn {
+  padding: 7px 18px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.07);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  color: rgba(255,255,255,0.65);
+}
+
+.tshirt3d-product-btn:hover {
+  border-color: rgba(192,132,252,0.4);
+  background: rgba(192,132,252,0.12);
+  color: #c084fc;
+}
+
+.tshirt3d-product-btn.active {
+  background: rgba(192,132,252,0.2);
+  border-color: rgba(192,132,252,0.5);
+  color: #c084fc;
+  font-weight: 700;
+}
+
+/* ── Calibration UV ── */
+.tshirt3d-calib-btn {
+  border-color: rgba(251,191,36,0.4) !important;
+  color: rgba(251,191,36,0.8) !important;
+}
+
+.tshirt3d-calib-btn.active {
+  background: rgba(251,191,36,0.2) !important;
+  border-color: rgba(251,191,36,0.6) !important;
+  color: #fbbf24 !important;
+}
+
+.tshirt3d-calib-hint {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(251,191,36,0.08);
+  border: 1px solid rgba(251,191,36,0.25);
+  font-size: 12px;
+  color: rgba(255,255,255,0.75);
+  line-height: 1.5;
+}
+
+.tshirt3d-calib-hint strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #fbbf24;
+  font-size: 12px;
+}
+
+.tshirt3d-calib-hint code {
+  background: rgba(255,255,255,0.1);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 11px;
+  color: #c084fc;
+}
