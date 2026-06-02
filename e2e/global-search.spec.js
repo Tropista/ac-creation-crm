@@ -36,8 +36,11 @@ test.describe("Recherche globale (Ctrl+K)", () => {
   test("se ferme avec Échap", async ({ page }) => {
     await page.goto("/dashboard");
     await openSearch(page);
+    // S'assurer que l'input est bien focusé avant d'appuyer sur Échap
+    await page.getByPlaceholder(/Rechercher un client/).click();
     await page.keyboard.press("Escape");
-    await expect(page.getByPlaceholder(/Rechercher un client/)).not.toBeVisible();
+    // GlobalSearch renvoie null quand fermé → élément retiré du DOM
+    await expect(page.getByPlaceholder(/Rechercher un client/)).not.toBeAttached({ timeout: 5000 });
   });
 
   test("filtre les résultats en temps réel", async ({ page }) => {
