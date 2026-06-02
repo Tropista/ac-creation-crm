@@ -2395,6 +2395,52 @@ export default function Vue3DTshirt() {
             )}
           </div>
 
+          <div className="tshirt3d-project-panel">
+            <div className="tshirt3d-project-header">
+              <strong>Sauvegarde projet client</strong>
+              <span>{savedProjects.length} sauvegarde{savedProjects.length > 1 ? "s" : ""}</span>
+            </div>
+            <div className="tshirt3d-project-controls">
+              <input
+                type="text"
+                value={projectName}
+                onChange={(e) => setProjectName(e.target.value)}
+                placeholder="Nom client / commande"
+              />
+              <label className="tshirt3d-qty-field">
+                Qté
+                <input
+                  type="number"
+                  min="1"
+                  value={orderQuantity}
+                  onChange={(e) => setOrderQuantity(e.target.value)}
+                />
+              </label>
+              <button type="button" onClick={saveCurrentProject}>Sauvegarder</button>
+              <button type="button" onClick={exportProjectJson}>Exporter projet</button>
+              <label className="tshirt3d-project-import">
+                Importer projet
+                <input type="file" accept="application/json,.json" onChange={importProjectJson} />
+              </label>
+            </div>
+            {savedProjects.length ? (
+              <div className="tshirt3d-project-list">
+                {savedProjects.map((project) => (
+                  <div key={project.id} className="tshirt3d-project-row">
+                    <div>
+                      <strong>{project.name}</strong>
+                      <small>{new Date(project.savedAt).toLocaleString("fr-FR")}</small>
+                    </div>
+                    <button type="button" onClick={() => loadProject(project.id)}>Reprendre</button>
+                    <button type="button" className="danger" onClick={() => deleteProject(project.id)}>Supprimer</button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="muted">Aucun projet sauvegardé pour le moment.</p>
+            )}
+          </div>
+
           <div className="tshirt3d-tech-panel">
             <strong>Zones techniques atelier</strong>
             <div className="tshirt3d-tech-grid">
