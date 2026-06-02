@@ -136,19 +136,46 @@ textarea {
   padding: 8px 14px;
   font-size: 12px;
   outline: none;
-  backdrop-filter: blur(8px);
-  transition: border .15s ease, box-shadow .15s ease;
+  transition: border .15s ease, box-shadow .15s ease, background .15s ease;
+  appearance: none;
+  -webkit-appearance: none;
 }
 textarea { min-height: 84px; resize: vertical; }
 input::placeholder,
 textarea::placeholder { color: rgba(255,255,255,0.25); }
+input:hover,
+select:hover {
+  background: rgba(255,255,255,0.12);
+  border-color: rgba(255,255,255,0.2);
+}
 input:focus,
 select:focus,
 textarea:focus {
+  background: rgba(255,255,255,0.1);
   border-color: rgba(192,132,252,0.5);
   box-shadow: 0 0 0 3px rgba(192,132,252,0.1);
 }
 option { background: #1e0533; color: #fff; }
+
+/* Bouton natif "Choisir un fichier" des input[type=file] */
+input[type="file"]::file-selector-button,
+input[type="file"]::-webkit-file-upload-button {
+  background: rgba(192,132,252,0.15);
+  border: 1px solid rgba(192,132,252,0.3);
+  border-radius: 8px;
+  color: #c084fc;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-right: 10px;
+  transition: background .15s ease;
+}
+input[type="file"]::file-selector-button:hover,
+input[type="file"]::-webkit-file-upload-button:hover {
+  background: rgba(192,132,252,0.25);
+  color: #fff;
+}
 
 /* =========================================================
    Layout
@@ -806,20 +833,38 @@ tbody tr:hover td { background: rgba(255,255,255,0.04); }
   display: grid;
   place-items: center;
   padding: 24px;
-  background:
-    radial-gradient(circle at 10% 5%, rgba(124, 58, 237, 0.12), transparent 28%),
-    radial-gradient(circle at 92% 16%, rgba(37, 99, 235, 0.12), transparent 30%),
-    linear-gradient(135deg, #f8fbff 0%, #f7f5ff 44%, #fff8f2 100%);
+  background: linear-gradient(135deg, #1e0533 0%, #0f1b4d 50%, #002040 100%);
+  position: relative;
+  overflow: hidden;
+}
+.crm-loading::before {
+  content: "";
+  position: fixed;
+  top: -50px; right: -50px;
+  width: 300px; height: 300px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(192,132,252,0.2) 0%, transparent 70%);
+  pointer-events: none;
+}
+.crm-loading::after {
+  content: "";
+  position: fixed;
+  bottom: -30px; left: -30px;
+  width: 200px; height: 200px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(56,189,248,0.15) 0%, transparent 70%);
+  pointer-events: none;
 }
 .crm-loading-card {
   width: min(100%, 420px);
   text-align: center;
   padding: 40px 32px;
-  border-radius: var(--radius-lg);
-  background: rgba(255,255,255,.86);
-  border: 1px solid rgba(226, 232, 240, .95);
-  box-shadow: var(--shadow-soft);
-  backdrop-filter: blur(14px);
+  border-radius: 16px;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.12);
+  box-shadow: 0 32px 80px rgba(0,0,0,0.4);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 .crm-loading-logo {
   width: 72px;
@@ -827,28 +872,28 @@ tbody tr:hover td { background: rgba(255,255,255,0.04); }
   margin: 0 auto 24px;
   border-radius: 18px;
   padding: 8px;
-  background: #fff;
-  box-shadow: 0 10px 28px rgba(124, 58, 237, .15);
+  background: rgba(192,132,252,0.15);
+  border: 1px solid rgba(192,132,252,0.3);
 }
 .crm-loading-logo img { width: 100%; height: 100%; object-fit: contain; }
 .crm-loading-spinner {
   width: 44px;
   height: 44px;
   margin: 0 auto 20px;
-  border: 3px solid #e9d5ff;
-  border-top-color: var(--purple);
-  border-right-color: var(--pink);
+  border: 3px solid rgba(192,132,252,0.2);
+  border-top-color: #c084fc;
+  border-right-color: #f472b6;
   border-radius: 50%;
   animation: crm-spin .85s linear infinite;
 }
 .crm-loading h2 {
   margin: 0;
   font-size: clamp(22px, 3vw, 28px);
-  font-weight: 950;
+  font-weight: 700;
   letter-spacing: -.5px;
-  color: #111827;
+  color: #fff;
 }
-.crm-loading p { margin: 10px 0 0; color: var(--muted); font-size: 15px; }
+.crm-loading p { margin: 10px 0 0; color: rgba(255,255,255,0.5); font-size: 15px; }
 .crm-content-loading {
   display: grid;
   place-items: center;
@@ -1148,8 +1193,9 @@ html,
   margin: 0 0 1rem;
   padding: 12px 14px;
   border-radius: 14px;
-  border: 1px solid #dbeafe;
-  background: #eff6ff;
+  border: 1px solid rgba(56,189,248,0.25);
+  background: rgba(56,189,248,0.08);
+  color: rgba(255,255,255,0.7);
   font-size: 13px;
   line-height: 1.45;
 }

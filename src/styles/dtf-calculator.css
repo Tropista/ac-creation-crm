@@ -17,16 +17,16 @@
   display:grid;
   gap:12px;
   padding:16px;
-  border:1px solid rgba(148,163,184,.18);
-  border-radius:22px;
-  background:rgba(255,255,255,.72);
+  border:1px solid rgba(255,255,255,0.1);
+  border-radius:16px;
+  background:rgba(255,255,255,0.07);
 }
 
 .dtf-section-title{
   display:flex;
   align-items:center;
   gap:10px;
-  color:#0f172a;
+  color:#fff;
   font-size:16px;
 }
 
@@ -36,7 +36,7 @@
   display:grid;
   place-items:center;
   border-radius:14px;
-  background:linear-gradient(135deg,#ecfeff,#eef2ff);
+  background:rgba(192,132,252,0.2);
 }
 
 .dtf-grid{
@@ -48,7 +48,7 @@
 .dtf-grid label{
   display:grid;
   gap:7px;
-  color:#64748b;
+  color:rgba(255,255,255,0.5);
   font-size:13px;
   font-weight:800;
 }
@@ -57,7 +57,7 @@
   font-size:11px;
   font-weight:600;
   line-height:1.35;
-  color:#94a3b8;
+  color:rgba(255,255,255,0.35);
 }
 
 .dtf-checkbox{
@@ -78,7 +78,7 @@
   top:24px;
   display:grid;
   gap:16px;
-  background:linear-gradient(135deg,#ffffff,#f8fafc);
+  background:#150a30;
 }
 
 .dtf-price{
@@ -110,8 +110,8 @@
   gap:12px;
   padding:14px;
   border-radius:16px;
-  background:#f8fafc;
-  border:1px solid #e5e7eb;
+  background:rgba(255,255,255,0.07);
+  border:1px solid rgba(255,255,255,0.1);
 }
 
 .dtf-breakdown{
@@ -125,12 +125,12 @@
   gap:12px;
   padding:11px 12px;
   border-radius:14px;
-  background:white;
-  border:1px solid #edf2f7;
+  background:rgba(255,255,255,0.07);
+  border:1px solid rgba(255,255,255,0.08);
 }
 
-.dtf-breakdown span{color:#64748b}
-.dtf-breakdown strong{color:#0f172a}
+.dtf-breakdown span{color:rgba(255,255,255,0.5)}
+.dtf-breakdown strong{color:#fff}
 
 .dtf-actions{
   display:flex;
@@ -142,8 +142,8 @@
   margin:0;
   padding:12px;
   border-radius:14px;
-  color:#64748b;
-  background:#ecfeff;
+  color:rgba(255,255,255,0.5);
+  background:rgba(56,189,248,0.1);
 }
 
 @media(max-width:1000px){

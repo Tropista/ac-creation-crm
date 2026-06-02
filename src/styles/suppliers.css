@@ -1,5 +1,5 @@
 /* ==========================
-   FOURNISSEURS
+   FOURNISSEURS — glassmorphism
    ========================== */
 
 .suppliers-page {
@@ -22,11 +22,12 @@
 
 .suppliers-search {
   min-width: 320px;
-  padding: 14px 18px;
-  border-radius: 18px;
-  border: 1px solid #e5e7eb;
-  background: #fff;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+  padding: 12px 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.07);
+  color: #fff;
+  backdrop-filter: blur(8px);
 }
 
 .suppliers-layout {
@@ -45,35 +46,38 @@
 
 .suppliers-table th {
   text-align: left;
-  padding: 14px 12px;
-  font-size: 12px;
+  padding: 10px 12px;
+  font-size: 10px;
   text-transform: uppercase;
-  opacity: 0.7;
+  letter-spacing: 1.5px;
+  color: rgba(255,255,255,0.4);
+  font-weight: 600;
 }
 
 .suppliers-table td {
   padding: 12px;
-  border-top: 1px solid #eef2ff;
+  border-top: 1px solid rgba(255,255,255,0.06);
   vertical-align: middle;
+  color: rgba(255,255,255,0.85);
 }
 
 .suppliers-table tr.clickable-row {
   cursor: pointer;
 }
 
-.suppliers-table tr:hover,
-.suppliers-table tr.selected-row {
-  background: #f8fafc;
+.suppliers-table tr:hover td,
+.suppliers-table tr.selected-row td {
+  background: rgba(255,255,255,0.05);
 }
 
-.suppliers-table tr.selected-row {
-  box-shadow: inset 4px 0 0 #6366f1;
+.suppliers-table tr.selected-row td {
+  box-shadow: inset 4px 0 0 #c084fc;
 }
 
 .supplier-meta {
   margin-top: 4px;
   font-size: 12px;
-  color: #64748b;
+  color: rgba(255,255,255,0.4);
 }
 
 .supplier-actions {
@@ -84,9 +88,8 @@
 
 .supplier-actions button {
   padding: 8px 14px;
-  border: 0;
-  border-radius: 12px;
-  font-size: 14px;
+  border-radius: 10px;
+  font-size: 13px;
   cursor: pointer;
 }
 
@@ -102,12 +105,12 @@
 .supplier-empty {
   text-align: center;
   padding: 40px 20px;
-  color: #64748b;
+  color: rgba(255,255,255,0.4);
 }
 
 .supplier-empty strong {
   display: block;
-  color: #0f172a;
+  color: #fff;
   font-size: 20px;
 }
 
@@ -123,12 +126,13 @@
   gap: 16px;
   margin-bottom: 20px;
   padding-bottom: 16px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  border-bottom: 1px solid rgba(255,255,255,0.1);
 }
 
 .supplier-detail-header h3 {
   margin: 0;
   font-size: 28px;
+  color: #fff;
 }
 
 .supplier-info-grid {
@@ -140,9 +144,9 @@
 
 .supplier-field {
   padding: 14px;
-  border: 1px solid rgba(148, 163, 184, 0.18);
-  border-radius: 18px;
-  background: #fff;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.06);
 }
 
 .supplier-field-wide {
@@ -152,15 +156,17 @@
 .supplier-field strong {
   display: block;
   margin-bottom: 6px;
-  font-size: 12px;
-  color: #0f172a;
-  opacity: 0.75;
+  font-size: 11px;
+  color: rgba(255,255,255,0.4);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 600;
 }
 
 .supplier-field span,
 .supplier-field a {
-  color: #475569;
-  font-size: 15px;
+  color: #fff;
+  font-size: 14px;
   font-weight: 600;
   word-break: break-word;
 }
@@ -180,13 +186,14 @@
 
 .supplier-links-header h4 {
   margin: 0;
+  color: #fff;
 }
 
 .supplier-link-form {
   padding: 16px;
-  border-radius: 18px;
-  background: #f8fafc;
-  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
 }
 
 .supplier-links-table {
@@ -201,20 +208,23 @@
 .supplier-links-table th,
 .supplier-links-table td {
   padding: 10px 8px;
-  border-top: 1px solid #eef2ff;
+  border-top: 1px solid rgba(255,255,255,0.06);
   text-align: left;
+  color: rgba(255,255,255,0.8);
 }
 
 .supplier-links-table th {
-  font-size: 12px;
+  font-size: 10px;
   text-transform: uppercase;
-  opacity: 0.7;
+  letter-spacing: 1.5px;
+  color: rgba(255,255,255,0.4);
+  font-weight: 600;
 }
 
 .supplier-expenses-section {
   margin-top: 28px;
   padding-top: 24px;
-  border-top: 1px solid #eef2ff;
+  border-top: 1px solid rgba(255,255,255,0.08);
 }
 
 .supplier-expense-totals {
@@ -223,24 +233,27 @@
   flex-wrap: wrap;
   align-items: center;
   font-size: 13px;
-  color: #64748b;
+  color: rgba(255,255,255,0.45);
 }
 
 .supplier-expense-totals strong {
-  color: #0f172a;
+  color: #fff;
 }
 
 .supplier-expenses-table th,
 .supplier-expenses-table td {
   padding: 10px 8px;
-  border-top: 1px solid #eef2ff;
+  border-top: 1px solid rgba(255,255,255,0.06);
   text-align: left;
+  color: rgba(255,255,255,0.8);
 }
 
 .supplier-expenses-table th {
-  font-size: 12px;
+  font-size: 10px;
   text-transform: uppercase;
-  opacity: 0.7;
+  letter-spacing: 1.5px;
+  color: rgba(255,255,255,0.4);
+  font-weight: 600;
 }
 
 @media (max-width: 1100px) {

@@ -17,16 +17,16 @@
   display:grid;
   gap:12px;
   padding:16px;
-  border:1px solid rgba(148,163,184,.18);
-  border-radius:22px;
-  background:rgba(255,255,255,.72);
+  border:1px solid rgba(255,255,255,0.1);
+  border-radius:16px;
+  background:rgba(255,255,255,0.07);
 }
 
 .print3d-section-title{
   display:flex;
   align-items:center;
   gap:10px;
-  color:#0f172a;
+  color:#fff;
   font-size:16px;
 }
 
@@ -36,7 +36,7 @@
   display:grid;
   place-items:center;
   border-radius:14px;
-  background:linear-gradient(135deg,#fdf2f8,#eef2ff);
+  background:rgba(192,132,252,0.15);
 }
 
 .print3d-grid{
@@ -48,7 +48,7 @@
 .print3d-grid label{
   display:grid;
   gap:7px;
-  color:#64748b;
+  color:rgba(255,255,255,0.5);
   font-size:13px;
   font-weight:800;
 }
@@ -58,7 +58,7 @@
   top:24px;
   display:grid;
   gap:16px;
-  background:linear-gradient(135deg,#ffffff,#f8fafc);
+  background:#150a30;
 }
 
 .print3d-price{
@@ -89,8 +89,8 @@
   gap:12px;
   padding:14px;
   border-radius:16px;
-  background:#f8fafc;
-  border:1px solid #e5e7eb;
+  background:rgba(255,255,255,0.07);
+  border:1px solid rgba(255,255,255,0.1);
 }
 
 .print3d-breakdown{
@@ -104,19 +104,19 @@
   gap:12px;
   padding:11px 12px;
   border-radius:14px;
-  background:white;
-  border:1px solid #edf2f7;
+  background:rgba(255,255,255,0.07);
+  border:1px solid rgba(255,255,255,0.08);
 }
 
-.print3d-breakdown span{color:#64748b}
-.print3d-breakdown strong{color:#0f172a}
+.print3d-breakdown span{color:rgba(255,255,255,0.5)}
+.print3d-breakdown strong{color:#fff}
 
 .print3d-note{
   margin:0;
   padding:12px;
   border-radius:14px;
-  color:#64748b;
-  background:#fff7ed;
+  color:rgba(255,255,255,0.5);
+  background:rgba(251,146,60,0.1);
 }
 
 @media(max-width:1000px){
