@@ -1251,6 +1251,35 @@ reset();
         )}
       </div>
 
+      {!isQuote && documents.some((d) => d.isTemplate) && (
+        <div className="card" style={{ marginBottom: 0, padding: "14px 16px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+            <span style={{ fontSize: 14, fontWeight: 700 }}>⭐ Modèles de facture</span>
+            <span style={{ fontSize: 12, color: "var(--muted)" }}>{documents.filter((d) => d.isTemplate).length} modèle(s)</span>
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {documents.filter((d) => d.isTemplate).map((tpl) => {
+              const tplClient = (data.clients || []).find((c) => c.id === tpl.clientId);
+              return (
+                <div key={tpl.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.07)", fontSize: 12 }}>
+                  <span style={{ fontWeight: 600 }}>{tpl.number}</span>
+                  {tplClient && <span style={{ color: "var(--muted)" }}>{tplClient.name}</span>}
+                  <span style={{ color: "var(--muted)" }}>{money(tpl.totalTTC)}</span>
+                  <button
+                    type="button"
+                    className="primary"
+                    style={{ padding: "4px 12px", fontSize: 11 }}
+                    onClick={() => duplicate(tpl)}
+                  >
+                    Créer depuis ce modèle
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {invoiceNumberGaps.length > 0 && (
         <div className="card documents-gap-warning">
           <strong>Numérotation {currentDocumentYear()} — trous détectés</strong>
@@ -1343,6 +1372,16 @@ reset();
           setData({ ...data, [key]: documents.map((d) => String(d.id) === String(doc.id) ? { ...d, emailReadAt: new Date().toISOString() } : d) });
           showToast(`${doc.number} marqué comme lu.`, "success");
         }}
+        onToggleTemplate={!isQuote ? (doc) => {
+          const next = !doc.isTemplate;
+          setData({ ...data, invoices: documents.map((d) => String(d.id) === String(doc.id) ? { ...d, isTemplate: next } : d) });
+          showToast(`${doc.number} ${next ? "enregistré comme modèle ⭐" : "retiré des modèles"}.`, "success");
+        } : undefined}
+        onToggleNoReminder={!isQuote ? (doc) => {
+          const next = !doc.noAutoReminder;
+          setData({ ...data, invoices: documents.map((d) => String(d.id) === String(doc.id) ? { ...d, noAutoReminder: next } : d) });
+          showToast(`Relances ${next ? "désactivées" : "réactivées"} pour ${doc.number}.`, "success");
+        } : undefined}
         dateFrom={dateFrom}
         dateTo={dateTo}
         onDateFromChange={(v) => { setDateFrom(v); setCurrentPage(1); }}

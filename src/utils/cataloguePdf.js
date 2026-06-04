@@ -190,7 +190,31 @@ export function buildCataloguePdf({ products = [], categories = [], settings = {
   return pdf;
 }
 
-export function downloadCataloguePdf(options) {
-  const pdf = buildCataloguePdf(options);
+async function loadImageAsDataUrl(url) {
+  if (!url) return null;
+  if (url.startsWith("data:") || url.startsWith("blob:")) return url;
+  try {
+    const res = await fetch(url, { mode: "cors" });
+    const blob = await res.blob();
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
+export async function downloadCataloguePdf({ products = [], categories = [], settings = {}, logoDataUrl = null }) {
+  // Pré-charger les images produits en base64 pour les inclure dans le PDF
+  const enriched = await Promise.all(
+    (products || []).map(async (p) => {
+      const imageDataUrl = await loadImageAsDataUrl(p.imageUrl || "");
+      return { ...p, imageDataUrl };
+    })
+  );
+  const pdf = buildCataloguePdf({ products: enriched, categories, settings, logoDataUrl });
   pdf.save("catalogue-ac-creation.pdf");
 }

@@ -638,9 +638,11 @@ function drawClientInfoGrid(pdf, doc, data, y, style, { isQuote, isDelivery }) {
   const client = (data.clients || []).find((c) => c.id === doc.clientId);
 
   const leftEntries = [{ value: client?.name || clientName(data, doc.clientId), bold: true }];
+  const clientVat = client?.vatNumber || client?.vat || client?.tva;
   [client?.company, client?.address, client?.email, client?.phone]
     .filter(Boolean)
     .forEach((value) => leftEntries.push({ value }));
+  if (clientVat) leftEntries.push({ value: `N° TVA : ${clientVat}` });
 
   const rightEntries = [];
   if (isDelivery) {

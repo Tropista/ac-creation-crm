@@ -34,6 +34,8 @@ export default function DocumentList({
   onCreateBalance,
   onRecordPayment,
   onDuplicate,
+  onToggleNoReminder,
+  onToggleTemplate,
   dateFrom = "",
   dateTo = "",
   onDateFromChange,
@@ -199,6 +201,16 @@ export default function DocumentList({
                       </td>
                     )}
                     <td>
+                      {!isQuote && onToggleNoReminder && (
+                        <button
+                          type="button"
+                          onClick={() => onToggleNoReminder(d)}
+                          title={d.noAutoReminder ? "Relances automatiques désactivées — cliquer pour réactiver" : "Désactiver les relances automatiques pour cette facture"}
+                          style={{ fontSize: 10, background: "none", border: "none", cursor: "pointer", padding: 0, color: d.noAutoReminder ? "var(--orange, #fb923c)" : "var(--muted)" }}
+                        >
+                          {d.noAutoReminder ? "🔕 Relances off" : "🔔"}
+                        </button>
+                      )}
                       {d.emailSentAt && (
                         <div style={{ marginBottom: 3 }}>
                           {d.emailReadAt ? (
@@ -261,6 +273,17 @@ export default function DocumentList({
                       {onDuplicate && (
                         <button type="button" className="compact" onClick={() => onDuplicate(d)} title={`Dupliquer ce ${isQuote ? "devis" : "facture"}`}>
                           Dupliquer
+                        </button>
+                      )}
+                      {!isQuote && onToggleTemplate && (
+                        <button
+                          type="button"
+                          className="compact"
+                          title={d.isTemplate ? "Retirer des modèles" : "Enregistrer comme modèle récurrent"}
+                          onClick={() => onToggleTemplate(d)}
+                          style={{ color: d.isTemplate ? "var(--yellow, #fbbf24)" : undefined }}
+                        >
+                          {d.isTemplate ? "⭐ Modèle" : "☆ Modèle"}
                         </button>
                       )}
                       {isQuote &&

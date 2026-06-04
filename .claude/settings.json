@@ -18,7 +18,15 @@
       "Bash(git commit -m 'fix\\(e2e\\): stabiliser tests global-search \\(body.click avant Ctrl+K, waitFor\\) *)",
       "Bash(xargs grep \"ENABLE ROW LEVEL SECURITY\")",
       "Bash(git checkout *)",
-      "Bash(grep -n \"background.*#fff\\\\|background.*white\\\\|background.*#f[0-9a-f]\\\\|background.*rgba\\(255.*0\\\\.[6-9]\\\\|background.*#e[0-9a-f]\\\\|color.*#[0-9a-f]\\\\{3,6\\\\}\" src/styles/documents.css)"
+      "Bash(grep -n \"background.*#fff\\\\|background.*white\\\\|background.*#f[0-9a-f]\\\\|background.*rgba\\(255.*0\\\\.[6-9]\\\\|background.*#e[0-9a-f]\\\\|color.*#[0-9a-f]\\\\{3,6\\\\}\" src/styles/documents.css)",
+      "Bash(git merge *)",
+      "Bash(git stash *)",
+      "Bash(git commit -m 'fix: restaurer JSX panneau projet client \\(perdu lors réorganisation\\) *)",
+      "Bash(VITE_SUPABASE_URL=https://example.supabase.co VITE_SUPABASE_ANON_KEY=ci-dummy npx vite build)",
+      "Bash(ls -la dist/models/polo/)",
+      "Bash(du -sh dist/models/polo/scene.bin)",
+      "Bash(git commit -m 'fix\\(e2e\\): stabiliser test Échap — click input avant keypress *)",
+      "Bash(grep -n \"^th,\\\\|^td {\" src/App.css)"
     ]
   }
 }

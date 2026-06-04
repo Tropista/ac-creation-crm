@@ -255,13 +255,24 @@ export default function DocumentPreview({
   }
 
 
-  function openEmailPreview() {
+  async function openEmailPreview() {
     if (!client?.email) { showToast("Ce client n'a pas d'adresse email enregistrée.", "error"); return; }
     if (!data.settings?.smtpEmail || !data.settings?.smtpAppPassword) { showToast("Configure ton adresse Gmail dans Paramètres avant d'envoyer.", "error"); return; }
     const key = isQuote ? "quote" : "invoice";
     const vars = buildDocVars(doc, client, data.settings || {});
     const { subject, body } = buildEmailFromTemplate(key, vars, data.settings || {});
-    setEmailPreview({ subject, body });
+
+    // Générer une miniature de la première page du document
+    let thumbnail = null;
+    try {
+      const source = document.getElementById("document-preview");
+      if (source) {
+        const canvas = await html2canvas(source, { scale: 0.4, useCORS: true, allowTaint: false, backgroundColor: "#ffffff", logging: false });
+        thumbnail = canvas.toDataURL("image/jpeg", 0.7);
+      }
+    } catch { /* miniature optionnelle */ }
+
+    setEmailPreview({ subject, body, thumbnail });
   }
 
   async function sendEmail() {
@@ -711,6 +722,13 @@ export default function DocumentPreview({
           </label>
           <p style={{ fontSize: 11, color: "var(--muted)", margin: 0 }}>
             📎 Le PDF sera joint automatiquement à l'envoi.
+            {emailPreview.thumbnail && (
+              <img
+                src={emailPreview.thumbnail}
+                alt="Aperçu PDF"
+                style={{ display: "block", marginTop: 8, maxWidth: 160, border: "1px solid var(--border)", borderRadius: 6, opacity: 0.85 }}
+              />
+            )}
           </p>
         </div>
         <div style={{ padding: "12px 20px", borderTop: "1px solid var(--border)", display: "flex", gap: 8, justifyContent: "flex-end" }}>

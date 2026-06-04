@@ -48,6 +48,7 @@ export function getInvoicesDueForReminder(invoices = [], clients = [], settings 
   const results = [];
 
   for (const invoice of invoices) {
+    if (invoice.noAutoReminder) continue; // relance désactivée manuellement
     const step = getDueReminderStep(invoice, schedule, referenceDate);
     if (!step) continue;
 

@@ -1163,8 +1163,13 @@ export default function Vue3DTshirt() {
     if (!project) return;
 
     setCurrentProjectId(project.id);
+    // Restaurer le produit en premier (change PRINT_ZONE_SIZES_CM et productConfig)
+    const restoredProduct = project.selectedProduct || "tshirt";
+    setSelectedProduct(restoredProduct);
+    const restoredConfig = getProductConfig(restoredProduct);
     await restoreCustomFonts(project.customFonts || []);
-    setItems((project.items || []).map((item) => limitItemToPrintArea(item, project.printZoneSizes || PRINT_ZONE_SIZES_CM)));
+    const zoneSizes = project.printZoneSizes || restoredConfig.printZoneSizesCm;
+    setItems((project.items || []).map((item) => limitItemToPrintArea(item, zoneSizes)));
     setSelectedId(null);
     setActiveArea(project.activeArea || "front");
     setTshirtColor(project.tshirtColor || "#ffffff");
@@ -1172,7 +1177,7 @@ export default function Vue3DTshirt() {
     setSnapEnabled(project.snapEnabled ?? true);
     setDefaultTechnique(project.defaultTechnique || "dtf");
     setGarmentSize(project.garmentSize || "M");
-    setPrintZoneSizes(project.printZoneSizes || PRINT_ZONE_SIZES_CM);
+    setPrintZoneSizes(zoneSizes);
     setProjectName(project.name || "");
   }
 
