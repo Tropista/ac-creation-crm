@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   clientName,
@@ -77,7 +77,7 @@ import {
   buildDashboardProfitability,
 } from "../utils/profitability";
 import AutomationCenter from "./AutomationCenter";
-import DashboardCharts from "./DashboardCharts";
+const DashboardCharts = lazy(() => import("./DashboardCharts"));
 import ErrorBoundary from "./ErrorBoundary";
 import { getInvoicesDueForReminder } from "../utils/autoReminderEngine";
 import { sendReminderEmail } from "../services/emailService";
@@ -1166,15 +1166,17 @@ export default function Dashboard({
 
       {(canManageInvoices || canManageQuotes) && (
         <ErrorBoundary>
-          <DashboardCharts
-            annualStats={annualStats}
-            processTypeStats={processTypeStats}
-            leads={leads}
-            quotes={quotes}
-            invoices={invoices}
-            expenses={data.expenses || []}
-            year={Number(annualStatsYear) || new Date().getFullYear()}
-          />
+          <Suspense fallback={<div style={{ height: 280, display: "grid", placeItems: "center", color: "var(--muted)", fontSize: 13 }}>Chargement des graphiques…</div>}>
+            <DashboardCharts
+              annualStats={annualStats}
+              processTypeStats={processTypeStats}
+              leads={leads}
+              quotes={quotes}
+              invoices={invoices}
+              expenses={data.expenses || []}
+              year={Number(annualStatsYear) || new Date().getFullYear()}
+            />
+          </Suspense>
         </ErrorBoundary>
       )}
 
