@@ -361,7 +361,9 @@ input[type="file"]::-webkit-file-upload-button:hover {
 .filters-price-wrap { display: flex; align-items: center; gap: 8px; }
 
 /* =========================================================
-   Tables — glassmorphism
+   Tables — glassmorphism (CRM UI)
+   Les styles d'aperçu facture (.ac-table) sont dans invoice-styles.css
+   et écrasent ces règles via une spécificité plus haute.
    ========================================================= */
 .table { overflow-x: auto; }
 table { width: 100%; border-collapse: separate; border-spacing: 0; }

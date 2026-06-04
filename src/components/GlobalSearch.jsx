@@ -49,6 +49,16 @@ export default function GlobalSearch({ isOpen, onClose, data, onOpenDoc }) {
     }
   }, [isOpen]);
 
+  // Échap géré au niveau document — fonctionne même si l'input n'est pas focusé
+  useEffect(() => {
+    if (!isOpen) return;
+    function handleEsc(e) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", handleEsc);
+    return () => document.removeEventListener("keydown", handleEsc);
+  }, [isOpen, onClose]);
+
   useEffect(() => { setCursor(0); }, [results]);
 
   function open(item) {
@@ -67,7 +77,6 @@ export default function GlobalSearch({ isOpen, onClose, data, onOpenDoc }) {
   }
 
   function onKeyDown(e) {
-    if (e.key === "Escape") { onClose(); return; }
     if (e.key === "ArrowDown") { e.preventDefault(); setCursor((c) => Math.min(c + 1, results.length - 1)); }
     if (e.key === "ArrowUp")   { e.preventDefault(); setCursor((c) => Math.max(c - 1, 0)); }
     if (e.key === "Enter" && results[cursor]) open(results[cursor]);

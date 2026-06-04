@@ -187,7 +187,7 @@ export default function DocumentPreview({
       );
 
       const canvas = await html2canvas(clone, {
-        scale: 2,
+        scale: 3,           // 300 DPI équivalent — qualité impression professionnelle
         useCORS: true,
         allowTaint: false,
         backgroundColor: "#ffffff",
@@ -197,7 +197,8 @@ export default function DocumentPreview({
       });
 
       const pdf = new jsPDF("p", "mm", "a4");
-      const imgData = canvas.toDataURL("image/png");
+      // JPEG 95% : 3x moins lourd que PNG avec qualité quasi identique à l'impression
+      const imgData = canvas.toDataURL("image/jpeg", 0.95);
 
       const pageWidth = 210;
       const pageHeight = 297;
@@ -209,7 +210,7 @@ export default function DocumentPreview({
       let imgHeight = (canvas.height * imgWidth) / canvas.width;
 
       if (imgHeight <= maxHeight) {
-        pdf.addImage(imgData, "PNG", margin, margin, imgWidth, imgHeight);
+        pdf.addImage(imgData, "JPEG", margin, margin, imgWidth, imgHeight);
         pdf.save(documentFileName);
         return;
       }
@@ -219,7 +220,7 @@ export default function DocumentPreview({
         imgHeight = maxHeight;
         imgWidth = (canvas.width * imgHeight) / canvas.height;
         const x = (pageWidth - imgWidth) / 2;
-        pdf.addImage(imgData, "PNG", x, margin, imgWidth, imgHeight);
+        pdf.addImage(imgData, "JPEG", x, margin, imgWidth, imgHeight);
         pdf.save(documentFileName);
         return;
       }
@@ -227,13 +228,13 @@ export default function DocumentPreview({
       let heightLeft = imgHeight;
       let position = margin;
 
-      pdf.addImage(imgData, "PNG", margin, position, imgWidth, imgHeight);
+      pdf.addImage(imgData, "JPEG", margin, position, imgWidth, imgHeight);
       heightLeft -= maxHeight;
 
       while (heightLeft > 0) {
         position = margin - (imgHeight - heightLeft);
         pdf.addPage();
-        pdf.addImage(imgData, "PNG", margin, position, imgWidth, imgHeight);
+        pdf.addImage(imgData, "JPEG", margin, position, imgWidth, imgHeight);
         heightLeft -= maxHeight;
       }
 
@@ -404,6 +405,9 @@ export default function DocumentPreview({
                 {client?.address && <p>{client.address}</p>}
                 {client?.email && <p>{client.email}</p>}
                 {client?.phone && <p>{client.phone}</p>}
+                {(client?.vatNumber || client?.vat || client?.tva) && (
+                  <p>N° TVA : {client.vatNumber || client.vat || client.tva}</p>
+                )}
               </div>
             </div>
 
