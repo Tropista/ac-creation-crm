@@ -22,6 +22,7 @@ export const PAGE_PATHS = {
   lasercalc: "/calculateur-laser",
   dtfcalc: "/calculateur-dtf",
   uvdtfcalc: "/calculateur-uv-dtf",
+  brodcalc: "/calculateur-broderie",
   vue3d: "/vue-3d",
   tshirt3d: "/t-shirt-3d",
   banque: "/banque",

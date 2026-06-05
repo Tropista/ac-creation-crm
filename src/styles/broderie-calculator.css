@@ -1,0 +1,226 @@
+/* ==========================
+   Calculateur Broderie
+   ========================== */
+
+.broderie-page { display: grid; gap: 20px; }
+
+.broderie-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) 420px;
+  gap: 22px;
+  align-items: start;
+}
+
+.broderie-form { display: grid; gap: 18px; }
+
+.broderie-section {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.broderie-section-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.broderie-icon {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: rgba(192,132,252,0.2);
+  border: 1px solid rgba(192,132,252,0.3);
+  font-size: 16px;
+}
+
+.broderie-mode-toggle {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.broderie-mode-toggle button {
+  padding: 7px 16px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.07);
+  color: rgba(255,255,255,0.6);
+  transition: all .15s;
+}
+
+.broderie-mode-toggle button.active,
+.broderie-mode-toggle button:hover {
+  background: rgba(192,132,252,0.2);
+  border-color: rgba(192,132,252,0.4);
+  color: #c084fc;
+}
+
+.broderie-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.broderie-field {
+  display: grid;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.broderie-computed {
+  padding: 8px 14px;
+  background: rgba(192,132,252,0.12);
+  border: 1px solid rgba(192,132,252,0.3);
+  border-radius: 10px;
+  color: #c084fc;
+  font-size: 14px;
+  font-weight: 700;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+}
+
+.broderie-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 4px;
+}
+
+.broderie-presets button {
+  padding: 5px 12px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.6);
+  transition: all .15s;
+}
+
+.broderie-presets button:hover {
+  background: rgba(192,132,252,0.15);
+  border-color: rgba(192,132,252,0.35);
+  color: #c084fc;
+}
+
+/* ── Résultats ──────────────────────────────────────────── */
+.broderie-result-card {
+  position: sticky;
+  top: 24px;
+  display: grid;
+  gap: 14px;
+  background: #150a30 !important;
+}
+
+.broderie-price {
+  padding: 22px;
+  border-radius: 16px;
+  color: #fff;
+  background: linear-gradient(135deg, #c084fc, #818cf8);
+  box-shadow: 0 12px 32px rgba(192,132,252,0.3);
+  text-align: center;
+}
+
+.broderie-price span {
+  display: block;
+  font-size: 12px;
+  opacity: .85;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+}
+
+.broderie-price strong {
+  display: block;
+  font-size: 42px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.broderie-price small {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+  opacity: .75;
+}
+
+.broderie-stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.broderie-stats-row .stat {
+  min-height: 0;
+  padding: 10px;
+  text-align: center;
+  border-radius: 12px;
+}
+
+.broderie-stats-row .stat span {
+  font-size: 9px !important;
+  letter-spacing: 0.8px;
+}
+
+.broderie-stats-row .stat strong {
+  font-size: 16px !important;
+  margin-top: 4px;
+}
+
+.broderie-breakdown {
+  display: grid;
+  gap: 8px;
+}
+
+.broderie-breakdown div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+.broderie-breakdown span { color: rgba(255,255,255,0.5); font-size: 13px; }
+.broderie-breakdown strong { color: #fff; font-size: 13px; }
+
+.broderie-breakdown--subtotal {
+  background: rgba(192,132,252,0.12) !important;
+  border-color: rgba(192,132,252,0.25) !important;
+}
+
+.broderie-breakdown--subtotal span { color: rgba(255,255,255,0.7) !important; font-weight: 600; }
+.broderie-breakdown--subtotal strong { color: #c084fc !important; font-weight: 700; }
+
+.broderie-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.broderie-actions button {
+  flex: 1;
+  min-width: 140px;
+}
+
+@media (max-width: 1000px) {
+  .broderie-layout { grid-template-columns: 1fr; }
+  .broderie-result-card { position: static; }
+}

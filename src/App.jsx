@@ -147,6 +147,10 @@ const UvDtfCalculator = lazy(() =>
   import("./components/UvDtfCalculator")
 );
 
+const BroderieCalculator = lazy(() =>
+  import("./components/BroderieCalculator")
+);
+
 function getInitialAuthState() {
   const session = loadSession();
   if (session?.expired) {
@@ -856,6 +860,18 @@ function CrmApp() {
               element={
                 canAccessPage(currentRole, "uvdtfcalc") ? (
                   <UvDtfCalculator
+                    data={data}
+                    setData={updateData}
+                    logActivity={handleLogActivity}
+                  />
+                ) : null
+              }
+            />
+            <Route
+              path={pageToPath("brodcalc")}
+              element={
+                canAccessPage(currentRole, "brodcalc") ? (
+                  <BroderieCalculator
                     data={data}
                     setData={updateData}
                     logActivity={handleLogActivity}
