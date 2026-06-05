@@ -34,6 +34,10 @@ export async function uploadClientFile(file, { clientId }) {
     if (msg.includes("bucket") && msg.includes("not found")) {
       throw new Error("Bucket « ac-creation-attachments » absent dans Supabase Storage.");
     }
+    if (msg.includes("mime") || msg.includes("content type") || msg.includes("not supported")) {
+      // Type MIME non accepté par le bucket → signaler pour déclencher le fallback local
+      throw new Error(`MIME_NOT_SUPPORTED:${file.type || "inconnu"}`);
+    }
     throw new Error(error.message || "Erreur lors de l'upload.");
   }
 

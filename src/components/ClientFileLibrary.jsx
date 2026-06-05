@@ -42,9 +42,24 @@ export default function ClientFileLibrary({ clientId, files = [], onFilesChange 
         let storagePath = "";
 
         if (canCloud) {
-          const result = await uploadClientFile(file, { clientId });
-          url = result.url;
-          storagePath = result.storagePath;
+          try {
+            const result = await uploadClientFile(file, { clientId });
+            url = result.url;
+            storagePath = result.storagePath;
+          } catch (uploadErr) {
+            // Fallback local si le type MIME n'est pas supporté par le bucket
+            if (String(uploadErr.message).startsWith("MIME_NOT_SUPPORTED:")) {
+              url = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+              });
+              storagePath = "";
+            } else {
+              throw uploadErr;
+            }
+          }
         } else {
           // Fallback: store as data URL locally
           url = await new Promise((resolve, reject) => {
@@ -72,7 +87,11 @@ export default function ClientFileLibrary({ clientId, files = [], onFilesChange 
       }
     }
 
-    if (newEntries.length) onFilesChange([...files, ...newEntries]);
+    if (newEntries.length) {
+      onFilesChange([...files, ...newEntries]);
+    } else if (Array.from(fileList).length > 0) {
+      showToast("Aucun fichier n'a pu être ajouté.", "error");
+    }
     setLoading(false);
   }
 

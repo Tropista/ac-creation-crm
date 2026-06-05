@@ -1063,8 +1063,11 @@ h1{
                     clientId={selectedClient.id}
                     files={(data.clientFiles || []).filter((f) => String(f.clientId) === String(selectedClient.id))}
                     onFilesChange={(updated) => {
-                      const others = (data.clientFiles || []).filter((f) => String(f.clientId) !== String(selectedClient.id));
-                      setData({ ...data, clientFiles: [...others, ...updated] });
+                      const clientId = selectedClient.id;
+                      setData((prev) => {
+                        const others = (prev.clientFiles || []).filter((f) => String(f.clientId) !== String(clientId));
+                        return { ...prev, clientFiles: [...others, ...updated] };
+                      });
                     }}
                   />
                 )}
