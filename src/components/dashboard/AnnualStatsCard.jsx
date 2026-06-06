@@ -1,21 +1,11 @@
-import { useState } from "react";
-import { collectAnnualYears, computeAnnualStats } from "../../utils/annualStats";
 import { money } from "../../utils/money";
 
-export default function AnnualStatsCard({ quotes, invoices, expenses, data }) {
-  const [annualStatsYear, setAnnualStatsYear] = useState(() =>
-    String(new Date().getFullYear())
-  );
-
-  const annualYearOptions = collectAnnualYears(quotes, invoices, expenses);
-  const annualStats = computeAnnualStats({
-    quotes,
-    invoices,
-    expenses,
-    data,
-    year: Number(annualStatsYear) || new Date().getFullYear(),
-  });
-
+export default function AnnualStatsCard({
+  annualStats,
+  annualStatsYear,
+  setAnnualStatsYear,
+  annualYearOptions,
+}) {
   return (
     <div className="card dashboard-annual-stats" data-testid="dashboard-annual-stats">
       <div className="dashboard-annual-stats__head">

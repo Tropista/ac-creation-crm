@@ -36,6 +36,7 @@ import { exportInvoicesCsv, exportLowStockPurchaseOrderCsv, buildPurchaseOrderTe
 import MonthlyAccountingExport from "./MonthlyAccountingExport";
 import { getStaleDraftQuotes, getStaleSentQuotes, markDocumentReminder, formatTrackingDate } from "../utils/documentTracking";
 import { buildMondayWorkQueue, MONDAY_QUEUE_KINDS } from "../utils/mondayWorkQueue";
+import { collectAnnualYears, computeAnnualStats } from "../utils/annualStats";
 import { downloadPurchaseOrderPdf } from "../utils/purchaseOrderPdf";
 import {
   buildLeadMailtoHref,
@@ -120,6 +121,9 @@ export default function Dashboard({
     )
   );
   const [billingYear, setBillingYear] = useState(() =>
+    String(new Date().getFullYear())
+  );
+  const [annualStatsYear, setAnnualStatsYear] = useState(() =>
     String(new Date().getFullYear())
   );
   const [sendingReminders, setSendingReminders] = useState(false);
@@ -329,6 +333,15 @@ export default function Dashboard({
     () => collectInvoiceYears(invoices, new Date().getFullYear()),
     [invoices]
   );
+
+  const annualYearOptions = collectAnnualYears(quotes, invoices, expenses);
+  const annualStats = computeAnnualStats({
+    quotes,
+    invoices,
+    expenses,
+    data,
+    year: Number(annualStatsYear) || new Date().getFullYear(),
+  });
 
   const allTimeInvoiceTotals = useMemo(
     () => computeInvoicePeriodTotals(invoices),
@@ -1029,10 +1042,10 @@ export default function Dashboard({
 
       {(canManageInvoices || canManageQuotes) && (
         <AnnualStatsCard
-          quotes={quotes}
-          invoices={invoices}
-          expenses={expenses}
-          data={data}
+          annualStats={annualStats}
+          annualStatsYear={annualStatsYear}
+          setAnnualStatsYear={setAnnualStatsYear}
+          annualYearOptions={annualYearOptions}
         />
       )}
 
