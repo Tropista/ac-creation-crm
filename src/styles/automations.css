@@ -18,6 +18,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+  margin-bottom: 0.75rem;
 }
 
 .automations-list {
@@ -26,39 +27,44 @@
   gap: 0.5rem;
 }
 
+/* ── Alert cards ──────────────────────────────────────────── */
 .automation-alert {
   display: flex;
   align-items: flex-start;
   gap: 0.75rem;
   padding: 0.75rem 0.9rem;
   border-radius: 12px;
-  border: 1px solid var(--border, #e5e7eb);
-  background: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.07);
+  text-align: left;
+  width: 100%;
+  cursor: default;
 }
 
 .automation-alert--danger {
-  border-color: #fecaca;
-  background: #fef2f2;
+  border-color: rgba(239, 68, 68, 0.35);
+  background: rgba(239, 68, 68, 0.1);
 }
 
 .automation-alert--warning {
-  border-color: #fde68a;
-  background: #fffbeb;
+  border-color: rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.1);
 }
 
 .automation-alert--success {
-  border-color: #bbf7d0;
-  background: #f0fdf4;
+  border-color: rgba(34, 197, 94, 0.35);
+  background: rgba(34, 197, 94, 0.1);
 }
 
 .automation-alert--info {
-  border-color: #bfdbfe;
-  background: #eff6ff;
+  border-color: rgba(56, 189, 248, 0.35);
+  background: rgba(56, 189, 248, 0.1);
 }
 
 .automation-alert__icon {
   font-size: 1.25rem;
   line-height: 1;
+  flex-shrink: 0;
 }
 
 .automation-alert__body {
@@ -69,25 +75,28 @@
 .automation-alert__title {
   font-weight: 600;
   margin: 0 0 0.15rem;
+  color: #ffffff;
 }
 
 .automation-alert__message {
   margin: 0;
   font-size: 0.88rem;
-  color: #475569;
+  color: rgba(255, 255, 255, 0.62);
 }
 
 .automation-alert__action {
   align-self: center;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .automations-empty {
   padding: 2rem;
   text-align: center;
-  color: #64748b;
+  color: rgba(255, 255, 255, 0.45);
 }
 
+/* ── Dashboard compact ───────────────────────────────────── */
 .dashboard-automations {
   margin-top: 1rem;
 }
@@ -99,6 +108,17 @@
   margin-top: 0.5rem;
 }
 
+.dashboard-automations__list .automation-alert {
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.dashboard-automations__list .automation-alert:hover {
+  transform: translateX(4px);
+  background: rgba(255, 255, 255, 0.11);
+}
+
+/* ── Sidebar badge ────────────────────────────────────────── */
 .sidebar-nav-badge {
   margin-left: auto;
   min-width: 1.25rem;

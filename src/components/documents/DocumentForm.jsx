@@ -17,6 +17,107 @@ import { showToast } from "../../utils/toast";
 import { isSupabaseConfigured } from "../../supabase";
 import ProductPicker from "./ProductPicker";
 
+function ClientCombobox({ clients, value, onChange }) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef(null);
+  const inputRef = useRef(null);
+
+  const selected = clients.find((c) => c.id === value) || null;
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? clients.filter(
+        (c) =>
+          c.name.toLowerCase().includes(q) ||
+          (c.email && c.email.toLowerCase().includes(q))
+      )
+    : clients;
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointerDown(e) {
+      if (containerRef.current && !containerRef.current.contains(e.target)) {
+        setOpen(false);
+        setQuery("");
+      }
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [open]);
+
+  useEffect(() => {
+    if (open) inputRef.current?.focus();
+  }, [open]);
+
+  function select(id) {
+    onChange(id);
+    setQuery("");
+    setOpen(false);
+  }
+
+  return (
+    <div ref={containerRef} className="client-combobox">
+      <div
+        className={`client-combobox__trigger${open ? " client-combobox__trigger--open" : ""}`}
+        onClick={() => setOpen((o) => !o)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen((o) => !o); }
+          if (e.key === "Escape") { setOpen(false); setQuery(""); }
+        }}
+        tabIndex={0}
+        role="combobox"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        <span className={selected ? "" : "client-combobox__placeholder"}>
+          {selected ? selected.name : "Choisir un client"}
+        </span>
+        <span className="client-combobox__chevron" aria-hidden="true">▾</span>
+      </div>
+      {open && (
+        <div className="client-combobox__dropdown">
+          <div className="client-combobox__search-wrap">
+            <input
+              ref={inputRef}
+              type="text"
+              className="client-combobox__search"
+              placeholder="Rechercher un client…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+          <ul className="client-combobox__list" role="listbox">
+            <li
+              role="option"
+              aria-selected={!value}
+              className={`client-combobox__option client-combobox__option--none${!value ? " client-combobox__option--active" : ""}`}
+              onClick={() => select("")}
+            >
+              — Aucun client —
+            </li>
+            {filtered.length === 0 ? (
+              <li className="client-combobox__empty">Aucun résultat pour « {query} »</li>
+            ) : (
+              filtered.map((c) => (
+                <li
+                  key={c.id}
+                  role="option"
+                  aria-selected={c.id === value}
+                  className={`client-combobox__option${c.id === value ? " client-combobox__option--active" : ""}`}
+                  onClick={() => select(c.id)}
+                >
+                  <span className="client-combobox__option-name">{c.name}</span>
+                  {c.email && <span className="client-combobox__option-email">{c.email}</span>}
+                </li>
+              ))
+            )}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DocumentForm({
   isQuote,
   editingId,
@@ -188,20 +289,14 @@ export default function DocumentForm({
       </div>
 
       <div className={`documents-form-header${isQuote ? " documents-form-header--quote" : ""}`}>
-        <label className="documents-field">
+        <div className="documents-field">
           <span>Client</span>
-          <select
+          <ClientCombobox
+            clients={clients}
             value={form.clientId}
-            onChange={(e) => setForm({ ...form, clientId: e.target.value })}
-          >
-            <option value="">Choisir un client</option>
-            {clients.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
+            onChange={(id) => setForm({ ...form, clientId: id })}
+          />
+        </div>
 
         <label className="documents-field">
           <span>Statut</span>
