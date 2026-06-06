@@ -158,10 +158,11 @@ export default function DtfCalculator({ data, setData, logActivity }) {
     if (form.inkPricingMode === "ml") {
       const cmykMl = totalAreaM2 * n(form.inkMlPerM2Cmyk);
       const whiteMl = form.usesWhiteInk
-        ? totalAreaM2 * n(form.inkMlPerM2White) * whiteMultiplier
+        ? totalAreaM2 * n(form.inkMlPerM2White)
         : 0;
       inkCost = (cmykMl + whiteMl) * n(form.inkCostPerMl);
     } else {
+      // En mode m² simplifié, on applique le multiplicateur vêtement sur le coût global
       inkCost = totalAreaM2 * n(form.inkCostPerM2) * whiteMultiplier;
     }
 
@@ -179,7 +180,7 @@ export default function DtfCalculator({ data, setData, logActivity }) {
     if (form.autoEstimateTime) {
       const printHoursPerUnit = areaM2 / Math.max(0.01, n(form.printSpeedM2PerHour));
       printMinutesPerUnit = printHoursPerUnit * 60;
-      powderMinutesPerUnit = Math.max(0.3, areaM2 * 8);
+      powderMinutesPerUnit = 0.5; // ~30 secondes par pièce, valeur terrain réaliste
     }
 
     const machineMinutesPerUnit = printMinutesPerUnit + powderMinutesPerUnit;
@@ -930,6 +931,9 @@ Machine : ${form.machineLabel}`,
                   value={form.marginCoef}
                   onChange={(e) => update("marginCoef", e.target.value)}
                 />
+                <small style={{ color: "#888", fontSize: "0.8em", marginTop: "4px", display: "block" }}>
+                  → Marge réelle : {Math.round((1 - 1 / Math.max(1, n(form.marginCoef))) * 100)} %
+                </small>
               </label>
 
               <label>

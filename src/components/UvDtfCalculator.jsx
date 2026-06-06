@@ -182,7 +182,7 @@ export default function UvDtfCalculator({ data, setData, logActivity }) {
     if (form.inkPricingMode === "ml") {
       const cmykMl = totalAreaM2 * n(form.inkMlPerM2Cmyk);
       const whiteMl = form.usesWhiteInk
-        ? totalAreaM2 * n(form.inkMlPerM2White) * whiteMultiplier
+        ? totalAreaM2 * n(form.inkMlPerM2White)
         : 0;
       const varnishMl = form.usesVarnish
         ? totalAreaM2 * n(form.inkMlPerM2Varnish)
@@ -192,6 +192,7 @@ export default function UvDtfCalculator({ data, setData, logActivity }) {
         whiteMl * n(form.inkCostPerMl) +
         varnishMl * n(form.varnishCostPerMl);
     } else {
+      // En mode m² simplifié uniquement, on applique le multiplicateur objet
       const inkMult =
         whiteMultiplier *
         (form.usesWhiteInk ? 1 : 0.7) *
@@ -206,7 +207,7 @@ export default function UvDtfCalculator({ data, setData, logActivity }) {
       const printHoursPerUnit =
         areaM2 / Math.max(0.01, n(form.printSpeedM2PerHour));
       printMinutesPerUnit = printHoursPerUnit * 60;
-      laminationMinutesPerUnit = Math.max(0.2, areaM2 * 6);
+      laminationMinutesPerUnit = 0.3; // ~18 secondes par pièce, valeur fixe réaliste
     }
 
     const machineMinutesPerUnit =
@@ -987,6 +988,9 @@ Machine : ${form.machineLabel}`,
                   value={form.marginCoef}
                   onChange={(e) => update("marginCoef", e.target.value)}
                 />
+                <small style={{ color: "#888", fontSize: "0.8em", marginTop: "4px", display: "block" }}>
+                  → Marge réelle : {Math.round((1 - 1 / Math.max(1, n(form.marginCoef))) * 100)} %
+                </small>
               </label>
 
               <label>

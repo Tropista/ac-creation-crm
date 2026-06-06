@@ -11,12 +11,12 @@
  */
 
 export const MATERIAL_PRESETS = {
-  Bois: { costPerM2: 18, cutSpeed: 600, engraveSpeed: 45000 },
-  Acrylique: { costPerM2: 28, cutSpeed: 900, engraveSpeed: 55000 },
-  Contreplaqué: { costPerM2: 15, cutSpeed: 550, engraveSpeed: 40000 },
-  MDF: { costPerM2: 12, cutSpeed: 500, engraveSpeed: 40000 },
-  Cuir: { costPerM2: 45, cutSpeed: 300, engraveSpeed: 25000 },
-  Autre: { costPerM2: 20, cutSpeed: 600, engraveSpeed: 45000 },
+  Bois:         { costPerM2: 18, cutSpeed: 600, engraveSpeed: 2000 },
+  Acrylique:    { costPerM2: 28, cutSpeed: 900, engraveSpeed: 2500 },
+  Contreplaqué: { costPerM2: 15, cutSpeed: 550, engraveSpeed: 1800 },
+  MDF:          { costPerM2: 12, cutSpeed: 500, engraveSpeed: 1800 },
+  Cuir:         { costPerM2: 45, cutSpeed: 300, engraveSpeed: 1200 },
+  Autre:        { costPerM2: 20, cutSpeed: 600, engraveSpeed: 2000 },
 };
 
 function n(value) {

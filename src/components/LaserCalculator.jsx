@@ -507,6 +507,9 @@ ${multiQty ? `Calcul : ${euro(calc.pricePerUnitHT)} HT / pièce` : ""}`,
                   value={form.marginCoef}
                   onChange={(e) => update("marginCoef", e.target.value)}
                 />
+                <small style={{ color: "#888", fontSize: "0.8em", marginTop: "4px", display: "block" }}>
+                  → Marge réelle : {Math.round((1 - 1 / Math.max(1, Number(form.marginCoef) || 1)) * 100)} %
+                </small>
               </label>
 
               <label>

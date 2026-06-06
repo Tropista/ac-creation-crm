@@ -104,7 +104,7 @@ export default function BroderieCalculator({ data, setData, logActivity }) {
   // ── Calculs principaux ─────────────────────────────────────────────
   const calc = useMemo(() => {
     const points = inputMode === "size"
-      ? Math.round(logoWidth * logoHeight * 1000)
+      ? Math.round(logoWidth * logoHeight * 500)
       : manualPoints;
 
     const timeMachineH = machineSpeed > 0 ? points / machineSpeed / 60 : 0;
@@ -429,6 +429,20 @@ export default function BroderieCalculator({ data, setData, logActivity }) {
                       ➜ Coût calculé / 1 000 pts : <strong>{num(calibMachineResult.cout1000pts)} €</strong>
                     </div>
                   </div>
+                  {calibMachine.prixMachine > 0 && calibMachine.dureeVieH > 0 && (
+                    <p style={{
+                      fontSize: "0.8em",
+                      color: "#b45309",
+                      background: "#fef3c7",
+                      padding: "6px 10px",
+                      borderRadius: "6px",
+                      margin: "8px 0"
+                    }}>
+                      ⚠️ Le coût calculé inclut déjà l'amortissement machine.
+                      Pense à mettre le champ "Amortissement (€/h)" à 0 pour éviter
+                      de le compter deux fois.
+                    </p>
+                  )}
                   <button type="button" className="primary broderie-calib-apply" onClick={applyCalibMachine}>
                     ✅ Appliquer {num(calibMachineResult.cout1000pts)} €
                   </button>
@@ -576,6 +590,9 @@ export default function BroderieCalculator({ data, setData, logActivity }) {
               <label className="broderie-field">
                 <span>Coefficient marge (×)</span>
                 <input type="number" min="1" step="0.1" value={coefMarge} onChange={(e) => setCoefMarge(Number(e.target.value))} />
+                <small style={{ color: "#888", fontSize: "0.8em", marginTop: "4px", display: "block" }}>
+                  → Marge réelle : {Math.round((1 - 1 / Math.max(1, coefMarge)) * 100)} %
+                </small>
               </label>
               <label className="broderie-field">
                 <span>TVA (%)</span>

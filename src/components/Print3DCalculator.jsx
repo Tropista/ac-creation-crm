@@ -398,6 +398,17 @@ Temps impression : ${form.printHours}h ${form.printMinutes}min`,
                   onChange={(e) => update("electricityPrice", e.target.value)}
                 />
               </label>
+
+              <label>
+                Maintenance (€/h)
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.maintenancePerHour}
+                  onChange={(e) => update("maintenancePerHour", e.target.value)}
+                />
+              </label>
             </div>
           </div>
 
@@ -462,17 +473,6 @@ Temps impression : ${form.printHours}h ${form.printMinutes}min`,
 
             <div className="print3d-grid">
               <label>
-                Maintenance (€/h)
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.maintenancePerHour}
-                  onChange={(e) => update("maintenancePerHour", e.target.value)}
-                />
-              </label>
-
-              <label>
                 Risque échec (%)
                 <input
                   type="number"
@@ -484,15 +484,18 @@ Temps impression : ${form.printHours}h ${form.printMinutes}min`,
               </label>
 
               <label>
-  Coefficient marge
-  <input
-    type="number"
-    min="1"
-    step="0.1"
-    value={form.marginCoef}
-    onChange={(e) => update("marginCoef", e.target.value)}
-  />
-</label>
+                Coefficient marge
+                <input
+                  type="number"
+                  min="1"
+                  step="0.1"
+                  value={form.marginCoef}
+                  onChange={(e) => update("marginCoef", e.target.value)}
+                />
+                <small style={{ color: "#888", fontSize: "0.8em", marginTop: "4px", display: "block" }}>
+                  → Marge réelle : {Math.round((1 - 1 / Math.max(1, form.marginCoef)) * 100)} %
+                </small>
+              </label>
 
               <label>
                 TVA (%)
