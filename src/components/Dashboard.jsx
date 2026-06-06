@@ -28,13 +28,6 @@ import { openQuoteReminderMailto } from "../utils/quoteReminders";
 import { getProductionQueue, QUOTES_STATUS_FILTER_KEY } from "../utils/production";
 import { getOverdueQuotes, getQuotesToLaunchToday } from "../utils/quoteDelivery";
 import DeliveryUrgencyBadge from "./DeliveryUrgencyBadge";
-import {
-  addDays,
-  buildDeliveryWeekCalendar,
-  countWeekDeliveries,
-  formatWeekRangeLabel,
-  startOfWeekMonday,
-} from "../utils/quoteDeliveryCalendar";
 import { money } from "../utils/money";
 import { pageToPath } from "../utils/routes";
 import { getPermissions } from "../utils/permissions";
@@ -43,7 +36,6 @@ import { exportInvoicesCsv, exportLowStockPurchaseOrderCsv, buildPurchaseOrderTe
 import MonthlyAccountingExport from "./MonthlyAccountingExport";
 import { getStaleDraftQuotes, getStaleSentQuotes, markDocumentReminder, formatTrackingDate } from "../utils/documentTracking";
 import { buildMondayWorkQueue, MONDAY_QUEUE_KINDS } from "../utils/mondayWorkQueue";
-import { collectAnnualYears, computeAnnualStats } from "../utils/annualStats";
 import { downloadPurchaseOrderPdf } from "../utils/purchaseOrderPdf";
 import {
   buildLeadMailtoHref,
@@ -79,6 +71,10 @@ import {
 import AutomationCenter from "./AutomationCenter";
 const DashboardCharts = lazy(() => import("./DashboardCharts"));
 import ErrorBoundary from "./ErrorBoundary";
+import DashboardStatCard from "./dashboard/DashboardStatCard";
+import BillingPeriodCard from "./dashboard/BillingPeriodCard";
+import AnnualStatsCard from "./dashboard/AnnualStatsCard";
+import DeliveryCalendarCard from "./dashboard/DeliveryCalendarCard";
 import { getInvoicesDueForReminder } from "../utils/autoReminderEngine";
 import { sendReminderEmail } from "../services/emailService";
 import {
@@ -104,19 +100,6 @@ function leadStatusMeta(lead) {
   return { label: "Nouveau", className: "dashboard-lead-status dashboard-lead-status--new" };
 }
 
-function DashboardStatCard({ label, value, onClick, className = "", detail }) {
-  return (
-    <button
-      type="button"
-      className={`card stat stat--clickable${className ? ` ${className}` : ""}`}
-      onClick={onClick}
-    >
-      <span>{label}</span>
-      <strong>{value}</strong>
-      {detail ? <em className="stat-detail">{detail}</em> : null}
-    </button>
-  );
-}
 
 export default function Dashboard({
   data,
@@ -127,7 +110,6 @@ export default function Dashboard({
   onCloudResync,
 }) {
   const navigate = useNavigate();
-  const [deliveryWeekOffset, setDeliveryWeekOffset] = useState(0);
   const [billingPeriodMode, setBillingPeriodMode] = useState(
     INVOICE_PERIOD_MODES.MONTH
   );
@@ -138,9 +120,6 @@ export default function Dashboard({
     )
   );
   const [billingYear, setBillingYear] = useState(() =>
-    String(new Date().getFullYear())
-  );
-  const [annualStatsYear, setAnnualStatsYear] = useState(() =>
     String(new Date().getFullYear())
   );
   const [sendingReminders, setSendingReminders] = useState(false);
@@ -258,33 +237,12 @@ export default function Dashboard({
   const productionQueue = getProductionQueue(quotes);
   const overdueDeliveries = getOverdueQuotes(quotes);
   const quotesToLaunchToday = getQuotesToLaunchToday(quotes);
-  const deliveryWeekStart = useMemo(
-    () => addDays(startOfWeekMonday(new Date()), deliveryWeekOffset * 7),
-    [deliveryWeekOffset]
-  );
-  const deliveryWeekCalendar = useMemo(
-    () => buildDeliveryWeekCalendar(quotes, deliveryWeekStart, new Date()),
-    [quotes, deliveryWeekStart]
-  );
-  const deliveryWeekCount = countWeekDeliveries(deliveryWeekCalendar);
   const staleDraftQuotes = getStaleDraftQuotes(quotes).slice(0, 8);
   const staleSentQuotes = getStaleSentQuotes(quotes).slice(0, 8);
   const mondayWorkQueue = useMemo(
     () => buildMondayWorkQueue({ quotes, invoices, data }),
     [quotes, invoices, data]
   );
-  const annualYearOptions = collectAnnualYears(
-    quotes,
-    invoices,
-    data.expenses || []
-  );
-  const annualStats = computeAnnualStats({
-    quotes,
-    invoices,
-    expenses: data.expenses || [],
-    data,
-    year: Number(annualStatsYear) || new Date().getFullYear(),
-  });
   const activeLeads = getActiveLeads(leads);
   const unreadLeadCount = countUnreadLeads(leads);
   const activeLeadCount = countActiveLeads(leads);
@@ -1038,131 +996,20 @@ export default function Dashboard({
         </div>
       )}
 
-      <div
-        className="card dashboard-billing-period"
-        data-testid="dashboard-billing-period"
-      >
-        <div className="dashboard-billing-period__head">
-          <div>
-            <h3>Facturation</h3>
-            <p className="muted">
-              Montants TTC pour la période : {billingPeriodLabel}
-              {periodInvoiceTotals.count > 0
-                ? ` · ${periodInvoiceTotals.count} facture(s)`
-                : ""}
-            </p>
-          </div>
-          <div className="dashboard-period-tabs" role="tablist" aria-label="Période">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={billingPeriodMode === INVOICE_PERIOD_MODES.MONTH}
-              className={
-                billingPeriodMode === INVOICE_PERIOD_MODES.MONTH ? "active" : ""
-              }
-              onClick={() => setBillingPeriodMode(INVOICE_PERIOD_MODES.MONTH)}
-            >
-              Mois
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={billingPeriodMode === INVOICE_PERIOD_MODES.YEAR}
-              className={
-                billingPeriodMode === INVOICE_PERIOD_MODES.YEAR ? "active" : ""
-              }
-              onClick={() => setBillingPeriodMode(INVOICE_PERIOD_MODES.YEAR)}
-            >
-              Année
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={billingPeriodMode === INVOICE_PERIOD_MODES.ALL}
-              className={
-                billingPeriodMode === INVOICE_PERIOD_MODES.ALL ? "active" : ""
-              }
-              onClick={() => setBillingPeriodMode(INVOICE_PERIOD_MODES.ALL)}
-            >
-              Depuis la création
-            </button>
-          </div>
-        </div>
-        <div className="dashboard-billing-period__controls">
-          {billingPeriodMode === INVOICE_PERIOD_MODES.MONTH && (
-            <label className="accounting-export-month" htmlFor="dashboard-billing-month">
-              <span>Mois</span>
-              <input
-                id="dashboard-billing-month"
-                type="month"
-                value={billingMonthValue}
-                onChange={(event) => setBillingMonthValue(event.target.value)}
-                data-testid="dashboard-billing-month"
-              />
-            </label>
-          )}
-          {billingPeriodMode === INVOICE_PERIOD_MODES.YEAR && (
-            <label className="accounting-export-month" htmlFor="dashboard-billing-year">
-              <span>Année</span>
-              <select
-                id="dashboard-billing-year"
-                value={billingYear}
-                onChange={(event) => setBillingYear(event.target.value)}
-                data-testid="dashboard-billing-year"
-              >
-                {billingYearOptions.map((year) => (
-                  <option key={year} value={String(year)}>
-                    {year}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-        </div>
-        <div className="stats dashboard-billing-period__stats">
-          <DashboardStatCard
-            label="Total facturé"
-            value={money(periodInvoiceTotals.billedTTC)}
-            detail={`TTC · ${billingPeriodLabel}`}
-            onClick={() => goToInvoices()}
-          />
-          <DashboardStatCard
-            label="Total payé"
-            value={money(periodInvoiceTotals.paidTTC)}
-            detail={`TTC · ${billingPeriodLabel}`}
-            onClick={() => goToInvoices("paid")}
-          />
-          <DashboardStatCard
-            label="À encaisser"
-            value={money(periodInvoiceTotals.unpaidTTC)}
-            detail={`TTC · ${billingPeriodLabel}`}
-            className={
-              periodInvoiceTotals.unpaidTTC > 0 ? "stat--danger" : ""
-            }
-            onClick={() => goToInvoices("unpaid")}
-          />
-        </div>
-        {canManageInvoices && processTypeStats.length > 0 ? (
-          <div
-            className="dashboard-process-stats"
-            data-testid="dashboard-process-stats"
-          >
-            <h4>CA et marge par technique ({billingPeriodLabel})</h4>
-            <ul className="dashboard-process-stats__list">
-              {processTypeStats.map((entry) => (
-                <li key={entry.key}>
-                  <strong>{entry.label}</strong>
-                  <span>{entry.count} facture(s)</span>
-                  <span>{money(entry.revenueHT)} HT</span>
-                  <span className={entry.marginHT < 0 ? "stat--danger" : ""}>
-                    Marge {money(entry.marginHT)} HT
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-      </div>
+      <BillingPeriodCard
+        billingPeriodMode={billingPeriodMode}
+        setBillingPeriodMode={setBillingPeriodMode}
+        billingMonthValue={billingMonthValue}
+        setBillingMonthValue={setBillingMonthValue}
+        billingYear={billingYear}
+        setBillingYear={setBillingYear}
+        billingPeriodLabel={billingPeriodLabel}
+        billingYearOptions={billingYearOptions}
+        periodInvoiceTotals={periodInvoiceTotals}
+        processTypeStats={processTypeStats}
+        canManageInvoices={canManageInvoices}
+        goToInvoices={goToInvoices}
+      />
 
       {(canManageInvoices || canManageQuotes) && (
         <ErrorBoundary>
@@ -1181,82 +1028,12 @@ export default function Dashboard({
       )}
 
       {(canManageInvoices || canManageQuotes) && (
-        <div className="card dashboard-annual-stats" data-testid="dashboard-annual-stats">
-          <div className="dashboard-annual-stats__head">
-            <div>
-              <h3>Statistiques annuelles</h3>
-              <p className="muted">
-                CA HT, marge, taux d&apos;acceptation des devis et top clients.
-              </p>
-            </div>
-            <label className="accounting-export-month" htmlFor="dashboard-annual-year">
-              <span>Année</span>
-              <select
-                id="dashboard-annual-year"
-                value={annualStatsYear}
-                onChange={(event) => setAnnualStatsYear(event.target.value)}
-                data-testid="dashboard-annual-year"
-              >
-                {annualYearOptions.map((year) => (
-                  <option key={year} value={String(year)}>
-                    {year}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-          <div className="dashboard-annual-stats__kpis">
-            <div>
-              <span className="muted">CA HT</span>
-              <strong>{money(annualStats.revenueHT)}</strong>
-            </div>
-            <div>
-              <span className="muted">Marge HT</span>
-              <strong className={annualStats.marginHT < 0 ? "stat--danger" : ""}>
-                {money(annualStats.marginHT)}
-              </strong>
-            </div>
-            <div>
-              <span className="muted">Taux acceptation devis</span>
-              <strong>
-                {annualStats.acceptance.rate == null
-                  ? "—"
-                  : `${Math.round(annualStats.acceptance.rate * 100)} %`}
-              </strong>
-              <em className="stat-detail">
-                {annualStats.acceptance.acceptedCount}/{annualStats.acceptance.sentCount} acceptés
-              </em>
-            </div>
-          </div>
-          <div className="dashboard-annual-stats__grid">
-            <div>
-              <h4>CA HT par mois</h4>
-              <ul className="dashboard-annual-monthly">
-                {annualStats.monthlyRevenue.map((entry) => (
-                  <li key={entry.month}>
-                    <span>{entry.label}</span>
-                    <strong>{money(entry.ht)}</strong>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <h4>Top clients</h4>
-              {annualStats.topClients.length === 0 ? (
-                <p className="muted">Aucune facture sur cette année.</p>
-              ) : (
-                <ul className="dashboard-annual-top-clients">
-                  {annualStats.topClients.map((client) => (
-                    <li key={client.clientId}>
-                      <span>{client.name}</span>
-                      <strong>{money(client.revenueHT)} HT</strong>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-        </div>
+        <AnnualStatsCard
+          quotes={quotes}
+          invoices={invoices}
+          expenses={expenses}
+          data={data}
+        />
       )}
 
       {canManageQuotes && hasProfitabilityData && (
@@ -1840,80 +1617,11 @@ export default function Dashboard({
         )}
 
         {canManageQuotes && (
-          <div className="card dashboard-action-card" data-testid="delivery-week-calendar">
-            <div className="dashboard-action-card__header">
-              <div>
-                <h3>Calendrier livraisons</h3>
-                <p className="muted">
-                  {deliveryWeekCount === 0
-                    ? "Aucune livraison prévue cette semaine."
-                    : `${deliveryWeekCount} livraison(s) prévue(s) — semaine du ${formatWeekRangeLabel(deliveryWeekStart)}`}
-                </p>
-              </div>
-              <div className="dashboard-delivery-nav">
-                <button
-                  type="button"
-                  className="ghost"
-                  onClick={() => setDeliveryWeekOffset((value) => value - 1)}
-                  aria-label="Semaine précédente"
-                >
-                  ←
-                </button>
-                <button
-                  type="button"
-                  className="ghost"
-                  onClick={() => setDeliveryWeekOffset(0)}
-                  disabled={deliveryWeekOffset === 0}
-                >
-                  Cette semaine
-                </button>
-                <button
-                  type="button"
-                  className="ghost"
-                  onClick={() => setDeliveryWeekOffset((value) => value + 1)}
-                  aria-label="Semaine suivante"
-                >
-                  →
-                </button>
-                <button type="button" className="ghost" onClick={goToAtelier}>
-                  Atelier →
-                </button>
-              </div>
-            </div>
-            <div className="dashboard-delivery-week">
-              {deliveryWeekCalendar.map((day) => (
-                <div
-                  key={day.date.toISOString()}
-                  className={`dashboard-delivery-day${day.isToday ? " dashboard-delivery-day--today" : ""}`}
-                >
-                  <header className="dashboard-delivery-day__head">
-                    <strong>{day.label}</strong>
-                    {day.items.length > 0 ? (
-                      <span>{day.items.length}</span>
-                    ) : null}
-                  </header>
-                  {day.items.length === 0 ? (
-                    <p className="muted dashboard-delivery-day__empty">—</p>
-                  ) : (
-                    <ul className="dashboard-delivery-day__list">
-                      {day.items.map(({ quote, overdue }) => (
-                        <li
-                          key={quote.id}
-                          className={overdue ? "dashboard-delivery-item--overdue" : ""}
-                        >
-                          <strong>{quote.number}</strong>
-                          <em>{clientName(data, quote.clientId)}</em>
-                          <DeliveryUrgencyBadge quote={quote} />
-                          <span className={statusClass(quote.status)}>{quote.status}</span>
-                          {overdue ? <span className="dashboard-delivery-overdue-tag">Retard</span> : null}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
+          <DeliveryCalendarCard
+            quotes={quotes}
+            data={data}
+            onGoToAtelier={goToAtelier}
+          />
         )}
 
         {canManageQuotes && overdueDeliveries.length > 0 && (

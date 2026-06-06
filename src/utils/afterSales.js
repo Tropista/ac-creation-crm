@@ -41,11 +41,19 @@ export function normalizeAfterSalesCase(entry = {}) {
     subject: entry.subject || "",
     description: entry.description || "",
     internalNotes: entry.internalNotes || "",
+    assignedTo: entry.assignedTo || "",
     openedAt: entry.openedAt || today(),
     resolvedAt: entry.resolvedAt || "",
     updatedAt: entry.updatedAt || entry.openedAt || new Date().toISOString(),
     createdAt: entry.createdAt || new Date().toISOString(),
   };
+}
+
+export function isUnassignedOpenCase(entry) {
+  if (!entry) return false;
+  const status = String(entry.status || "");
+  if (status === "Résolu" || status === "Clôturé") return false;
+  return !entry.assignedTo;
 }
 
 export function filterAfterSalesByClient(cases = [], clientId) {

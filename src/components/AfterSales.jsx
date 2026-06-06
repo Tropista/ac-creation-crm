@@ -19,6 +19,7 @@ const emptyForm = {
   subject: "",
   description: "",
   internalNotes: "",
+  assignedTo: "",
 };
 
 export default function AfterSales({
@@ -77,6 +78,7 @@ export default function AfterSales({
       subject: entry.subject || "",
       description: entry.description || "",
       internalNotes: entry.internalNotes || "",
+      assignedTo: entry.assignedTo || "",
     });
     setShowForm(true);
   }
@@ -202,6 +204,11 @@ export default function AfterSales({
                   {entry.invoiceNumber ? ` · ${entry.invoiceNumber}` : ""}
                   {entry.quoteNumber ? ` · ${entry.quoteNumber}` : ""}
                 </p>
+                <p className="after-sales-card__meta">
+                  {entry.assignedTo
+                    ? `👤 ${(data.users || []).find((u) => u.id === entry.assignedTo)?.name || entry.assignedTo}`
+                    : <span className="after-sales-unassigned">⚠️ Non assigné</span>}
+                </p>
                 {entry.description ? <p>{entry.description}</p> : null}
                 {entry.internalNotes ? (
                   <p className="muted">
@@ -311,6 +318,18 @@ export default function AfterSales({
                     <option key={solution} value={solution}>
                       {solution}
                     </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Responsable
+                <select
+                  value={form.assignedTo}
+                  onChange={(e) => setForm({ ...form, assignedTo: e.target.value })}
+                >
+                  <option value="">— Non assigné</option>
+                  {(data.users || []).map((u) => (
+                    <option key={u.id} value={u.id}>{u.name}</option>
                   ))}
                 </select>
               </label>

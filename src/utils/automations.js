@@ -1,6 +1,6 @@
 import { getStaleDraftQuotes, getStaleSentQuotes } from "./documentTracking";
 import { isInvoiceOverdue, isPaidInvoice, isCancelledInvoice } from "./invoices";
-import { isStaleAfterSalesCase } from "./afterSales";
+import { isStaleAfterSalesCase, isUnassignedOpenCase } from "./afterSales";
 import { getLowStockProductsByKind, isOutOfStock } from "./stock";
 
 export const AUTOMATION_ALERT_TYPES = {
@@ -9,6 +9,7 @@ export const AUTOMATION_ALERT_TYPES = {
   LOW_STOCK: "low_stock",
   ORDER_READY: "order_ready",
   STALE_SAV: "stale_sav",
+  UNASSIGNED_SAV: "unassigned_sav",
 };
 
 export function detectStaleQuoteAlerts(quotes = [], { draftDays = 7, sentDays = 14 } = {}) {
@@ -110,6 +111,20 @@ export function detectStaleSavAlerts(cases = [], staleDays = 14) {
     }));
 }
 
+export function detectUnassignedSavAlerts(cases = []) {
+  return (cases || [])
+    .filter((entry) => isUnassignedOpenCase(entry))
+    .map((entry) => ({
+      type: AUTOMATION_ALERT_TYPES.UNASSIGNED_SAV,
+      severity: "warning",
+      title: `SAV non assigné — ${entry.subject || entry.type}`,
+      message: "Dossier ouvert sans responsable assigné.",
+      caseId: entry.id,
+      clientId: entry.clientId,
+      createdAt: entry.updatedAt || entry.openedAt,
+    }));
+}
+
 export function buildAutomationAlerts(data = {}, options = {}) {
   const alerts = [
     ...detectStaleQuoteAlerts(data.quotes, options),
@@ -117,6 +132,7 @@ export function buildAutomationAlerts(data = {}, options = {}) {
     ...detectLowStockAlerts(data.products, data.settings),
     ...detectOrderReadyAlerts(data.quotes),
     ...detectStaleSavAlerts(data.afterSalesCases, options.savStaleDays),
+    ...detectUnassignedSavAlerts(data.afterSalesCases),
   ];
 
   return alerts.sort(

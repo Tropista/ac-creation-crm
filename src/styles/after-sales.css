@@ -51,6 +51,12 @@
   color: #64748b;
 }
 
+.after-sales-unassigned {
+  color: #b45309;
+  font-weight: 600;
+  font-size: 0.8rem;
+}
+
 .after-sales-card__actions {
   display: flex;
   flex-wrap: wrap;
