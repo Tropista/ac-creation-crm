@@ -71,13 +71,12 @@ test.describe("Atelier — changement de statut", () => {
       ],
     });
 
-    page.on("dialog", (dialog) => dialog.accept());
-
     await seedCrm(page, { session: adminSession, data });
     await page.goto("/atelier");
 
     await expect(page.getByText("DEV-E2E-DEL")).toBeVisible();
     await page.getByTestId("atelier-delete-quote-atelier-delete").click();
+    await page.getByRole("button", { name: "Supprimer" }).click();
     await expect(page.getByText("DEV-E2E-DEL")).not.toBeVisible();
     await expect(page.getByText("Aucune commande en file")).toBeVisible();
   });
