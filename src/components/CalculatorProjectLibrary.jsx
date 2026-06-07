@@ -5,6 +5,7 @@ import {
   saveCalculatorProject,
 } from "../utils/calculatorProjects";
 import { showToast } from "../utils/toast";
+import { confirmAction } from "../utils/confirmAction";
 
 function formatSavedAt(value) {
   if (!value) return "";
@@ -72,10 +73,17 @@ export default function CalculatorProjectLibrary({
     showToast(`Projet « ${project.name} » chargé.`, "success");
   }
 
-  function handleDelete(projectId) {
+  async function handleDelete(projectId) {
     const project = projects.find((entry) => String(entry.id) === String(projectId));
     if (!project) return;
-    if (!confirm(`Supprimer le projet « ${project.name} » ?`)) return;
+    if (
+      !(await confirmAction({
+        title: "Supprimer le projet",
+        message: `Supprimer le projet « ${project.name} » ?`,
+        confirmLabel: "Supprimer",
+        danger: true,
+      }))
+    ) return;
     deleteCalculatorProject(calculatorType, projectId);
     refresh();
     pushSettingsSync();

@@ -39,6 +39,8 @@ import "./App.css";
 import GlobalSearch from "./components/GlobalSearch";
 import { useGlobalShortcuts } from "./hooks/useGlobalShortcuts";
 import Sidebar from "./components/Sidebar";
+import ConfirmDialogHost from "./components/ConfirmDialogHost";
+import AutomationEmailRunner from "./components/AutomationEmailRunner";
 import AuthPage from "./components/auth/AuthPage";
 import AccessDenied from "./components/auth/AccessDenied";
 
@@ -185,14 +187,17 @@ function ContentLoading({ message = "Chargement..." }) {
 
 export default function App() {
   return (
-    <Routes>
-      <Route
-        path={PUBLIC_TSHIRT_PATH}
-        element={<PublicTshirtConfigurator />}
-      />
-      <Route path={PUBLIC_QUOTE_PATH} element={<PublicQuoteView />} />
-      <Route path="/*" element={<CrmApp />} />
-    </Routes>
+    <>
+      <Routes>
+        <Route
+          path={PUBLIC_TSHIRT_PATH}
+          element={<PublicTshirtConfigurator />}
+        />
+        <Route path={PUBLIC_QUOTE_PATH} element={<PublicQuoteView />} />
+        <Route path="/*" element={<CrmApp />} />
+      </Routes>
+      <ConfirmDialogHost />
+    </>
   );
 }
 
@@ -528,6 +533,11 @@ function CrmApp() {
       {/* Blobs décoratifs glassmorphism */}
       <div style={{ position: "fixed", top: "-50px", right: "-50px", width: 300, height: 300, borderRadius: "50%", background: "radial-gradient(circle, rgba(192,132,252,0.2) 0%, transparent 70%)", pointerEvents: "none", zIndex: 0 }} />
       <div style={{ position: "fixed", bottom: "-30px", left: "-30px", width: 200, height: 200, borderRadius: "50%", background: "radial-gradient(circle, rgba(56,189,248,0.15) 0%, transparent 70%)", pointerEvents: "none", zIndex: 0 }} />
+      <AutomationEmailRunner
+        data={data}
+        setData={updateData}
+        logActivity={handleLogActivity}
+      />
       <Sidebar
         data={data}
         currentUser={currentUser}
@@ -748,7 +758,11 @@ function CrmApp() {
               path={pageToPath("automations")}
               element={
                 canAccessPage(currentRole, "automations") ? (
-                  <AutomationCenter data={data} />
+                  <AutomationCenter
+                    data={data}
+                    setData={updateData}
+                    logActivity={handleLogActivity}
+                  />
                 ) : null
               }
             />

@@ -56,7 +56,7 @@ export async function sendDocumentByEmail({ doc, type, data, client, overrideSub
   return { ...payload, sentAt: new Date().toISOString() };
 }
 
-async function callSendEmail({ to, subject, text, settings }) {
+export async function sendPlainEmail({ to, subject, text, settings }) {
   const apiUrl = getBankApiUrl();
   const response = await fetch(`${apiUrl}/send-email`, {
     method: "POST",
@@ -92,5 +92,5 @@ export async function sendReminderEmail({ invoice, client, settings, reminderNum
   const key = `reminder${Math.min(reminderNumber, 3)}`;
   const vars = buildDocVars(invoice, client, settings);
   const { subject, body } = buildEmailFromTemplate(key, vars, settings);
-  return callSendEmail({ to: client.email, subject, text: body, settings });
+  return sendPlainEmail({ to: client.email, subject, text: body, settings });
 }

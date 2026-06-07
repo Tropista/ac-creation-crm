@@ -11,6 +11,7 @@ import {
 } from "../utils/creditNotes";
 import { money } from "../utils/money";
 import { showToast } from "../utils/toast";
+import { confirmAction } from "../utils/confirmAction";
 
 const emptyForm = {
   reason: "",
@@ -77,12 +78,19 @@ export default function CreditNotes({
     });
   }
 
-  function removeNote(noteId) {
+  async function removeNote(noteId) {
     if (!canDeleteData(currentRole)) {
       showToast("Ton rôle ne permet pas de supprimer.", "error");
       return;
     }
-    if (!confirm("Supprimer cet avoir ?")) return;
+    if (
+      !(await confirmAction({
+        title: "Supprimer l'avoir",
+        message: "Cet avoir sera supprimé définitivement.",
+        confirmLabel: "Supprimer",
+        danger: true,
+      }))
+    ) return;
     const removed = creditNotes.find((n) => n.id === noteId);
     setData({
       ...data,

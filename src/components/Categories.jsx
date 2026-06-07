@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { showToast } from "../utils/toast";
+import { confirmAction } from "../utils/confirmAction";
 function uid() {
   return crypto.randomUUID();
 }
@@ -64,15 +65,26 @@ export default function Categories({
         setForm({ name: category.name || "", description: category.description || "" });
       }
     
-      function remove(category) {
+      async function remove(category) {
         const used = (data.products || []).some((product) => product.category === category.name);
     
         if (used) {
-          const clearProducts = confirm(
-            "Cette catégorie est utilisée par des produits. Supprimer la catégorie et retirer cette catégorie des produits ?"
-          );
+          const clearProducts = await confirmAction({
+            title: "Supprimer la catégorie utilisée",
+            message: "Cette catégorie est utilisée par des produits.",
+            detail: "La catégorie sera supprimée et retirée des produits concernés.",
+            confirmLabel: "Supprimer",
+            danger: true,
+          });
           if (!clearProducts) return;
-        } else if (!confirm("Supprimer cette catégorie ?")) {
+        } else if (
+          !(await confirmAction({
+            title: "Supprimer la catégorie",
+            message: "Cette catégorie sera supprimée.",
+            confirmLabel: "Supprimer",
+            danger: true,
+          }))
+        ) {
           return;
         }
     

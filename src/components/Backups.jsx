@@ -6,6 +6,7 @@ import {
   createBackupSnapshot
 } from "../utils/documents";
 import { showToast } from "../utils/toast";
+import { confirmAction } from "../utils/confirmAction";
 export default function Backups({
   data,
   setData,
@@ -23,7 +24,15 @@ export default function Backups({
 
   async function restoreBackup() {
     if (!selectedBackup) return showToast("Choisis une sauvegarde à restaurer.", "error");
-    if (!confirm("Restaurer cette sauvegarde ? Les données actuelles seront remplacées.")) return;
+    if (
+      !(await confirmAction({
+        title: "Restaurer la sauvegarde",
+        message: "Les données actuelles seront remplacées par cette sauvegarde.",
+        detail: "Une sauvegarde de l'état actuel sera conservée avant restauration.",
+        confirmLabel: "Restaurer",
+        danger: true,
+      }))
+    ) return;
 
     const restored = normalizeData({
       ...selectedBackup.data,
@@ -38,8 +47,15 @@ export default function Backups({
     showToast("Sauvegarde restaurée.", "success");
   }
 
-  function deleteBackup(id) {
-    if (!confirm("Supprimer cette sauvegarde ?")) return;
+  async function deleteBackup(id) {
+    if (
+      !(await confirmAction({
+        title: "Supprimer la sauvegarde",
+        message: "Cette sauvegarde sera retirée de la liste.",
+        confirmLabel: "Supprimer",
+        danger: true,
+      }))
+    ) return;
     const backupToDelete = (data.backups || []).find((backup) => backup.id === id);
     setData({
       ...data,

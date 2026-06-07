@@ -8,6 +8,7 @@ import {
   normalizeAfterSalesCase,
 } from "../utils/afterSales";
 import { showToast } from "../utils/toast";
+import { confirmAction } from "../utils/confirmAction";
 
 const emptyForm = {
   clientId: "",
@@ -136,12 +137,19 @@ export default function AfterSales({
     resetForm();
   }
 
-  function removeCase(id) {
+  async function removeCase(id) {
     if (!canDeleteData(currentRole)) {
       showToast("Ton rôle ne permet pas de supprimer.", "error");
       return;
     }
-    if (!confirm("Supprimer ce dossier SAV ?")) return;
+    if (
+      !(await confirmAction({
+        title: "Supprimer le dossier SAV",
+        message: "Ce dossier SAV sera supprimé définitivement.",
+        confirmLabel: "Supprimer",
+        danger: true,
+      }))
+    ) return;
     setData({
       ...data,
       afterSalesCases: cases.filter((entry) => entry.id !== id),

@@ -11,6 +11,7 @@ import {
 import { getQuoteIdFromLocation, getShareTokenFromLocation } from "../utils/quoteShare";
 import { showToast } from "../utils/toast";
 import { APP_LOGO_URL } from "../utils/assets";
+import { confirmAction } from "../utils/confirmAction";
 
 function buildPreviewData(settings, client, quote) {
   const snapshot = quote?.clientSnapshot;
@@ -89,7 +90,13 @@ export default function PublicQuoteView() {
 
   async function handleAccept() {
     if (!quoteId || accepting) return;
-    if (!confirm("Confirmez-vous l'acceptation de ce devis ?")) return;
+    if (
+      !(await confirmAction({
+        title: "Accepter le devis",
+        message: "Confirmez-vous l'acceptation de ce devis ?",
+        confirmLabel: "Accepter",
+      }))
+    ) return;
 
     setAccepting(true);
     try {
@@ -106,7 +113,14 @@ export default function PublicQuoteView() {
 
   async function handleDecline() {
     if (!quoteId || declining) return;
-    if (!confirm("Confirmez-vous le refus de ce devis ?")) return;
+    if (
+      !(await confirmAction({
+        title: "Refuser le devis",
+        message: "Confirmez-vous le refus de ce devis ?",
+        confirmLabel: "Refuser",
+        danger: true,
+      }))
+    ) return;
 
     setDeclining(true);
     try {

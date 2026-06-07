@@ -24,6 +24,7 @@ import {
   PRODUCTS_STOCK_FILTER_KEY,
 } from "../utils/stock";
 import { showToast } from "../utils/toast";
+import { confirmAction } from "../utils/confirmAction";
 import { isRequired, validateFields } from "../utils/validation";
 import PaginationControls from "./PaginationControls";
 
@@ -399,7 +400,7 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
     setForm((current) => ({ ...current, sku: nextSku }));
   }
 
-  function regenerateAllProductSkus() {
+  async function regenerateAllProductSkus() {
     const validProducts = allProducts.filter((product) => categoryExists(product.category));
 
     if (!validProducts.length) {
@@ -411,7 +412,15 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
       ? `Cette action va remplacer les SKU de ${validProducts.length} produit(s). ${skippedProducts} produit(s) sans catégorie valide seront ignorés. Continuer ?`
       : `Cette action va remplacer les SKU de ${validProducts.length} produit(s). Continuer ?`;
 
-    if (!confirm(confirmMessage)) return;
+    if (
+      !(await confirmAction({
+        title: "Regénérer les SKU",
+        message: confirmMessage.replace(" Continuer ?", ""),
+        detail: "Les anciens SKU des produits concernés seront remplacés.",
+        confirmLabel: "Regénérer",
+        danger: true,
+      }))
+    ) return;
 
     const countersByPrefix = {};
     const usedSkus = new Set();
@@ -629,7 +638,7 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
     setForm({ name: "", sku: "", category: "", price: "", stock: "", stockMin: "", imageUrl: "", description: "" });
   }
 
-  function submit(e) {
+  async function submit(e) {
     e.preventDefault();
     const validationError = validateFields(form, {
       name: [{ test: isRequired, message: "Nom du produit obligatoire." }],
@@ -674,7 +683,7 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
           : p
       );
 
-      setData({
+      await setData({
         ...data,
         products: updatedProducts,
       });
@@ -683,7 +692,7 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
         setSelectedProduct(updatedProducts.find((p) => p.id === editing) || null);
       }
 
-      logActivity?.("Modification produit", productData.name || existingProduct?.name, productData.sku);
+      await logActivity?.("Modification produit", productData.name || existingProduct?.name, productData.sku);
     } else {
       const product = {
         id: uid(),
@@ -694,11 +703,11 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
         ],
         ...productData,
       };
-      setData({
+      await setData({
         ...data,
         products: [...allProducts, product],
       });
-      logActivity?.("Création produit", product.name, product.sku);
+      await logActivity?.("Création produit", product.name, product.sku);
     }
 
     reset();
@@ -718,12 +727,19 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
     });
   }
 
-  function remove(id) {
+  async function remove(id) {
     if (!canDeleteData(currentRole)) return showToast("Ton rôle ne permet pas de supprimer.", "error");
-    if (!confirm("Supprimer ce produit ?")) return;
+    if (
+      !(await confirmAction({
+        title: "Supprimer le produit",
+        message: "Ce produit sera supprimé du catalogue.",
+        confirmLabel: "Supprimer",
+        danger: true,
+      }))
+    ) return;
     const removedProduct = allProducts.find((p) => p.id === id);
-    setData({ ...data, products: allProducts.filter((p) => p.id !== id) });
-    logActivity?.("Suppression produit", removedProduct?.name || id, removedProduct?.sku || "");
+    await setData({ ...data, products: allProducts.filter((p) => p.id !== id) });
+    await logActivity?.("Suppression produit", removedProduct?.name || id, removedProduct?.sku || "");
     setSelectedProductIds(selectedProductIds.filter((productId) => productId !== id));
 
     if (selectedProduct?.id === id) {
@@ -750,11 +766,11 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
     }
   }
 
-  function applyBulkCategory() {
+  async function applyBulkCategory() {
     if (!selectedProductIds.length) return showToast("Sélectionne au moins un produit.", "error");
     if (!bulkCategory) return showToast("Choisis une catégorie.", "error");
 
-    setData({
+    await setData({
       ...data,
       products: allProducts.map((product) =>
         selectedProductIds.includes(product.id)
@@ -763,16 +779,16 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
       ),
     });
 
-    logActivity?.("Modification catégorie produits", bulkCategory, `${selectedProductIds.length} produit(s)`);
+    await logActivity?.("Modification catégorie produits", bulkCategory, `${selectedProductIds.length} produit(s)`);
     setSelectedProductIds([]);
     setBulkCategory("");
     showToast("Catégorie appliquée aux produits sélectionnés.", "success");
   }
 
-  function applyBulkStock() {
+  async function applyBulkStock() {
     if (!selectedProductIds.length) return showToast("Sélectionne au moins un produit.", "error");
 
-    setData({
+    await setData({
       ...data,
       products: allProducts.map((product) =>
         selectedProductIds.includes(product.id)
@@ -786,15 +802,23 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
       ),
     });
 
-    logActivity?.("Modification stock produits", `${Number(bulkStock || 0)} pièce(s)`, `${selectedProductIds.length} produit(s)`);
+    await logActivity?.("Modification stock produits", `${Number(bulkStock || 0)} pièce(s)`, `${selectedProductIds.length} produit(s)`);
     setSelectedProductIds([]);
     showToast("Stock modifié avec succès.", "success");
   }
 
-  function setAllProductsStock100() {
-    if (!confirm("Mettre tous les produits à 100 pièces ?")) return;
+  async function setAllProductsStock100() {
+    if (
+      !(await confirmAction({
+        title: "Réinitialiser les stocks",
+        message: "Tous les produits passeront à 100 pièces.",
+        detail: "Cette action modifie le stock de tout le catalogue.",
+        confirmLabel: "Mettre à 100",
+        danger: true,
+      }))
+    ) return;
 
-    setData({
+    await setData({
       ...data,
       products: allProducts.map((product) => ({
         ...product,
@@ -802,7 +826,7 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
       })),
     });
 
-    logActivity?.("Réinitialisation stock produits", "100 pièces", `${allProducts.length} produit(s)`);
+    await logActivity?.("Réinitialisation stock produits", "100 pièces", `${allProducts.length} produit(s)`);
     setSelectedProductIds([]);
     showToast("Tous les produits sont maintenant à 100 pièces.", "success");
   }
@@ -822,7 +846,7 @@ function openLinkedDocument(doc) {
   );
 }
 
-  function duplicateProduct(product) {
+  async function duplicateProduct(product) {
     const duplicated = {
       ...product,
       id: uid(),
@@ -837,12 +861,12 @@ function openLinkedDocument(doc) {
     };
 
     const nextProducts = [...allProducts, duplicated];
-    setData({ ...data, products: nextProducts });
+    await setData({ ...data, products: nextProducts });
     setSelectedProduct(duplicated);
-    logActivity?.("Duplication produit", duplicated.name, duplicated.sku);
+    await logActivity?.("Duplication produit", duplicated.name, duplicated.sku);
   }
 
-  function archiveProduct(product) {
+  async function archiveProduct(product) {
     const archived = !product.archived;
     const nextProducts = allProducts.map((p) =>
       p.id === product.id
@@ -858,12 +882,12 @@ function openLinkedDocument(doc) {
         : p
     );
 
-    setData({ ...data, products: nextProducts });
+    await setData({ ...data, products: nextProducts });
     setSelectedProduct(nextProducts.find((p) => p.id === product.id) || null);
-    logActivity?.(archived ? "Archivage produit" : "Réactivation produit", product.name, product.sku || "");
+    await logActivity?.(archived ? "Archivage produit" : "Réactivation produit", product.name, product.sku || "");
   }
 
-  function adjustSelectedProductStock(mode) {
+  async function adjustSelectedProductStock(mode) {
     if (!selectedProduct) return;
 
     const qty = Math.max(0, Number(stockMoveQty || 0));
@@ -905,10 +929,10 @@ function openLinkedDocument(doc) {
     });
 
     const nextSelected = nextProducts.find((product) => String(product.id) === String(selectedProduct.id)) || null;
-    setData({ ...data, products: nextProducts });
+    await setData({ ...data, products: nextProducts });
     setSelectedProduct(nextSelected);
     setStockMoveQty(1);
-    logActivity?.(actionLabel, selectedProduct.name, `${reason} — ${qty}`);
+    await logActivity?.(actionLabel, selectedProduct.name, `${reason} — ${qty}`);
   }
 
 

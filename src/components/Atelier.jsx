@@ -21,6 +21,7 @@ import {
 } from "../utils/productionPdf";
 import { pageToPath } from "../utils/routes";
 import { showToast } from "../utils/toast";
+import { confirmAction } from "../utils/confirmAction";
 import { canDeleteData } from "../services/authService";
 import { useAtelierRealtime } from "../hooks/useAtelierRealtime";
 import { openOrderReadyWhatsApp } from "../utils/quoteShare";
@@ -589,16 +590,20 @@ export default function Atelier({
     updateQuoteStatus(quote, nextStatus);
   }
 
-  function handleDelete(quote) {
+  async function handleDelete(quote) {
     if (!canDeleteData(currentRole)) {
       showToast("Ton rôle ne permet pas de supprimer.", "error");
       return;
     }
 
     if (
-      !confirm(
-        `Supprimer la commande « ${quote.number} » de l'atelier ?\n\nCette action supprime définitivement le devis.`
-      )
+      !(await confirmAction({
+        title: "Supprimer la commande atelier",
+        message: `Supprimer la commande « ${quote.number} » de l'atelier ?`,
+        detail: "Cette action supprime définitivement le devis.",
+        confirmLabel: "Supprimer",
+        danger: true,
+      }))
     ) {
       return;
     }

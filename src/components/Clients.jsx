@@ -3,6 +3,7 @@ import PaginationControls from "./PaginationControls";
 import ClientFileLibrary from "./ClientFileLibrary";
 import { canDeleteData } from "../services/authService";
 import { showToast } from "../utils/toast";
+import { confirmAction } from "../utils/confirmAction";
 import { isRequired, validateFields } from "../utils/validation";
 import { filterCreditNotesByClient } from "../utils/creditNotes";
 import { filterAfterSalesByClient } from "../utils/afterSales";
@@ -474,13 +475,21 @@ export default function Clients({
     });
   }
 
-  function remove(id) {
+  async function remove(id) {
     if (!canDeleteData(currentRole)) {
       showToast("Ton rôle ne permet pas de supprimer.", "error");
       return;
     }
 
-    if (!confirm("Supprimer ce client ?")) return;
+    if (
+      !(await confirmAction({
+        title: "Supprimer le client",
+        message: "Cette fiche client sera supprimée.",
+        detail: "Les documents existants conservent leurs informations, mais le client ne sera plus disponible dans la liste.",
+        confirmLabel: "Supprimer",
+        danger: true,
+      }))
+    ) return;
 
     const removedClient = (data.clients || []).find((client) => client.id === id);
 

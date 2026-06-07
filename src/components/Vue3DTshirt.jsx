@@ -7,6 +7,7 @@ import "./Vue3DTshirt.css";
 import Product3DErrorBoundary from "./3d/Product3DErrorBoundary";
 import TshirtModel from "./3d/TshirtModel";
 import { showToast } from "../utils/toast";
+import { confirmAction } from "../utils/confirmAction";
 import { PRODUCT_CONFIGS, PRODUCT_OPTIONS, getProductConfig } from "../utils/productConfigs";
 import { resolveAssetUrl } from "../utils/assets";
 import {
@@ -551,12 +552,36 @@ export default function Vue3DTshirt() {
     setProjectName(project.name || "");
   }
 
-  function deleteProject(projectId) {
+  async function deleteProject(projectId) {
     const project = savedProjects.find((entry) => entry.id === projectId);
     if (!project) return;
-    if (!window.confirm(`Supprimer la sauvegarde “${project.name}” ?`)) return;
+    if (
+      !(await confirmAction({
+        title: "Supprimer la sauvegarde",
+        message: `Supprimer la sauvegarde « ${project.name} » ?`,
+        confirmLabel: "Supprimer",
+        danger: true,
+      }))
+    ) return;
     persistProjects(savedProjects.filter((entry) => entry.id !== projectId));
     if (currentProjectId === projectId) setCurrentProjectId(null);
+  }
+
+  async function changeSelectedProduct(productKey) {
+    if (productKey === selectedProduct) return;
+    if (items.length > 0) {
+      const confirmed = await confirmAction({
+        title: "Changer de produit",
+        message: "Changer de produit effacera la personnalisation en cours.",
+        confirmLabel: "Changer",
+        danger: true,
+      });
+      if (!confirmed) return;
+      setItems([]);
+    }
+    setSelectedProduct(productKey);
+    setPrintZoneSizes(getProductConfig(productKey).printZoneSizesCm);
+    setGarmentSize("M");
   }
 
   function exportProjectJson() {
@@ -1480,19 +1505,7 @@ export default function Vue3DTshirt() {
                   key={opt.value}
                   type="button"
                   className={`tshirt3d-product-btn${selectedProduct === opt.value ? " active" : ""}`}
-                  onClick={() => {
-                    if (opt.value === selectedProduct) return;
-                    if (items.length > 0) {
-                      const confirmed = window.confirm(
-                        `Changer de produit effacera la personnalisation en cours. Continuer ?`
-                      );
-                      if (!confirmed) return;
-                      setItems([]);
-                    }
-                    setSelectedProduct(opt.value);
-                    setPrintZoneSizes(getProductConfig(opt.value).printZoneSizesCm);
-                    setGarmentSize("M");
-                  }}
+                  onClick={() => changeSelectedProduct(opt.value)}
                 >
                   {opt.label}
                 </button>

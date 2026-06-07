@@ -22,6 +22,7 @@ import {
 import { isPaidInvoice } from "../utils/invoices";
 import { money } from "../utils/money";
 import { showToast } from "../utils/toast";
+import { confirmAction } from "../utils/confirmAction";
 import {
   disconnectBank,
   fetchBankLinkUrl,
@@ -322,9 +323,12 @@ export default function Banque({ data, setData, logActivity }) {
 
   async function ignoreTransaction(transaction) {
     if (
-      !confirm(
-        "Marquer cette transaction comme rapprochée sans facture associée ?"
-      )
+      !(await confirmAction({
+        title: "Ignorer la transaction",
+        message: "Marquer cette transaction comme rapprochée sans facture associée ?",
+        detail: "Elle ne sera plus proposée dans les rapprochements à traiter.",
+        confirmLabel: "Marquer rapprochée",
+      }))
     ) {
       return;
     }
@@ -379,7 +383,13 @@ export default function Banque({ data, setData, logActivity }) {
       ? `Cette transaction est rapprochée avec la facture ${linkedInvoice.number}. La supprimer remettra la facture en « Non payée ». Confirmer ?`
       : "Supprimer cette transaction bancaire ?";
 
-    if (!confirm(confirmMessage)) {
+    if (!(await confirmAction({
+      title: linkedInvoice ? "Supprimer le rapprochement" : "Supprimer la transaction",
+      message: confirmMessage.replace(" Confirmer ?", ""),
+      detail: linkedInvoice ? "La facture liée repassera en statut non payé." : "",
+      confirmLabel: "Supprimer",
+      danger: true,
+    }))) {
       return;
     }
 

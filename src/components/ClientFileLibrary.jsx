@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { uploadClientFile, deleteClientFile, canUploadClientFiles } from "../services/clientFileStorage";
 import { showToast } from "../utils/toast";
+import { confirmAction } from "../utils/confirmAction";
 
 const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "image/svg+xml"];
 const ACCEPT = ".jpg,.jpeg,.png,.webp,.gif,.svg,.pdf,.ai,.eps,.zip,.cdr,.dxf";
@@ -96,7 +97,14 @@ export default function ClientFileLibrary({ clientId, files = [], onFilesChange 
   }
 
   async function handleDelete(entry) {
-    if (!confirm(`Supprimer « ${entry.name} » ?`)) return;
+    if (
+      !(await confirmAction({
+        title: "Supprimer le fichier",
+        message: `Supprimer « ${entry.name} » ?`,
+        confirmLabel: "Supprimer",
+        danger: true,
+      }))
+    ) return;
     if (entry.storagePath) {
       try { await deleteClientFile(entry.storagePath); }
       catch { /* best-effort */ }

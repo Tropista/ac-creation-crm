@@ -76,6 +76,7 @@ import {
   buildPaymentSummary,
   PAYMENT_METHODS,
 } from "../utils/payments";
+import { confirmAction } from "../utils/confirmAction";
 
 function Documents({ type, data, setData, currentRole = 'Admin', logActivity, pendingOpenDoc = null, onClearPendingOpenDoc }) {
   const location = useLocation();
@@ -836,13 +837,23 @@ reset();
     showToast(`${label} ${newNum} créée depuis ${doc.number}.`, "success");
   }
 
-  function remove(id) {
+  async function remove(id) {
     if (!canDeleteData(currentRole)) {
       showToast("Ton rôle ne permet pas de supprimer.", "error");
       return;
     }
 
-    if (!confirm(`Supprimer ce ${isQuote ? "devis" : "facture"} ?`)) return;
+    if (
+      !(await confirmAction({
+        title: `Supprimer ${isQuote ? "le devis" : "la facture"}`,
+        message: `Ce ${isQuote ? "devis" : "facture"} sera supprimé définitivement.`,
+        detail: isQuote
+          ? "Le stock réservé en production sera ajusté si nécessaire."
+          : "Le stock facturé sera réintégré si cette facture l'avait déjà déduit.",
+        confirmLabel: "Supprimer",
+        danger: true,
+      }))
+    ) return;
     const removedDoc = documents.find((d) => d.id === id);
     let nextProducts = data.products || [];
 

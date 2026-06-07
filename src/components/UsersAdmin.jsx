@@ -2,6 +2,7 @@ import { useState } from "react";
 import { getSupabase } from "../supabase";
 import { normalizeEmail } from "../services/authService";
 import { showToast } from "../utils/toast";
+import { confirmAction } from "../utils/confirmAction";
 function uid() {
   return crypto.randomUUID();
 }
@@ -98,7 +99,14 @@ export default function UsersAdmin({ data, setData, logActivity }) {
   }
 
   async function removeUser(id) {
-    if (!confirm("Retirer cet accès utilisateur ?")) return;
+    if (
+      !(await confirmAction({
+        title: "Retirer l'accès utilisateur",
+        message: "Cet utilisateur ne pourra plus accéder au CRM via cette fiche.",
+        confirmLabel: "Retirer",
+        danger: true,
+      }))
+    ) return;
 
     try {
       const removedUser = users.find((user) => user.id === id);

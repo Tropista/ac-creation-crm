@@ -28,6 +28,7 @@ import {
 } from "../utils/expenseYearStats";
 import { getPermissions } from "../utils/permissions";
 import { showToast } from "../utils/toast";
+import { confirmAction } from "../utils/confirmAction";
 
 function uid() {
   return crypto.randomUUID();
@@ -469,7 +470,7 @@ export default function Expenses({
     resetForm();
   }
 
-  function removeExpense(id) {
+  async function removeExpense(id) {
     if (!canDeleteData(currentRole)) {
       showToast("Ton rôle ne permet pas de supprimer.", "error");
       return;
@@ -477,9 +478,13 @@ export default function Expenses({
 
     const expense = expenses.find((item) => item.id === id);
     if (
-      !confirm(
-        `Supprimer la facture « ${expense?.invoiceNumber || expense?.supplierName || ""} » ?`
-      )
+      !(await confirmAction({
+        title: "Supprimer la dépense",
+        message: `Supprimer la facture « ${expense?.invoiceNumber || expense?.supplierName || ""} » ?`,
+        detail: "Cette dépense sera retirée des exports et statistiques.",
+        confirmLabel: "Supprimer",
+        danger: true,
+      }))
     ) {
       return;
     }

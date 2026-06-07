@@ -600,6 +600,50 @@ e.target.value
   </span>
 </label>
 
+<label style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+  <span style={{ fontSize: "12px", color: "var(--text-muted, #6b7280)" }}>
+    Envoi automatique des relances factures
+  </span>
+  <select
+    value={form.autoReminderSendAutomatically ? "on" : "off"}
+    onChange={(e) => setForm({ ...form, autoReminderSendAutomatically: e.target.value === "on" })}
+  >
+    <option value="off">Désactivé</option>
+    <option value="on">Activé — envoyer aux clients une fois par jour</option>
+  </select>
+  <span style={{ fontSize: "11px", color: "var(--text-muted, #9ca3af)" }}>
+    Nécessite Gmail configuré. Les factures relancées sont marquées automatiquement.
+  </span>
+</label>
+
+<label style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+  <span style={{ fontSize: "12px", color: "var(--text-muted, #6b7280)" }}>
+    Résumé quotidien des alertes CRM
+  </span>
+  <select
+    value={form.automationEmailEnabled ? "on" : "off"}
+    onChange={(e) => setForm({ ...form, automationEmailEnabled: e.target.value === "on" })}
+  >
+    <option value="off">Désactivé</option>
+    <option value="on">Activé — envoyer un résumé interne une fois par jour</option>
+  </select>
+</label>
+
+<label style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+  <span style={{ fontSize: "12px", color: "var(--text-muted, #6b7280)" }}>
+    Email destinataire du résumé automatisations
+  </span>
+  <input
+    type="email"
+    placeholder={form.companyEmail || form.smtpEmail || "admin@entreprise.lu"}
+    value={form.automationNotificationEmail || ""}
+    onChange={(e) => setForm({ ...form, automationNotificationEmail: e.target.value })}
+  />
+  <span style={{ fontSize: "11px", color: "var(--text-muted, #9ca3af)" }}>
+    Si vide, le CRM utilise l'email entreprise puis l'adresse Gmail configurée.
+  </span>
+</label>
+
 <button className="primary">
 
 Sauvegarder

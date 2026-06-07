@@ -6,6 +6,7 @@ import {
   sumExpenseTotals,
 } from "../utils/expenseSuppliers";
 import { showToast } from "../utils/toast";
+import { confirmAction } from "../utils/confirmAction";
 import { isNonNegativeNumber, isRequired, parseLocaleNumber, validateFields } from "../utils/validation";
 
 function uid() {
@@ -222,14 +223,20 @@ export default function Suppliers({
     });
   }
 
-  function removeSupplier(id) {
+  async function removeSupplier(id) {
     if (!canDeleteData(currentRole)) {
       showToast("Ton rôle ne permet pas de supprimer.", "error");
       return;
     }
 
     const supplier = suppliers.find((item) => item.id === id);
-    if (!confirm(`Supprimer le fournisseur « ${supplier?.name || ""} » ?`)) {
+    if (!(await confirmAction({
+      title: "Supprimer le fournisseur",
+      message: `Supprimer le fournisseur « ${supplier?.name || ""} » ?`,
+      detail: "Les informations d'achat liées à ce fournisseur seront retirées.",
+      confirmLabel: "Supprimer",
+      danger: true,
+    }))) {
       return;
     }
 
@@ -326,10 +333,17 @@ export default function Suppliers({
     });
   }
 
-  function removeLink(linkId) {
+  async function removeLink(linkId) {
     if (!selectedSupplier) return;
 
-    if (!confirm("Retirer ce produit acheté du fournisseur ?")) return;
+    if (
+      !(await confirmAction({
+        title: "Retirer le produit fournisseur",
+        message: "Ce produit ne sera plus lié à ce fournisseur.",
+        confirmLabel: "Retirer",
+        danger: true,
+      }))
+    ) return;
 
     setData({
       ...data,
