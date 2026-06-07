@@ -25,6 +25,8 @@ public/uploads
 
 *.glb
 *.gltf
+!public/models/**/*.glb
+!public/models/**/*.gltf
 
 .DS_Store
 # Electron / electron-builder
@@ -41,6 +43,7 @@ test-results/
 
 # Local scratch files
 temp_import.txt
+tmp-*
 tmp-*.html
 .vercel
 .env*.local

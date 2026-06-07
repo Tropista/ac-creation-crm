@@ -51,11 +51,20 @@ function pidsOnPort(port) {
 }
 
 const app = express();
-app.use(cors());
-app.use(express.json({ limit: "10mb" }));
 
 const PORT = Number(process.env.PORT || 3001);
 const HOST = process.env.BANK_HOST || "127.0.0.1";
+const API_TOKEN = process.env.EMAIL_API_TOKEN || process.env.BANK_API_TOKEN || "";
+const CORS_ORIGINS = parseCsvEnv(process.env.BANK_CORS_ORIGINS || process.env.CORS_ORIGINS);
+const SMTP_EMAIL = process.env.SMTP_EMAIL || process.env.GMAIL_SMTP_EMAIL || "";
+const SMTP_APP_PASSWORD =
+  process.env.SMTP_APP_PASSWORD || process.env.GMAIL_SMTP_APP_PASSWORD || "";
+const SMTP_FROM_NAME = process.env.SMTP_FROM_NAME || "";
+const SEND_EMAIL_WINDOW_MS = Number(process.env.SEND_EMAIL_WINDOW_MS || 15 * 60 * 1000);
+const SEND_EMAIL_MAX_REQUESTS = Number(process.env.SEND_EMAIL_MAX_REQUESTS || 20);
+const MAX_ATTACHMENT_BASE64_LENGTH = Number(
+  process.env.SEND_EMAIL_MAX_ATTACHMENT_BASE64_LENGTH || 8 * 1024 * 1024
+);
 const TINK_CLIENT_ID = process.env.TINK_CLIENT_ID || "";
 const TINK_CLIENT_SECRET = process.env.TINK_CLIENT_SECRET || "";
 const TINK_REDIRECT_URI =
@@ -66,6 +75,56 @@ const TINK_LOCALE = process.env.TINK_LOCALE || "fr_FR";
 const TOKEN_STORE_PATH =
   process.env.TINK_TOKEN_STORE_PATH ||
   path.join(__dirname, ".tink-token.json");
+
+function parseCsvEnv(value = "") {
+  return String(value)
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function isLoopbackOrigin(origin = "") {
+  try {
+    const { hostname } = new URL(origin);
+    return (
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "::1" ||
+      hostname.endsWith(".localhost")
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isAllowedOrigin(origin) {
+  if (!origin || origin === "null") return true;
+  if (CORS_ORIGINS.includes(origin)) return true;
+  return isLoopbackOrigin(origin);
+}
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (isAllowedOrigin(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error(`Origine CORS non autorisee : ${origin}`));
+    },
+  })
+);
+app.use(express.json({ limit: "10mb" }));
+
+if (HOST !== "127.0.0.1" && HOST !== "localhost" && HOST !== "::1") {
+  console.warn(
+    `BANK_HOST=${HOST} expose l'API CRM hors loopback. Verrouillez CORS et EMAIL_API_TOKEN.`
+  );
+}
+
+if (!API_TOKEN) {
+  console.warn("EMAIL_API_TOKEN absent — /send-email reste limite au CORS local et au rate-limit.");
+}
 
 function readTokenStore() {
   try {
@@ -281,35 +340,133 @@ app.get("/api/bank/transactions", async (req, res) => {
   }
 });
 
-app.post("/send-email", async (req, res) => {
-  const { to, subject, text, html, attachmentBase64, attachmentName, smtpEmail, smtpAppPassword, fromName } = req.body || {};
+const sendEmailRateLimits = new Map();
 
-  if (!to || !subject || !smtpEmail || !smtpAppPassword) {
-    return res.status(400).json({ error: "Paramètres manquants (to, subject, smtpEmail, smtpAppPassword)." });
+function getClientIp(req) {
+  return req.ip || req.socket?.remoteAddress || "unknown";
+}
+
+function pruneRateLimits(now = Date.now()) {
+  for (const [key, bucket] of sendEmailRateLimits) {
+    if (now - bucket.startedAt > SEND_EMAIL_WINDOW_MS) {
+      sendEmailRateLimits.delete(key);
+    }
+  }
+}
+
+function checkSendEmailRateLimit(req, res, next) {
+  const now = Date.now();
+  pruneRateLimits(now);
+
+  const key = getClientIp(req);
+  const bucket = sendEmailRateLimits.get(key) || { count: 0, startedAt: now };
+  if (now - bucket.startedAt > SEND_EMAIL_WINDOW_MS) {
+    bucket.count = 0;
+    bucket.startedAt = now;
+  }
+
+  bucket.count += 1;
+  sendEmailRateLimits.set(key, bucket);
+
+  if (bucket.count > SEND_EMAIL_MAX_REQUESTS) {
+    return res.status(429).json({
+      error: "Trop d'envois email en peu de temps. Reessayez plus tard.",
+    });
+  }
+
+  return next();
+}
+
+function getRequestToken(req) {
+  const header = String(req.get("authorization") || "");
+  if (header.toLowerCase().startsWith("bearer ")) {
+    return header.slice(7).trim();
+  }
+  return String(req.get("x-crm-api-token") || "").trim();
+}
+
+function requireApiToken(req, res, next) {
+  if (!API_TOKEN) return next();
+
+  if (getRequestToken(req) !== API_TOKEN) {
+    return res.status(401).json({ error: "Jeton API email invalide ou manquant." });
+  }
+
+  return next();
+}
+
+function isValidEmailList(value = "") {
+  return String(value)
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .every((email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email));
+}
+
+function sanitizeFromName(value = "") {
+  return String(value).replace(/["\r\n]/g, "").trim().slice(0, 80);
+}
+
+app.post("/send-email", requireApiToken, checkSendEmailRateLimit, async (req, res) => {
+  const {
+    to,
+    subject,
+    text,
+    html,
+    attachmentBase64,
+    attachmentName,
+    smtpEmail,
+    smtpAppPassword,
+    fromName,
+  } = req.body || {};
+
+  const resolvedSmtpEmail = SMTP_EMAIL || smtpEmail;
+  const resolvedSmtpPassword = SMTP_APP_PASSWORD || smtpAppPassword;
+  const resolvedFromName = sanitizeFromName(SMTP_FROM_NAME || fromName);
+
+  if (!to || !subject || !resolvedSmtpEmail || !resolvedSmtpPassword) {
+    return res.status(400).json({
+      error:
+        "Parametres manquants (to, subject et identifiants SMTP via .env ou Parametres).",
+    });
+  }
+
+  if (!isValidEmailList(to) || !isValidEmailList(resolvedSmtpEmail)) {
+    return res.status(400).json({ error: "Adresse email invalide." });
+  }
+
+  if (attachmentBase64 && String(attachmentBase64).length > MAX_ATTACHMENT_BASE64_LENGTH) {
+    return res.status(413).json({ error: "Piece jointe trop volumineuse." });
   }
 
   try {
     const transporter = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 587,
-      secure: false,
-      auth: { user: smtpEmail, pass: smtpAppPassword },
+      host: process.env.SMTP_HOST || "smtp.gmail.com",
+      port: Number(process.env.SMTP_PORT || 587),
+      secure: String(process.env.SMTP_SECURE || "false") === "true",
+      auth: { user: resolvedSmtpEmail, pass: resolvedSmtpPassword },
     });
 
     const mailOptions = {
-      from: fromName ? `"${fromName}" <${smtpEmail}>` : smtpEmail,
+      from: resolvedFromName
+        ? `"${resolvedFromName}" <${resolvedSmtpEmail}>`
+        : resolvedSmtpEmail,
       to,
-      subject,
+      subject: String(subject).slice(0, 200),
       text: text || "",
       html: html || (text || "").replace(/\n/g, "<br>"),
-      ...(attachmentBase64 ? {
-        attachments: [{
-          filename: attachmentName || "document.pdf",
-          content: attachmentBase64,
-          encoding: "base64",
-          contentType: "application/pdf",
-        }],
-      } : {}),
+      ...(attachmentBase64
+        ? {
+            attachments: [
+              {
+                filename: attachmentName || "document.pdf",
+                content: attachmentBase64,
+                encoding: "base64",
+                contentType: "application/pdf",
+              },
+            ],
+          }
+        : {}),
     };
 
     await transporter.sendMail(mailOptions);

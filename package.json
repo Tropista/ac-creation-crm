@@ -14,6 +14,7 @@
     "predist": "npm run clean:release",
     "predist:win": "npm run clean:release",
     "lint": "eslint .",
+    "verify:encoding": "node scripts/verify-encoding.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",

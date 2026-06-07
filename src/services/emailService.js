@@ -1,4 +1,4 @@
-import { getBankApiUrl } from "../utils/bankApi";
+import { getBankApiUrl, getLocalApiHeaders } from "../utils/bankApi";
 import { buildDocumentPdf, getDocumentFileName } from "../utils/documentPdf";
 import { buildEmailFromTemplate, buildDocVars } from "../utils/emailTemplates";
 
@@ -26,7 +26,7 @@ export async function sendDocumentByEmail({ doc, type, data, client, overrideSub
   const apiUrl = getBankApiUrl();
   const response = await fetch(`${apiUrl}/send-email`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: getLocalApiHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({
       to: client.email,
       subject,
@@ -60,7 +60,7 @@ async function callSendEmail({ to, subject, text, settings }) {
   const apiUrl = getBankApiUrl();
   const response = await fetch(`${apiUrl}/send-email`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: getLocalApiHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({
       to,
       subject,

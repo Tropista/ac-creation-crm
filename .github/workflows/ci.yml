@@ -26,6 +26,9 @@ jobs:
       - name: ESLint
         run: npm run lint
 
+      - name: Verification encodage
+        run: npm run verify:encoding
+
       - name: Tests unitaires
         run: npm test
 

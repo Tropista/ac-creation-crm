@@ -111,6 +111,12 @@ Copier `.env.example` vers `.env`. Ne jamais committer le fichier `.env`.
 | `VITE_SUPABASE_URL` | Oui | URL du projet Supabase (frontend) |
 | `VITE_SUPABASE_ANON_KEY` | Oui | Clé anon Supabase (frontend) |
 | `VITE_BANK_API_URL` | Non | URL API banque (défaut : `http://localhost:3001`) |
+| `EMAIL_API_TOKEN` | Non | Jeton backend optionnel pour verrouiller `/send-email` |
+| `VITE_EMAIL_API_TOKEN` | Non | Même jeton côté frontend local si `EMAIL_API_TOKEN` est défini |
+| `SMTP_EMAIL` | Non | Adresse SMTP côté backend pour éviter d'envoyer le mot de passe depuis le frontend |
+| `SMTP_APP_PASSWORD` | Non | Mot de passe d'application SMTP côté backend |
+| `SMTP_FROM_NAME` | Non | Nom d'expéditeur email côté backend |
+| `BANK_CORS_ORIGINS` | Non | Origines web autorisées en plus de `localhost` / `127.0.0.1` |
 | `TINK_CLIENT_ID` | Non | Connexion bancaire Tink (backend) |
 | `PORT` | Non | Port du serveur banque (défaut : 3001) |
 | `BANK_HOST` | Non | Hôte d'écoute (défaut : `127.0.0.1` — ne pas changer en prod cloud) |

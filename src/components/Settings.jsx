@@ -7,6 +7,7 @@ import {
   normalizePaymentDays,
 } from "../utils/invoiceReminders";
 import { showToast } from "../utils/toast";
+import { getBankApiUrl, getLocalApiHeaders } from "../utils/bankApi";
 import { getStoredTheme, setTheme, THEMES } from "../utils/theme";
 import { downloadInvoiceUblStub } from "../utils/peppolUbl";
 import MonthlyAccountingExport from "./MonthlyAccountingExport";
@@ -507,10 +508,10 @@ e.target.value
       }
       showToast("Test en cours…", "info");
       try {
-        const apiUrl = import.meta.env.VITE_BANK_API_URL || "http://127.0.0.1:3001";
+        const apiUrl = getBankApiUrl();
         const res = await fetch(`${apiUrl}/send-email`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: getLocalApiHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify({
             to: form.smtpEmail,
             subject: "Test connexion CRM",
@@ -543,10 +544,10 @@ e.target.value
     onClick={async () => {
       showToast("Envoi du test de relance…", "info");
       try {
-        const apiUrl = import.meta.env.VITE_BANK_API_URL || "http://127.0.0.1:3001";
+        const apiUrl = getBankApiUrl();
         const res = await fetch(`${apiUrl}/send-email`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: getLocalApiHeaders({ "Content-Type": "application/json" }),
           body: JSON.stringify({
             to: form.smtpEmail,
             subject: "Test relance — Facture FAC-TEST-0001",

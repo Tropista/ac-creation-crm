@@ -11,6 +11,14 @@ export function getBankApiUrl() {
   return import.meta.env.VITE_BANK_API_URL || DEFAULT_BANK_API_URL;
 }
 
+export function getLocalApiHeaders(extraHeaders = {}) {
+  const token = import.meta.env.VITE_EMAIL_API_TOKEN || import.meta.env.VITE_BANK_API_TOKEN || "";
+  return {
+    ...extraHeaders,
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
 export async function fetchBankStatus() {
   const response = await fetch(`${getBankApiUrl()}/api/bank/status`);
   if (!response.ok) {
