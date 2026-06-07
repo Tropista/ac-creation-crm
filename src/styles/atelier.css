@@ -235,7 +235,7 @@
   border: 1px solid rgba(192,132,252,0.3);
   border-radius: 12px;
   background: rgba(192,132,252,0.15);
-  color: #c084fc;
+  color: var(--accent);
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
@@ -251,7 +251,7 @@
 .atelier-wa-btn {
   border-color: rgba(74,222,128,0.3);
   background: rgba(74,222,128,0.15);
-  color: #4ade80;
+  color: var(--green);
 }
 
 .atelier-assignee-filter {
@@ -263,10 +263,10 @@
 
 .atelier-assignee-filter select {
   min-height: 38px;
-  border: 1px solid rgba(255,255,255,0.12);
+  border: 1px solid var(--input-border);
   border-radius: 12px;
   padding: 8px 10px;
-  background: rgba(255,255,255,0.07);
+  background: var(--surface);
   color: #fff;
   font: inherit;
 }
@@ -288,8 +288,8 @@
   gap: 8px;
   padding: 6px;
   border-radius: 16px;
-  background: rgba(255,255,255,0.07);
-  border: 1px solid rgba(255,255,255,0.12);
+  background: var(--surface);
+  border: 1px solid var(--input-border);
 }
 
 .atelier-header-actions {
@@ -305,8 +305,8 @@
   gap: 8px;
   padding: 6px;
   border-radius: 16px;
-  background: rgba(255,255,255,0.07);
-  border: 1px solid rgba(255,255,255,0.12);
+  background: var(--surface);
+  border: 1px solid var(--input-border);
 }
 
 .atelier-layout-toggle button {
@@ -405,27 +405,27 @@
 }
 
 .delivery-urgency--overdue {
-  color: #f87171;
+  color: var(--red);
   background: rgba(248,113,113,0.15);
   border: 1px solid rgba(248,113,113,0.3);
 }
 
 .delivery-urgency--today {
-  color: #fb923c;
+  color: var(--accent-4);
   background: rgba(251,146,60,0.15);
   border: 1px solid rgba(251,146,60,0.3);
 }
 
 .delivery-urgency--thisWeek {
-  color: #4ade80;
+  color: var(--green);
   background: rgba(74,222,128,0.15);
   border: 1px solid rgba(74,222,128,0.3);
 }
 
 .delivery-urgency--later {
   color: rgba(255,255,255,0.5);
-  background: rgba(255,255,255,0.07);
-  border: 1px solid rgba(255,255,255,0.12);
+  background: var(--surface);
+  border: 1px solid var(--input-border);
 }
 
 .atelier-launch-today {
@@ -456,7 +456,7 @@
   font-size: 13px;
   padding: 10px 12px;
   border-radius: 12px;
-  background: rgba(255,255,255,0.07);
+  background: var(--surface);
   border: 1px solid rgba(251,146,60,0.2);
   color: rgba(255,255,255,0.85);
 }
@@ -512,7 +512,7 @@
   border-radius: 99px;
   background: rgba(192,132,252,0.15);
   border: 1px solid rgba(192,132,252,0.3);
-  color: #c084fc;
+  color: var(--accent);
   font-size: 11px;
   font-weight: 700;
 }
@@ -680,7 +680,7 @@
     border: 1px solid rgba(192,132,252,0.3);
     border-radius: 14px;
     background: rgba(192,132,252,0.15);
-    color: #c084fc;
+    color: var(--accent);
     font-size: 14px;
     font-weight: 700;
     cursor: pointer;
@@ -691,7 +691,7 @@
     border: 1px solid rgba(74,222,128,0.3);
     border-radius: 14px;
     background: rgba(74,222,128,0.15);
-    color: #4ade80;
+    color: var(--green);
     font-size: 14px;
     font-weight: 700;
     cursor: pointer;
@@ -749,8 +749,8 @@
 .atelier-planning__cell {
   padding: 8px;
   border-radius: 10px;
-  background: rgba(255,255,255,0.07);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: var(--surface);
+  border: 1px solid var(--border);
   min-height: 52px;
   color: rgba(255,255,255,0.7);
   backdrop-filter: blur(8px);
@@ -767,7 +767,7 @@
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
-  color: #c084fc;
+  color: var(--accent);
 }
 
 .atelier-production-panel {
@@ -857,7 +857,7 @@
 .atelier-priority-chip--alert:not(.active) {
   border-color: rgba(248,113,113,0.35);
   background: rgba(248,113,113,0.12);
-  color: #f87171;
+  color: var(--red);
 }
 
 .atelier-priority-chip__count {
@@ -889,26 +889,26 @@
 
 .atelier-status-badge--accepted {
   background: rgba(56,189,248,0.15);
-  color: #38bdf8;
+  color: var(--accent-3);
   border: 1px solid rgba(56,189,248,0.3);
 }
 
 .atelier-status-badge--production {
   background: rgba(251,146,60,0.15);
-  color: #fb923c;
+  color: var(--accent-4);
   border: 1px solid rgba(251,146,60,0.3);
 }
 
 .atelier-status-badge--ready {
   background: rgba(74,222,128,0.15);
-  color: #4ade80;
+  color: var(--green);
   border: 1px solid rgba(74,222,128,0.3);
 }
 
 .atelier-status-badge--delivered {
-  background: rgba(255,255,255,0.07);
-  color: rgba(255,255,255,0.45);
-  border: 1px solid rgba(255,255,255,0.12);
+  background: var(--surface);
+  color: var(--muted);
+  border: 1px solid var(--input-border);
 }
 
 .atelier-deposit-badge {
@@ -918,7 +918,7 @@
   border-radius: 99px;
   background: rgba(251,146,60,0.15);
   border: 1px solid rgba(251,146,60,0.3);
-  color: #fb923c;
+  color: var(--accent-4);
   font-size: 10px;
   font-weight: 700;
 }
@@ -926,7 +926,7 @@
 .atelier-deposit-badge--paid {
   background: rgba(74,222,128,0.15);
   border-color: rgba(74,222,128,0.3);
-  color: #4ade80;
+  color: var(--green);
 }
 
 .atelier-card__key-date {
@@ -941,10 +941,10 @@
   align-items: center;
   gap: 12px;
   padding: 14px 18px;
-  border-left: 4px solid #fb923c;
+  border-left: 4px solid var(--accent-4);
   background: rgba(251,146,60,0.08);
 }
 
 .atelier-stock-alert strong {
-  color: #fb923c;
+  color: var(--accent-4);
 }

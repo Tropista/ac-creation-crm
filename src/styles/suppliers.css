@@ -24,8 +24,8 @@
   min-width: 320px;
   padding: 12px 18px;
   border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(255,255,255,0.07);
+  border: 1px solid var(--input-border);
+  background: var(--surface);
   color: #fff;
   backdrop-filter: blur(8px);
 }
@@ -71,7 +71,7 @@
 }
 
 .suppliers-table tr.selected-row td {
-  box-shadow: inset 4px 0 0 #c084fc;
+  box-shadow: inset 4px 0 0 var(--accent);
 }
 
 .supplier-meta {
@@ -126,7 +126,7 @@
   gap: 16px;
   margin-bottom: 20px;
   padding-bottom: 16px;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
+  border-bottom: 1px solid var(--border);
 }
 
 .supplier-detail-header h3 {
@@ -144,7 +144,7 @@
 
 .supplier-field {
   padding: 14px;
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid var(--border);
   border-radius: 14px;
   background: rgba(255,255,255,0.06);
 }
@@ -193,7 +193,7 @@
   padding: 16px;
   border-radius: 14px;
   background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid var(--border);
 }
 
 .supplier-links-table {
@@ -233,7 +233,7 @@
   flex-wrap: wrap;
   align-items: center;
   font-size: 13px;
-  color: rgba(255,255,255,0.45);
+  color: var(--muted);
 }
 
 .supplier-expense-totals strong {

@@ -14,8 +14,8 @@
 .labels-stat-card {
   padding: 16px 20px;
   border-radius: 16px;
-  border: 1px solid rgba(255,255,255,0.1);
-  background: rgba(255,255,255,0.07);
+  border: 1px solid var(--border);
+  background: var(--surface);
   backdrop-filter: blur(12px);
 }
 
@@ -43,13 +43,13 @@
 }
 
 .labels-stat-card--accent span { color: rgba(255,255,255,0.6); }
-.labels-stat-card--accent strong { color: #c084fc; }
+.labels-stat-card--accent strong { color: var(--accent); }
 
 /* --- Toolbar --- */
 .labels-toolbar {
   margin-bottom: 0;
   background: rgba(255,255,255,0.06) !important;
-  border: 1px solid rgba(255,255,255,0.1) !important;
+  border: 1px solid var(--border) !important;
 }
 
 .labels-toolbar-header {
@@ -99,7 +99,7 @@
   padding: 0 14px;
   border-radius: 10px;
   border: 1px solid rgba(255,255,255,0.15);
-  background: rgba(255,255,255,0.07);
+  background: var(--surface);
   color: rgba(255,255,255,0.7);
   font-size: 13px;
   font-weight: 600;
@@ -109,7 +109,7 @@
 
 .labels-checkbox:hover {
   border-color: rgba(192,132,252,0.4);
-  background: rgba(255,255,255,0.1);
+  background: var(--border);
   color: #fff;
 }
 
@@ -117,7 +117,7 @@
   width: auto;
   min-height: auto;
   margin: 0;
-  accent-color: #c084fc;
+  accent-color: var(--accent);
 }
 
 .labels-toolbar-actions {
@@ -170,7 +170,7 @@
   padding: 4px 10px;
   border-radius: 99px;
   background: rgba(255,255,255,0.08);
-  border: 1px solid rgba(255,255,255,0.12);
+  border: 1px solid var(--input-border);
   color: rgba(255,255,255,0.6);
   font-size: 11px;
   font-weight: 600;
@@ -179,7 +179,7 @@
 .labels-badge--accent {
   background: rgba(192,132,252,0.15);
   border-color: rgba(192,132,252,0.3);
-  color: #c084fc;
+  color: var(--accent);
 }
 
 .labels-product-scroll {
@@ -211,7 +211,7 @@
 }
 
 .label-product-row:hover {
-  background: rgba(255,255,255,0.1);
+  background: var(--border);
   border-color: rgba(255,255,255,0.18);
 }
 
@@ -224,7 +224,7 @@
   width: auto;
   min-height: auto;
   margin-top: 3px;
-  accent-color: #c084fc;
+  accent-color: var(--accent);
 }
 
 .label-product-row span { display: grid; gap: 4px; min-width: 0; }
@@ -253,7 +253,7 @@
 .labels-preview-surface {
   padding: 18px;
   border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid var(--border);
   background: rgba(255,255,255,0.05);
 }
 

@@ -119,7 +119,7 @@
 .ac-title-box {
   padding: 3mm 3.5mm;
   color: #fff;
-  background: linear-gradient(135deg, #f472b6, #ec4899, #db2777);
+  background: linear-gradient(135deg, var(--accent-2), #ec4899, #db2777);
   box-shadow: 0 8px 20px rgba(236, 72, 153, 0.18);
 }
 
@@ -174,7 +174,7 @@
   place-items: center;
   border-radius: 999px;
   color: #fff;
-  background: linear-gradient(135deg, #f472b6, #ec4899);
+  background: linear-gradient(135deg, var(--accent-2), #ec4899);
   font-weight: 900;
 }
 
@@ -213,7 +213,7 @@
 
 .ac-table th {
   padding: 2.5mm 2mm;
-  background: linear-gradient(135deg, #f472b6, #ec4899, #db2777);
+  background: linear-gradient(135deg, var(--accent-2), #ec4899, #db2777);
   color: #fff;
   text-align: left;
   font-size: 9.5px;
@@ -347,7 +347,7 @@
 
 .ac-total-final {
   color: #fff;
-  background: linear-gradient(135deg, #f472b6, #ec4899, #db2777);
+  background: linear-gradient(135deg, var(--accent-2), #ec4899, #db2777);
   border-bottom: 0;
   font-size: 13px;
   justify-content: center;

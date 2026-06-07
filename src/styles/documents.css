@@ -20,7 +20,7 @@
   border-radius: 99px;
   background: rgba(251,146,60,0.15);
   border: 1px solid rgba(251,146,60,0.3);
-  color: #fb923c;
+  color: var(--accent-4);
   font-size: 13px;
   font-weight: 700;
   white-space: nowrap;
@@ -36,8 +36,8 @@
 .documents-stat-card {
   padding: 16px;
   border-radius: 16px;
-  border: 1px solid rgba(255,255,255,0.1);
-  background: rgba(255,255,255,0.07);
+  border: 1px solid var(--border);
+  background: var(--surface);
   backdrop-filter: blur(12px);
 }
 
@@ -62,7 +62,7 @@
 .documents-stat-card em {
   display: block;
   margin-top: 6px;
-  color: #f87171;
+  color: var(--red);
   font-style: normal;
   font-size: 12px;
   font-weight: 700;
@@ -90,13 +90,13 @@
 }
 
 .documents-stat-card--danger span { color: rgba(248,113,113,0.7); }
-.documents-stat-card--danger strong { color: #f87171; }
+.documents-stat-card--danger strong { color: var(--red); }
 
 /* --- Form card --- */
 .documents-form-card {
   margin-bottom: 0;
   background: rgba(255,255,255,0.06) !important;
-  border: 1px solid rgba(255,255,255,0.1) !important;
+  border: 1px solid var(--border) !important;
 }
 
 .documents-form-head {
@@ -179,9 +179,9 @@
 }
 
 .documents-add-line {
-  background: rgba(255,255,255,0.07) !important;
+  background: var(--surface) !important;
   color: rgba(255,255,255,0.6) !important;
-  border: 1px solid rgba(255,255,255,0.12) !important;
+  border: 1px solid var(--input-border) !important;
 }
 
 .documents-totals-panel {
@@ -189,7 +189,7 @@
   padding: 0;
   overflow: hidden;
   border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid var(--border);
   background: rgba(255,255,255,0.06);
 }
 
@@ -291,8 +291,8 @@
 .documents-filter-btn {
   min-height: 40px;
   padding: 8px 16px;
-  border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(255,255,255,0.07);
+  border: 1px solid var(--input-border);
+  background: var(--surface);
   color: rgba(255,255,255,0.6);
   box-shadow: none;
 }
@@ -320,7 +320,7 @@
   padding: 4px 8px;
   border-radius: 99px;
   background: rgba(192,132,252,0.15);
-  color: #c084fc;
+  color: var(--accent);
   font-size: 11px;
   font-weight: 700;
 }
@@ -339,19 +339,19 @@
 
 .documents-page .badge.en-production {
   background: rgba(192,132,252,0.15);
-  color: #c084fc;
+  color: var(--accent);
   border-color: rgba(192,132,252,0.3);
 }
 
 .documents-page .badge.pret {
   background: rgba(74,222,128,0.15);
-  color: #4ade80;
+  color: var(--green);
   border-color: rgba(74,222,128,0.3);
 }
 
 .documents-page .badge.livre {
   background: rgba(74,222,128,0.2);
-  color: #4ade80;
+  color: var(--green);
   border-color: rgba(74,222,128,0.35);
 }
 
@@ -362,13 +362,13 @@
 
 .documents-remind-btn {
   border-color: rgba(251,146,60,0.3);
-  color: #fb923c;
+  color: var(--accent-4);
 }
 
 .documents-page .badge.brouillon {
-  background: rgba(255,255,255,0.07);
-  color: rgba(255,255,255,0.45);
-  border-color: rgba(255,255,255,0.12);
+  background: var(--surface);
+  color: var(--muted);
+  border-color: var(--input-border);
 }
 
 .documents-page .badge.annulee {
@@ -399,7 +399,7 @@
   padding: 4px 10px;
   border-radius: 99px;
   background: rgba(74,222,128,0.15);
-  color: #4ade80;
+  color: var(--green);
   border: 1px solid rgba(74,222,128,0.3);
   font-size: 11px;
   font-weight: 700;
@@ -409,7 +409,7 @@
   padding: 36px 20px;
   text-align: center;
   border-radius: 14px;
-  background: rgba(255,255,255,0.04);
+  background: var(--surface-2);
   border: 1px dashed rgba(255,255,255,0.15);
 }
 
@@ -458,7 +458,7 @@
   padding: 20px;
   background: rgba(15,5,40,0.95);
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid var(--border);
   color: #fff;
   border-radius: 20px;
   box-shadow: 0 32px 100px rgba(0,0,0,0.5);
@@ -484,13 +484,13 @@
   margin-bottom: 16px;
   padding: 12px 16px;
   background: rgba(15,5,40,0.9);
-  border: 1px solid rgba(255,255,255,0.12);
+  border: 1px solid var(--input-border);
   border-radius: 14px;
   justify-content: flex-start;
 }
 
 .ac-invoice-actions button {
-  background: rgba(255,255,255,0.12) !important;
+  background: var(--input-border) !important;
   border: 1px solid rgba(255,255,255,0.2) !important;
   color: #fff !important;
   border-radius: 10px !important;
@@ -512,7 +512,7 @@
 }
 
 .ac-invoice-actions button.primary {
-  background: linear-gradient(135deg, #c084fc, #818cf8) !important;
+  background: linear-gradient(135deg, var(--accent), var(--purple-dark)) !important;
   border-color: transparent !important;
   color: #fff !important;
   box-shadow: 0 4px 16px rgba(192,132,252,0.35);
@@ -589,7 +589,7 @@
 .invoice-document-head {
   padding: 18px;
   border-radius: 24px;
-  background: linear-gradient(135deg,#f472b6,#ec4899,#c026d3);
+  background: linear-gradient(135deg,var(--accent-2),#ec4899,#c026d3);
   color: #ffffff;
   box-shadow: 0 18px 38px rgba(124, 58, 237, 0.25);
 }
@@ -668,7 +668,7 @@
   border-radius: 50%;
   color: #ffffff;
   font-weight: 900;
-  background: linear-gradient(135deg,#f472b6,#ec4899);
+  background: linear-gradient(135deg,var(--accent-2),#ec4899);
 }
 
 /* Tableau */
@@ -684,7 +684,7 @@
 
 .invoice-modern-table th {
   padding: 14px 12px;
-  background: linear-gradient(135deg,#f9a8d4,#f472b6,#ec4899);
+  background: linear-gradient(135deg,#f9a8d4,var(--accent-2),#ec4899);
   color: #ffffff;
   text-align: left;
   font-size: 11px;
@@ -782,7 +782,7 @@
 }
 
 .invoice-final-due {
-  background: linear-gradient(135deg,#f472b6,#ec4899,#db2777);
+  background: linear-gradient(135deg,var(--accent-2),#ec4899,#db2777);
   border-bottom: 0 !important;
 }
 
@@ -1025,8 +1025,8 @@
 .document-line:not(.document-line-head) {
   padding: 8px;
   border-radius: 14px;
-  background: rgba(255,255,255,0.07);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: var(--surface);
+  border: 1px solid var(--border);
   backdrop-filter: blur(8px);
 }
 
@@ -1055,9 +1055,9 @@
   display: grid;
   gap: 6px;
   padding: 14px;
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid var(--border);
   border-radius: 14px;
-  background: rgba(255,255,255,0.07);
+  background: var(--surface);
   backdrop-filter: blur(8px);
   color: rgba(255,255,255,0.85);
 }
@@ -1348,7 +1348,7 @@
 .quote-attachments-section {
   margin: 16px 0;
   padding: 14px;
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid var(--border);
   border-radius: 16px;
   background: rgba(255,255,255,0.06);
   backdrop-filter: blur(8px);
@@ -1376,8 +1376,8 @@
   gap: 12px;
   padding: 10px 12px;
   border-radius: 12px;
-  background: rgba(255,255,255,0.07);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: var(--surface);
+  border: 1px solid var(--border);
   color: rgba(255,255,255,0.85);
 }
 
@@ -1427,7 +1427,7 @@
   border-radius: 12px;
   background: rgba(251,146,60,0.1);
   border: 1px solid rgba(251,146,60,0.25);
-  color: #fb923c;
+  color: var(--accent-4);
   font-size: 12px;
 }
 
@@ -1623,13 +1623,13 @@
 }
 
 .client-combobox__trigger:hover {
-  background: rgba(255, 255, 255, 0.12);
+  background: var(--input-border);
   border-color: rgba(255, 255, 255, 0.2);
 }
 
 .client-combobox__trigger--open,
 .client-combobox__trigger:focus {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--border);
   border-color: rgba(192, 132, 252, 0.5);
   box-shadow: 0 0 0 3px rgba(192, 132, 252, 0.1);
 }
@@ -1665,7 +1665,7 @@
 
 .client-combobox__search-wrap {
   padding: 8px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  border-bottom: 1px solid var(--surface);
 }
 
 .client-combobox__search {

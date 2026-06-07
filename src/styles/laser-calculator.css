@@ -17,9 +17,9 @@
   display:grid;
   gap:12px;
   padding:16px;
-  border:1px solid rgba(255,255,255,0.1);
+  border:1px solid var(--border);
   border-radius:16px;
-  background:rgba(255,255,255,0.07);
+  background:var(--surface);
 }
 
 .laser-section-title{
@@ -85,7 +85,7 @@
   padding:22px;
   border-radius:24px;
   color:white;
-  background:linear-gradient(135deg,#f472b6,#8b5cf6,#2563eb);
+  background:linear-gradient(135deg,var(--accent-2),#8b5cf6,#2563eb);
   box-shadow:0 18px 38px rgba(124,58,237,.22);
   text-align:center;
 }
@@ -125,7 +125,7 @@
   border-color:rgba(74,222,128,0.3);
 }
 
-.laser-sortie-highlight strong{color:#4ade80}
+.laser-sortie-highlight strong{color:var(--green)}
 
 .laser-breakdown-heading{
   margin:6px 0 0;
@@ -144,8 +144,8 @@
   gap:12px;
   padding:14px;
   border-radius:16px;
-  background:rgba(255,255,255,0.07);
-  border:1px solid rgba(255,255,255,0.1);
+  background:var(--surface);
+  border:1px solid var(--border);
 }
 
 .laser-breakdown{
@@ -159,7 +159,7 @@
   gap:12px;
   padding:11px 12px;
   border-radius:14px;
-  background:rgba(255,255,255,0.07);
+  background:var(--surface);
   border:1px solid rgba(255,255,255,0.08);
 }
 
@@ -173,7 +173,7 @@
 }
 
 .laser-sortie-atelier strong,
-.laser-sortie-atelier-unit strong{color:#4ade80}
+.laser-sortie-atelier-unit strong{color:var(--green)}
 
 .laser-actions{
   display:flex;

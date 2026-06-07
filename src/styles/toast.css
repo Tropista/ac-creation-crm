@@ -19,7 +19,7 @@
   background: rgba(15, 8, 35, 0.92);
   color: #fff;
   box-shadow: 0 12px 32px rgba(0,0,0,0.4);
-  border: 1px solid rgba(255,255,255,0.12);
+  border: 1px solid var(--input-border);
   backdrop-filter: blur(16px);
   pointer-events: auto;
   animation: toast-in 0.22s ease;
@@ -66,7 +66,7 @@
 }
 
 .toast__close:hover {
-  background: rgba(255,255,255,0.1);
+  background: var(--border);
   color: #fff;
   transform: none;
 }

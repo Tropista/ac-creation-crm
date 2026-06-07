@@ -75,7 +75,7 @@
   place-items:center;
   overflow:hidden;
   border-radius:16px;
-  background:rgba(255,255,255,0.07);
+  background:var(--surface);
   border:1px dashed rgba(255,255,255,0.2);
   color:rgba(255,255,255,0.3);
   font-size:64px;
@@ -144,7 +144,7 @@
 .product-side-header span{
   display:block;
   margin-top:6px;
-  color:rgba(255,255,255,0.45);
+  color:var(--muted);
   font-weight:600;
 }
 
@@ -152,7 +152,7 @@
   white-space:nowrap;
   padding:6px 14px;
   border-radius:99px;
-  color:#c084fc;
+  color:var(--accent);
   background:rgba(192,132,252,0.15);
   border:1px solid rgba(192,132,252,0.3);
 }
@@ -165,9 +165,9 @@
 
 .product-side-kpis div{
   padding:12px;
-  border:1px solid rgba(255,255,255,0.1);
+  border:1px solid var(--border);
   border-radius:14px;
-  background:rgba(255,255,255,0.07);
+  background:var(--surface);
   text-align:center;
 }
 
@@ -189,7 +189,7 @@
   padding:14px;
   border-radius:14px;
   background:rgba(255,255,255,0.06);
-  border:1px solid rgba(255,255,255,0.1);
+  border:1px solid var(--border);
 }
 
 .product-side-desc strong{
@@ -287,7 +287,7 @@
   padding:4px 10px;
   font-size:11px;
   background:rgba(255,255,255,0.08);
-  border:1px solid rgba(255,255,255,0.12);
+  border:1px solid var(--input-border);
   border-radius:99px;
   color:rgba(255,255,255,0.7);
 }
@@ -343,8 +343,8 @@
   margin-bottom:8px;
   padding:4px 12px;
   border-radius:99px;
-  background:rgba(255,255,255,0.07);
-  border:1px solid rgba(255,255,255,0.12);
+  background:var(--surface);
+  border:1px solid var(--input-border);
   color:rgba(255,255,255,0.4);
   font-size:11px;
   font-weight:600;
@@ -362,8 +362,8 @@
   gap:3px;
   padding:10px;
   border-radius:14px;
-  background:rgba(255,255,255,0.07);
-  border:1px solid rgba(255,255,255,0.1);
+  background:var(--surface);
+  border:1px solid var(--border);
   color:rgba(255,255,255,0.4);
   font-size:12px;
   font-weight:600;
@@ -388,9 +388,9 @@
   align-items:center;
   gap:10px;
   padding:10px;
-  border:1px solid rgba(255,255,255,0.1);
+  border:1px solid var(--border);
   border-radius:12px;
-  background:rgba(255,255,255,0.07);
+  background:var(--surface);
   color:rgba(255,255,255,0.85);
 }
 
@@ -447,7 +447,7 @@
   border-radius:14px;
   background:rgba(251,146,60,0.12);
   border:1px solid rgba(251,146,60,0.3);
-  color:#fb923c;
+  color:var(--accent-4);
   font-size:13px;
   font-weight:700;
 }
@@ -467,8 +467,8 @@
   width:100%;
   padding:10px 12px;
   border-radius:14px;
-  border:1px solid rgba(255,255,255,0.12);
-  background:rgba(255,255,255,0.07);
+  border:1px solid var(--input-border);
+  background:var(--surface);
   color:#fff;
   font-weight:600;
 }
@@ -542,13 +542,13 @@
 .product-doc-badge.dev{
   background:rgba(56,189,248,0.15);
   border:1px solid rgba(56,189,248,0.3);
-  color:#38bdf8;
+  color:var(--accent-3);
 }
 
 .product-doc-badge.fac{
   background:rgba(192,132,252,0.15);
   border:1px solid rgba(192,132,252,0.3);
-  color:#c084fc;
+  color:var(--accent);
 }
 
 .product-ranking-box p{
@@ -558,7 +558,7 @@
   padding:8px 10px;
   margin:0;
   border-radius:10px;
-  background:rgba(255,255,255,0.07);
+  background:var(--surface);
   border:1px solid rgba(255,255,255,0.08);
   color:rgba(255,255,255,0.8);
 }
@@ -602,9 +602,9 @@
   width:max-content;
   padding:3px 10px;
   border-radius:99px;
-  background:rgba(255,255,255,0.07);
-  border:1px solid rgba(255,255,255,0.12);
-  color:rgba(255,255,255,0.45);
+  background:var(--surface);
+  border:1px solid var(--input-border);
+  color:var(--muted);
   font-size:11px;
   font-weight:600;
 }
@@ -679,7 +679,7 @@
   padding:6px 14px;
   border-radius:99px;
   border:1px solid rgba(255,255,255,0.15);
-  background:rgba(255,255,255,0.07);
+  background:var(--surface);
   color:rgba(255,255,255,0.6);
   font-size:12px;
   font-weight:600;

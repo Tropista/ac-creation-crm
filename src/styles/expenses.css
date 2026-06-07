@@ -81,8 +81,8 @@
   min-width: 320px;
   padding: 12px 18px;
   border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(255,255,255,0.07);
+  border: 1px solid var(--input-border);
+  background: var(--surface);
   color: #fff;
   backdrop-filter: blur(8px);
 }
@@ -173,17 +173,17 @@
   font-weight: 600;
   background: rgba(192,132,252,0.15);
   border: 1px solid rgba(192,132,252,0.3);
-  color: #c084fc;
+  color: var(--accent);
 }
 
 .expense-source-badge.manual {
   background: rgba(74,222,128,0.15);
   border-color: rgba(74,222,128,0.3);
-  color: #4ade80;
+  color: var(--green);
 }
 
 .expense-source-badge.csv {
   background: rgba(251,146,60,0.15);
   border-color: rgba(251,146,60,0.3);
-  color: #fb923c;
+  color: var(--accent-4);
 }
