@@ -76,7 +76,10 @@ test.describe("Atelier — changement de statut", () => {
 
     await expect(page.getByText("DEV-E2E-DEL")).toBeVisible();
     await page.getByTestId("atelier-delete-quote-atelier-delete").click();
-    await page.getByRole("button", { name: "Supprimer" }).click();
+    await page
+      .getByRole("alertdialog", { name: "Supprimer la commande atelier" })
+      .getByRole("button", { name: "Supprimer" })
+      .click();
     await expect(page.getByText("DEV-E2E-DEL")).not.toBeVisible();
     await expect(page.getByText("Aucune commande en file")).toBeVisible();
   });
