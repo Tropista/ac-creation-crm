@@ -3,6 +3,7 @@ import PaginationControls from "./PaginationControls";
 import ClientFileLibrary from "./ClientFileLibrary";
 import { canDeleteData } from "../services/authService";
 import { showToast } from "../utils/toast";
+import { isRequired, validateFields } from "../utils/validation";
 import { filterCreditNotesByClient } from "../utils/creditNotes";
 import { filterAfterSalesByClient } from "../utils/afterSales";
 
@@ -403,8 +404,11 @@ export default function Clients({
   function submit(e) {
     e.preventDefault();
 
-    if (!form.name) {
-      showToast("Le nom du client est obligatoire.", "error");
+    const validationError = validateFields(form, {
+      name: [{ test: isRequired, message: "Le nom du client est obligatoire." }],
+    });
+    if (validationError) {
+      showToast(validationError, "error");
       return;
     }
 

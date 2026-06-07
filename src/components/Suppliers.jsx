@@ -6,6 +6,7 @@ import {
   sumExpenseTotals,
 } from "../utils/expenseSuppliers";
 import { showToast } from "../utils/toast";
+import { isNonNegativeNumber, isRequired, parseLocaleNumber, validateFields } from "../utils/validation";
 
 function uid() {
   return crypto.randomUUID();
@@ -168,8 +169,11 @@ export default function Suppliers({
   function submitSupplier(e) {
     e.preventDefault();
 
-    if (!form.name.trim()) {
-      showToast("Le nom du fournisseur est obligatoire.", "error");
+    const validationError = validateFields(form, {
+      name: [{ test: isRequired, message: "Le nom du fournisseur est obligatoire." }],
+    });
+    if (validationError) {
+      showToast(validationError, "error");
       return;
     }
 
@@ -249,19 +253,19 @@ export default function Suppliers({
 
     const name = linkForm.name.trim();
 
-    if (!name) {
-      showToast("Le nom du produit acheté est obligatoire.", "error");
-      return;
-    }
-
-    const purchasePriceHT = Number(
-      String(linkForm.purchasePriceHT || "0").replace(",", ".")
+    const validationError = validateFields(
+      { name, purchasePriceHT: linkForm.purchasePriceHT || "0" },
+      {
+        name: [{ test: isRequired, message: "Le nom du produit acheté est obligatoire." }],
+        purchasePriceHT: [{ test: isNonNegativeNumber, message: "Prix d'achat HT invalide." }],
+      }
     );
-
-    if (Number.isNaN(purchasePriceHT) || purchasePriceHT < 0) {
-      showToast("Prix d'achat HT invalide.", "error");
+    if (validationError) {
+      showToast(validationError, "error");
       return;
     }
+
+    const purchasePriceHT = parseLocaleNumber(linkForm.purchasePriceHT || "0");
 
     const existingLinks = selectedSupplier.productLinks || [];
     const duplicate = existingLinks.some(

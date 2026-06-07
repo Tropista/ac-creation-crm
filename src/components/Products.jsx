@@ -24,6 +24,7 @@ import {
   PRODUCTS_STOCK_FILTER_KEY,
 } from "../utils/stock";
 import { showToast } from "../utils/toast";
+import { isRequired, validateFields } from "../utils/validation";
 import PaginationControls from "./PaginationControls";
 
 function money(value) {
@@ -630,7 +631,10 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
 
   function submit(e) {
     e.preventDefault();
-    if (!form.name) return showToast("Nom du produit obligatoire.", "error");
+    const validationError = validateFields(form, {
+      name: [{ test: isRequired, message: "Nom du produit obligatoire." }],
+    });
+    if (validationError) return showToast(validationError, "error");
 
     const imageUrl = String(form.imageUrl || "").trim();
     if (imageUrl && !isHttpImageUrl(imageUrl) && isLargeBase64Image(imageUrl)) {
