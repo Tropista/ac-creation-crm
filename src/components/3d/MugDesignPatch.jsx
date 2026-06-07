@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
-import * as THREE from "three";
+import {
+  ClampToEdgeWrapping,
+  FrontSide,
+  SRGBColorSpace,
+  TextureLoader,
+} from "three";
 
 export default function MugDesignPatch({
   imageUrl,
@@ -15,7 +20,7 @@ export default function MugDesignPatch({
       return;
     }
 
-    const loader = new THREE.TextureLoader();
+    const loader = new TextureLoader();
     let active = true;
 
     loader.load(
@@ -23,10 +28,10 @@ export default function MugDesignPatch({
       (loadedTexture) => {
         if (!active) return;
 
-        loadedTexture.colorSpace = THREE.SRGBColorSpace;
+        loadedTexture.colorSpace = SRGBColorSpace;
         loadedTexture.anisotropy = 16;
-        loadedTexture.wrapS = THREE.ClampToEdgeWrapping;
-        loadedTexture.wrapT = THREE.ClampToEdgeWrapping;
+        loadedTexture.wrapS = ClampToEdgeWrapping;
+        loadedTexture.wrapT = ClampToEdgeWrapping;
         loadedTexture.needsUpdate = true;
 
         setTexture(loadedTexture);
@@ -86,7 +91,7 @@ export default function MugDesignPatch({
       <meshStandardMaterial
         map={texture}
         transparent
-        side={THREE.FrontSide}
+        side={FrontSide}
         depthWrite={false}
         polygonOffset
         polygonOffsetFactor={-4}

@@ -2,7 +2,13 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Canvas } from "@react-three/fiber";
 import { Bounds, Center, Environment, OrbitControls, useGLTF } from "@react-three/drei";
-import * as THREE from "three";
+import {
+  CanvasTexture,
+  DoubleSide,
+  MeshStandardMaterial,
+  RepeatWrapping,
+  SRGBColorSpace,
+} from "three";
 import jsPDF from "jspdf";
 import "./Vue3DTshirt.css";
 import Product3DErrorBoundary from "./3d/Product3DErrorBoundary";
@@ -649,14 +655,14 @@ function makeUvTexture(itemImages, items, tshirtColor, baseImage = null, uvFlipY
     drawItem(ctx, item, zone, itemImages[item.id], uvFlipY);
   }
 
-  const texture = new THREE.CanvasTexture(canvas);
+  const texture = new CanvasTexture(canvas);
   texture.flipY = false;
-  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.colorSpace = SRGBColorSpace;
 
   // RepeatWrapping : les UV négatifs wrappent dans 0-1 (ex: -0.5 → 0.5)
   // Nécessaire pour les modèles Sketchfab/CLO3D avec UV hors 0-1
-  texture.wrapS = THREE.RepeatWrapping;
-  texture.wrapT = THREE.RepeatWrapping;
+  texture.wrapS = RepeatWrapping;
+  texture.wrapT = RepeatWrapping;
   texture.repeat.set(1, 1);
   texture.offset.set(0, 0);
 
@@ -676,12 +682,12 @@ function TshirtModel({ texture, garmentScale = [1, 1, 1], modelUrl, garmentColor
       child.castShadow = true;
       child.receiveShadow = true;
 
-      child.material = new THREE.MeshStandardMaterial({
+      child.material = new MeshStandardMaterial({
         map: texture,
         color: garmentColor,
         roughness: 0.72,
         metalness: 0,
-        side: THREE.DoubleSide,
+        side: DoubleSide,
       });
 
       child.material.needsUpdate = true;

@@ -2,7 +2,13 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Canvas } from "@react-three/fiber";
 import { Bounds, Center, OrbitControls, useGLTF } from "@react-three/drei";
-import * as THREE from "three";
+import {
+  CanvasTexture,
+  ClampToEdgeWrapping,
+  DoubleSide,
+  MeshBasicMaterial,
+  SRGBColorSpace,
+} from "three";
 import jsPDF from "jspdf";
 import "./Vue3D.css";
 import Product3DErrorBoundary from "./3d/Product3DErrorBoundary";
@@ -326,11 +332,11 @@ function createPrintTexture(items) {
     ctx.restore();
   }
 
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
+  const texture = new CanvasTexture(canvas);
+  texture.colorSpace = SRGBColorSpace;
   texture.flipY = true;
-  texture.wrapS = THREE.ClampToEdgeWrapping;
-  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.wrapS = ClampToEdgeWrapping;
+  texture.wrapT = ClampToEdgeWrapping;
   texture.needsUpdate = true;
 
   return texture;
@@ -374,10 +380,10 @@ function MugModel({ items }) {
       }
 
       child.visible = true;
-      child.material = new THREE.MeshBasicMaterial({
+      child.material = new MeshBasicMaterial({
         map: printTexture,
         transparent: true,
-        side: THREE.DoubleSide,
+        side: DoubleSide,
         depthWrite: false,
         depthTest: true,
         polygonOffset: true,
