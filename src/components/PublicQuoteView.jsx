@@ -3,6 +3,7 @@ import { useLocation, useSearchParams } from "react-router-dom";
 import DocumentPreview from "./DocumentPreview";
 import { money } from "../utils/money";
 import { statusClass } from "../utils/documents";
+import { getClientPortalProgress, getInvoicePaymentLabel } from "../utils/clientPortal";
 import {
   acceptPublicQuote,
   declinePublicQuote,
@@ -45,7 +46,9 @@ export default function PublicQuoteView() {
   const [accepted, setAccepted] = useState(false);
   const [declined, setDeclined] = useState(false);
   const [declineReason, setDeclineReason] = useState("");
-  const [showPreview, setShowPreview] = useState(false);
+  const [signatureName, setSignatureName] = useState("");
+  const [previewDocument, setPreviewDocument] = useState(null);
+  const [previewType, setPreviewType] = useState("quote");
 
   useEffect(() => {
     let cancelled = false;
@@ -88,19 +91,41 @@ export default function PublicQuoteView() {
     return !["Accepté", "Refusé", "Annulé"].includes(status);
   }, [context]);
 
+  const portal = useMemo(
+    () => context?.portal || { quotes: [], invoices: [], deliveryNotes: [] },
+    [context?.portal]
+  );
+  const progressSteps = useMemo(
+    () => getClientPortalProgress(context?.quote, portal),
+    [context?.quote, portal]
+  );
+
+  function openPreview(doc, type) {
+    setPreviewDocument(doc);
+    setPreviewType(type);
+  }
+
   async function handleAccept() {
     if (!quoteId || accepting) return;
+    const trimmedSignature = signatureName.trim();
+    if (!trimmedSignature) {
+      showToast("Indiquez le nom du signataire avant d'accepter.", "error");
+      return;
+    }
     if (
       !(await confirmAction({
         title: "Accepter le devis",
-        message: "Confirmez-vous l'acceptation de ce devis ?",
-        confirmLabel: "Accepter",
+        message: `Confirmez-vous l'acceptation et la signature par ${trimmedSignature} ?`,
+        confirmLabel: "Signer et accepter",
       }))
     ) return;
 
     setAccepting(true);
     try {
-      const result = await acceptPublicQuote(quoteId, shareToken, context?.settings);
+      const result = await acceptPublicQuote(quoteId, shareToken, context?.settings, {
+        typedName: trimmedSignature,
+        clientEmail: context?.client?.email || context?.quote?.clientSnapshot?.email || "",
+      });
       setContext(result);
       setAccepted(true);
       showToast("Merci — votre acceptation a été enregistrée.", "success");
@@ -204,18 +229,28 @@ export default function PublicQuoteView() {
         ) : null}
 
         <div className="public-quote-actions">
-          <button type="button" className="primary" onClick={() => setShowPreview(true)}>
-            Voir le devis / PDF
+          <button type="button" className="primary" onClick={() => openPreview(quote, "quote")}>
+            Voir / télécharger le devis
           </button>
           {canRespond && !accepted && !declined ? (
             <>
+              <label className="public-quote-signature">
+                <span>Nom du signataire</span>
+                <input
+                  type="text"
+                  value={signatureName}
+                  onChange={(event) => setSignatureName(event.target.value)}
+                  placeholder={clientLabel}
+                  autoComplete="name"
+                />
+              </label>
               <button
                 type="button"
                 className="public-quote-accept"
                 disabled={accepting || declining}
                 onClick={handleAccept}
               >
-                {accepting ? "Enregistrement…" : "J'accepte ce devis"}
+                {accepting ? "Enregistrement…" : "Signer et accepter ce devis"}
               </button>
               <div className="public-quote-decline">
                 <label htmlFor="public-quote-decline-reason">
@@ -248,14 +283,90 @@ export default function PublicQuoteView() {
         </div>
       </section>
 
-      {showPreview && previewData ? (
+      <section className="public-portal-grid">
+        <div className="public-quote-card public-portal-section">
+          <h2>Suivi d'avancement</h2>
+          <ol className="public-portal-timeline">
+            {progressSteps.map((step) => (
+              <li
+                key={step.id}
+                className={[
+                  step.complete ? "is-complete" : "",
+                  step.muted ? "is-muted" : "",
+                ].filter(Boolean).join(" ")}
+              >
+                <span aria-hidden="true" />
+                <strong>{step.label}</strong>
+              </li>
+            ))}
+          </ol>
+        </div>
+
+        <div className="public-quote-card public-portal-section">
+          <h2>Documents client</h2>
+          <div className="public-portal-documents">
+            <DocumentGroup
+              title="Devis"
+              emptyLabel="Aucun autre devis disponible."
+              items={portal.quotes}
+              type="quote"
+              onPreview={openPreview}
+            />
+            <DocumentGroup
+              title="Factures"
+              emptyLabel="Aucune facture disponible."
+              items={portal.invoices}
+              type="invoice"
+              onPreview={openPreview}
+              subtitle={getInvoicePaymentLabel}
+            />
+            <DocumentGroup
+              title="Bons de livraison"
+              emptyLabel="Aucun bon de livraison disponible."
+              items={portal.deliveryNotes}
+              type="delivery"
+              onPreview={openPreview}
+            />
+          </div>
+        </div>
+      </section>
+
+      {previewDocument && previewData ? (
         <DocumentPreview
-          doc={quote}
-          type="quote"
+          doc={previewDocument}
+          type={previewType}
           data={previewData}
-          onClose={() => setShowPreview(false)}
+          onClose={() => setPreviewDocument(null)}
+          publicMode
         />
       ) : null}
+    </div>
+  );
+}
+
+function DocumentGroup({ title, emptyLabel, items = [], type, onPreview, subtitle }) {
+  return (
+    <div className="public-portal-document-group">
+      <h3>{title}</h3>
+      {items.length ? (
+        <div className="public-portal-document-list">
+          {items.map((item) => (
+            <article key={`${type}-${item.id || item.number}`} className="public-portal-document">
+              <div>
+                <strong>{item.number || "Document"}</strong>
+                <span>{item.date || "Date non renseignée"}</span>
+                {subtitle ? <small>{subtitle(item)}</small> : null}
+              </div>
+              <span className={statusClass(item.status)}>{item.status || "Disponible"}</span>
+              <button type="button" onClick={() => onPreview(item, type)}>
+                Voir / PDF
+              </button>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <p className="muted">{emptyLabel}</p>
+      )}
     </div>
   );
 }

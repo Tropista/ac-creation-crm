@@ -66,6 +66,7 @@ export default function DocumentPreview({
   onQuoteSharePrepared,
   onQuoteAccept,
   paymentSummary,
+  publicMode = false,
 }) {
   const pdfWrapperRef = useRef(null);
   const [sending, setSending] = useState(false);
@@ -330,7 +331,7 @@ export default function DocumentPreview({
           <button type="button" onClick={handleClose}>
             Fermer
           </button>
-          {isQuote && (
+          {isQuote && !publicMode && (
             <>
               <button type="button" onClick={copyQuoteLink}>
                 Copier le lien
@@ -340,9 +341,11 @@ export default function DocumentPreview({
               </button>
             </>
           )}
-          <button type="button" onClick={openEmailPreview} disabled={sending}>
-            Envoyer par email
-          </button>
+          {!publicMode && (
+            <button type="button" onClick={openEmailPreview} disabled={sending}>
+              Envoyer par email
+            </button>
+          )}
           <button type="button" onClick={() => window.print()}>
             Imprimer
           </button>

@@ -1,5 +1,7 @@
 import { getSupabase, isSupabaseConfigured } from "../supabase";
 import { loadData } from "./dataService";
+import { getClientPortalDocuments } from "../utils/clientPortal";
+import { acceptQuoteWithSignature } from "../utils/quoteSignature";
 
 export function generateShareToken() {
   return crypto.randomUUID().replace(/-/g, "").slice(0, 24);
@@ -29,6 +31,23 @@ function findQuoteInLocalData(quoteId) {
   return (data.quotes || []).find((entry) => String(entry.id) === String(quoteId)) || null;
 }
 
+function buildPortalContext(data, quote) {
+  return getClientPortalDocuments(data, quote);
+}
+
+async function fetchPublicCollection(supabase, tableName, clientId) {
+  if (!clientId) return [];
+  const { data, error } = await supabase
+    .from(tableName)
+    .select("data")
+    .eq("data->>clientId", String(clientId));
+  if (error) {
+    console.warn(`Lecture portail client impossible pour ${tableName}`, error);
+    return [];
+  }
+  return (data || []).map((row) => row.data).filter(Boolean);
+}
+
 export async function fetchPublicQuoteContext(quoteId, shareToken, settings = {}) {
   if (!quoteId) {
     throw new Error("Identifiant de devis manquant.");
@@ -41,6 +60,7 @@ export async function fetchPublicQuoteContext(quoteId, shareToken, settings = {}
       quote: localQuote,
       client: (data.clients || []).find((c) => c.id === localQuote.clientId) || null,
       settings: data.settings || settings,
+      portal: buildPortalContext(data, localQuote),
       source: "local",
     };
   }
@@ -83,7 +103,19 @@ export async function fetchPublicQuoteContext(quoteId, shareToken, settings = {}
     cloudSettings = settingsRow.data;
   }
 
-  return { quote, client, settings: cloudSettings, source: "cloud" };
+  const [quotes, invoices, deliveryNotes] = await Promise.all([
+    fetchPublicCollection(supabase, "quotes", quote.clientId),
+    fetchPublicCollection(supabase, "invoices", quote.clientId),
+    fetchPublicCollection(supabase, "delivery_notes", quote.clientId),
+  ]);
+
+  return {
+    quote,
+    client,
+    settings: cloudSettings,
+    portal: buildPortalContext({ quotes, invoices, deliveryNotes }, quote),
+    source: "cloud",
+  };
 }
 
 async function persistPublicQuote(context, quoteId, nextQuote) {
@@ -96,7 +128,12 @@ async function persistPublicQuote(context, quoteId, nextQuote) {
       "crm_local_data_v2",
       JSON.stringify({ ...data, quotes: nextQuotes })
     );
-    return { ...context, quote: nextQuote, source: "local" };
+    return {
+      ...context,
+      quote: nextQuote,
+      portal: buildPortalContext({ ...data, quotes: nextQuotes }, nextQuote),
+      source: "local",
+    };
   }
 
   if (!isSupabaseConfigured) {
@@ -113,10 +150,24 @@ async function persistPublicQuote(context, quoteId, nextQuote) {
     throw new Error("Impossible d'enregistrer votre réponse. Contactez-nous.");
   }
 
-  return { ...context, quote: nextQuote, source: "cloud" };
+  return {
+    ...context,
+    quote: nextQuote,
+    portal: buildPortalContext(
+      {
+        quotes: (context.portal?.quotes || []).map((entry) =>
+          String(entry.id) === String(quoteId) ? nextQuote : entry
+        ),
+        invoices: context.portal?.invoices || [],
+        deliveryNotes: context.portal?.deliveryNotes || [],
+      },
+      nextQuote
+    ),
+    source: "cloud",
+  };
 }
 
-export async function acceptPublicQuote(quoteId, shareToken, settings = {}) {
+export async function acceptPublicQuote(quoteId, shareToken, settings = {}, signature = {}) {
   const context = await fetchPublicQuoteContext(quoteId, shareToken, settings);
   const { quote } = context;
 
@@ -124,12 +175,21 @@ export async function acceptPublicQuote(quoteId, shareToken, settings = {}) {
     return { ...context, alreadyHandled: true };
   }
 
-  const acceptedQuote = {
-    ...quote,
-    status: "Accepté",
-    acceptedAt: new Date().toISOString(),
-    acceptedVia: "public-link",
-  };
+  const acceptedQuote = signature?.typedName
+    ? {
+        ...acceptQuoteWithSignature(quote, {
+          mode: "typed",
+          typedName: signature.typedName,
+          clientEmail: signature.clientEmail || context.client?.email || quote.clientSnapshot?.email || "",
+        }),
+        acceptedVia: "public-link-signature",
+      }
+    : {
+        ...quote,
+        status: "Accepté",
+        acceptedAt: new Date().toISOString(),
+        acceptedVia: "public-link",
+      };
 
   const result = await persistPublicQuote(context, quoteId, acceptedQuote);
   return { ...result, accepted: true };

@@ -1259,6 +1259,30 @@ html,
   gap: 10px;
 }
 
+.public-quote-signature {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 12px;
+  background: #eff6ff;
+}
+
+.public-quote-signature span {
+  font-size: 13px;
+  font-weight: 800;
+  color: #1d4ed8;
+}
+
+.public-quote-signature input {
+  min-height: 42px;
+  border: 1px solid #93c5fd;
+  border-radius: 10px;
+  padding: 0 12px;
+  font: inherit;
+  background: #fff;
+}
+
 .public-quote-accept {
   min-height: 48px;
   border: 0;
@@ -1320,4 +1344,118 @@ html,
   background: #fef2f2;
   color: #991b1b;
   font-weight: 700;
+}
+
+.public-portal-grid {
+  max-width: 720px;
+  margin: 16px auto 0;
+  display: grid;
+  gap: 16px;
+}
+
+.public-portal-section h2 {
+  margin: 0 0 14px;
+  font-size: 20px;
+}
+
+.public-portal-timeline {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.public-portal-timeline li {
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  align-items: center;
+  gap: 10px;
+  color: #64748b;
+}
+
+.public-portal-timeline li > span {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 2px solid #cbd5e1;
+  background: #fff;
+}
+
+.public-portal-timeline li.is-complete {
+  color: #065f46;
+}
+
+.public-portal-timeline li.is-complete > span {
+  border-color: #10b981;
+  background: radial-gradient(circle at center, #10b981 45%, #d1fae5 48%);
+}
+
+.public-portal-timeline li.is-muted {
+  opacity: 0.55;
+}
+
+.public-portal-documents {
+  display: grid;
+  gap: 18px;
+}
+
+.public-portal-document-group h3 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.public-portal-document-list {
+  display: grid;
+  gap: 8px;
+}
+
+.public-portal-document {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.public-portal-document div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.public-portal-document strong,
+.public-portal-document span,
+.public-portal-document small {
+  overflow-wrap: anywhere;
+}
+
+.public-portal-document div > span,
+.public-portal-document small {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.public-portal-document button {
+  min-height: 34px;
+  border-radius: 10px;
+  border: 1px solid #c7d2fe;
+  background: #fff;
+  color: #4338ca;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .public-portal-document {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .public-portal-document button {
+    width: 100%;
+  }
 }
