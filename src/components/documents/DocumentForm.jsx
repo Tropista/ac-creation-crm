@@ -17,7 +17,7 @@ import { showToast } from "../../utils/toast";
 import { isSupabaseConfigured } from "../../supabase";
 import ProductPicker from "./ProductPicker";
 
-function ClientCombobox({ clients, value, onChange }) {
+export function ClientCombobox({ clients, value, onChange }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const containerRef = useRef(null);

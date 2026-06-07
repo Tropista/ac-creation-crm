@@ -16,6 +16,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    setupFiles: ["./src/test/setupComponentTests.js"],
     exclude: ["**/node_modules/**", "**/dist/**", "e2e/**"],
   },
   build: {
