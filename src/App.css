@@ -1324,6 +1324,18 @@ html,
   cursor: pointer;
 }
 
+.public-quote-page .public-quote-accept {
+  border: 0;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #ffffff;
+  box-shadow: 0 10px 24px rgba(5, 150, 105, 0.22);
+}
+
+.public-quote-page .public-quote-accept:hover {
+  background: linear-gradient(135deg, #059669, #047857);
+  color: #ffffff;
+}
+
 .public-quote-accepted {
   margin: 0;
   padding: 12px 14px;
@@ -1365,6 +1377,17 @@ html,
   color: #b91c1c;
   font-weight: 800;
   cursor: pointer;
+}
+
+.public-quote-page .public-quote-decline-btn {
+  border: 1px solid #fca5a5;
+  background: #ffffff;
+  color: #b91c1c;
+}
+
+.public-quote-page .public-quote-decline-btn:hover {
+  background: #fef2f2;
+  color: #991b1b;
 }
 
 .public-quote-declined {
