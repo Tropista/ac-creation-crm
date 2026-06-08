@@ -288,6 +288,14 @@ export function normalizeData(data) {
       rest?.payments || []
     ),
 
+    clientFiles: dedupeItemsById(
+      rest?.clientFiles || []
+    ),
+
+    clientNotes: dedupeItemsById(
+      rest?.clientNotes || []
+    ),
+
     backups: dedupeItemsById(
       rest?.backups || []
     ),

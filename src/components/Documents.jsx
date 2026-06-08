@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import DocumentPreview from "./DocumentPreview";
 import DocumentForm from "./documents/DocumentForm";
 import DocumentList from "./documents/DocumentList";
@@ -80,6 +80,7 @@ import { confirmAction } from "../utils/confirmAction";
 
 function Documents({ type, data, setData, currentRole = 'Admin', logActivity, pendingOpenDoc = null, onClearPendingOpenDoc }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const isQuote = type === "quote";
   const listKey = isQuote ? "quotes" : "invoices";
   const title = isQuote ? "Devis" : "Factures";
@@ -776,8 +777,11 @@ reset();
   useEffect(() => {
     const openFromUrl = parseQuoteOpenIdFromLocation(location);
     const openDocumentId =
-      localStorage.getItem("crm_open_document_id") || openFromUrl;
+      location.state?.openDocumentId ||
+      localStorage.getItem("crm_open_document_id") ||
+      openFromUrl;
     const openDocumentType =
+      location.state?.openDocumentType ||
       localStorage.getItem("crm_open_document_type") ||
       (openFromUrl ? (isQuote ? "quote" : "invoice") : "");
 
@@ -806,9 +810,15 @@ reset();
 
     setPreviewDoc(doc);
     setPreviewType(openDocumentType === "quote" ? "quote" : "invoice");
+    if (location.state?.openDocumentId) {
+      navigate(`${location.pathname}${location.search}${location.hash}`, {
+        replace: true,
+        state: { ...location.state, openDocumentId: null, openDocumentType: null },
+      });
+    }
 
     return undefined;
-  }, [documents, isQuote, location.search, location.hash, location.pathname]);
+  }, [documents, isQuote, location.search, location.hash, location.pathname, location.state, navigate]);
   function duplicate(doc) {
     const newId  = crypto.randomUUID();
     const newNum = isQuote

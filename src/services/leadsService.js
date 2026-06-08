@@ -10,6 +10,16 @@ export const LEAD_STATUS = {
   CONVERTED: "converti",
 };
 
+export const LEAD_PIPELINE_STAGES = [
+  { value: "new", label: "Nouveau", defaultProbability: 10 },
+  { value: "qualified", label: "Qualifie", defaultProbability: 30 },
+  { value: "follow-up", label: "Relance", defaultProbability: 55 },
+  { value: "quote-ready", label: "Devis a preparer", defaultProbability: 75 },
+  { value: "converted", label: "Converti", defaultProbability: 100 },
+];
+
+const PIPELINE_STAGE_VALUES = new Set(LEAD_PIPELINE_STAGES.map((stage) => stage.value));
+
 function uid() {
   return crypto.randomUUID();
 }
@@ -116,6 +126,60 @@ export function getActiveLeads(leads = []) {
   return (leads || []).filter(isActiveLead);
 }
 
+export function getLeadPipelineStage(lead = {}) {
+  if (PIPELINE_STAGE_VALUES.has(String(lead.pipelineStage || ""))) {
+    return String(lead.pipelineStage);
+  }
+
+  if (String(lead.status || "") === LEAD_STATUS.CONVERTED) return "converted";
+  if (String(lead.status || "") === LEAD_STATUS.READ) return "qualified";
+  return "new";
+}
+
+export function getLeadProbability(lead = {}) {
+  const explicit = lead.probability ?? lead.metadata?.probability;
+  if (explicit !== undefined && explicit !== null && explicit !== "") {
+    return Math.min(100, Math.max(0, Math.round(Number(explicit) || 0)));
+  }
+
+  const stage = LEAD_PIPELINE_STAGES.find((entry) => entry.value === getLeadPipelineStage(lead));
+  return stage?.defaultProbability || 0;
+}
+
+export function getLeadEstimatedAmount(lead = {}) {
+  const value = lead.estimatedAmount ?? lead.metadata?.estimatedAmount ?? lead.metadata?.budget;
+  return Math.max(0, Math.round(Number(value || 0) * 100) / 100);
+}
+
+export function normalizeLeadCommercialFields(lead = {}) {
+  return {
+    ...lead,
+    pipelineStage: getLeadPipelineStage(lead),
+    probability: getLeadProbability(lead),
+    estimatedAmount: getLeadEstimatedAmount(lead),
+    nextFollowUpAt: lead.nextFollowUpAt || "",
+  };
+}
+
+export function updateLeadCommercialFields(leads = [], leadId, patch = {}) {
+  return (leads || []).map((lead) => {
+    if (String(lead.id) !== String(leadId)) return lead;
+
+    const next = { ...lead, ...patch };
+    if (patch.pipelineStage && !PIPELINE_STAGE_VALUES.has(String(patch.pipelineStage))) {
+      next.pipelineStage = getLeadPipelineStage(lead);
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, "probability")) {
+      next.probability = Math.min(100, Math.max(0, Math.round(Number(patch.probability) || 0)));
+    }
+    if (Object.prototype.hasOwnProperty.call(patch, "estimatedAmount")) {
+      next.estimatedAmount = Math.max(0, Math.round(Number(patch.estimatedAmount || 0) * 100) / 100);
+    }
+
+    return { ...next, updatedAt: nowIso() };
+  });
+}
+
 export function markLeadRead(leads = [], leadId) {
   return (leads || []).map((lead) =>
     String(lead.id) === String(leadId)
@@ -130,6 +194,8 @@ export function markLeadConverted(leads = [], leadId, { clientId = "" } = {}) {
       ? {
           ...lead,
           status: LEAD_STATUS.CONVERTED,
+          pipelineStage: "converted",
+          probability: 100,
           convertedAt: nowIso(),
           clientId: clientId || lead.clientId || "",
           updatedAt: nowIso(),

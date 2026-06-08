@@ -6,11 +6,14 @@ import {
   convertLeadToClientAndQuote,
   countActiveLeads,
   countUnreadLeads,
+  LEAD_PIPELINE_STAGES,
   LEAD_STATUS,
   loadLocalPublicLeads,
   markLeadRead,
   mergePublicLeadsIntoData,
+  normalizeLeadCommercialFields,
   PUBLIC_LEADS_UPDATED_EVENT,
+  updateLeadCommercialFields,
 } from "../services/leadsService";
 import { openQuoteFromCalculator } from "../utils/quoteDraft";
 import { showToast } from "../utils/toast";
@@ -25,10 +28,24 @@ const STATUS_FILTERS = [
 ];
 
 function formatLeadDate(value) {
-  if (!value) return "—";
+  if (!value) return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
   return date.toLocaleString("fr-FR");
+}
+
+function formatShortDate(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value).slice(0, 10);
+  return date.toLocaleDateString("fr-FR");
+}
+
+function money(value) {
+  return `${Number(value || 0).toLocaleString("fr-FR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  })} EUR`;
 }
 
 export default function Leads({ data, setData, logActivity, currentRole = "Admin" }) {
@@ -53,19 +70,36 @@ export default function Leads({ data, setData, logActivity, currentRole = "Admin
     };
   }, [setData]);
 
-  const leads = data.leads || [];
+  const leads = (data.leads || []).map(normalizeLeadCommercialFields);
   const filteredLeads = useMemo(() => {
     const sorted = [...leads].sort(
       (a, b) => Date.parse(String(b.createdAt || "")) - Date.parse(String(a.createdAt || ""))
     );
     if (statusFilter === "all") return sorted;
-    return sorted.filter(
-      (lead) => String(lead.status || LEAD_STATUS.NEW) === statusFilter
-    );
+    return sorted.filter((lead) => String(lead.status || LEAD_STATUS.NEW) === statusFilter);
   }, [leads, statusFilter]);
 
   const unreadCount = countUnreadLeads(leads);
   const activeCount = countActiveLeads(leads);
+  const estimatedPipelineTotal = filteredLeads.reduce(
+    (sum, lead) => sum + Number(lead.estimatedAmount || 0),
+    0
+  );
+  const weightedPipelineTotal = filteredLeads.reduce(
+    (sum, lead) =>
+      sum + (Number(lead.estimatedAmount || 0) * Number(lead.probability || 0)) / 100,
+    0
+  );
+
+  const leadsByStage = useMemo(() => {
+    const groups = new Map(LEAD_PIPELINE_STAGES.map((stage) => [stage.value, []]));
+    for (const lead of filteredLeads) {
+      const stage = lead.pipelineStage || "new";
+      const target = groups.has(stage) ? stage : "new";
+      groups.get(target).push(lead);
+    }
+    return groups;
+  }, [filteredLeads]);
 
   function handleConvertLead(lead) {
     try {
@@ -73,15 +107,15 @@ export default function Leads({ data, setData, logActivity, currentRole = "Admin
       setData(result.data);
       logActivity?.(
         result.isNewClient
-          ? "Conversion lead → client + devis"
-          : "Conversion lead → devis (client existant)",
+          ? "Conversion lead -> client + devis"
+          : "Conversion lead -> devis (client existant)",
         lead.email
       );
       openQuoteFromCalculator(navigate, result.draft);
       showToast(
         result.isNewClient
-          ? "Client créé et devis pré-rempli."
-          : "Devis pré-rempli pour le client existant.",
+          ? "Client cree et devis pre-rempli."
+          : "Devis pre-rempli pour le client existant.",
         "success"
       );
     } catch (error) {
@@ -94,7 +128,14 @@ export default function Leads({ data, setData, logActivity, currentRole = "Admin
       ...current,
       leads: markLeadRead(current.leads || [], leadId),
     }));
-    showToast("Lead marqué comme lu.", "success");
+    showToast("Lead marque comme lu.", "success");
+  }
+
+  function updateLead(leadId, patch) {
+    setData((current) => ({
+      ...current,
+      leads: updateLeadCommercialFields(current.leads || [], leadId, patch),
+    }));
   }
 
   return (
@@ -103,12 +144,12 @@ export default function Leads({ data, setData, logActivity, currentRole = "Admin
         <div>
           <h2>Leads</h2>
           <p>
-            Contacts laissés via les configurateurs — {activeCount} actif(s)
+            Contacts laisses via les configurateurs - {activeCount} actif(s)
             {unreadCount > 0 ? ` · ${unreadCount} nouveau(x)` : ""}.
           </p>
         </div>
         <button type="button" className="ghost" onClick={() => navigate(pageToPath("dashboard"))}>
-          Tableau de bord →
+          Tableau de bord
         </button>
       </div>
 
@@ -126,83 +167,162 @@ export default function Leads({ data, setData, logActivity, currentRole = "Admin
         ))}
       </div>
 
+      <div className="leads-pipeline-summary">
+        <div className="card leads-kpi">
+          <span>Pipeline estime</span>
+          <strong>{money(estimatedPipelineTotal)}</strong>
+        </div>
+        <div className="card leads-kpi">
+          <span>Pondere</span>
+          <strong>{money(weightedPipelineTotal)}</strong>
+        </div>
+        <div className="card leads-kpi">
+          <span>Leads actifs</span>
+          <strong>{activeCount}</strong>
+        </div>
+      </div>
+
       {filteredLeads.length === 0 ? (
         <div className="card leads-empty">
           <p className="muted">
             {statusFilter === "all"
-              ? "Aucun lead enregistré pour le moment."
-              : `Aucun lead avec le statut « ${STATUS_FILTERS.find((f) => f.value === statusFilter)?.label} ».`}
+              ? "Aucun lead enregistre pour le moment."
+              : `Aucun lead avec le statut "${STATUS_FILTERS.find((f) => f.value === statusFilter)?.label}".`}
           </p>
         </div>
       ) : (
-        <div className="table compact-table card">
-          <table>
-            <thead>
-              <tr>
-                <th>Email</th>
-                <th>Téléphone</th>
-                <th>Projet</th>
-                <th>Source</th>
-                <th>Statut</th>
-                <th>Date</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredLeads.map((lead) => {
-                const mailtoHref = buildLeadMailtoHref(lead);
-                const telHref = buildLeadTelHref(lead);
-                const projectName = String(lead.metadata?.projectName || "").trim();
-                const status = String(lead.status || LEAD_STATUS.NEW);
-                const isConverted = status === LEAD_STATUS.CONVERTED;
+        <div className="leads-kanban" data-testid="leads-kanban">
+          {LEAD_PIPELINE_STAGES.map((stage) => {
+            const stageLeads = leadsByStage.get(stage.value) || [];
+            const stageTotal = stageLeads.reduce(
+              (sum, lead) => sum + Number(lead.estimatedAmount || 0),
+              0
+            );
 
-                return (
-                  <tr key={lead.id} data-testid={`lead-row-${lead.id}`}>
-                    <td>
-                      {mailtoHref ? (
-                        <a href={mailtoHref}>{lead.email}</a>
-                      ) : (
-                        lead.email
-                      )}
-                    </td>
-                    <td>
-                      {telHref ? <a href={telHref}>{lead.phone}</a> : lead.phone || "—"}
-                    </td>
-                    <td>{projectName || "—"}</td>
-                    <td>{lead.source || "configurateur"}</td>
-                    <td>
-                      <span className={`leads-status leads-status--${status}`}>
-                        {status}
-                      </span>
-                    </td>
-                    <td className="muted">{formatLeadDate(lead.createdAt)}</td>
-                    <td>
-                      <div className="leads-row-actions">
-                        {canConvertLeads && !isConverted ? (
-                          <button
-                            type="button"
-                            className="compact primary"
-                            onClick={() => handleConvertLead(lead)}
-                          >
-                            Créer client + devis
-                          </button>
-                        ) : null}
-                        {status === LEAD_STATUS.NEW ? (
-                          <button
-                            type="button"
-                            className="compact"
-                            onClick={() => handleMarkLeadRead(lead.id)}
-                          >
-                            Marquer lu
-                          </button>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+            return (
+              <section className="leads-kanban-column card" key={stage.value}>
+                <div className="leads-kanban-column__header">
+                  <div>
+                    <h3>{stage.label}</h3>
+                    <span>
+                      {stageLeads.length} lead(s) · {money(stageTotal)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="leads-kanban-cards">
+                  {stageLeads.length === 0 ? (
+                    <p className="muted leads-kanban-empty">Aucun lead.</p>
+                  ) : (
+                    stageLeads.map((lead) => {
+                      const mailtoHref = buildLeadMailtoHref(lead);
+                      const telHref = buildLeadTelHref(lead);
+                      const projectName = String(lead.metadata?.projectName || "").trim();
+                      const status = String(lead.status || LEAD_STATUS.NEW);
+                      const isConverted = status === LEAD_STATUS.CONVERTED;
+
+                      return (
+                        <article className="lead-card" key={lead.id} data-testid={`lead-row-${lead.id}`}>
+                          <div className="lead-card__top">
+                            <div>
+                              <strong>{projectName || lead.email || "Lead"}</strong>
+                              <span>{formatLeadDate(lead.createdAt)}</span>
+                            </div>
+                            <span className={`leads-status leads-status--${status}`}>{status}</span>
+                          </div>
+
+                          <div className="lead-card__contacts">
+                            {mailtoHref ? <a href={mailtoHref}>{lead.email}</a> : <span>{lead.email}</span>}
+                            {telHref ? <a href={telHref}>{lead.phone}</a> : <span>{lead.phone || "-"}</span>}
+                          </div>
+
+                          <div className="lead-card__meta">
+                            <label>
+                              Source
+                              <input
+                                value={lead.source || ""}
+                                onChange={(event) => updateLead(lead.id, { source: event.target.value })}
+                                placeholder="Source"
+                              />
+                            </label>
+                            <label>
+                              Etape
+                              <select
+                                value={lead.pipelineStage}
+                                onChange={(event) => updateLead(lead.id, { pipelineStage: event.target.value })}
+                                disabled={isConverted}
+                              >
+                                {LEAD_PIPELINE_STAGES.map((entry) => (
+                                  <option key={entry.value} value={entry.value}>
+                                    {entry.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label>
+                              Relance
+                              <input
+                                type="date"
+                                value={String(lead.nextFollowUpAt || "").slice(0, 10)}
+                                onChange={(event) => updateLead(lead.id, { nextFollowUpAt: event.target.value })}
+                              />
+                            </label>
+                            <label>
+                              Probabilite
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                value={lead.probability}
+                                onChange={(event) => updateLead(lead.id, { probability: event.target.value })}
+                              />
+                            </label>
+                            <label>
+                              Montant estime
+                              <input
+                                type="number"
+                                min="0"
+                                step="10"
+                                value={lead.estimatedAmount}
+                                onChange={(event) => updateLead(lead.id, { estimatedAmount: event.target.value })}
+                              />
+                            </label>
+                          </div>
+
+                          <div className="lead-card__score">
+                            <span>{lead.probability}%</span>
+                            <strong>{money(lead.estimatedAmount)}</strong>
+                            {lead.nextFollowUpAt ? <em>Relance {formatShortDate(lead.nextFollowUpAt)}</em> : null}
+                          </div>
+
+                          <div className="leads-row-actions">
+                            {canConvertLeads && !isConverted ? (
+                              <button
+                                type="button"
+                                className="compact primary"
+                                onClick={() => handleConvertLead(lead)}
+                              >
+                                Creer client + devis
+                              </button>
+                            ) : null}
+                            {status === LEAD_STATUS.NEW ? (
+                              <button
+                                type="button"
+                                className="compact"
+                                onClick={() => handleMarkLeadRead(lead.id)}
+                              >
+                                Marquer lu
+                              </button>
+                            ) : null}
+                          </div>
+                        </article>
+                      );
+                    })
+                  )}
+                </div>
+              </section>
+            );
+          })}
         </div>
       )}
     </section>

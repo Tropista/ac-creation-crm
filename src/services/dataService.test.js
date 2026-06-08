@@ -77,6 +77,25 @@ describe("dataService", () => {
     expect(loaded.clients[0].name).toBe("AC Creation");
   });
 
+  it("loadData conserve les fichiers et notes client", () => {
+    const storage = createStorage();
+    vi.stubGlobal("localStorage", storage);
+
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        ...emptyData,
+        clientFiles: [{ id: "file-1", clientId: "c1", name: "logo.svg" }],
+        clientNotes: [{ id: "note-1", clientId: "c1", text: "Appel client" }],
+      })
+    );
+
+    const loaded = loadData();
+
+    expect(loaded.clientFiles).toHaveLength(1);
+    expect(loaded.clientNotes).toHaveLength(1);
+  });
+
   it("saveData retire les images produits base64 trop lourdes du localStorage", () => {
     const storage = createStorage();
     vi.stubGlobal("localStorage", storage);

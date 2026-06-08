@@ -259,6 +259,47 @@ export default function Clients({
     return filterAfterSalesByClient(data.afterSalesCases, selectedClient.id);
   }, [data.afterSalesCases, selectedClient]);
 
+  const selectedClientPayments = useMemo(() => {
+    if (!selectedClient) return [];
+    const invoiceIds = new Set(selectedClientInvoices.map((invoice) => String(invoice.id)));
+    return (data.payments || [])
+      .filter(
+        (payment) =>
+          String(payment.clientId || "") === String(selectedClient.id) ||
+          invoiceIds.has(String(payment.invoiceId || ""))
+      )
+      .sort(
+        (a, b) =>
+          new Date(b.date || b.createdAt || 0) - new Date(a.date || a.createdAt || 0)
+      );
+  }, [data.payments, selectedClient, selectedClientInvoices]);
+
+  const selectedClientFiles = useMemo(() => {
+    if (!selectedClient) return [];
+    return (data.clientFiles || [])
+      .filter((file) => String(file.clientId) === String(selectedClient.id))
+      .sort((a, b) => new Date(b.uploadedAt || b.createdAt || 0) - new Date(a.uploadedAt || a.createdAt || 0));
+  }, [data.clientFiles, selectedClient]);
+
+  const selectedClientNotes = useMemo(() => {
+    if (!selectedClient) return [];
+    return (data.clientNotes || [])
+      .filter((note) => String(note.clientId) === String(selectedClient.id))
+      .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  }, [data.clientNotes, selectedClient]);
+
+  const selectedClientLeads = useMemo(() => {
+    if (!selectedClient) return [];
+    const clientEmail = String(selectedClient.email || "").trim().toLowerCase();
+    return (data.leads || [])
+      .filter(
+        (lead) =>
+          String(lead.clientId || "") === String(selectedClient.id) ||
+          (clientEmail && String(lead.email || "").trim().toLowerCase() === clientEmail)
+      )
+      .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+  }, [data.leads, selectedClient]);
+
   const clientHistory = useMemo(() => {
     const quotes = selectedClientQuotes.map((quote) => ({
       id: `quote-${quote.id}`,
@@ -334,7 +375,124 @@ export default function Clients({
       total: 0,
     }));
 
-    return [...quotes, ...invoices, ...deliveryNotes, ...creditNotes, ...savCases, ...created].sort(
+    const payments = selectedClientPayments.map((payment) => ({
+      id: `payment-${payment.id}`,
+      type: "Paiement",
+      icon: "Paiement",
+      tone: payment.status === "Recu" || payment.status === "Reçu" ? "green" : "purple",
+      title: payment.invoiceNumber || payment.method || "Paiement",
+      status: payment.status || payment.method || "Enregistre",
+      date: payment.date || payment.createdAt,
+      total: Number(payment.amount || 0),
+      detail: payment.notes || (payment.method ? `Mode : ${payment.method}` : ""),
+    }));
+
+    const files = selectedClientFiles.map((file) => ({
+      id: `file-${file.id}`,
+      type: "Fichier",
+      icon: "Fichier",
+      tone: "purple",
+      title: file.name || "Fichier client",
+      status: file.source || "Ajoute",
+      date: file.uploadedAt || file.createdAt,
+      total: 0,
+      detail: file.mimeType || "",
+      href: file.url || "",
+    }));
+
+    const noteLabels = {
+      note: "Note",
+      call: "Appel",
+      email: "Email",
+    };
+    const noteIcons = {
+      note: "Note",
+      call: "Appel",
+      email: "Email",
+    };
+    const notes = selectedClientNotes.map((note) => {
+      const kind = note.kind || "note";
+      return {
+        id: `note-${note.id}`,
+        type: noteLabels[kind] || "Note",
+        icon: noteIcons[kind] || "Note",
+        tone: kind === "call" ? "green" : kind === "email" ? "purple" : "",
+        title: String(note.text || "").slice(0, 70) || "Note client",
+        status: "Saisi",
+        date: note.createdAt,
+        total: 0,
+        detail: note.text || "",
+      };
+    });
+
+    const leads = selectedClientLeads.map((lead) => ({
+      id: `lead-${lead.id}`,
+      type: "Lead",
+      icon: "Lead",
+      tone: "green",
+      title: lead.metadata?.projectName || lead.email || "Lead",
+      status: lead.status || "nouveau",
+      date: lead.convertedAt || lead.createdAt,
+      total: Number(lead.estimatedAmount || lead.metadata?.estimatedAmount || 0),
+      detail: `${lead.source || "configurateur"}${lead.probability ? ` · ${lead.probability}%` : ""}`,
+    }));
+
+    const emailEvents = [...selectedClientQuotes, ...selectedClientInvoices, ...selectedClientDeliveryNotes]
+      .flatMap((doc) => {
+        const label = doc.number || doc.reference || "Document";
+        const events = [];
+        if (doc.sentAt || doc.emailSentAt) {
+          events.push({
+            id: `email-sent-${doc.id}`,
+            type: "Email",
+            icon: "Email",
+            tone: "purple",
+            title: `${label} envoye`,
+            status: "Envoye",
+            date: doc.emailSentAt || doc.sentAt,
+            total: 0,
+          });
+        }
+        if (doc.emailReadAt) {
+          events.push({
+            id: `email-read-${doc.id}`,
+            type: "Email",
+            icon: "Email",
+            tone: "green",
+            title: `${label} lu`,
+            status: "Lu",
+            date: doc.emailReadAt,
+            total: 0,
+          });
+        }
+        if (doc.lastReminderAt || doc.lastReminderDate) {
+          events.push({
+            id: `email-reminder-${doc.id}`,
+            type: "Relance",
+            icon: "Relance",
+            tone: "purple",
+            title: `${label} relance`,
+            status: `Relance n°${Number(doc.reminderCount || 1)}`,
+            date: doc.lastReminderAt || doc.lastReminderDate,
+            total: 0,
+          });
+        }
+        return events;
+      });
+
+    return [
+      ...quotes,
+      ...invoices,
+      ...deliveryNotes,
+      ...creditNotes,
+      ...savCases,
+      ...payments,
+      ...files,
+      ...notes,
+      ...leads,
+      ...emailEvents,
+      ...created,
+    ].sort(
       (a, b) => new Date(b.date || 0) - new Date(a.date || 0)
     );
   }, [
@@ -344,6 +502,10 @@ export default function Clients({
     selectedClientDeliveryNotes,
     selectedClientCreditNotes,
     selectedClientSavCases,
+    selectedClientPayments,
+    selectedClientFiles,
+    selectedClientNotes,
+    selectedClientLeads,
   ]);
 
   const selectedClientInvoiceTotal = selectedClientInvoices.reduce(
@@ -519,14 +681,14 @@ export default function Clients({
     localStorage.setItem("crm_open_document_type", type);
 
     if (type === "quote") {
-      setPage?.("quotes");
+      setPage?.("quotes", { state: { openDocumentId: doc.id, openDocumentType: "quote" } });
       return;
     }
     if (type === "delivery") {
-      setPage?.("quotes");
+      setPage?.("quotes", { state: { openDocumentId: doc.id, openDocumentType: "delivery" } });
       return;
     }
-    setPage?.("invoices");
+    setPage?.("invoices", { state: { openDocumentId: doc.id, openDocumentType: "invoice" } });
   }
 
   function remindClient(mode = "copy") {
@@ -1074,7 +1236,7 @@ h1{
                 {clientTab === "files" && (
                   <ClientFileLibrary
                     clientId={selectedClient.id}
-                    files={(data.clientFiles || []).filter((f) => String(f.clientId) === String(selectedClient.id))}
+                    files={selectedClientFiles}
                     onFilesChange={(updated) => {
                       const clientId = selectedClient.id;
                       setData((prev) => {
@@ -1125,7 +1287,7 @@ h1{
                 {clientTab === "notes" && (
                   <ClientNotes
                     clientId={selectedClient.id}
-                    notes={(data.clientNotes || []).filter((n) => String(n.clientId) === String(selectedClient.id))}
+                    notes={selectedClientNotes}
                     onNotesChange={(updated) => {
                       const others = (data.clientNotes || []).filter((n) => String(n.clientId) !== String(selectedClient.id));
                       setData({ ...data, clientNotes: [...others, ...updated] });
@@ -1144,11 +1306,12 @@ h1{
 
 function ClientNotes({ clientId, notes = [], onNotesChange }) {
   const [text, setText] = useState("");
+  const [kind, setKind] = useState("note");
 
   function addNote() {
     const t = text.trim();
     if (!t) return;
-    onNotesChange([...notes, { id: crypto.randomUUID(), clientId, text: t, createdAt: new Date().toISOString() }]);
+    onNotesChange([...notes, { id: crypto.randomUUID(), clientId, kind, text: t, createdAt: new Date().toISOString() }]);
     setText("");
   }
 
@@ -1161,6 +1324,15 @@ function ClientNotes({ clientId, notes = [], onNotesChange }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div style={{ display: "flex", gap: 8 }}>
+        <select
+          value={kind}
+          onChange={(e) => setKind(e.target.value)}
+          style={{ width: 120, alignSelf: "flex-start", fontSize: 13 }}
+        >
+          <option value="note">Note</option>
+          <option value="call">Appel</option>
+          <option value="email">Email</option>
+        </select>
         <textarea
           rows={3}
           value={text}
@@ -1182,7 +1354,7 @@ function ClientNotes({ clientId, notes = [], onNotesChange }) {
               <div style={{ flex: 1 }}>
                 <p style={{ margin: "0 0 4px", fontSize: 13, whiteSpace: "pre-wrap" }}>{n.text}</p>
                 <span style={{ fontSize: 11, color: "var(--muted)" }}>
-                  {new Date(n.createdAt).toLocaleString("fr-FR", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  {(n.kind === "call" ? "Appel" : n.kind === "email" ? "Email" : "Note")} · {new Date(n.createdAt).toLocaleString("fr-FR", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                 </span>
               </div>
               <button type="button" onClick={() => deleteNote(n.id)}
@@ -1235,43 +1407,58 @@ function DocumentRow({ doc, type, label, onOpen }) {
 
 function Timeline({ items, onOpen }) {
   if (!items.length) {
-    return <p className="muted">Aucun document pour ce client.</p>;
+    return <p className="muted">Aucune activite pour ce client.</p>;
   }
 
   return (
     <div className="client-timeline">
-      {items.map((item) => (
-        <div
-          className={`timeline-item${item.doc ? " clickable" : ""}`}
-          key={item.id}
-          onClick={item.doc && item.docType ? () => onOpen?.(item.doc, item.docType) : undefined}
-          onKeyDown={
-            item.doc && item.docType
-              ? (event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    onOpen?.(item.doc, item.docType);
+      {items.map((item) => {
+        const canOpenDocument = Boolean(item.doc && item.docType);
+
+        return (
+          <div
+            className={`timeline-item${canOpenDocument ? " clickable" : ""}`}
+            key={item.id}
+            onClick={canOpenDocument ? () => onOpen?.(item.doc, item.docType) : undefined}
+            onKeyDown={
+              canOpenDocument
+                ? (event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onOpen?.(item.doc, item.docType);
+                    }
                   }
-                }
-              : undefined
-          }
-          role={item.doc && item.docType ? "button" : undefined}
-          tabIndex={item.doc && item.docType ? 0 : undefined}
-        >
-          <div className="timeline-dot" />
+                : undefined
+            }
+            role={canOpenDocument ? "button" : undefined}
+            tabIndex={canOpenDocument ? 0 : undefined}
+          >
+            <div className={`timeline-dot ${item.tone || ""}`} />
 
-          <div>
-            <strong>
-              {item.icon} {item.type} — {item.title}
-            </strong>
+            <div>
+              <strong>
+                {item.icon} {item.type} - {item.title}
+              </strong>
 
-            <p>
-              {formatDate(item.date)} · {item.status}
-              {item.total > 0 ? ` · ${money(item.total)}` : ""}
-            </p>
+              <p>
+                {formatDate(item.date)} - {item.status}
+                {Number(item.total || 0) !== 0 ? ` - ${money(item.total)}` : ""}
+              </p>
+              {item.detail ? <small>{item.detail}</small> : null}
+              {item.href ? (
+                <a
+                  href={item.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  Ouvrir le fichier
+                </a>
+              ) : null}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

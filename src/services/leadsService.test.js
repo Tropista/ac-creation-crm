@@ -17,12 +17,17 @@ import {
   deriveClientNameFromLead,
   findClientByEmail,
   getActiveLeads,
+  getLeadEstimatedAmount,
+  getLeadPipelineStage,
+  getLeadProbability,
   loadLocalPublicLeads,
   markLeadConverted,
   markLeadRead,
   mergePublicLeadsIntoData,
+  normalizeLeadCommercialFields,
   PUBLIC_LEADS_KEY,
   submitPublicLead,
+  updateLeadCommercialFields,
 } from "./leadsService";
 const sampleLead = {
   id: "lead-1",
@@ -72,7 +77,37 @@ describe("leadsService", () => {
     const convertedLeads = markLeadConverted(readLeads, "lead-1", { clientId: "client-1" });
     expect(convertedLeads[0].status).toBe(LEAD_STATUS.CONVERTED);
     expect(convertedLeads[0].clientId).toBe("client-1");
+    expect(convertedLeads[0].pipelineStage).toBe("converted");
+    expect(convertedLeads[0].probability).toBe(100);
     expect(convertedLeads[0].convertedAt).toBeTruthy();
+  });
+
+  it("normalise les champs commerciaux du pipeline", () => {
+    const lead = normalizeLeadCommercialFields({
+      ...sampleLead,
+      status: LEAD_STATUS.READ,
+      metadata: { estimatedAmount: "450" },
+    });
+
+    expect(getLeadPipelineStage(lead)).toBe("qualified");
+    expect(getLeadProbability(lead)).toBe(30);
+    expect(getLeadEstimatedAmount(lead)).toBe(450);
+    expect(lead.nextFollowUpAt).toBe("");
+  });
+
+  it("met a jour les champs commerciaux d'un lead", () => {
+    const updated = updateLeadCommercialFields([sampleLead], "lead-1", {
+      pipelineStage: "follow-up",
+      probability: "62",
+      estimatedAmount: "1250.49",
+      nextFollowUpAt: "2026-06-15",
+    });
+
+    expect(updated[0].pipelineStage).toBe("follow-up");
+    expect(updated[0].probability).toBe(62);
+    expect(updated[0].estimatedAmount).toBe(1250.49);
+    expect(updated[0].nextFollowUpAt).toBe("2026-06-15");
+    expect(updated[0].updatedAt).toBeTruthy();
   });
 
   it("dérive un nom client depuis l’email", () => {
