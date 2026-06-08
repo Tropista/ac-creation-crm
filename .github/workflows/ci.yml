@@ -84,7 +84,7 @@ jobs:
 
       # Build Electron décompressé (--dir) : vérifie le packaging sans NSIS complet
       - name: Smoke test packaging Electron
-        run: npx electron-builder --win --dir --config.directories.output=release-ci
+        run: npx electron-builder --win --dir --config.directories.output=release-ci --config.win.signAndEditExecutable=false
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
           ELECTRON_CACHE: ${{ github.workspace }}\.cache\electron
