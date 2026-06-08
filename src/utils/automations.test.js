@@ -20,4 +20,34 @@ describe("automations", () => {
     });
     expect(alerts.some((a) => a.type === AUTOMATION_ALERT_TYPES.UNPAID_INVOICE)).toBe(true);
   });
+  it("genere des alertes marge faible et couts manquants", () => {
+    const alerts = buildAutomationAlerts({
+      clients: [{ id: "c1", name: "Client" }],
+      products: [{ id: "p1", purchasePrice: 80 }],
+      quotes: [],
+      afterSalesCases: [],
+      settings: { lowMarginAlertThreshold: 30 },
+      invoices: [
+        {
+          id: "low",
+          number: "FAC-LOW",
+          clientId: "c1",
+          date: "2026-01-01",
+          totalHT: 100,
+          lines: [{ productId: "p1", quantity: 1, price: 100, totalHT: 100 }],
+        },
+        {
+          id: "missing",
+          number: "FAC-MISSING",
+          clientId: "c1",
+          date: "2026-01-02",
+          totalHT: 50,
+          lines: [{ description: "Prestation", quantity: 1, price: 50, totalHT: 50 }],
+        },
+      ],
+    });
+
+    expect(alerts.some((alert) => alert.type === AUTOMATION_ALERT_TYPES.LOW_MARGIN)).toBe(true);
+    expect(alerts.some((alert) => alert.type === AUTOMATION_ALERT_TYPES.MISSING_COST)).toBe(true);
+  });
 });

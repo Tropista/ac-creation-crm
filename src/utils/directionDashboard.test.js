@@ -32,6 +32,8 @@ describe("directionDashboard", () => {
     expect(result.marginRate).toBe(80);
     expect(result.marginKnownRevenueHT).toBe(100);
     expect(result.marginUnknownRevenueHT).toBe(0);
+    expect(result.marginByClient[0].marginHT).toBe(80);
+    expect(result.marginByProcess[0].marginHT).toBe(80);
     expect(result.topClients[0].name).toBe("Client A");
     expect(result.profitableProducts[0].marginHT).toBe(80);
   });
@@ -114,5 +116,6 @@ describe("directionDashboard", () => {
     expect(result.marginKnownRevenueHT).toBe(0);
     expect(result.marginUnknownRevenueHT).toBe(100);
     expect(result.hasCompleteMargin).toBe(false);
+    expect(result.marginAlerts.some((alert) => alert.type === "missing_cost")).toBe(true);
   });
 });

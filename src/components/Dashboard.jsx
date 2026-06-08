@@ -1157,6 +1157,47 @@ export default function Dashboard({
               )}
             </section>
           </div>
+          <div className="dashboard-direction__grid dashboard-direction__grid--margins">
+            <section>
+              <h4>Marge par technique</h4>
+              {directionDashboard.marginByProcess.length === 0 ? <p className="muted">Aucune marge calculable.</p> : (
+                <ul className="dashboard-annual-top-clients">
+                  {directionDashboard.marginByProcess.map((row) => (
+                    <li key={row.key}>
+                      <span>{row.name}</span>
+                      <strong>{money(row.marginHT)} ({row.marginRate} %)</strong>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+            <section>
+              <h4>Marge par client</h4>
+              {directionDashboard.marginByClient.length === 0 ? <p className="muted">Aucune marge calculable.</p> : (
+                <ul className="dashboard-annual-top-clients">
+                  {directionDashboard.marginByClient.map((row) => (
+                    <li key={row.key}>
+                      <span>{row.name}</span>
+                      <strong>{money(row.marginHT)} ({row.marginRate} %)</strong>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+            <section>
+              <h4>Alertes marge</h4>
+              {directionDashboard.marginAlerts.length === 0 ? <p className="muted">Aucune alerte marge.</p> : (
+                <ul className="dashboard-direction__alerts">
+                  {directionDashboard.marginAlerts.slice(0, 6).map((alert, index) => (
+                    <li key={`${alert.type}-${alert.invoiceId || index}`} className={`is-${alert.severity}`}>
+                      <strong>{alert.title}</strong>
+                      <span>{alert.message}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </div>
         </div>
       )}
 

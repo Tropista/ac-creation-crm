@@ -15,6 +15,11 @@ import {
 import { uid } from "../../utils/documents";
 import { showToast } from "../../utils/toast";
 import { isSupabaseConfigured } from "../../supabase";
+import {
+  applyProductionMarginTemplate,
+  computeLineInternalCosts,
+  PRODUCTION_MARGIN_TEMPLATES,
+} from "../../utils/quoteMarginAssistant";
 import ProductPicker from "./ProductPicker";
 
 export function ClientCombobox({ clients, value, onChange }) {
@@ -433,6 +438,7 @@ export default function DocumentForm({
 
           {(form.lines || []).map((line, index) => {
             const total = lineTotal(line).totalHT;
+            const margin = computeLineInternalCosts(line, products);
             return (
               <div className="document-line-group" key={index}>
                 <div className="document-line">
@@ -510,6 +516,73 @@ export default function DocumentForm({
                     </label>
                   </div>
                 )}
+                <div className="document-line-margin-assistant">
+                    <div className="document-line-margin-assistant__head">
+                      <strong>Assistant marge interne</strong>
+                      <span>
+                        Coût {money(margin.totalCost)} · Marge {money(margin.marginHT)} ({margin.marginRate} %)
+                      </span>
+                    </div>
+                    <div className="document-line-margin-assistant__grid">
+                      <label className="documents-field documents-field--compact">
+                        <span>Modèle</span>
+                        <select
+                          value={line.productionTemplateId || ""}
+                          onChange={(e) =>
+                            onUpdateLine(index, applyProductionMarginTemplate(line, e.target.value))
+                          }
+                        >
+                          <option value="">Aucun</option>
+                          {PRODUCTION_MARGIN_TEMPLATES.map((template) => (
+                            <option key={template.id} value={template.id}>
+                              {template.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="documents-field documents-field--compact">
+                        <span>Support HT</span>
+                        <input type="number" min="0" step="0.01" value={line.purchasePrice || ""} onChange={(e) => onUpdateLine(index, { purchasePrice: e.target.value })} />
+                      </label>
+                      <label className="documents-field documents-field--compact">
+                        <span>Matières HT</span>
+                        <input type="number" min="0" step="0.01" value={line.materialCost || ""} onChange={(e) => onUpdateLine(index, { materialCost: e.target.value })} />
+                      </label>
+                      <label className="documents-field documents-field--compact">
+                        <span>Temps min</span>
+                        <input type="number" min="0" step="1" value={line.laborMinutes || ""} onChange={(e) => onUpdateLine(index, { laborMinutes: e.target.value })} />
+                      </label>
+                      <label className="documents-field documents-field--compact">
+                        <span>Taux horaire</span>
+                        <input type="number" min="0" step="0.01" value={line.laborHourlyRate || ""} onChange={(e) => onUpdateLine(index, { laborHourlyRate: e.target.value })} placeholder="18" />
+                      </label>
+                      <label className="documents-field documents-field--compact">
+                        <span>Machine HT</span>
+                        <input type="number" min="0" step="0.01" value={line.machineCost || ""} onChange={(e) => onUpdateLine(index, { machineCost: e.target.value })} />
+                      </label>
+                      <label className="documents-field documents-field--compact">
+                        <span>Sous-traitance</span>
+                        <input type="number" min="0" step="0.01" value={line.subcontractingCost || ""} onChange={(e) => onUpdateLine(index, { subcontractingCost: e.target.value })} />
+                      </label>
+                      <label className="documents-field documents-field--compact">
+                        <span>Marge cible %</span>
+                        <input type="number" min="0" max="95" step="1" value={line.targetMarginRate || ""} onChange={(e) => onUpdateLine(index, { targetMarginRate: e.target.value })} placeholder="60" />
+                      </label>
+                      <button
+                        type="button"
+                        className="compact document-line-margin-assistant__price"
+                        disabled={!margin.suggestedUnitPrice}
+                        onClick={() => onUpdateLine(index, { price: margin.suggestedUnitPrice })}
+                      >
+                        Prix conseillé {money(margin.suggestedUnitPrice)}
+                      </button>
+                    </div>
+                    {margin.isLowMargin && (
+                      <p className="document-line-margin-assistant__warning">
+                        Marge sous l'objectif : augmente le prix ou ajuste les coûts.
+                      </p>
+                    )}
+                  </div>
               </div>
             );
           })}

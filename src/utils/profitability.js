@@ -2,6 +2,10 @@ import { clientName } from "./documents";
 import { isCancelledInvoice, isPaidInvoice } from "./invoices";
 import { buildPaymentSummary, enrichInvoiceWithPayments } from "./payments";
 import { resolveProcessType } from "./production";
+import {
+  computeLineInternalCosts,
+  computeLinesSupportCost,
+} from "./quoteMarginAssistant";
 
 const DEFAULT_MACHINE_HOURLY = 25;
 const DEFAULT_OPERATOR_HOURLY = 18;
@@ -26,7 +30,8 @@ export function computeOrderProfitability(quote, data = {}, options = {}) {
   const costs = normalizeProductionCosts(quote);
   const machineRate = Number(options.machineHourlyRate ?? DEFAULT_MACHINE_HOURLY);
   const operatorRate = Number(options.operatorHourlyRate ?? DEFAULT_OPERATOR_HOURLY);
-  const productCost = computeLineCostsFromProducts(quote?.lines, data.products);
+  const productCost = computeLinesSupportCost(quote?.lines, data.products);
+  const lineExtraCost = computeLineCostsFromProducts(quote?.lines, data.products) - productCost;
 
   const minutes = costs.realMinutes > 0 ? costs.realMinutes : costs.estimatedMinutes;
   const timeCost =
@@ -39,13 +44,13 @@ export function computeOrderProfitability(quote, data = {}, options = {}) {
       : Math.round(((minutes / 60) * machineRate) * 100) / 100;
 
   const subcontractingCost = costs.subcontractingCost;
-  const totalCost = Math.round((productCost + materialCost + machineCost + timeCost + subcontractingCost) * 100) / 100;
+  const totalCost = Math.round((productCost + lineExtraCost + materialCost + machineCost + timeCost + subcontractingCost) * 100) / 100;
   const marginHT = Math.round((revenueHT - totalCost) * 100) / 100;
   const marginRate = revenueHT > 0 ? Math.round((marginHT / revenueHT) * 1000) / 10 : 0;
   const estimatedTimeCost =
     Math.round(((costs.estimatedMinutes / 60) * operatorRate) * 100) / 100;
   const estimatedCost = Math.round(
-    (productCost + costs.estimatedMaterialCost + costs.machineCost + estimatedTimeCost + costs.estimatedSubcontractingCost) * 100
+    (productCost + lineExtraCost + costs.estimatedMaterialCost + costs.machineCost + estimatedTimeCost + costs.estimatedSubcontractingCost) * 100
   ) / 100;
   const estimatedMarginHT = Math.round((revenueHT - estimatedCost) * 100) / 100;
 
@@ -66,6 +71,7 @@ export function computeOrderProfitability(quote, data = {}, options = {}) {
     operatorName: operator?.name || operator?.email || "—",
     revenueHT,
     productCost,
+    lineExtraCost,
     materialCost,
     machineCost,
     timeCost,
@@ -157,14 +163,7 @@ export function quoteHasProductionCosts(quote) {
 export function computeLineCostsFromProducts(lines = [], products = []) {
   return Math.round(
     (lines || []).reduce((sum, line) => {
-      const product = (products || []).find(
-        (entry) => String(entry.id) === String(line.productId)
-      );
-      const unitCost = Number(
-        line.purchasePrice ?? line.unitCost ?? product?.purchasePrice ?? 0
-      );
-      const qty = Number(line.quantity || 0);
-      return sum + unitCost * qty;
+      return sum + computeLineInternalCosts(line, products).totalCost;
     }, 0) * 100
   ) / 100;
 }

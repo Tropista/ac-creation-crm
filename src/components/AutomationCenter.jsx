@@ -18,6 +18,9 @@ const TYPE_LABELS = {
   [AUTOMATION_ALERT_TYPES.LOW_STOCK]: "Stock bas",
   [AUTOMATION_ALERT_TYPES.ORDER_READY]: "Commandes prêtes",
   [AUTOMATION_ALERT_TYPES.STALE_SAV]: "SAV en attente",
+  [AUTOMATION_ALERT_TYPES.UNASSIGNED_SAV]: "SAV non assigné",
+  [AUTOMATION_ALERT_TYPES.LOW_MARGIN]: "Marge faible",
+  [AUTOMATION_ALERT_TYPES.MISSING_COST]: "Coûts manquants",
 };
 
 const TYPE_ICONS = {
@@ -26,6 +29,9 @@ const TYPE_ICONS = {
   [AUTOMATION_ALERT_TYPES.LOW_STOCK]: "📦",
   [AUTOMATION_ALERT_TYPES.ORDER_READY]: "✅",
   [AUTOMATION_ALERT_TYPES.STALE_SAV]: "🔧",
+  [AUTOMATION_ALERT_TYPES.UNASSIGNED_SAV]: "!",
+  [AUTOMATION_ALERT_TYPES.LOW_MARGIN]: "%",
+  [AUTOMATION_ALERT_TYPES.MISSING_COST]: "€",
 };
 
 function alertTargetPath(alert) {
@@ -34,6 +40,9 @@ function alertTargetPath(alert) {
   if (alert.type === AUTOMATION_ALERT_TYPES.ORDER_READY) return pageToPath("atelier");
   if (alert.type === AUTOMATION_ALERT_TYPES.LOW_STOCK) return pageToPath("products");
   if (alert.type === AUTOMATION_ALERT_TYPES.STALE_SAV) return pageToPath("sav");
+  if (alert.type === AUTOMATION_ALERT_TYPES.UNASSIGNED_SAV) return pageToPath("sav");
+  if (alert.type === AUTOMATION_ALERT_TYPES.LOW_MARGIN) return pageToPath("invoices");
+  if (alert.type === AUTOMATION_ALERT_TYPES.MISSING_COST) return pageToPath("invoices");
   return pageToPath("dashboard");
 }
 

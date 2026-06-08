@@ -38,6 +38,7 @@ import {
   DEPOSIT_PRESETS,
 } from "../utils/invoices";
 import { computeDueDate, openInvoiceReminderMailto } from "../utils/invoiceReminders";
+import { syncQuoteProductionSheetFromLines } from "../utils/quoteMarginAssistant";
 import {
   clearInvoiceDraft,
   clearQuoteDraft,
@@ -94,6 +95,14 @@ function Documents({ type, data, setData, currentRole = 'Admin', logActivity, pe
     quantity: 1,
     price: 0,
     discount: 0,
+    purchasePrice: "",
+    materialCost: "",
+    laborMinutes: "",
+    laborHourlyRate: "",
+    machineCost: "",
+    subcontractingCost: "",
+    targetMarginRate: "",
+    productionTemplateId: "",
     taille: "",
     couleur: "",
     emplacementMarquage: "",
@@ -272,6 +281,14 @@ const [form, setForm] = useState({
         quantity: Number(line.quantity || 1),
         price: Number(line.price || 0),
         discount: Number(line.discount || 0),
+        purchasePrice: line.purchasePrice || "",
+        materialCost: line.materialCost || "",
+        laborMinutes: line.laborMinutes || "",
+        laborHourlyRate: line.laborHourlyRate || "",
+        machineCost: line.machineCost || "",
+        subcontractingCost: line.subcontractingCost || "",
+        targetMarginRate: line.targetMarginRate || "",
+        productionTemplateId: line.productionTemplateId || "",
         taille: line.taille || "",
         couleur: line.couleur || "",
         emplacementMarquage: line.emplacementMarquage || "",
@@ -522,6 +539,13 @@ const [form, setForm] = useState({
         categoryId: "",
         description: "",
         price: 0,
+        purchasePrice: "",
+        materialCost: "",
+        laborMinutes: "",
+        laborHourlyRate: "",
+        machineCost: "",
+        subcontractingCost: "",
+        targetMarginRate: "",
       });
       return;
     }
@@ -533,6 +557,7 @@ const [form, setForm] = useState({
       categoryId: product.categoryId || "",
       description: product.description || product.name || "",
       price: Number(product.price || 0),
+      purchasePrice: Number(product.purchasePrice || 0) || "",
     });
   }
 
@@ -590,6 +615,14 @@ const [form, setForm] = useState({
           quantity: Number(line.quantity || 0),
           price: Number(line.price || 0),
           discount: 0,
+          purchasePrice: Number(line.purchasePrice || 0),
+          materialCost: Number(line.materialCost || 0),
+          laborMinutes: Number(line.laborMinutes || 0),
+          laborHourlyRate: Number(line.laborHourlyRate || 0),
+          machineCost: Number(line.machineCost || 0),
+          subcontractingCost: Number(line.subcontractingCost || 0),
+          targetMarginRate: Number(line.targetMarginRate || 0),
+          productionTemplateId: line.productionTemplateId || "",
           ...(isQuote && {
             taille: String(line.taille || "").trim(),
             couleur: String(line.couleur || "").trim(),
@@ -620,7 +653,7 @@ const [form, setForm] = useState({
 
     if (editingId) {
       const existingDoc = documents.find((d) => d.id === editingId);
-      const updatedDoc = enrichInvoicePaymentFields({
+      const updatedDocBase = enrichInvoicePaymentFields({
         ...existingDoc,
         clientId: form.clientId,
         status: form.status,
@@ -636,6 +669,9 @@ const [form, setForm] = useState({
         ...(!isQuote && { date: invoiceDate }),
         ...totals,
       });
+      const updatedDoc = isQuote
+        ? syncQuoteProductionSheetFromLines(updatedDocBase, data.products || [])
+        : updatedDocBase;
 
       const stockSync = isQuote
         ? syncQuoteProductionStock(
@@ -666,7 +702,7 @@ const [form, setForm] = useState({
       });
       logActivity?.(`Modification ${isQuote ? "devis" : "facture"}`, existingDoc?.number || editingId, money(totals.totalTTC));
     } else {
-      const doc = {
+      const docBase = {
         id: uid(),
         number: form.numberOverride?.trim() || nextAutoNumber,
         date: isQuote ? today() : invoiceDate,
@@ -688,6 +724,9 @@ const [form, setForm] = useState({
         }),
         ...totals,
       };
+      const doc = isQuote
+        ? syncQuoteProductionSheetFromLines(docBase, data.products || [])
+        : docBase;
 
       const quoteStockSync = isQuote
         ? syncQuoteProductionStock(data.products || [], null, doc, {
@@ -732,6 +771,14 @@ reset();
           quantity: Number(line.quantity || 1),
           price: Number(line.price || 0),
           discount: Number(line.discount || 0),
+          purchasePrice: line.purchasePrice || "",
+          materialCost: line.materialCost || "",
+          laborMinutes: line.laborMinutes || "",
+          laborHourlyRate: line.laborHourlyRate || "",
+          machineCost: line.machineCost || "",
+          subcontractingCost: line.subcontractingCost || "",
+          targetMarginRate: line.targetMarginRate || "",
+          productionTemplateId: line.productionTemplateId || "",
           taille: line.taille || "",
           couleur: line.couleur || "",
           emplacementMarquage: line.emplacementMarquage || "",

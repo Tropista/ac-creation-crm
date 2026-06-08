@@ -2,6 +2,7 @@ import { computeInvoiceProfitability } from "./profitability";
 import { isCancelledInvoice, isPaidInvoice, parseDocumentDate } from "./invoices";
 import { buildPaymentSummary } from "./payments";
 import { clientName } from "./documents";
+import { computeLineInternalCosts } from "./quoteMarginAssistant";
 
 function round2(value) {
   return Math.round(Number(value || 0) * 100) / 100;
@@ -45,6 +46,36 @@ function getOpenInvoiceAmount(invoice, payments = []) {
   return summary.remaining > 0.01 ? round2(summary.remaining) : 0;
 }
 
+function pushMarginAggregate(map, key, label, row) {
+  if (!key) return;
+  const current = map.get(key) || {
+    key,
+    name: label || "Non renseigné",
+    revenueHT: 0,
+    marginHT: 0,
+    totalCost: 0,
+    count: 0,
+  };
+  current.revenueHT += Number(row.revenueHT || 0);
+  current.marginHT += Number(row.marginHT || 0);
+  current.totalCost += Number(row.totalCost || 0);
+  current.count += 1;
+  map.set(key, current);
+}
+
+function finalizeMarginAggregate(entries, limit = 5) {
+  return [...entries]
+    .map((entry) => ({
+      ...entry,
+      revenueHT: round2(entry.revenueHT),
+      marginHT: round2(entry.marginHT),
+      totalCost: round2(entry.totalCost),
+      marginRate: entry.revenueHT > 0 ? Math.round((entry.marginHT / entry.revenueHT) * 1000) / 10 : 0,
+    }))
+    .sort((a, b) => b.marginHT - a.marginHT)
+    .slice(0, limit);
+}
+
 export function buildDirectionDashboard(data = {}, { year = new Date().getFullYear() } = {}) {
   const invoices = (data.invoices || []).filter((invoice) => inYear(invoice.date, year));
   const quotes = (data.quotes || []).filter((quote) => inYear(quote.date || quote.createdAt, year));
@@ -67,6 +98,7 @@ export function buildDirectionDashboard(data = {}, { year = new Date().getFullYe
     .map((invoice) => ({ invoice, openAmount: getOpenInvoiceAmount(invoice, data.payments || []) }))
     .filter((entry) => entry.openAmount > 0.01);
   const profitabilityRows = invoices.map((invoice) => computeInvoiceProfitability(invoice, data));
+  const lowMarginThreshold = Number(data.settings?.lowMarginAlertThreshold ?? 30);
 
   const topClientsMap = new Map();
   for (const invoice of invoices) {
@@ -93,15 +125,45 @@ export function buildDirectionDashboard(data = {}, { year = new Date().getFullYe
       };
       const qty = Number(line.quantity || 0);
       const revenue = Number(line.totalHT || line.subtotal || qty * Number(line.price || 0));
-      const unitCost = Number(line.purchasePrice ?? line.unitCost ?? product?.purchasePrice ?? 0);
       current.revenueHT += revenue;
-      current.costHT += unitCost * qty;
+      current.costHT += computeLineInternalCosts(line, data.products || []).totalCost;
       current.quantity += qty;
       productMap.set(key, current);
     }
   }
 
   const knownProfitabilityRows = profitabilityRows.filter((row) => row.costSource !== "unknown");
+  const unknownProfitabilityRows = profitabilityRows.filter((row) => row.costSource === "unknown");
+  const marginByClientMap = new Map();
+  const marginByProcessMap = new Map();
+
+  for (const row of knownProfitabilityRows) {
+    pushMarginAggregate(marginByClientMap, row.clientId || "unknown", row.clientName, row);
+    pushMarginAggregate(marginByProcessMap, row.processKey || row.processLabel || "other", row.processLabel, row);
+  }
+
+  const lowMarginRows = knownProfitabilityRows
+    .filter((row) => row.revenueHT > 0 && row.marginRate < lowMarginThreshold)
+    .sort((a, b) => a.marginRate - b.marginRate)
+    .slice(0, 8);
+
+  const marginAlerts = [
+    ...lowMarginRows.map((row) => ({
+      type: "low_margin",
+      severity: row.marginHT < 0 ? "danger" : "warning",
+      title: `Marge faible ${row.invoiceNumber || ""}`.trim(),
+      message: `${row.clientName} · ${row.marginRate} % · ${round2(row.marginHT)} €`,
+      invoiceId: row.invoiceId,
+    })),
+    ...unknownProfitabilityRows.slice(0, 8).map((row) => ({
+      type: "missing_cost",
+      severity: "warning",
+      title: `Coûts à compléter ${row.invoiceNumber || ""}`.trim(),
+      message: `${row.clientName} · ${round2(row.revenueHT)} € HT sans coût connu`,
+      invoiceId: row.invoiceId,
+    })),
+  ];
+
   const marginHT = round2(knownProfitabilityRows.reduce((sum, row) => sum + row.marginHT, 0));
   const marginKnownRevenueHT = round2(knownProfitabilityRows.reduce((sum, row) => sum + row.revenueHT, 0));
   const revenueHT = round2(invoices.reduce((sum, invoice) => sum + Number(invoice.totalHT || 0), 0));
@@ -122,6 +184,24 @@ export function buildDirectionDashboard(data = {}, { year = new Date().getFullYe
     marginUnknownRevenueHT,
     marginCoverageRate: revenueHT > 0 ? Math.round((marginKnownRevenueHT / revenueHT) * 1000) / 10 : 0,
     hasCompleteMargin: revenueHT > 0 && marginUnknownRevenueHT <= 0.01,
+    lowMarginThreshold,
+    marginByClient: finalizeMarginAggregate(marginByClientMap.values()),
+    marginByProcess: finalizeMarginAggregate(marginByProcessMap.values()),
+    lowMarginOrders: lowMarginRows.map((row) => ({
+      invoiceId: row.invoiceId,
+      invoiceNumber: row.invoiceNumber,
+      clientName: row.clientName,
+      revenueHT: round2(row.revenueHT),
+      marginHT: round2(row.marginHT),
+      marginRate: row.marginRate,
+    })),
+    missingCostOrders: unknownProfitabilityRows.slice(0, 8).map((row) => ({
+      invoiceId: row.invoiceId,
+      invoiceNumber: row.invoiceNumber,
+      clientName: row.clientName,
+      revenueHT: round2(row.revenueHT),
+    })),
+    marginAlerts,
     topClients: [...topClientsMap.values()]
       .map((entry) => ({ ...entry, revenueHT: round2(entry.revenueHT) }))
       .sort((a, b) => b.revenueHT - a.revenueHT)

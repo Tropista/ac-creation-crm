@@ -204,4 +204,37 @@ describe("profitability", () => {
     expect(row.marginHT).toBe(75);
     expect(row.costSource).toBe("atelier");
   });
+
+  it("utilise les couts internes des lignes de devis sans les afficher au client", () => {
+    const row = computeInvoiceProfitability(
+      {
+        id: "inv-internal",
+        number: "FAC-I",
+        clientId: "c1",
+        totalHT: 80,
+        lines: [
+          {
+            productId: "shirt",
+            quantity: 2,
+            price: 40,
+            totalHT: 80,
+            materialCost: 4,
+            laborMinutes: 30,
+            laborHourlyRate: 20,
+            machineCost: 3,
+            subcontractingCost: 5,
+          },
+        ],
+      },
+      {
+        clients: [{ id: "c1", name: "Client" }],
+        products: [{ id: "shirt", purchasePrice: 6 }],
+        quotes: [],
+      }
+    );
+
+    expect(row.totalCost).toBe(34);
+    expect(row.marginHT).toBe(46);
+    expect(row.costSource).toBe("products");
+  });
 });
