@@ -145,6 +145,37 @@ describe("stock avancé", () => {
     expect(draft.subject).toContain("AC");
     expect(draft.body).toContain("T-shirt blanc");
   });
+  it("utilise le fournisseur principal, le prix fournisseur et le délai moyen", () => {
+    const suppliers = [{
+      id: "s1",
+      name: "Textiles SA",
+      email: "stock@example.com",
+      productLinks: [{
+        id: "l1",
+        name: "T-shirt blanc",
+        purchasePriceHT: 4,
+        supplierSku: "TS-BL",
+        leadTimeDays: 5,
+      }],
+    }];
+    const quotes = [{ id: "q1", status: "Accepté", lines: [{ productId: "p1", quantity: 3 }] }];
+    const products = [{ id: "p1", name: "T-shirt blanc", stock: 5, stockMin: 4, supplierId: "s1" }];
+
+    const rows = buildAdvancedStockRows(products, quotes, suppliers);
+    expect(rows[0].supplierName).toBe("Textiles SA");
+    expect(rows[0].supplierPurchasePriceHT).toBe(4);
+    expect(rows[0].supplierLeadTimeDays).toBe(5);
+    expect(rows[0].reorderCostHT).toBe(24);
+
+    const groups = buildSupplierReorderGroups(products, suppliers, quotes);
+    expect(groups[0].totalCostHT).toBe(24);
+    expect(groups[0].maxLeadTimeDays).toBe(5);
+
+    const draft = createSupplierPurchaseOrderDraft(groups[0], { companyName: "AC" });
+    expect(draft.body).toContain("TS-BL");
+    expect(draft.body).toContain("Total");
+    expect(draft.body).toContain("5 jour");
+  });
 });
 
 describe("stock consommables", () => {

@@ -103,17 +103,18 @@ export async function fetchPublicQuoteContext(quoteId, shareToken, settings = {}
     cloudSettings = settingsRow.data;
   }
 
-  const [quotes, invoices, deliveryNotes] = await Promise.all([
+  const [quotes, invoices, deliveryNotes, clientFiles] = await Promise.all([
     fetchPublicCollection(supabase, "quotes", quote.clientId),
     fetchPublicCollection(supabase, "invoices", quote.clientId),
     fetchPublicCollection(supabase, "delivery_notes", quote.clientId),
+    fetchPublicCollection(supabase, "client_files", quote.clientId),
   ]);
 
   return {
     quote,
     client,
     settings: cloudSettings,
-    portal: buildPortalContext({ quotes, invoices, deliveryNotes }, quote),
+    portal: buildPortalContext({ quotes, invoices, deliveryNotes, clientFiles }, quote),
     source: "cloud",
   };
 }
@@ -150,19 +151,21 @@ async function persistPublicQuote(context, quoteId, nextQuote) {
     throw new Error("Impossible d'enregistrer votre réponse. Contactez-nous.");
   }
 
+  const nextPortal = buildPortalContext(
+    {
+      quotes: (context.portal?.quotes || []).map((entry) =>
+        String(entry.id) === String(quoteId) ? nextQuote : entry
+      ),
+      invoices: context.portal?.invoices || [],
+      deliveryNotes: context.portal?.deliveryNotes || [],
+    },
+    nextQuote
+  );
+
   return {
     ...context,
     quote: nextQuote,
-    portal: buildPortalContext(
-      {
-        quotes: (context.portal?.quotes || []).map((entry) =>
-          String(entry.id) === String(quoteId) ? nextQuote : entry
-        ),
-        invoices: context.portal?.invoices || [],
-        deliveryNotes: context.portal?.deliveryNotes || [],
-      },
-      nextQuote
-    ),
+    portal: { ...nextPortal, files: context.portal?.files || nextPortal.files || [] },
     source: "cloud",
   };
 }

@@ -1,4 +1,5 @@
 const DEFAULT_LABOR_HOURLY_RATE = 18;
+const DEFAULT_MACHINE_HOURLY_RATE = 25;
 const DEFAULT_TARGET_MARGIN_RATE = 60;
 
 export const PRODUCTION_MARGIN_TEMPLATES = [
@@ -7,8 +8,14 @@ export const PRODUCTION_MARGIN_TEMPLATES = [
     name: "T-shirt DTF coeur",
     technique: "DTF",
     emplacementMarquage: "Poitrine",
+    printWidthCm: 10,
+    printHeightCm: 10,
+    materialPricePerM2: 35,
     materialCost: 1.5,
     laborMinutes: 6,
+    laborHourlyRate: 18,
+    machineMinutes: 4,
+    machineHourlyRate: 18,
     machineCost: 0.8,
     targetMarginRate: 60,
   },
@@ -17,8 +24,14 @@ export const PRODUCTION_MARGIN_TEMPLATES = [
     name: "T-shirt DTF dos",
     technique: "DTF",
     emplacementMarquage: "Dos",
+    printWidthCm: 28,
+    printHeightCm: 28,
+    materialPricePerM2: 35,
     materialCost: 3.5,
     laborMinutes: 10,
+    laborHourlyRate: 18,
+    machineMinutes: 4,
+    machineHourlyRate: 18,
     machineCost: 1.2,
     targetMarginRate: 60,
   },
@@ -27,17 +40,45 @@ export const PRODUCTION_MARGIN_TEMPLATES = [
     name: "Polo broderie coeur",
     technique: "Broderie",
     emplacementMarquage: "Poitrine",
+    printWidthCm: 10,
+    printHeightCm: 10,
+    materialPricePerM2: 12,
     materialCost: 1.2,
     laborMinutes: 18,
+    laborHourlyRate: 18,
+    machineMinutes: 14,
+    machineHourlyRate: 28,
     machineCost: 2.5,
     targetMarginRate: 65,
+  },
+  {
+    id: "uv-dtf-small",
+    name: "UV-DTF petit marquage",
+    technique: "UV-DTF",
+    emplacementMarquage: "Objet",
+    printWidthCm: 8,
+    printHeightCm: 8,
+    materialPricePerM2: 45,
+    materialCost: 1,
+    laborMinutes: 6,
+    laborHourlyRate: 18,
+    machineMinutes: 4,
+    machineHourlyRate: 22,
+    machineCost: 1.5,
+    targetMarginRate: 60,
   },
   {
     id: "mug-sublimation",
     name: "Mug sublimation",
     technique: "Sublimation",
+    printWidthCm: 20,
+    printHeightCm: 9,
+    materialPricePerM2: 18,
     materialCost: 0.9,
     laborMinutes: 8,
+    laborHourlyRate: 18,
+    machineMinutes: 6,
+    machineHourlyRate: 15,
     machineCost: 1,
     targetMarginRate: 60,
   },
@@ -45,8 +86,14 @@ export const PRODUCTION_MARGIN_TEMPLATES = [
     id: "laser-small",
     name: "Laser petite gravure",
     technique: "Laser",
+    printWidthCm: 6,
+    printHeightCm: 4,
+    materialPricePerM2: 0,
     materialCost: 1,
     laborMinutes: 8,
+    laborHourlyRate: 18,
+    machineMinutes: 8,
+    machineHourlyRate: 25,
     machineCost: 2,
     targetMarginRate: 65,
   },
@@ -66,16 +113,50 @@ export function computeLineSupportCost(line = {}, products = []) {
   return roundMoney(unitCost * Number(line.quantity || 0));
 }
 
+export function computeLineAutomaticProductionCosts(line = {}) {
+  const quantity = Number(line.quantity || 0);
+  const widthCm = Number(line.printWidthCm || 0);
+  const heightCm = Number(line.printHeightCm || 0);
+  const surfaceM2 = roundMoney((widthCm * heightCm * Math.max(1, quantity)) / 10000);
+  const materialPricePerM2 = Number(line.materialPricePerM2 || 0);
+  const materialCost = roundMoney(surfaceM2 * materialPricePerM2);
+  const machineMinutes = Number(line.machineMinutes || 0);
+  const machineHourlyRate = Number(line.machineHourlyRate || DEFAULT_MACHINE_HOURLY_RATE);
+  const machineCost = roundMoney((machineMinutes / 60) * machineHourlyRate);
+  const operatorMinutes = Number(line.laborMinutes || 0);
+  const operatorHourlyRate = Number(line.laborHourlyRate || DEFAULT_LABOR_HOURLY_RATE);
+  const operatorCost = roundMoney((operatorMinutes / 60) * operatorHourlyRate);
+
+  return {
+    surfaceM2,
+    materialPricePerM2,
+    materialCost,
+    machineMinutes,
+    machineHourlyRate,
+    machineCost,
+    operatorMinutes,
+    operatorHourlyRate,
+    operatorCost,
+    totalCost: roundMoney(materialCost + machineCost + operatorCost),
+    hasAutoCost: materialCost > 0 || machineCost > 0 || operatorCost > 0,
+  };
+}
+
 export function computeLineInternalCosts(line = {}, products = [], options = {}) {
   const quantity = Number(line.quantity || 0);
   const supportCost = computeLineSupportCost(line, products);
-  const materialCost = roundMoney(Number(line.materialCost || 0));
+  const automaticCosts = computeLineAutomaticProductionCosts(line);
+  const materialCost = roundMoney(
+    Number(line.materialCost || 0) || automaticCosts.materialCost
+  );
   const laborMinutes = Number(line.laborMinutes || 0);
   const laborHourlyRate = Number(
     line.laborHourlyRate || options.laborHourlyRate || DEFAULT_LABOR_HOURLY_RATE
   );
   const laborCost = roundMoney((laborMinutes / 60) * laborHourlyRate);
-  const machineCost = roundMoney(Number(line.machineCost || 0));
+  const machineCost = roundMoney(
+    Number(line.machineCost || 0) || automaticCosts.machineCost
+  );
   const subcontractingCost = roundMoney(Number(line.subcontractingCost || 0));
   const totalCost = roundMoney(
     supportCost + materialCost + laborCost + machineCost + subcontractingCost
@@ -106,6 +187,7 @@ export function computeLineInternalCosts(line = {}, products = [], options = {})
     marginRate,
     targetMarginRate,
     suggestedUnitPrice,
+    automaticCosts,
     hasCost: totalCost > 0.01,
     isLowMargin: revenueHT > 0 && marginRate < targetMarginRate,
   };
@@ -139,10 +221,28 @@ export function applyProductionMarginTemplate(line = {}, templateId) {
     productionTemplateId: template.id,
     technique: line.technique || template.technique || "",
     emplacementMarquage: line.emplacementMarquage || template.emplacementMarquage || "",
+    printWidthCm: line.printWidthCm || template.printWidthCm || "",
+    printHeightCm: line.printHeightCm || template.printHeightCm || "",
+    materialPricePerM2: line.materialPricePerM2 || template.materialPricePerM2 || "",
     materialCost: line.materialCost || template.materialCost || "",
     laborMinutes: line.laborMinutes || template.laborMinutes || "",
+    laborHourlyRate: line.laborHourlyRate || template.laborHourlyRate || "",
+    machineMinutes: line.machineMinutes || template.machineMinutes || "",
+    machineHourlyRate: line.machineHourlyRate || template.machineHourlyRate || "",
     machineCost: line.machineCost || template.machineCost || "",
     targetMarginRate: line.targetMarginRate || template.targetMarginRate || "",
+  };
+}
+
+export function applyAutomaticProductionCosts(line = {}) {
+  const automaticCosts = computeLineAutomaticProductionCosts(line);
+
+  return {
+    ...line,
+    materialCost: automaticCosts.materialCost || "",
+    machineCost: automaticCosts.machineCost || "",
+    laborMinutes: automaticCosts.operatorMinutes || line.laborMinutes || "",
+    laborHourlyRate: automaticCosts.operatorHourlyRate || line.laborHourlyRate || "",
   };
 }
 

@@ -1,6 +1,7 @@
 .leads-filters {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
   padding: 12px 16px;
   margin-bottom: 16px;
@@ -13,6 +14,12 @@
 .leads-filters button.active {
   background: var(--primary);
   color: #fff;
+}
+
+.leads-filter-separator {
+  width: 1px;
+  height: 28px;
+  background: var(--border);
 }
 
 .leads-empty {
@@ -42,6 +49,15 @@
 .leads-kpi strong {
   color: #fff;
   font-size: 22px;
+}
+
+.leads-kpi--danger {
+  border-color: rgba(248,113,113,0.35) !important;
+  background: rgba(248,113,113,0.1) !important;
+}
+
+.leads-kpi--danger strong {
+  color: var(--red);
 }
 
 .leads-kanban {
@@ -105,6 +121,13 @@
   align-items: flex-start;
 }
 
+.lead-card__badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
 .lead-card__top strong {
   display: block;
   color: #fff;
@@ -145,17 +168,24 @@
 }
 
 .lead-card__meta label:first-child,
-.lead-card__meta label:nth-child(2) {
+.lead-card__meta label:nth-child(2),
+.lead-card__notes {
   grid-column: 1 / -1;
 }
 
 .lead-card__meta input,
-.lead-card__meta select {
+.lead-card__meta select,
+.lead-card__meta textarea {
   min-width: 0;
   width: 100%;
   border-radius: 8px;
   padding: 8px 9px;
   font-size: 12px;
+}
+
+.lead-card__meta textarea {
+  min-height: 70px;
+  resize: vertical;
 }
 
 .lead-card__score {
@@ -211,6 +241,33 @@
 .leads-status--converti {
   background: #f3f4f6;
   color: #374151;
+}
+
+.leads-followup {
+  display: inline-flex;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.leads-followup--overdue {
+  background: rgba(248,113,113,0.18);
+  color: #fecaca;
+  border: 1px solid rgba(248,113,113,0.3);
+}
+
+.leads-followup--today {
+  background: rgba(251,191,36,0.18);
+  color: #fde68a;
+  border: 1px solid rgba(251,191,36,0.3);
+}
+
+.leads-followup--upcoming {
+  background: rgba(56,189,248,0.16);
+  color: #bae6fd;
+  border: 1px solid rgba(56,189,248,0.28);
 }
 
 @media (max-width: 1200px) {

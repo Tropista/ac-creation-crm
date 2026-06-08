@@ -4,6 +4,7 @@ import {
   AUTOMATION_ALERT_TYPES,
   buildAutomationAlerts,
   countAutomationAlerts,
+  getAutomationAlertKey,
 } from "../utils/automations";
 import { pageToPath } from "../utils/routes";
 import { getInvoicesDueForReminder } from "../utils/autoReminderEngine";
@@ -46,6 +47,16 @@ function alertTargetPath(alert) {
   return pageToPath("dashboard");
 }
 
+function alertNavigationState(alert) {
+  if (alert.invoiceId) {
+    return { openDocumentId: alert.invoiceId, openDocumentType: "invoice" };
+  }
+  if (alert.quoteId) {
+    return { openDocumentId: alert.quoteId, openDocumentType: "quote" };
+  }
+  return undefined;
+}
+
 export default function AutomationCenter({
   data,
   setData,
@@ -71,7 +82,42 @@ export default function AutomationCenter({
   }, [data, typeFilter, compact, limit]);
 
   function openAlert(alert) {
-    navigate(alertTargetPath(alert));
+    navigate(alertTargetPath(alert), { state: alertNavigationState(alert) });
+  }
+
+  function dismissAlert(alert) {
+    if (typeof setData !== "function") {
+      showToast("Impossible d'ignorer depuis cette vue.", "error");
+      return;
+    }
+
+    const key = getAutomationAlertKey(alert);
+    setData((current) => {
+      const existing = current.dismissedAutomationAlerts || [];
+      if (existing.some((entry) => (typeof entry === "string" ? entry : entry?.key) === key)) {
+        return current;
+      }
+      return {
+        ...current,
+        dismissedAutomationAlerts: [
+          ...existing,
+          {
+            key,
+            type: alert.type,
+            title: alert.title,
+            dismissedAt: new Date().toISOString(),
+          },
+        ],
+      };
+    });
+    logActivity?.("Alerte ignorée", alert.title || alert.type);
+    showToast("Alerte ignorée.", "success");
+  }
+
+  function restoreDismissedAlerts() {
+    if (typeof setData !== "function") return;
+    setData((current) => ({ ...current, dismissedAutomationAlerts: [] }));
+    showToast("Alertes ignorées réaffichées.", "success");
   }
 
   function assertReminderConfig() {
@@ -252,6 +298,11 @@ export default function AutomationCenter({
               </option>
             ))}
           </select>
+          {(data.dismissedAutomationAlerts || []).length > 0 ? (
+            <button type="button" className="automation-alert__restore" onClick={restoreDismissedAlerts}>
+              Réafficher les alertes ignorées ({data.dismissedAutomationAlerts.length})
+            </button>
+          ) : null}
         </div>
 
         {alerts.length === 0 ? (
@@ -268,13 +319,22 @@ export default function AutomationCenter({
                   <p className="automation-alert__title">{alert.title}</p>
                   <p className="automation-alert__message">{alert.message}</p>
                 </div>
-                <button
-                  type="button"
-                  className="automation-alert__action"
-                  onClick={() => openAlert(alert)}
-                >
-                  Voir
-                </button>
+                <div className="automation-alert__actions">
+                  <button
+                    type="button"
+                    className="automation-alert__action"
+                    onClick={() => openAlert(alert)}
+                  >
+                    Voir
+                  </button>
+                  <button
+                    type="button"
+                    className="automation-alert__action automation-alert__action--ghost"
+                    onClick={() => dismissAlert(alert)}
+                  >
+                    Ignorer
+                  </button>
+                </div>
               </div>
             ))}
           </div>

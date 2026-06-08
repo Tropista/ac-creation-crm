@@ -1,4 +1,5 @@
 import { isPaidInvoice, getInvoiceRemaining } from "./invoices";
+import { hydrateQuoteAttachments } from "./quoteAttachments";
 
 function normalizeStatus(value = "") {
   return String(value || "")
@@ -23,11 +24,93 @@ export function isDocumentLinkedToQuote(document, quote) {
   );
 }
 
+function sortByRecentDate(a, b) {
+  return String(b.date || b.uploadedAt || b.createdAt || "").localeCompare(
+    String(a.date || a.uploadedAt || a.createdAt || "")
+  );
+}
+
+function getFileUrl(file) {
+  return String(file?.url || file?.publicUrl || "").trim();
+}
+
+function getFileKey(file) {
+  return String(file?.url || file?.storagePath || file?.id || file?.name || "");
+}
+
+function isClientFileVisibleInPortal(file) {
+  return Boolean(
+    file?.publicPortal ||
+      file?.visibleToClient ||
+      file?.clientVisible ||
+      file?.isPublic
+  );
+}
+
+function mapQuoteAttachment(attachment, quote) {
+  const url = getFileUrl(attachment);
+  if (!url) return null;
+  return {
+    id: `quote-file-${quote?.id || quote?.number || "quote"}-${attachment.id || attachment.name || url}`,
+    name: attachment.name || "Fichier devis",
+    url,
+    mimeType: attachment.mimeType || "",
+    size: attachment.size || 0,
+    uploadedAt: attachment.uploadedAt || quote?.updatedAt || quote?.date || quote?.createdAt || "",
+    source: quote?.number || "Devis",
+    kind: "BAT / fichier devis",
+  };
+}
+
+function mapClientFile(file) {
+  const url = getFileUrl(file);
+  if (!url) return null;
+  return {
+    id: file.id || file.storagePath || file.name || url,
+    name: file.name || "Fichier client",
+    url,
+    mimeType: file.mimeType || "",
+    size: file.size || 0,
+    uploadedAt: file.uploadedAt || file.createdAt || file.date || "",
+    source: file.source || "Espace client",
+    kind: file.kind || file.category || "Fichier client",
+  };
+}
+
+export function getClientPortalFiles(data = {}, quote = {}, relatedQuotes = []) {
+  const clientId = quote?.clientId;
+  const quoteList = relatedQuotes.length
+    ? relatedQuotes
+    : (data.quotes || []).filter((entry) => isDocumentForClient(entry, clientId));
+  const files = [];
+
+  quoteList.forEach((entry) => {
+    hydrateQuoteAttachments(entry.attachments || [])
+      .map((attachment) => mapQuoteAttachment(attachment, entry))
+      .filter(Boolean)
+      .forEach((file) => files.push(file));
+  });
+
+  (data.clientFiles || [])
+    .filter((file) => isDocumentForClient(file, clientId) && isClientFileVisibleInPortal(file))
+    .map(mapClientFile)
+    .filter(Boolean)
+    .forEach((file) => files.push(file));
+
+  const deduped = new Map();
+  files.forEach((file) => {
+    const key = getFileKey(file);
+    if (key && !deduped.has(key)) deduped.set(key, file);
+  });
+
+  return Array.from(deduped.values()).sort(sortByRecentDate);
+}
+
 export function getClientPortalDocuments(data = {}, quote = {}) {
   const clientId = quote?.clientId;
   const quotes = (data.quotes || [])
     .filter((entry) => isDocumentForClient(entry, clientId))
-    .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+    .sort(sortByRecentDate);
 
   const invoices = (data.invoices || [])
     .filter(
@@ -35,7 +118,7 @@ export function getClientPortalDocuments(data = {}, quote = {}) {
         isDocumentForClient(entry, clientId) ||
         isDocumentLinkedToQuote(entry, quote)
     )
-    .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+    .sort(sortByRecentDate);
 
   const deliveryNotes = (data.deliveryNotes || [])
     .filter(
@@ -43,9 +126,33 @@ export function getClientPortalDocuments(data = {}, quote = {}) {
         isDocumentForClient(entry, clientId) ||
         isDocumentLinkedToQuote(entry, quote)
     )
-    .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+    .sort(sortByRecentDate);
 
-  return { quotes, invoices, deliveryNotes };
+  const files = getClientPortalFiles(data, quote, quotes);
+
+  return { quotes, invoices, deliveryNotes, files };
+}
+
+export function getClientPortalSummary(portal = {}) {
+  const invoices = portal.invoices || [];
+  const remainingTTC = invoices.reduce(
+    (sum, invoice) => sum + Math.max(0, getInvoiceRemaining(invoice)),
+    0
+  );
+  const invoiceTotalTTC = invoices.reduce(
+    (sum, invoice) => sum + (Number(invoice.totalTTC) || 0),
+    0
+  );
+
+  return {
+    quoteCount: (portal.quotes || []).length,
+    invoiceCount: invoices.length,
+    deliveryNoteCount: (portal.deliveryNotes || []).length,
+    fileCount: (portal.files || []).length,
+    invoiceTotalTTC,
+    remainingTTC,
+    paidInvoiceCount: invoices.filter((invoice) => isPaidInvoice(invoice)).length,
+  };
 }
 
 export function getClientPortalProgress(quote = {}, related = {}) {

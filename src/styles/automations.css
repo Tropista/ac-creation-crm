@@ -18,6 +18,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+  align-items: center;
   margin-bottom: 0.75rem;
 }
 
@@ -141,6 +142,27 @@
   flex-shrink: 0;
 }
 
+.automation-alert__actions {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.automation-alert__action--ghost,
+.automation-alert__restore {
+  border: 1px solid var(--input-border);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.72);
+  box-shadow: none;
+}
+
+.automation-alert__action--ghost:hover,
+.automation-alert__restore:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
 .automations-empty {
   padding: 2rem;
   text-align: center;
@@ -149,9 +171,14 @@
 
 @media (max-width: 640px) {
   .automations-reminders__header,
-  .automation-reminder-row {
+  .automation-reminder-row,
+  .automation-alert {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .automation-alert__actions {
+    justify-content: flex-start;
   }
 }
 

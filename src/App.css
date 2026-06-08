@@ -157,6 +157,76 @@ textarea:focus {
 }
 option { background: #1e0533; color: #fff; }
 
+input[type="checkbox"],
+input[type="radio"] {
+  appearance: auto !important;
+  -webkit-appearance: auto !important;
+  width: 18px !important;
+  min-width: 18px;
+  height: 18px;
+  min-height: 18px !important;
+  padding: 0 !important;
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+input[type="checkbox"]:focus-visible,
+input[type="radio"]:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(192,132,252,0.32);
+}
+
+button[aria-selected="true"],
+.client-tabs button.active,
+.dashboard-period-tabs button.active,
+.leads-filters button.active,
+.products-quick-filters button.active,
+.broderie-mode-toggle button.active,
+.documents-filter-btn.is-active,
+.quote-signature-tabs button.active {
+  color: #fff !important;
+  border-color: rgba(255,255,255,0.32) !important;
+  background: linear-gradient(135deg, var(--purple), var(--purple-dark)) !important;
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.12), 0 10px 24px rgba(129,140,248,0.26) !important;
+}
+
+.client-tabs button.active::before,
+.dashboard-period-tabs button.active::before,
+.leads-filters button.active::before,
+.products-quick-filters button.active::before,
+.broderie-mode-toggle button.active::before,
+.documents-filter-btn.is-active::before,
+.quote-signature-tabs button.active::before,
+button[aria-selected="true"]::before {
+  content: "✓";
+  display: inline-block;
+  margin-right: 6px;
+  font-weight: 900;
+}
+
+.dtf-checkbox:has(input[type="checkbox"]:checked),
+.laser-checkbox:has(input[type="checkbox"]:checked),
+.uvdtf-checkbox:has(input[type="checkbox"]:checked),
+.tshirt3d-checkbox:has(input[type="checkbox"]:checked),
+.labels-checkbox:has(input[type="checkbox"]:checked) {
+  border-color: rgba(192,132,252,0.65) !important;
+  background: rgba(192,132,252,0.18) !important;
+  box-shadow: 0 0 0 2px rgba(192,132,252,0.12);
+  color: #fff !important;
+}
+
+.client-erp-row.selected,
+.product-premium-card.selected,
+.product-premium-card.active-product-card,
+.suppliers-table tr.selected-row td,
+.vue3d-design-item.selected,
+.tshirt3d-design.selected {
+  border-color: rgba(255,255,255,0.34) !important;
+  box-shadow: 0 0 0 3px rgba(192,132,252,0.2), 0 16px 34px rgba(15,23,42,0.18) !important;
+}
+
 /* Bouton natif "Choisir un fichier" des input[type=file] */
 input[type="file"]::file-selector-button,
 input[type="file"]::-webkit-file-upload-button {
@@ -1431,6 +1501,37 @@ html,
   font-weight: 700;
 }
 
+.public-portal-summary {
+  max-width: 720px;
+  margin: 16px auto 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.public-portal-summary-card {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid #dbeafe;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+}
+
+.public-portal-summary-card span {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.public-portal-summary-card strong {
+  color: #0f172a;
+  font-size: 18px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
 .public-portal-grid {
   max-width: 720px;
   margin: 16px auto 0;
@@ -1497,7 +1598,7 @@ html,
 
 .public-portal-document {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: center;
   gap: 10px;
   padding: 10px;
@@ -1534,7 +1635,86 @@ html,
   cursor: pointer;
 }
 
+.public-portal-pay-btn {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid #86efac;
+  background: #16a34a;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.public-portal-payment-note {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #fed7aa;
+  border-radius: 12px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.public-portal-file-list {
+  display: grid;
+  gap: 8px;
+}
+
+.public-portal-file {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid #dbeafe;
+  border-radius: 12px;
+  background: #f8fbff;
+}
+
+.public-portal-file div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.public-portal-file strong,
+.public-portal-file span,
+.public-portal-file small {
+  overflow-wrap: anywhere;
+}
+
+.public-portal-file span,
+.public-portal-file small {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.public-portal-file a {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid #bfdbfe;
+  background: #fff;
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
 @media (max-width: 640px) {
+  .public-portal-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .public-portal-document {
     grid-template-columns: 1fr;
     align-items: stretch;
@@ -1542,5 +1722,10 @@ html,
 
   .public-portal-document button {
     width: 100%;
+  }
+
+  .public-portal-file {
+    grid-template-columns: 1fr;
+    align-items: stretch;
   }
 }

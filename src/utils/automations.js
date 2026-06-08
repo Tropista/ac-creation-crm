@@ -164,6 +164,32 @@ export function detectMarginAlerts(data = {}, { lowMarginThreshold = 30 } = {}) 
   return [...lowMargin, ...missingCost];
 }
 
+export function getAutomationAlertKey(alert = {}) {
+  return [
+    alert.type,
+    alert.invoiceId ? `invoice:${alert.invoiceId}` : "",
+    alert.quoteId ? `quote:${alert.quoteId}` : "",
+    alert.productId ? `product:${alert.productId}` : "",
+    alert.caseId ? `case:${alert.caseId}` : "",
+    alert.clientId && !alert.invoiceId && !alert.quoteId ? `client:${alert.clientId}` : "",
+    alert.title || "",
+  ]
+    .filter(Boolean)
+    .join("|");
+}
+
+export function isAutomationAlertDismissed(alert = {}, dismissedAlerts = []) {
+  const key = getAutomationAlertKey(alert);
+  return (dismissedAlerts || []).some((entry) => {
+    if (typeof entry === "string") return entry === key;
+    return entry?.key === key;
+  });
+}
+
+export function filterDismissedAutomationAlerts(alerts = [], dismissedAlerts = []) {
+  return (alerts || []).filter((alert) => !isAutomationAlertDismissed(alert, dismissedAlerts));
+}
+
 export function buildAutomationAlerts(data = {}, options = {}) {
   const alerts = [
     ...detectStaleQuoteAlerts(data.quotes, options),
@@ -177,7 +203,10 @@ export function buildAutomationAlerts(data = {}, options = {}) {
     }),
   ];
 
-  return alerts.sort(
+  return filterDismissedAutomationAlerts(
+    alerts,
+    options.includeDismissed ? [] : data.dismissedAutomationAlerts
+  ).sort(
     (a, b) =>
       severityRank(b.severity) - severityRank(a.severity) ||
       String(b.createdAt || "").localeCompare(String(a.createdAt || ""))

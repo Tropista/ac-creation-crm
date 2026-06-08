@@ -1,0 +1,78 @@
+/* États de sélection visibles sur le thème sombre */
+input[type="checkbox"],
+input[type="radio"] {
+  appearance: auto !important;
+  -webkit-appearance: auto !important;
+  width: 18px !important;
+  min-width: 18px;
+  height: 18px;
+  min-height: 18px !important;
+  padding: 0 !important;
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+input[type="checkbox"]:focus-visible,
+input[type="radio"]:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(192,132,252,0.32);
+}
+
+button[aria-selected="true"],
+.client-tabs button.active,
+.dashboard-period-tabs button.active,
+.leads-filters button.active,
+.products-quick-filters button.active,
+.broderie-mode-toggle button.active,
+.documents-filter-btn.is-active,
+.quote-signature-tabs button.active,
+.atelier-layout-toggle button.active,
+.atelier-view-toggle button.active,
+.atelier-priority-chip.active,
+.tshirt3d-size-scale button.active {
+  color: #fff !important;
+  border-color: rgba(255,255,255,0.32) !important;
+  background: linear-gradient(135deg, var(--purple), var(--purple-dark)) !important;
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.12), 0 10px 24px rgba(129,140,248,0.26) !important;
+}
+
+.client-tabs button.active::before,
+.dashboard-period-tabs button.active::before,
+.leads-filters button.active::before,
+.products-quick-filters button.active::before,
+.broderie-mode-toggle button.active::before,
+.documents-filter-btn.is-active::before,
+.quote-signature-tabs button.active::before,
+.atelier-layout-toggle button.active::before,
+.atelier-view-toggle button.active::before,
+.atelier-priority-chip.active::before,
+.tshirt3d-size-scale button.active::before,
+button[aria-selected="true"]::before {
+  content: "✓";
+  display: inline-block;
+  margin-right: 6px;
+  font-weight: 900;
+}
+
+.dtf-checkbox:has(input[type="checkbox"]:checked),
+.laser-checkbox:has(input[type="checkbox"]:checked),
+.uvdtf-checkbox:has(input[type="checkbox"]:checked),
+.tshirt3d-checkbox:has(input[type="checkbox"]:checked),
+.labels-checkbox:has(input[type="checkbox"]:checked) {
+  border-color: rgba(192,132,252,0.65) !important;
+  background: rgba(192,132,252,0.18) !important;
+  box-shadow: 0 0 0 2px rgba(192,132,252,0.12);
+  color: #fff !important;
+}
+
+.client-erp-row.selected,
+.product-premium-card.selected,
+.product-premium-card.active-product-card,
+.suppliers-table tr.selected-row td,
+.vue3d-design-item.selected,
+.tshirt3d-design.selected {
+  border-color: rgba(255,255,255,0.34) !important;
+  box-shadow: 0 0 0 3px rgba(192,132,252,0.2), 0 16px 34px rgba(15,23,42,0.18) !important;
+}

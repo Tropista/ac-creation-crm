@@ -23,6 +23,7 @@ import { showToast } from "../utils/toast";
 import { cleanupNavigationBlockers, CRM_ROUTE_CHANGE_EVENT } from "../utils/uiCleanup";
 import { isQuoteSigned, getSignatureDisplayLabel } from "../utils/quoteSignature";
 import { formatPaymentDate } from "../utils/payments";
+import { getInvoicePaymentLink } from "../utils/onlinePayments";
 import QuoteSignaturePanel from "./QuoteSignaturePanel";
 
 function IconUser() {
@@ -77,6 +78,9 @@ export default function DocumentPreview({
   const client = (data.clients || []).find((c) => c.id === doc.clientId);
   const paidAmount = getInvoicePaidAmount(doc);
   const remaining = getInvoiceRemaining(doc);
+  const paymentLink = !isQuote && !isDelivery
+    ? getInvoicePaymentLink(doc, data.settings || {}, client)
+    : "";
   const footerTotals = getDocumentFooterTotals(doc, type);
   const amountDue = getDocumentAmountDue(doc, type, { remaining });
 
@@ -320,6 +324,7 @@ export default function DocumentPreview({
     <div
       className="modal ac-invoice-modal-wrap document-preview-overlay"
       data-testid="document-preview-overlay"
+      data-react-preview="true"
       onClick={(event) => {
         if (event.target === event.currentTarget) {
           handleClose();
@@ -550,6 +555,11 @@ export default function DocumentPreview({
                 <h3>CONDITIONS DE PAIEMENT</h3>
                 <pre>{data.settings.paymentTerms}</pre>
                 <pre>{data.settings.bankInfo}</pre>
+                {paymentLink ? (
+                  <p className="ac-online-payment-link">
+                    Paiement en ligne : <a href={paymentLink}>{paymentLink}</a>
+                  </p>
+                ) : null}
               </div>
 
               <div className="ac-mentions">

@@ -3,7 +3,11 @@ import { useLocation, useSearchParams } from "react-router-dom";
 import DocumentPreview from "./DocumentPreview";
 import { money } from "../utils/money";
 import { statusClass } from "../utils/documents";
-import { getClientPortalProgress, getInvoicePaymentLabel } from "../utils/clientPortal";
+import {
+  getClientPortalProgress,
+  getClientPortalSummary,
+  getInvoicePaymentLabel,
+} from "../utils/clientPortal";
 import {
   acceptPublicQuote,
   declinePublicQuote,
@@ -13,6 +17,7 @@ import { getQuoteIdFromLocation, getShareTokenFromLocation } from "../utils/quot
 import { showToast } from "../utils/toast";
 import { APP_LOGO_URL } from "../utils/assets";
 import { confirmAction } from "../utils/confirmAction";
+import { getInvoicePaymentLink } from "../utils/onlinePayments";
 
 function buildPreviewData(settings, client, quote) {
   const snapshot = quote?.clientSnapshot;
@@ -92,9 +97,10 @@ export default function PublicQuoteView() {
   }, [context]);
 
   const portal = useMemo(
-    () => context?.portal || { quotes: [], invoices: [], deliveryNotes: [] },
+    () => context?.portal || { quotes: [], invoices: [], deliveryNotes: [], files: [] },
     [context?.portal]
   );
+  const portalSummary = useMemo(() => getClientPortalSummary(portal), [portal]);
   const progressSteps = useMemo(
     () => getClientPortalProgress(context?.quote, portal),
     [context?.quote, portal]
@@ -191,6 +197,7 @@ export default function PublicQuoteView() {
   const { quote, client, settings } = context;
   const clientLabel = client?.name || quote.clientSnapshot?.name || "Client";
   const companyName = settings?.companyName || "AC Creation";
+  const invoicePaymentUrl = (invoice) => getInvoicePaymentLink(invoice, settings, client);
 
   return (
     <div className="public-quote-page">
@@ -283,6 +290,25 @@ export default function PublicQuoteView() {
         </div>
       </section>
 
+      <section className="public-portal-summary" aria-label="Résumé espace client">
+        <div className="public-portal-summary-card">
+          <span>Devis</span>
+          <strong>{portalSummary.quoteCount}</strong>
+        </div>
+        <div className="public-portal-summary-card">
+          <span>Factures</span>
+          <strong>{portalSummary.invoiceCount}</strong>
+        </div>
+        <div className="public-portal-summary-card">
+          <span>Reste à payer</span>
+          <strong>{money(portalSummary.remainingTTC)}</strong>
+        </div>
+        <div className="public-portal-summary-card">
+          <span>Fichiers / BAT</span>
+          <strong>{portalSummary.fileCount}</strong>
+        </div>
+      </section>
+
       <section className="public-portal-grid">
         <div className="public-quote-card public-portal-section">
           <h2>Suivi d'avancement</h2>
@@ -319,7 +345,14 @@ export default function PublicQuoteView() {
               type="invoice"
               onPreview={openPreview}
               subtitle={getInvoicePaymentLabel}
+              paymentUrl={invoicePaymentUrl}
             />
+            {portalSummary.remainingTTC > 0 ? (
+              <p className="public-portal-payment-note">
+                Solde à régler : <strong>{money(portalSummary.remainingTTC)}</strong>. Le
+                paiement en ligne sera disponible ici dès son activation.
+              </p>
+            ) : null}
             <DocumentGroup
               title="Bons de livraison"
               emptyLabel="Aucun bon de livraison disponible."
@@ -328,6 +361,14 @@ export default function PublicQuoteView() {
               onPreview={openPreview}
             />
           </div>
+        </div>
+
+        <div className="public-quote-card public-portal-section">
+          <h2>Fichiers / BAT</h2>
+          <FileGroup
+            emptyLabel="Aucun fichier client ou BAT disponible."
+            items={portal.files}
+          />
         </div>
       </section>
 
@@ -344,7 +385,28 @@ export default function PublicQuoteView() {
   );
 }
 
-function DocumentGroup({ title, emptyLabel, items = [], type, onPreview, subtitle }) {
+function FileGroup({ emptyLabel, items = [] }) {
+  if (!items.length) return <p className="muted">{emptyLabel}</p>;
+
+  return (
+    <div className="public-portal-file-list">
+      {items.map((item) => (
+        <article key={item.id || item.url || item.name} className="public-portal-file">
+          <div>
+            <strong>{item.name || "Fichier"}</strong>
+            <span>{item.kind || item.source || "Fichier client"}</span>
+            {item.uploadedAt ? <small>{item.uploadedAt}</small> : null}
+          </div>
+          <a href={item.url} target="_blank" rel="noreferrer" download={item.name || undefined}>
+            Ouvrir / télécharger
+          </a>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function DocumentGroup({ title, emptyLabel, items = [], type, onPreview, subtitle, paymentUrl }) {
   return (
     <div className="public-portal-document-group">
       <h3>{title}</h3>
@@ -358,6 +420,16 @@ function DocumentGroup({ title, emptyLabel, items = [], type, onPreview, subtitl
                 {subtitle ? <small>{subtitle(item)}</small> : null}
               </div>
               <span className={statusClass(item.status)}>{item.status || "Disponible"}</span>
+              {paymentUrl?.(item) ? (
+                <a
+                  className="public-portal-pay-btn"
+                  href={paymentUrl(item)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Payer
+                </a>
+              ) : null}
               <button type="button" onClick={() => onPreview(item, type)}>
                 Voir / PDF
               </button>

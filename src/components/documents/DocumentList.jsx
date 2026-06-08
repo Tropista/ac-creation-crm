@@ -33,6 +33,7 @@ export default function DocumentList({
   onCreateDeposit,
   onCreateBalance,
   onRecordPayment,
+  onCreatePaymentLink,
   onDuplicate,
   onToggleNoReminder,
   onToggleTemplate,
@@ -376,6 +377,16 @@ export default function DocumentList({
                           title="Enregistrer un paiement partiel ou total"
                         >
                           Paiement
+                        </button>
+                      )}
+                      {!isQuote && d.status !== "Payée" && d.status !== "Annulée" && onCreatePaymentLink && (
+                        <button
+                          type="button"
+                          className="compact documents-payment-link-btn"
+                          onClick={() => onCreatePaymentLink(d)}
+                          title="Générer, copier ou ouvrir le lien de paiement en ligne"
+                        >
+                          Lien paiement
                         </button>
                       )}
                       {isQuote && (

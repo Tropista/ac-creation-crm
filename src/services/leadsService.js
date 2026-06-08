@@ -19,6 +19,7 @@ export const LEAD_PIPELINE_STAGES = [
 ];
 
 const PIPELINE_STAGE_VALUES = new Set(LEAD_PIPELINE_STAGES.map((stage) => stage.value));
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 function uid() {
   return crypto.randomUUID();
@@ -158,6 +159,7 @@ export function normalizeLeadCommercialFields(lead = {}) {
     probability: getLeadProbability(lead),
     estimatedAmount: getLeadEstimatedAmount(lead),
     nextFollowUpAt: lead.nextFollowUpAt || "",
+    commercialNotes: lead.commercialNotes || lead.notes || "",
   };
 }
 
@@ -175,9 +177,51 @@ export function updateLeadCommercialFields(leads = [], leadId, patch = {}) {
     if (Object.prototype.hasOwnProperty.call(patch, "estimatedAmount")) {
       next.estimatedAmount = Math.max(0, Math.round(Number(patch.estimatedAmount || 0) * 100) / 100);
     }
+    if (Object.prototype.hasOwnProperty.call(patch, "commercialNotes")) {
+      next.commercialNotes = String(patch.commercialNotes || "");
+    }
 
     return { ...next, updatedAt: nowIso() };
   });
+}
+
+export function getLeadFollowUpState(lead = {}, referenceDate = new Date()) {
+  const value = String(lead.nextFollowUpAt || "").slice(0, 10);
+  if (!value || String(lead.status || "") === LEAD_STATUS.CONVERTED) {
+    return { key: "none", label: "Aucune relance", daysUntil: null };
+  }
+
+  const followUp = new Date(`${value}T00:00:00`);
+  const reference = new Date(referenceDate);
+  reference.setHours(0, 0, 0, 0);
+  if (Number.isNaN(followUp.getTime())) {
+    return { key: "none", label: "Aucune relance", daysUntil: null };
+  }
+
+  const daysUntil = Math.round((followUp.getTime() - reference.getTime()) / DAY_MS);
+  if (daysUntil < 0) return { key: "overdue", label: "Relance en retard", daysUntil };
+  if (daysUntil === 0) return { key: "today", label: "Relance aujourd'hui", daysUntil };
+  return { key: "upcoming", label: `Relance J+${daysUntil}`, daysUntil };
+}
+
+export function compareLeadsForPipeline(a = {}, b = {}, referenceDate = new Date()) {
+  const aFollowUp = getLeadFollowUpState(a, referenceDate);
+  const bFollowUp = getLeadFollowUpState(b, referenceDate);
+  const rank = { overdue: 0, today: 1, upcoming: 2, none: 3 };
+  const followUpDelta = (rank[aFollowUp.key] ?? 9) - (rank[bFollowUp.key] ?? 9);
+  if (followUpDelta !== 0) return followUpDelta;
+
+  if (aFollowUp.daysUntil !== bFollowUp.daysUntil) {
+    if (aFollowUp.daysUntil === null) return 1;
+    if (bFollowUp.daysUntil === null) return -1;
+    return aFollowUp.daysUntil - bFollowUp.daysUntil;
+  }
+
+  const weightedA = Number(a.estimatedAmount || 0) * Number(a.probability || 0);
+  const weightedB = Number(b.estimatedAmount || 0) * Number(b.probability || 0);
+  if (weightedA !== weightedB) return weightedB - weightedA;
+
+  return Date.parse(String(b.createdAt || "")) - Date.parse(String(a.createdAt || ""));
 }
 
 export function markLeadRead(leads = [], leadId) {

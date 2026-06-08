@@ -77,6 +77,7 @@ import {
   buildPaymentSummary,
   PAYMENT_METHODS,
 } from "../utils/payments";
+import { getInvoicePaymentLink } from "../utils/onlinePayments";
 import { confirmAction } from "../utils/confirmAction";
 
 function Documents({ type, data, setData, currentRole = 'Admin', logActivity, pendingOpenDoc = null, onClearPendingOpenDoc }) {
@@ -97,8 +98,13 @@ function Documents({ type, data, setData, currentRole = 'Admin', logActivity, pe
     discount: 0,
     purchasePrice: "",
     materialCost: "",
+    printWidthCm: "",
+    printHeightCm: "",
+    materialPricePerM2: "",
     laborMinutes: "",
     laborHourlyRate: "",
+    machineMinutes: "",
+    machineHourlyRate: "",
     machineCost: "",
     subcontractingCost: "",
     targetMarginRate: "",
@@ -283,8 +289,13 @@ const [form, setForm] = useState({
         discount: Number(line.discount || 0),
         purchasePrice: line.purchasePrice || "",
         materialCost: line.materialCost || "",
+        printWidthCm: line.printWidthCm || "",
+        printHeightCm: line.printHeightCm || "",
+        materialPricePerM2: line.materialPricePerM2 || "",
         laborMinutes: line.laborMinutes || "",
         laborHourlyRate: line.laborHourlyRate || "",
+        machineMinutes: line.machineMinutes || "",
+        machineHourlyRate: line.machineHourlyRate || "",
         machineCost: line.machineCost || "",
         subcontractingCost: line.subcontractingCost || "",
         targetMarginRate: line.targetMarginRate || "",
@@ -541,8 +552,13 @@ const [form, setForm] = useState({
         price: 0,
         purchasePrice: "",
         materialCost: "",
+        printWidthCm: "",
+        printHeightCm: "",
+        materialPricePerM2: "",
         laborMinutes: "",
         laborHourlyRate: "",
+        machineMinutes: "",
+        machineHourlyRate: "",
         machineCost: "",
         subcontractingCost: "",
         targetMarginRate: "",
@@ -617,8 +633,13 @@ const [form, setForm] = useState({
           discount: 0,
           purchasePrice: Number(line.purchasePrice || 0),
           materialCost: Number(line.materialCost || 0),
+          printWidthCm: Number(line.printWidthCm || 0),
+          printHeightCm: Number(line.printHeightCm || 0),
+          materialPricePerM2: Number(line.materialPricePerM2 || 0),
           laborMinutes: Number(line.laborMinutes || 0),
           laborHourlyRate: Number(line.laborHourlyRate || 0),
+          machineMinutes: Number(line.machineMinutes || 0),
+          machineHourlyRate: Number(line.machineHourlyRate || 0),
           machineCost: Number(line.machineCost || 0),
           subcontractingCost: Number(line.subcontractingCost || 0),
           targetMarginRate: Number(line.targetMarginRate || 0),
@@ -773,8 +794,13 @@ reset();
           discount: Number(line.discount || 0),
           purchasePrice: line.purchasePrice || "",
           materialCost: line.materialCost || "",
+          printWidthCm: line.printWidthCm || "",
+          printHeightCm: line.printHeightCm || "",
+          materialPricePerM2: line.materialPricePerM2 || "",
           laborMinutes: line.laborMinutes || "",
           laborHourlyRate: line.laborHourlyRate || "",
+          machineMinutes: line.machineMinutes || "",
+          machineHourlyRate: line.machineHourlyRate || "",
           machineCost: line.machineCost || "",
           subcontractingCost: line.subcontractingCost || "",
           targetMarginRate: line.targetMarginRate || "",
@@ -1176,6 +1202,49 @@ reset();
     }
   }
 
+  async function copyText(value) {
+    try {
+      await navigator.clipboard?.writeText(value);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function handleCreatePaymentLink(invoice) {
+    const client = (data.clients || []).find(
+      (entry) => String(entry.id) === String(invoice.clientId)
+    );
+    const generatedLink = getInvoicePaymentLink(invoice, data.settings || {}, client);
+    const paymentLink =
+      generatedLink ||
+      window.prompt(
+        `Lien de paiement pour ${invoice.number}`,
+        invoice.paymentLink || ""
+      );
+
+    if (!paymentLink) {
+      showToast(
+        "Configurez un modèle de lien dans Paramètres ou collez un lien manuel.",
+        "info"
+      );
+      return;
+    }
+
+    const trimmedLink = String(paymentLink).trim();
+    const nextInvoices = (data.invoices || []).map((entry) =>
+      String(entry.id) === String(invoice.id)
+        ? { ...entry, paymentLink: trimmedLink, paymentLinkCreatedAt: new Date().toISOString() }
+        : entry
+    );
+
+    setData({ ...data, invoices: nextInvoices });
+    copyText(trimmedLink);
+    logActivity?.("Lien paiement facture", invoice.number, client?.name || "");
+    showToast(`Lien de paiement copié pour ${invoice.number}.`, "success");
+    window.open(trimmedLink, "_blank", "noopener,noreferrer");
+  }
+
   function handleQuoteSignatureAccept(signedQuote) {
     const nextQuotes = documents.map((entry) =>
       String(entry.id) === String(signedQuote.id) ? signedQuote : entry
@@ -1434,6 +1503,7 @@ reset();
         onCreateDeposit={createDepositInvoice}
         onCreateBalance={createBalanceInvoice}
         onRecordPayment={recordPartialPayment}
+        onCreatePaymentLink={handleCreatePaymentLink}
         onDuplicate={duplicate}
         onMarkEmailRead={(doc) => {
           const key = isQuote ? "quotes" : "invoices";

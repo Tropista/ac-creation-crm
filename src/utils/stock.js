@@ -85,6 +85,12 @@ export function getLowStockProductsByKind(
 export function resolveProductSupplier(product, suppliers = []) {
   if (!product) return null;
 
+  const supplierId = String(product.supplierId || product.primarySupplierId || "").trim();
+  if (supplierId) {
+    const byId = suppliers.find((entry) => String(entry.id) === supplierId);
+    if (byId) return byId;
+  }
+
   const supplierName = String(product.supplier || "").trim().toLowerCase();
   if (supplierName) {
     const byName = suppliers.find(
@@ -100,6 +106,52 @@ export function resolveProductSupplier(product, suppliers = []) {
       )
     ) || null
   );
+}
+
+function normalizeName(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+export function resolveProductSupplierLink(product, supplier) {
+  if (!product || !supplier) return null;
+  const productId = String(product.id || "");
+  const productName = normalizeName(product.name);
+  const productSku = normalizeName(product.sku);
+
+  return (
+    (supplier.productLinks || []).find((link) => {
+      if (link.productId && String(link.productId) === productId) return true;
+      const linkName = normalizeName(link.name);
+      const linkSku = normalizeName(link.supplierSku);
+      return (
+        (productName && linkName && linkName === productName) ||
+        (productSku && linkSku && linkSku === productSku)
+      );
+    }) || null
+  );
+}
+
+export function getProductSupplierInfo(product, suppliers = []) {
+  const supplier = resolveProductSupplier(product, suppliers);
+  const link = resolveProductSupplierLink(product, supplier);
+  const purchasePriceHT = Number(
+    product?.supplierPurchasePrice ??
+      link?.purchasePriceHT ??
+      product?.purchasePrice ??
+      0
+  );
+
+  return {
+    supplier,
+    link,
+    supplierId: supplier?.id || product?.supplierId || "",
+    supplierName: supplier?.name || product?.supplier || "Sans fournisseur",
+    supplierEmail: supplier?.email || "",
+    supplierSku: product?.supplierSku || link?.supplierSku || "",
+    unit: product?.supplierUnit || link?.unit || "pièce",
+    purchasePriceHT,
+    leadTimeDays: Number(product?.supplierLeadTimeDays ?? link?.leadTimeDays ?? 0),
+  };
 }
 
 /** Quantité suggérée pour réassort (écart jusqu'au double du seuil min). */
@@ -315,7 +367,8 @@ export function buildAdvancedStockRows(products = [], quotes = [], suppliers = [
       const reservedQty = Math.round(Number(reserved?.quantity || 0) * 100) / 100;
       const availableStock = Math.round((stock - reservedQty) * 100) / 100;
       const minStock = getMinStock(product);
-      const supplier = resolveProductSupplier(product, suppliers);
+      const supplierInfo = getProductSupplierInfo(product, suppliers);
+      const supplier = supplierInfo.supplier;
       const reorderQty =
         minStock > 0 ? Math.max(0, Math.ceil(minStock * 2 - availableStock)) : 0;
 
@@ -329,8 +382,14 @@ export function buildAdvancedStockRows(products = [], quotes = [], suppliers = [
         availableStock,
         minStock,
         supplier,
-        supplierId: supplier?.id || "",
-        supplierName: supplier?.name || product.supplier || "Sans fournisseur",
+        supplierId: supplierInfo.supplierId,
+        supplierName: supplierInfo.supplierName,
+        supplierEmail: supplierInfo.supplierEmail,
+        supplierSku: supplierInfo.supplierSku,
+        supplierUnit: supplierInfo.unit,
+        supplierPurchasePriceHT: supplierInfo.purchasePriceHT,
+        supplierLeadTimeDays: supplierInfo.leadTimeDays,
+        reorderCostHT: Math.round(reorderQty * supplierInfo.purchasePriceHT * 100) / 100,
         reorderQty,
         lowStock: availableStock > 0 && minStock > 0 && availableStock <= minStock,
         outOfStock: availableStock <= 0,
@@ -357,9 +416,11 @@ export function buildSupplierReorderGroups(products = [], suppliers = [], quotes
       supplier: row.supplier || null,
       supplierId: row.supplierId,
       supplierName: row.supplierName,
-      supplierEmail: row.supplier?.email || "",
+      supplierEmail: row.supplierEmail || row.supplier?.email || "",
       lines: [],
       totalSuggestedQty: 0,
+      totalCostHT: 0,
+      maxLeadTimeDays: 0,
     };
     current.lines.push({
       productId: row.productId,
@@ -370,8 +431,15 @@ export function buildSupplierReorderGroups(products = [], suppliers = [], quotes
       availableStock: row.availableStock,
       minStock: row.minStock,
       quantity: row.reorderQty,
+      supplierSku: row.supplierSku,
+      unit: row.supplierUnit,
+      purchasePriceHT: row.supplierPurchasePriceHT,
+      leadTimeDays: row.supplierLeadTimeDays,
+      totalHT: row.reorderCostHT,
     });
     current.totalSuggestedQty += row.reorderQty;
+    current.totalCostHT = Math.round((current.totalCostHT + row.reorderCostHT) * 100) / 100;
+    current.maxLeadTimeDays = Math.max(current.maxLeadTimeDays, row.supplierLeadTimeDays || 0);
     groups.set(key, current);
   }
 
@@ -396,8 +464,10 @@ export function createSupplierPurchaseOrderDraft(group = {}, settings = {}) {
       "",
       ...lines.map(
         (line) =>
-          `- ${line.quantity} x ${line.sku ? `${line.sku} - ` : ""}${line.name}`
+          `- ${line.quantity} ${line.unit || "pièce"} x ${line.supplierSku ? `${line.supplierSku} / ` : ""}${line.sku ? `${line.sku} - ` : ""}${line.name}${line.purchasePriceHT ? ` (${line.purchasePriceHT.toFixed(2)} EUR HT/u)` : ""}`
       ),
+      group.totalCostHT ? `\nTotal estimé HT : ${group.totalCostHT.toFixed(2)} EUR` : "",
+      group.maxLeadTimeDays ? `Délai souhaité / habituel : ${group.maxLeadTimeDays} jour(s)` : "",
       "",
       "Merci d'avance.",
       company,

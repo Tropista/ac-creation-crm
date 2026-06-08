@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildAutomationAlerts, AUTOMATION_ALERT_TYPES } from "./automations.js";
+import {
+  buildAutomationAlerts,
+  AUTOMATION_ALERT_TYPES,
+  countAutomationAlerts,
+  getAutomationAlertKey,
+} from "./automations.js";
 
 describe("automations", () => {
   it("génère des alertes factures impayées", () => {
@@ -49,5 +54,30 @@ describe("automations", () => {
 
     expect(alerts.some((alert) => alert.type === AUTOMATION_ALERT_TYPES.LOW_MARGIN)).toBe(true);
     expect(alerts.some((alert) => alert.type === AUTOMATION_ALERT_TYPES.MISSING_COST)).toBe(true);
+  });
+
+  it("ignore les alertes deja masquees", () => {
+    const data = {
+      quotes: [],
+      products: [],
+      afterSalesCases: [],
+      invoices: [
+        {
+          id: "i1",
+          number: "FAC-1",
+          status: "En retard",
+          dueDate: "01/01/2020",
+          totalTTC: 50,
+          remaining: 50,
+        },
+      ],
+    };
+    const [alert] = buildAutomationAlerts(data);
+    const dismissed = { key: getAutomationAlertKey(alert), type: alert.type, title: alert.title };
+    const result = countAutomationAlerts({ ...data, dismissedAutomationAlerts: [dismissed] });
+
+    expect(result.total).toBe(0);
+    expect(buildAutomationAlerts({ ...data, dismissedAutomationAlerts: [dismissed] })).toHaveLength(0);
+    expect(buildAutomationAlerts({ ...data, dismissedAutomationAlerts: [dismissed] }, { includeDismissed: true })).toHaveLength(1);
   });
 });

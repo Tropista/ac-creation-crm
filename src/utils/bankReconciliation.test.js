@@ -4,6 +4,8 @@ import {
   buildUnpaidInvoiceRevert,
   extractInvoiceNumbers,
   findInvoiceByReference,
+  getAutoReconciliationCandidates,
+  getInvoiceOpenAmount,
   getReconcilableInvoices,
   getTransactionReconciliationState,
   invoiceNumbersMatch,
@@ -103,6 +105,13 @@ describe("scoreInvoiceMatch", () => {
   });
 });
 
+describe("getInvoiceOpenAmount", () => {
+  it("utilise le reste à payer quand il existe", () => {
+    expect(getInvoiceOpenAmount({ totalTTC: 1200, paidAmount: 500, remaining: 700 })).toBe(700);
+    expect(getInvoiceOpenAmount({ totalTTC: 1200, paidAmount: 500 })).toBe(700);
+  });
+});
+
 describe("suggestInvoiceMatches", () => {
   it("propose les factures non annulées triées par score", () => {
     const transaction = {
@@ -140,6 +149,33 @@ describe("getReconcilableInvoices", () => {
     const open = getReconcilableInvoices(invoices);
 
     expect(open.map((invoice) => invoice.id)).toEqual(["inv-1"]);
+  });
+});
+
+describe("getAutoReconciliationCandidates", () => {
+  it("retient uniquement les correspondances fortes et uniques", () => {
+    const candidates = getAutoReconciliationCandidates(
+      [
+        {
+          id: "tx-1",
+          description: "Virement Dupont FAC-2025-0010",
+          amount: 1200,
+          transaction_date: "03/06/2025",
+        },
+        {
+          id: "tx-2",
+          description: "Paiement client vague",
+          amount: 500,
+          transaction_date: "03/06/2025",
+        },
+      ],
+      invoices,
+      data
+    );
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].transaction.id).toBe("tx-1");
+    expect(candidates[0].invoice.id).toBe("inv-1");
   });
 });
 

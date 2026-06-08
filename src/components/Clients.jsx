@@ -7,6 +7,7 @@ import { confirmAction } from "../utils/confirmAction";
 import { isRequired, validateFields } from "../utils/validation";
 import { filterCreditNotesByClient } from "../utils/creditNotes";
 import { filterAfterSalesByClient } from "../utils/afterSales";
+import { computeInvoiceProfitability } from "../utils/profitability";
 
 function statusClass(status) {
   const value = String(status || "").toLowerCase();
@@ -56,6 +57,11 @@ function docTotal(doc) {
 function isAcceptedQuote(quote) {
   const status = String(quote?.status || "").toLowerCase();
   return status.includes("accept") || status.includes("valid") || status.includes("sign");
+}
+
+function isRejectedQuote(quote) {
+  const status = String(quote?.status || "").toLowerCase();
+  return status.includes("refus") || status.includes("rejet") || status.includes("perdu");
 }
 
 function isPaidInvoice(invoice) {
@@ -542,6 +548,96 @@ export default function Clients({
     (sum, invoice) => sum + docTotal(invoice),
     0
   );
+
+  const clientCommercialSummary = useMemo(() => {
+    if (!selectedClient) {
+      return {
+        revenueHT: 0,
+        marginHT: 0,
+        marginRate: 0,
+        unknownCostRevenueHT: 0,
+        acceptedQuotes: 0,
+        rejectedQuotes: 0,
+        quoteConversionRate: 0,
+        topProducts: [],
+        lastReminders: [],
+        recentNotes: [],
+      };
+    }
+
+    const profitabilityRows = selectedClientInvoices.map((invoice) =>
+      computeInvoiceProfitability(invoice, data)
+    );
+    const knownRows = profitabilityRows.filter((row) => row.costSource !== "unknown");
+    const revenueHT = knownRows.reduce((sum, row) => sum + Number(row.revenueHT || 0), 0);
+    const marginHT = knownRows.reduce((sum, row) => sum + Number(row.marginHT || 0), 0);
+    const unknownCostRevenueHT = profitabilityRows
+      .filter((row) => row.costSource === "unknown")
+      .reduce((sum, row) => sum + Number(row.revenueHT || 0), 0);
+
+    const productMap = new Map();
+    for (const invoice of selectedClientInvoices) {
+      for (const line of invoice.lines || []) {
+        const key = line.productId || line.description || "Produit libre";
+        const current = productMap.get(key) || {
+          key,
+          name: line.description || "Produit libre",
+          quantity: 0,
+          revenueHT: 0,
+          lastDate: "",
+        };
+        current.quantity += Number(line.quantity || 0);
+        current.revenueHT += Number(line.totalHT || line.subtotal || Number(line.quantity || 0) * Number(line.price || 0));
+        const date = docDate(invoice);
+        if (!current.lastDate || new Date(date || 0) > new Date(current.lastDate || 0)) {
+          current.lastDate = date;
+        }
+        productMap.set(key, current);
+      }
+    }
+
+    const acceptedQuotes = selectedClientQuotes.filter(isAcceptedQuote).length;
+    const rejectedQuotes = selectedClientQuotes.filter(isRejectedQuote).length;
+    const lastReminders = [...selectedClientQuotes, ...selectedClientInvoices]
+      .filter((doc) => doc.lastReminderAt || doc.lastReminderDate || doc.reminderCount)
+      .map((doc) => ({
+        id: doc.id,
+        number: doc.number || doc.reference || "Document",
+        date: doc.lastReminderAt || doc.lastReminderDate || doc.updatedAt || doc.date,
+        count: Number(doc.reminderCount || 1),
+        type: selectedClientInvoices.some((invoice) => String(invoice.id) === String(doc.id)) ? "Facture" : "Devis",
+      }))
+      .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
+      .slice(0, 5);
+
+    return {
+      revenueHT: Math.round(revenueHT * 100) / 100,
+      marginHT: Math.round(marginHT * 100) / 100,
+      marginRate: revenueHT > 0 ? Math.round((marginHT / revenueHT) * 1000) / 10 : 0,
+      unknownCostRevenueHT: Math.round(unknownCostRevenueHT * 100) / 100,
+      acceptedQuotes,
+      rejectedQuotes,
+      quoteConversionRate:
+        selectedClientQuotes.length > 0
+          ? Math.round((acceptedQuotes / selectedClientQuotes.length) * 1000) / 10
+          : 0,
+      topProducts: [...productMap.values()]
+        .map((entry) => ({
+          ...entry,
+          revenueHT: Math.round(entry.revenueHT * 100) / 100,
+        }))
+        .sort((a, b) => b.revenueHT - a.revenueHT)
+        .slice(0, 6),
+      lastReminders,
+      recentNotes: selectedClientNotes.slice(0, 4),
+    };
+  }, [
+    data,
+    selectedClient,
+    selectedClientInvoices,
+    selectedClientNotes,
+    selectedClientQuotes,
+  ]);
 
   const _topProducts = useMemo(() => {
     const stats = {};
@@ -1114,6 +1210,7 @@ h1{
           ) : (
             <>
               <div className="client-tabs">
+                <button type="button" className={clientTab === "commercial" ? "active" : ""} onClick={() => setClientTab("commercial")}>Commercial</button>
                 <button type="button" className={clientTab === "infos" ? "active" : ""} onClick={() => setClientTab("infos")}>ℹ Informations</button>
                 <button type="button" className={clientTab === "contact" ? "active" : ""} onClick={() => setClientTab("contact")}>📞 Contact</button>
                 <button type="button" className={clientTab === "address" ? "active" : ""} onClick={() => setClientTab("address")}>📍 Adresse</button>
@@ -1125,6 +1222,98 @@ h1{
               </div>
 
               <div className="client-card">
+                {clientTab === "commercial" && (
+                  <div className="client-commercial">
+                    <div className="client-doc-top">
+                      <DashboardCard label="CA HT suivi" value={money(clientCommercialSummary.revenueHT)} />
+                      <DashboardCard label="Marge connue" value={`${money(clientCommercialSummary.marginHT)} (${clientCommercialSummary.marginRate} %)`} />
+                      <DashboardCard label="CA sans coût" value={money(clientCommercialSummary.unknownCostRevenueHT)} danger={clientCommercialSummary.unknownCostRevenueHT > 0} />
+                      <DashboardCard label="Conversion devis" value={`${clientCommercialSummary.quoteConversionRate} %`} />
+                      <DashboardCard label="Devis acceptés" value={clientCommercialSummary.acceptedQuotes} />
+                      <DashboardCard label="Devis refusés" value={clientCommercialSummary.rejectedQuotes} danger={clientCommercialSummary.rejectedQuotes > 0} />
+                    </div>
+
+                    <div className="client-commercial-grid">
+                      <div className="client-history-section">
+                        <h4>Produits achetés</h4>
+                        <div className="client-commercial-list">
+                          {clientCommercialSummary.topProducts.length === 0 ? (
+                            <p className="muted">Aucun produit facturé.</p>
+                          ) : (
+                            clientCommercialSummary.topProducts.map((product) => (
+                              <div key={product.key} className="client-commercial-row">
+                                <div>
+                                  <strong>{product.name}</strong>
+                                  <span>{product.quantity} unité(s) · dernier achat {formatDate(product.lastDate)}</span>
+                                </div>
+                                <strong>{money(product.revenueHT)}</strong>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="client-history-section">
+                        <h4>Dernières relances</h4>
+                        <div className="client-commercial-list">
+                          {clientCommercialSummary.lastReminders.length === 0 ? (
+                            <p className="muted">Aucune relance enregistrée.</p>
+                          ) : (
+                            clientCommercialSummary.lastReminders.map((reminder) => (
+                              <div key={`${reminder.type}-${reminder.id}`} className="client-commercial-row">
+                                <div>
+                                  <strong>{reminder.type} {reminder.number}</strong>
+                                  <span>Relance n°{reminder.count} · {formatDate(reminder.date)}</span>
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="client-history-section">
+                        <h4>Notes internes récentes</h4>
+                        <div className="client-commercial-list">
+                          {clientCommercialSummary.recentNotes.length === 0 && !selectedClient.notes ? (
+                            <p className="muted">Aucune note interne.</p>
+                          ) : (
+                            <>
+                              {selectedClient.notes ? (
+                                <div className="client-commercial-note">{selectedClient.notes}</div>
+                              ) : null}
+                              {clientCommercialSummary.recentNotes.map((note) => (
+                                <div key={note.id} className="client-commercial-note">
+                                  <strong>{note.kind === "call" ? "Appel" : note.kind === "email" ? "Email" : "Note"}</strong>
+                                  <span>{formatDate(note.createdAt)}</span>
+                                  <p>{note.text}</p>
+                                </div>
+                              ))}
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="client-history-section">
+                        <h4>Documents & fichiers</h4>
+                        <div className="client-commercial-docs">
+                          <button type="button" onClick={() => setClientTab("documents")}>
+                            {selectedClientQuotes.length + selectedClientInvoices.length + selectedClientDeliveryNotes.length} document(s)
+                          </button>
+                          <button type="button" onClick={() => setClientTab("files")}>
+                            {selectedClientFiles.length} fichier(s)
+                          </button>
+                          <button type="button" onClick={() => setClientTab("history")}>
+                            Historique complet
+                          </button>
+                          <button type="button" onClick={() => setClientTab("notes")}>
+                            Ajouter une note
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {clientTab === "infos" && (
                   <div className="erp-info-grid">
                     <InfoBox label="Société" value={selectedClient.company} />

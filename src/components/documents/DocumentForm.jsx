@@ -16,6 +16,7 @@ import { uid } from "../../utils/documents";
 import { showToast } from "../../utils/toast";
 import { isSupabaseConfigured } from "../../supabase";
 import {
+  applyAutomaticProductionCosts,
   applyProductionMarginTemplate,
   computeLineInternalCosts,
   PRODUCTION_MARGIN_TEMPLATES,
@@ -549,12 +550,32 @@ export default function DocumentForm({
                         <input type="number" min="0" step="0.01" value={line.materialCost || ""} onChange={(e) => onUpdateLine(index, { materialCost: e.target.value })} />
                       </label>
                       <label className="documents-field documents-field--compact">
-                        <span>Temps min</span>
+                        <span>Largeur cm</span>
+                        <input type="number" min="0" step="0.1" value={line.printWidthCm || ""} onChange={(e) => onUpdateLine(index, { printWidthCm: e.target.value })} />
+                      </label>
+                      <label className="documents-field documents-field--compact">
+                        <span>Hauteur cm</span>
+                        <input type="number" min="0" step="0.1" value={line.printHeightCm || ""} onChange={(e) => onUpdateLine(index, { printHeightCm: e.target.value })} />
+                      </label>
+                      <label className="documents-field documents-field--compact">
+                        <span>Prix matière / m²</span>
+                        <input type="number" min="0" step="0.01" value={line.materialPricePerM2 || ""} onChange={(e) => onUpdateLine(index, { materialPricePerM2: e.target.value })} />
+                      </label>
+                      <label className="documents-field documents-field--compact">
+                        <span>Temps opérateur</span>
                         <input type="number" min="0" step="1" value={line.laborMinutes || ""} onChange={(e) => onUpdateLine(index, { laborMinutes: e.target.value })} />
                       </label>
                       <label className="documents-field documents-field--compact">
                         <span>Taux horaire</span>
                         <input type="number" min="0" step="0.01" value={line.laborHourlyRate || ""} onChange={(e) => onUpdateLine(index, { laborHourlyRate: e.target.value })} placeholder="18" />
+                      </label>
+                      <label className="documents-field documents-field--compact">
+                        <span>Temps machine</span>
+                        <input type="number" min="0" step="1" value={line.machineMinutes || ""} onChange={(e) => onUpdateLine(index, { machineMinutes: e.target.value })} />
+                      </label>
+                      <label className="documents-field documents-field--compact">
+                        <span>Taux machine</span>
+                        <input type="number" min="0" step="0.01" value={line.machineHourlyRate || ""} onChange={(e) => onUpdateLine(index, { machineHourlyRate: e.target.value })} placeholder="25" />
                       </label>
                       <label className="documents-field documents-field--compact">
                         <span>Machine HT</span>
@@ -571,12 +592,25 @@ export default function DocumentForm({
                       <button
                         type="button"
                         className="compact document-line-margin-assistant__price"
+                        disabled={!margin.automaticCosts.hasAutoCost}
+                        onClick={() => onUpdateLine(index, applyAutomaticProductionCosts(line))}
+                      >
+                        Calculer coûts {money(margin.automaticCosts.totalCost)}
+                      </button>
+                      <button
+                        type="button"
+                        className="compact document-line-margin-assistant__price"
                         disabled={!margin.suggestedUnitPrice}
                         onClick={() => onUpdateLine(index, { price: margin.suggestedUnitPrice })}
                       >
                         Prix conseillé {money(margin.suggestedUnitPrice)}
                       </button>
                     </div>
+                    {margin.automaticCosts.hasAutoCost && (
+                      <p className="document-line-margin-assistant__auto">
+                        Auto : {margin.automaticCosts.surfaceM2} m² · matière {money(margin.automaticCosts.materialCost)} · machine {money(margin.automaticCosts.machineCost)} · opérateur {money(margin.automaticCosts.operatorCost)}
+                      </p>
+                    )}
                     {margin.isLowMargin && (
                       <p className="document-line-margin-assistant__warning">
                         Marge sous l'objectif : augmente le prix ou ajuste les coûts.

@@ -3,9 +3,11 @@ import { useNavigate } from "react-router-dom";
 import {
   buildLeadMailtoHref,
   buildLeadTelHref,
+  compareLeadsForPipeline,
   convertLeadToClientAndQuote,
   countActiveLeads,
   countUnreadLeads,
+  getLeadFollowUpState,
   LEAD_PIPELINE_STAGES,
   LEAD_STATUS,
   loadLocalPublicLeads,
@@ -25,6 +27,14 @@ const STATUS_FILTERS = [
   { value: LEAD_STATUS.NEW, label: "Nouveau" },
   { value: LEAD_STATUS.READ, label: "Lu" },
   { value: LEAD_STATUS.CONVERTED, label: "Converti" },
+];
+
+const FOLLOW_UP_FILTERS = [
+  { value: "all", label: "Toutes relances" },
+  { value: "overdue", label: "En retard" },
+  { value: "today", label: "Aujourd'hui" },
+  { value: "upcoming", label: "A venir" },
+  { value: "none", label: "Sans relance" },
 ];
 
 function formatLeadDate(value) {
@@ -51,6 +61,7 @@ function money(value) {
 export default function Leads({ data, setData, logActivity, currentRole = "Admin" }) {
   const navigate = useNavigate();
   const [statusFilter, setStatusFilter] = useState("all");
+  const [followUpFilter, setFollowUpFilter] = useState("all");
   const permissions = getPermissions(currentRole);
   const canConvertLeads =
     permissions.pages.includes("quotes") && permissions.pages.includes("clients");
@@ -72,12 +83,15 @@ export default function Leads({ data, setData, logActivity, currentRole = "Admin
 
   const leads = (data.leads || []).map(normalizeLeadCommercialFields);
   const filteredLeads = useMemo(() => {
-    const sorted = [...leads].sort(
-      (a, b) => Date.parse(String(b.createdAt || "")) - Date.parse(String(a.createdAt || ""))
-    );
-    if (statusFilter === "all") return sorted;
-    return sorted.filter((lead) => String(lead.status || LEAD_STATUS.NEW) === statusFilter);
-  }, [leads, statusFilter]);
+    const sorted = [...leads].sort((a, b) => compareLeadsForPipeline(a, b));
+    return sorted.filter((lead) => {
+      if (statusFilter !== "all" && String(lead.status || LEAD_STATUS.NEW) !== statusFilter) {
+        return false;
+      }
+      if (followUpFilter === "all") return true;
+      return getLeadFollowUpState(lead).key === followUpFilter;
+    });
+  }, [leads, statusFilter, followUpFilter]);
 
   const unreadCount = countUnreadLeads(leads);
   const activeCount = countActiveLeads(leads);
@@ -89,6 +103,14 @@ export default function Leads({ data, setData, logActivity, currentRole = "Admin
     (sum, lead) =>
       sum + (Number(lead.estimatedAmount || 0) * Number(lead.probability || 0)) / 100,
     0
+  );
+  const followUpStats = leads.reduce(
+    (acc, lead) => {
+      const key = getLeadFollowUpState(lead).key;
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    },
+    { overdue: 0, today: 0, upcoming: 0, none: 0 }
   );
 
   const leadsByStage = useMemo(() => {
@@ -165,6 +187,17 @@ export default function Leads({ data, setData, logActivity, currentRole = "Admin
             {filter.label}
           </button>
         ))}
+        <span className="leads-filter-separator" aria-hidden="true" />
+        {FOLLOW_UP_FILTERS.map((filter) => (
+          <button
+            key={filter.value}
+            type="button"
+            className={followUpFilter === filter.value ? "active" : ""}
+            onClick={() => setFollowUpFilter(filter.value)}
+          >
+            {filter.label}
+          </button>
+        ))}
       </div>
 
       <div className="leads-pipeline-summary">
@@ -179,6 +212,14 @@ export default function Leads({ data, setData, logActivity, currentRole = "Admin
         <div className="card leads-kpi">
           <span>Leads actifs</span>
           <strong>{activeCount}</strong>
+        </div>
+        <div className={`card leads-kpi${followUpStats.overdue > 0 ? " leads-kpi--danger" : ""}`}>
+          <span>Relances en retard</span>
+          <strong>{followUpStats.overdue}</strong>
+        </div>
+        <div className="card leads-kpi">
+          <span>Relances aujourd'hui</span>
+          <strong>{followUpStats.today}</strong>
         </div>
       </div>
 
@@ -220,6 +261,7 @@ export default function Leads({ data, setData, logActivity, currentRole = "Admin
                       const projectName = String(lead.metadata?.projectName || "").trim();
                       const status = String(lead.status || LEAD_STATUS.NEW);
                       const isConverted = status === LEAD_STATUS.CONVERTED;
+                      const followUpState = getLeadFollowUpState(lead);
 
                       return (
                         <article className="lead-card" key={lead.id} data-testid={`lead-row-${lead.id}`}>
@@ -228,7 +270,14 @@ export default function Leads({ data, setData, logActivity, currentRole = "Admin
                               <strong>{projectName || lead.email || "Lead"}</strong>
                               <span>{formatLeadDate(lead.createdAt)}</span>
                             </div>
-                            <span className={`leads-status leads-status--${status}`}>{status}</span>
+                            <div className="lead-card__badges">
+                              <span className={`leads-status leads-status--${status}`}>{status}</span>
+                              {followUpState.key !== "none" ? (
+                                <span className={`leads-followup leads-followup--${followUpState.key}`}>
+                                  {followUpState.label}
+                                </span>
+                              ) : null}
+                            </div>
                           </div>
 
                           <div className="lead-card__contacts">
@@ -285,6 +334,14 @@ export default function Leads({ data, setData, logActivity, currentRole = "Admin
                                 step="10"
                                 value={lead.estimatedAmount}
                                 onChange={(event) => updateLead(lead.id, { estimatedAmount: event.target.value })}
+                              />
+                            </label>
+                            <label className="lead-card__notes">
+                              Notes commerciales
+                              <textarea
+                                value={lead.commercialNotes || ""}
+                                onChange={(event) => updateLead(lead.id, { commercialNotes: event.target.value })}
+                                placeholder="Besoin, objection, prochain message..."
                               />
                             </label>
                           </div>

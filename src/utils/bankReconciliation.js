@@ -39,9 +39,18 @@ export function findInvoiceByReference(invoices, reference) {
   );
 }
 
+export function getInvoiceOpenAmount(invoice) {
+  const remaining = Number(invoice?.remaining);
+  if (!Number.isNaN(remaining) && remaining > 0) return remaining;
+
+  const total = Number(invoice?.totalTTC || 0);
+  const paid = Number(invoice?.paidAmount || 0);
+  return Math.max(0, total - paid);
+}
+
 function amountDelta(transaction, invoice) {
   const txAmount = Math.abs(Number(transaction?.amount || 0));
-  const invoiceAmount = Number(invoice?.totalTTC || 0);
+  const invoiceAmount = getInvoiceOpenAmount(invoice) || Number(invoice?.totalTTC || 0);
   return Math.abs(txAmount - invoiceAmount);
 }
 
@@ -68,7 +77,7 @@ export function scoreInvoiceMatch(transaction, invoice, invoiceClientName = "") 
   }
 
   const delta = amountDelta(transaction, invoice);
-  const invoiceAmount = Number(invoice?.totalTTC || 0);
+  const invoiceAmount = getInvoiceOpenAmount(invoice) || Number(invoice?.totalTTC || 0);
 
   if (delta <= 0.01) {
     score += 40;
@@ -114,6 +123,39 @@ export function suggestInvoiceMatches(transaction, invoices, data, { limit = 3 }
       return amountDelta(transaction, a.invoice) - amountDelta(transaction, b.invoice);
     })
     .slice(0, limit);
+}
+
+export function getAutoReconciliationCandidates(
+  transactions = [],
+  invoices = [],
+  data = {},
+  { minScore = 85, minGap = 15 } = {}
+) {
+  const usedInvoiceIds = new Set();
+  const pendingTransactions = (transactions || []).filter(
+    (transaction) => !transaction?.matched && Number(transaction?.amount || 0) !== 0
+  );
+  const openInvoices = getReconcilableInvoices(invoices);
+  const candidates = [];
+
+  for (const transaction of pendingTransactions) {
+    const suggestions = suggestInvoiceMatches(transaction, openInvoices, data, { limit: 2 });
+    const best = suggestions[0];
+    const second = suggestions[1];
+    if (!best || best.score < minScore) continue;
+    if (second && best.score - second.score < minGap) continue;
+    if (usedInvoiceIds.has(String(best.invoice.id))) continue;
+
+    candidates.push({
+      transaction,
+      invoice: best.invoice,
+      score: best.score,
+      reasons: best.reasons,
+    });
+    usedInvoiceIds.add(String(best.invoice.id));
+  }
+
+  return candidates;
 }
 
 export function getReconcilableInvoices(invoices) {

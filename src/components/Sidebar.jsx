@@ -232,7 +232,7 @@ export default function Sidebar({
   }
 
   function handleNavClick(event, item) {
-    cleanupNavigationBlockers({ removePreviewOverlay: true });
+    cleanupNavigationBlockers();
     setMobileOpen(false);
 
     const path = pageToPath(item.page);

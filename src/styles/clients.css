@@ -59,6 +59,18 @@
 .client-dashboard-card{padding:16px;border-radius:14px;background:var(--surface);border:1px solid var(--border);backdrop-filter:blur(8px);}
 .client-dashboard-card strong{display:block;font-size:22px;margin-bottom:6px;color:var(--accent);}.client-dashboard-card span{font-size:13px;color:rgba(255,255,255,0.5);}.client-dashboard-card.danger{background:rgba(248,113,113,0.1);border-color:rgba(248,113,113,0.25);}.client-dashboard-card.danger strong{color:var(--red);}
 
+.client-commercial{display:grid;gap:14px}
+.client-commercial-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px}
+.client-commercial-list{display:grid;gap:8px}
+.client-commercial-row{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;padding:11px 12px;border-radius:12px;background:var(--surface);border:1px solid var(--border);color:rgba(255,255,255,.85)}
+.client-commercial-row strong{color:#fff}
+.client-commercial-row span{display:block;margin-top:4px;color:rgba(255,255,255,.45);font-size:12px}
+.client-commercial-note{display:grid;gap:4px;padding:11px 12px;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);color:rgba(255,255,255,.86);white-space:pre-wrap}
+.client-commercial-note strong{color:#fff}.client-commercial-note span{color:rgba(255,255,255,.45);font-size:12px}.client-commercial-note p{margin:0;padding:0;background:transparent;color:rgba(255,255,255,.78)}
+.client-commercial-docs{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+.client-commercial-docs button{min-height:40px;border:1px solid var(--input-border);border-radius:10px;background:var(--surface);color:rgba(255,255,255,.75);font-weight:700;cursor:pointer}
+.client-commercial-docs button:hover{background:var(--input-border);color:#fff}
+
 /* Historique */
 .client-history{margin-top:14px}.client-history h4,.client-history-section h4{margin:0 0 12px}
 .client-history-section{border:1px solid var(--border);background:rgba(255,255,255,0.05);border-radius:14px;padding:16px;backdrop-filter:blur(8px);}

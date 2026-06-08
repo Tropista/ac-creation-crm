@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyAutomaticProductionCosts,
   applyProductionMarginTemplate,
   buildProductionSheetFromLines,
+  computeLineAutomaticProductionCosts,
   computeLineInternalCosts,
   syncQuoteProductionSheetFromLines,
 } from "./quoteMarginAssistant.js";
@@ -40,6 +42,43 @@ describe("quoteMarginAssistant", () => {
     expect(line.emplacementMarquage).toBe("Poitrine");
     expect(line.materialCost).toBeGreaterThan(0);
     expect(line.laborMinutes).toBeGreaterThan(0);
+  });
+
+  it("calcule automatiquement la matiere, la machine et l'operateur", () => {
+    const result = computeLineAutomaticProductionCosts({
+      quantity: 2,
+      printWidthCm: 20,
+      printHeightCm: 10,
+      materialPricePerM2: 50,
+      machineMinutes: 12,
+      machineHourlyRate: 30,
+      laborMinutes: 15,
+      laborHourlyRate: 20,
+    });
+
+    expect(result.surfaceM2).toBe(0.04);
+    expect(result.materialCost).toBe(2);
+    expect(result.machineCost).toBe(6);
+    expect(result.operatorCost).toBe(5);
+    expect(result.totalCost).toBe(13);
+  });
+
+  it("applique les couts automatiques sur une ligne", () => {
+    const line = applyAutomaticProductionCosts({
+      quantity: 1,
+      printWidthCm: 10,
+      printHeightCm: 10,
+      materialPricePerM2: 40,
+      machineMinutes: 6,
+      machineHourlyRate: 20,
+      laborMinutes: 12,
+      laborHourlyRate: 25,
+    });
+
+    expect(line.materialCost).toBe(0.4);
+    expect(line.machineCost).toBe(2);
+    expect(line.laborMinutes).toBe(12);
+    expect(line.laborHourlyRate).toBe(25);
   });
 
   it("genere une fiche atelier depuis les couts internes des lignes", () => {

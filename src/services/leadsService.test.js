@@ -7,6 +7,7 @@ vi.mock("../supabase", () => ({
 
 import {
   LEAD_STATUS,
+  compareLeadsForPipeline,
   buildClientFromLead,
   buildLeadMailtoHref,
   buildLeadTelHref,
@@ -18,6 +19,7 @@ import {
   findClientByEmail,
   getActiveLeads,
   getLeadEstimatedAmount,
+  getLeadFollowUpState,
   getLeadPipelineStage,
   getLeadProbability,
   loadLocalPublicLeads,
@@ -101,13 +103,35 @@ describe("leadsService", () => {
       probability: "62",
       estimatedAmount: "1250.49",
       nextFollowUpAt: "2026-06-15",
+      commercialNotes: "Relancer par telephone",
     });
 
     expect(updated[0].pipelineStage).toBe("follow-up");
     expect(updated[0].probability).toBe(62);
     expect(updated[0].estimatedAmount).toBe(1250.49);
     expect(updated[0].nextFollowUpAt).toBe("2026-06-15");
+    expect(updated[0].commercialNotes).toBe("Relancer par telephone");
     expect(updated[0].updatedAt).toBeTruthy();
+  });
+
+  it("classe les relances par urgence", () => {
+    const reference = new Date("2026-06-09T10:00:00");
+
+    expect(getLeadFollowUpState({ nextFollowUpAt: "2026-06-08" }, reference).key).toBe("overdue");
+    expect(getLeadFollowUpState({ nextFollowUpAt: "2026-06-09" }, reference).key).toBe("today");
+    expect(getLeadFollowUpState({ nextFollowUpAt: "2026-06-12" }, reference).key).toBe("upcoming");
+    expect(getLeadFollowUpState({ nextFollowUpAt: "" }, reference).key).toBe("none");
+  });
+
+  it("trie le pipeline avec les relances urgentes en premier", () => {
+    const reference = new Date("2026-06-09T10:00:00");
+    const leads = [
+      { ...sampleLead, id: "later", nextFollowUpAt: "2026-06-20", estimatedAmount: 5000, probability: 90 },
+      { ...sampleLead, id: "late", nextFollowUpAt: "2026-06-08", estimatedAmount: 100, probability: 10 },
+      { ...sampleLead, id: "today", nextFollowUpAt: "2026-06-09", estimatedAmount: 1000, probability: 50 },
+    ].sort((a, b) => compareLeadsForPipeline(a, b, reference));
+
+    expect(leads.map((lead) => lead.id)).toEqual(["late", "today", "later"]);
   });
 
   it("dérive un nom client depuis l’email", () => {

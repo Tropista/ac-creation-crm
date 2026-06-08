@@ -24,7 +24,10 @@ function createMockDocument() {
       style,
     },
     querySelectorAll: vi.fn((selector) => {
-      const node = { remove: vi.fn(() => removedNodes.push(selector)) };
+      const node = {
+        getAttribute: vi.fn(() => null),
+        remove: vi.fn(() => removedNodes.push(selector)),
+      };
       if (selector === ".ac-doc-pdf-root" || selector === ".product-picker__list--fixed") {
         return [node];
       }
@@ -80,5 +83,20 @@ describe("uiCleanup", () => {
     const event = window.dispatchEvent.mock.calls[0][0];
     expect(event.type).toBe(CRM_ROUTE_CHANGE_EVENT);
     expect(event.detail.pathname).toBe("/factures");
+  });
+
+  it("ne retire pas un apercu document encore gere par React", () => {
+    const reactNode = {
+      getAttribute: vi.fn((name) => (name === "data-react-preview" ? "true" : null)),
+      remove: vi.fn(() => mockDocument.removedNodes.push(".document-preview-overlay")),
+    };
+    mockDocument.querySelectorAll.mockImplementation((selector) => {
+      if (selector === ".document-preview-overlay") return [reactNode];
+      return [];
+    });
+
+    cleanupNavigationBlockers({ removePreviewOverlay: true });
+
+    expect(reactNode.remove).not.toHaveBeenCalled();
   });
 });

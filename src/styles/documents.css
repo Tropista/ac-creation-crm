@@ -1361,6 +1361,7 @@
 }
 
 .document-line-margin-assistant__head span,
+.document-line-margin-assistant__auto,
 .document-line-margin-assistant__warning {
   color: var(--muted);
   font-size: 12px;
@@ -1381,6 +1382,10 @@
 .document-line-margin-assistant__warning {
   margin: 8px 0 0;
   color: #fbbf24;
+}
+
+.document-line-margin-assistant__auto {
+  margin: 8px 0 0;
 }
 
 .documents-field--compact span {

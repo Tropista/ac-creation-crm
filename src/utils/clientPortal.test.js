@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   getClientPortalDocuments,
   getClientPortalProgress,
+  getClientPortalSummary,
   getInvoicePaymentLabel,
 } from "./clientPortal";
 
@@ -32,6 +33,28 @@ describe("clientPortal", () => {
     expect(related.deliveryNotes.map((entry) => entry.number)).toEqual(["BL-1", "BL-2"]);
   });
 
+  it("expose les BAT du devis et uniquement les fichiers client visibles", () => {
+    const quote = {
+      id: "q1",
+      number: "DEV-1",
+      clientId: "c1",
+      attachments: [{ id: "bat-1", name: "bat.pdf", url: "https://example.com/bat.pdf" }],
+    };
+    const related = getClientPortalDocuments(
+      {
+        quotes: [quote],
+        clientFiles: [
+          { id: "f1", clientId: "c1", name: "logo.zip", url: "https://example.com/logo.zip", publicPortal: true },
+          { id: "f2", clientId: "c1", name: "note-interne.pdf", url: "https://example.com/private.pdf" },
+          { id: "f3", clientId: "c2", name: "autre.pdf", url: "https://example.com/other.pdf", publicPortal: true },
+        ],
+      },
+      quote
+    );
+
+    expect(related.files.map((entry) => entry.name)).toEqual(["bat.pdf", "logo.zip"]);
+  });
+
   it("marque les étapes clés comme complètes selon le statut et les documents", () => {
     const progress = getClientPortalProgress(
       { id: "q1", number: "DEV-1", status: "Prêt" },
@@ -51,5 +74,23 @@ describe("clientPortal", () => {
     expect(
       getInvoicePaymentLabel({ status: "Partiellement payée", totalTTC: 100, paidAmount: 40 })
     ).toContain("60,00");
+  });
+
+  it("calcule le résumé du portail client", () => {
+    const summary = getClientPortalSummary({
+      quotes: [{ id: "q1" }],
+      invoices: [
+        { id: "i1", status: "Payée", totalTTC: 100, paidAmount: 100 },
+        { id: "i2", status: "Partiellement payée", totalTTC: 150, paidAmount: 25 },
+      ],
+      deliveryNotes: [{ id: "b1" }],
+      files: [{ id: "f1" }],
+    });
+
+    expect(summary.quoteCount).toBe(1);
+    expect(summary.invoiceCount).toBe(2);
+    expect(summary.paidInvoiceCount).toBe(1);
+    expect(summary.remainingTTC).toBe(125);
+    expect(summary.fileCount).toBe(1);
   });
 });

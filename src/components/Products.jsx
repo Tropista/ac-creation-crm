@@ -116,6 +116,11 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
     category: "",
     price: "",
     purchasePrice: "",
+    supplierId: "",
+    supplier: "",
+    supplierSku: "",
+    supplierPurchasePrice: "",
+    supplierLeadTimeDays: "",
     stock: "",
     stockMin: "",
     imageUrl: "",
@@ -658,6 +663,31 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
     return `mailto:${to}?subject=${encodeURIComponent(draft.subject)}&body=${encodeURIComponent(draft.body)}`;
   }
 
+  function handleSupplierSelect(supplierId) {
+    const supplier = (data.suppliers || []).find(
+      (entry) => String(entry.id) === String(supplierId)
+    );
+    const productName = cleanText(form.name);
+    const productSku = cleanText(form.sku);
+    const link = supplier?.productLinks?.find((entry) => {
+      const linkName = cleanText(entry.name);
+      const linkSku = cleanText(entry.supplierSku);
+      return (
+        (productName && linkName === productName) ||
+        (productSku && linkSku === productSku)
+      );
+    });
+
+    setForm({
+      ...form,
+      supplierId,
+      supplier: supplier?.name || "",
+      supplierSku: link?.supplierSku || form.supplierSku || "",
+      supplierPurchasePrice: link?.purchasePriceHT ?? form.supplierPurchasePrice,
+      supplierLeadTimeDays: link?.leadTimeDays ?? form.supplierLeadTimeDays,
+    });
+  }
+
   function resetProductFilters() {
     setSearch("");
     setCategoryFilter("");
@@ -670,7 +700,7 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
 
   function reset() {
     setEditing(null);
-    setForm({ name: "", sku: "", category: "", price: "", purchasePrice: "", stock: "", stockMin: "", imageUrl: "", description: "" });
+    setForm({ name: "", sku: "", category: "", price: "", purchasePrice: "", supplierId: "", supplier: "", supplierSku: "", supplierPurchasePrice: "", supplierLeadTimeDays: "", stock: "", stockMin: "", imageUrl: "", description: "" });
   }
 
   async function submit(e) {
@@ -695,6 +725,11 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
       sku: finalSku,
       price: Number(form.price || 0),
       purchasePrice: Number(form.purchasePrice || 0),
+      supplierId: form.supplierId || "",
+      supplier: form.supplier || "",
+      supplierSku: form.supplierSku || "",
+      supplierPurchasePrice: Number(form.supplierPurchasePrice || 0),
+      supplierLeadTimeDays: Number(form.supplierLeadTimeDays || 0),
       stock: Number(form.stock || 0),
       stockMin: Number(form.stockMin || 0),
     };
@@ -757,6 +792,11 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
       category: product.category || "",
       price: product.price || "",
       purchasePrice: product.purchasePrice || "",
+      supplierId: product.supplierId || product.primarySupplierId || "",
+      supplier: product.supplier || "",
+      supplierSku: product.supplierSku || "",
+      supplierPurchasePrice: product.supplierPurchasePrice || "",
+      supplierLeadTimeDays: product.supplierLeadTimeDays || "",
       stock: product.stock || "",
       stockMin: product.stockMin || product.minStock || "",
       imageUrl: product.imageUrl || "",
@@ -1020,6 +1060,31 @@ function openLinkedDocument(doc) {
           placeholder="Prix d'achat HT"
           value={String(form.purchasePrice).replace(".", ",")}
           onChange={(e) => setForm({ ...form, purchasePrice: e.target.value.replace(",", ".") })}
+        />
+        <select value={form.supplierId} onChange={(e) => handleSupplierSelect(e.target.value)}>
+          <option value="">Fournisseur principal</option>
+          {(data.suppliers || []).map((supplier) => (
+            <option key={supplier.id} value={supplier.id}>{supplier.name}</option>
+          ))}
+        </select>
+        <input
+          placeholder="SKU fournisseur"
+          value={form.supplierSku}
+          onChange={(e) => setForm({ ...form, supplierSku: e.target.value })}
+        />
+        <input
+          type="text"
+          inputMode="decimal"
+          placeholder="Prix fournisseur HT"
+          value={String(form.supplierPurchasePrice).replace(".", ",")}
+          onChange={(e) => setForm({ ...form, supplierPurchasePrice: e.target.value.replace(",", ".") })}
+        />
+        <input
+          type="number"
+          min="0"
+          placeholder="Délai moyen fournisseur (jours)"
+          value={form.supplierLeadTimeDays}
+          onChange={(e) => setForm({ ...form, supplierLeadTimeDays: e.target.value })}
         />
         <input type="number" min="0" placeholder="Stock actuel" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} />
         <input type="number" min="0" placeholder="Stock minimum / alerte" value={form.stockMin} onChange={(e) => setForm({ ...form, stockMin: e.target.value })} />

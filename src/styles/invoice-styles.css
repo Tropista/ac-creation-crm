@@ -325,6 +325,17 @@
   text-align: left;
 }
 
+.ac-online-payment-link {
+  margin: 2mm 0 0;
+  font-size: 10px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.ac-online-payment-link a {
+  color: inherit;
+}
+
 .ac-totals-card {
   background: white;
 }

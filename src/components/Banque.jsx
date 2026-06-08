@@ -5,6 +5,7 @@ import {
   buildPaidInvoiceUpdate,
   buildUnpaidInvoiceRevert,
   findInvoiceByReference,
+  getAutoReconciliationCandidates,
   getReconcilableInvoices,
   getTransactionReconciliationState,
   suggestInvoiceMatches,
@@ -53,6 +54,10 @@ export default function Banque({ data, setData, logActivity }) {
   const reconcilableInvoices = useMemo(
     () => getReconcilableInvoices(invoices),
     [invoices]
+  );
+  const autoCandidates = useMemo(
+    () => getAutoReconciliationCandidates(transactions, invoices, data),
+    [transactions, invoices, data]
   );
 
   useEffect(() => {
@@ -372,6 +377,81 @@ export default function Banque({ data, setData, logActivity }) {
     setWorkingTxId(null);
   }
 
+  async function autoReconcileTransactions() {
+    if (!autoCandidates.length) {
+      showToast("Aucun rapprochement automatique fiable trouvé.", "info");
+      return;
+    }
+
+    if (
+      !(await confirmAction({
+        title: "Rapprochement automatique",
+        message: `Rapprocher automatiquement ${autoCandidates.length} transaction(s) avec leur facture ?`,
+        detail: "Seules les correspondances fortes et non ambiguës seront validées.",
+        confirmLabel: "Rapprocher",
+      }))
+    ) {
+      return;
+    }
+
+    setWorkingTxId("auto");
+
+    const supabase = await getSupabase();
+    let nextTransactions = transactions;
+    let nextInvoices = invoices;
+    let reconciledCount = 0;
+    let localOnlyCount = 0;
+
+    for (const candidate of autoCandidates) {
+      const { transaction, invoice } = candidate;
+      const bankResult = await patchBankTransaction(
+        supabase,
+        transaction.id,
+        reconcilePatchVariants(invoice)
+      );
+      const patch = bankResult.patch || reconcilePatchVariants(invoice).at(-1);
+
+      if (!bankResult.ok) {
+        localOnlyCount += 1;
+        logBankTransactionError("rapprochement automatique", bankResult.error);
+      }
+
+      nextTransactions = applyLocalBankTransactionPatch(
+        nextTransactions,
+        transaction.id,
+        patch
+      );
+      nextInvoices = nextInvoices.map((entry) =>
+        String(entry.id) === String(invoice.id)
+          ? buildPaidInvoiceUpdate(entry, transaction)
+          : entry
+      );
+      reconciledCount += 1;
+      await logActivity?.(
+        "Rapprochement bancaire auto",
+        `${invoice.number} — ${money(transaction.amount)}`
+      );
+    }
+
+    await setData({
+      ...data,
+      invoices: nextInvoices,
+    });
+    setTransactions(nextTransactions);
+    setSelectedInvoiceByTx({});
+
+    showToast(
+      localOnlyCount
+        ? `${reconciledCount} rapprochement(s), dont ${localOnlyCount} localement seulement.`
+        : `${reconciledCount} rapprochement(s) automatique(s) enregistré(s).`,
+      localOnlyCount ? "info" : "success",
+      7000
+    );
+
+    await loadTransactions();
+    setWorkingTxId(null);
+  }
+
   async function deleteTransaction(transaction) {
     const reconciliation = getTransactionReconciliationState(
       transaction,
@@ -553,6 +633,15 @@ export default function Banque({ data, setData, logActivity }) {
           >
             Ajouter une transaction
           </button>
+          <button
+            onClick={autoReconcileTransactions}
+            disabled={!autoCandidates.length || workingTxId === "auto"}
+            title="Rapproche les virements reconnus avec un score élevé et sans ambiguïté"
+          >
+            {workingTxId === "auto"
+              ? "Rapprochement..."
+              : `Rapprocher auto (${autoCandidates.length})`}
+          </button>
         </div>
       </div>
 
@@ -678,6 +767,10 @@ export default function Banque({ data, setData, logActivity }) {
             Toutes
           </button>
         </div>
+        <p className="muted" style={{ margin: "10px 0 0", fontSize: 12 }}>
+          Auto-match fiable : {autoCandidates.length} transaction(s). Le CRM valide seulement les
+          cas avec référence/montant/client très cohérents.
+        </p>
       </div>
 
       <div className="table card">
@@ -764,7 +857,7 @@ export default function Banque({ data, setData, logActivity }) {
                             <div className="muted">
                               Suggestion :{" "}
                               <strong>{suggestions[0].invoice.number}</strong>{" "}
-                              ({suggestions[0].reasons.join(", ")})
+                              ({suggestions[0].reasons.join(", ")} · score {suggestions[0].score})
                             </div>
                           )}
 

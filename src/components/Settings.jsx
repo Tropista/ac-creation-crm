@@ -16,6 +16,7 @@ import {
   detectInvoiceNumberGaps,
   nextInvoiceNumber,
 } from "../utils/documents";
+import { normalizePaymentProvider, ONLINE_PAYMENT_PROVIDERS } from "../utils/onlinePayments";
 
 const THEME_LABELS = {
   light: "Clair",
@@ -134,6 +135,9 @@ export default function Settings({
             form.taxRate || 0
           ),
         paymentDays: normalizePaymentDays(form.paymentDays),
+        onlinePaymentEnabled: Boolean(form.onlinePaymentEnabled),
+        onlinePaymentProvider: normalizePaymentProvider(form.onlinePaymentProvider),
+        onlinePaymentUrlTemplate: String(form.onlinePaymentUrlTemplate || "").trim(),
         invoiceNumberPrefix: String(form.invoiceNumberPrefix || "FAC").trim() || "FAC",
         invoiceNumberPadding: Math.min(
           6,
@@ -382,6 +386,65 @@ e.target.value
     Nombre de jours après la date de facture pour calculer l&apos;échéance.
     Utilisé à la création des factures et pour détecter les retards de paiement
     (relances par e-mail).
+  </p>
+</label>
+
+<label className="theme-field">
+  <span>Paiement en ligne</span>
+  <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+    <input
+      type="checkbox"
+      checked={Boolean(form.onlinePaymentEnabled)}
+      onChange={(e) =>
+        setForm({
+          ...form,
+          onlinePaymentEnabled: e.target.checked,
+        })
+      }
+    />
+    Activer les liens de paiement sur les factures et le portail client
+  </label>
+</label>
+
+<label className="theme-field">
+  <span>Fournisseur paiement</span>
+  <select
+    value={form.onlinePaymentProvider || "manual"}
+    onChange={(e) =>
+      setForm({
+        ...form,
+        onlinePaymentProvider: e.target.value,
+      })
+    }
+  >
+    {ONLINE_PAYMENT_PROVIDERS.map((provider) => (
+      <option key={provider} value={provider}>
+        {provider === "manual"
+          ? "Lien manuel"
+          : provider === "stripe"
+            ? "Stripe"
+            : provider === "mollie"
+              ? "Mollie"
+              : "Payconiq"}
+      </option>
+    ))}
+  </select>
+</label>
+
+<label className="theme-field">
+  <span>Modèle URL de paiement</span>
+  <input
+    placeholder="https://pay.example.com/{number}?amount={amountCents}"
+    value={form.onlinePaymentUrlTemplate || ""}
+    onChange={(e) =>
+      setForm({
+        ...form,
+        onlinePaymentUrlTemplate: e.target.value,
+      })
+    }
+  />
+  <p className="muted" style={{ margin: 0, fontSize: "12px", lineHeight: 1.4 }}>
+    Variables disponibles : {"{number}"}, {"{amount}"}, {"{amountCents}"}, {"{clientName}"}, {"{clientEmail}"}. Pour Stripe/Mollie, utilisez une URL créée côté fournisseur ou via votre backend.
   </p>
 </label>
 

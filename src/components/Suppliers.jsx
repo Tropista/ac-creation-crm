@@ -48,6 +48,7 @@ const emptyLinkForm = {
   name: "",
   purchasePriceHT: "",
   supplierSku: "",
+  leadTimeDays: "",
   unit: "pièce",
   notes: "",
 };
@@ -291,6 +292,7 @@ export default function Suppliers({
       name,
       purchasePriceHT,
       supplierSku: linkForm.supplierSku.trim(),
+      leadTimeDays: Number(linkForm.leadTimeDays || 0),
       unit: linkForm.unit || "pièce",
       notes: linkForm.notes.trim(),
       updatedAt: today(),
@@ -328,6 +330,7 @@ export default function Suppliers({
       name: link.name?.trim() || getLinkDisplayName(link, products),
       purchasePriceHT: String(link.purchasePriceHT ?? ""),
       supplierSku: link.supplierSku || "",
+      leadTimeDays: String(link.leadTimeDays ?? ""),
       unit: link.unit || "pièce",
       notes: link.notes || "",
     });
@@ -617,6 +620,18 @@ export default function Suppliers({
                         }))
                       }
                     />
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="Délai moyen (jours)"
+                      value={linkForm.leadTimeDays}
+                      onChange={(e) =>
+                        setLinkForm((current) => ({
+                          ...current,
+                          leadTimeDays: e.target.value,
+                        }))
+                      }
+                    />
                     <select
                       value={linkForm.unit}
                       onChange={(e) =>
@@ -659,6 +674,7 @@ export default function Suppliers({
                         <th>Prix achat HT</th>
                         <th>Unité</th>
                         <th>SKU fourn.</th>
+                        <th>Délai</th>
                         <th>Màj</th>
                         <th>Actions</th>
                       </tr>
@@ -666,7 +682,7 @@ export default function Suppliers({
                     <tbody>
                       {(selectedSupplier.productLinks || []).length === 0 && (
                         <tr>
-                          <td colSpan="6" className="muted">
+                          <td colSpan="7" className="muted">
                             Aucun produit acheté.
                           </td>
                         </tr>
@@ -689,6 +705,7 @@ export default function Suppliers({
                             <td>{money(link.purchasePriceHT)}</td>
                             <td>{link.unit || "pièce"}</td>
                             <td>{link.supplierSku || "—"}</td>
+                            <td>{Number(link.leadTimeDays || 0) > 0 ? `${link.leadTimeDays} j` : "â€”"}</td>
                             <td>{formatDate(link.updatedAt)}</td>
                             <td>
                               <div className="supplier-actions">

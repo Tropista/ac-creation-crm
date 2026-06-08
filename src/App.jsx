@@ -109,6 +109,7 @@ import "./styles/leads.css";
 import "./styles/credit-notes.css";
 import "./styles/after-sales.css";
 import "./styles/automations.css";
+import "./styles/selection-states.css";
 const Vue3D = lazy(() =>
   import("./components/Vue3D")
 );
@@ -233,7 +234,7 @@ function CrmApp() {
   }, [pathname, location.pathname, location.state, navigate]);
 
   useEffect(() => {
-    cleanupNavigationBlockers({ removePreviewOverlay: true });
+    cleanupNavigationBlockers();
   }, [pathname]);
 
   const setPage = (pageKey, options = {}) => {
@@ -269,7 +270,7 @@ function CrmApp() {
   const [authNotice, setAuthNotice] = useState(initialAuth.notice);
 
   useEffect(() => {
-    cleanupNavigationBlockers({ removePreviewOverlay: true });
+    cleanupNavigationBlockers();
     dispatchRouteChange(pathname);
   }, [pathname]);
 

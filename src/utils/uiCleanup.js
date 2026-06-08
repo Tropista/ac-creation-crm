@@ -22,7 +22,10 @@ export function cleanupOrphanDomNodes({ removePreviewOverlay = false } = {}) {
 
   // Ne pas retirer l'aperçu React actif (Fermer) — laisser le démontage à React.
   if (removePreviewOverlay) {
-    document.querySelectorAll(".document-preview-overlay").forEach((node) => node.remove());
+    document.querySelectorAll(".document-preview-overlay").forEach((node) => {
+      if (node.getAttribute("data-react-preview") === "true") return;
+      node.remove();
+    });
   }
 }
 
