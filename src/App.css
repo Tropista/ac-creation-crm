@@ -1206,6 +1206,28 @@ html,
   min-height: 100vh;
   padding: 24px 16px 40px;
   background: linear-gradient(180deg, #eef2ff 0%, #f8fafc 100%);
+  color: #0f172a;
+  --public-surface: #ffffff;
+  --public-border: #dbe3ef;
+  --public-muted: #64748b;
+  --public-shadow: 0 14px 40px rgba(15, 23, 42, 0.12);
+}
+
+.public-quote-page .muted {
+  color: var(--public-muted);
+}
+
+.public-quote-page button {
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  color: #334155;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.public-quote-page button:hover {
+  background: #f8fafc;
+  color: #0f172a;
 }
 
 .public-quote-header {
@@ -1227,9 +1249,10 @@ html,
   margin: 0 auto;
   padding: 24px;
   border-radius: 22px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-soft);
+  background: var(--public-surface);
+  border: 1px solid var(--public-border);
+  box-shadow: var(--public-shadow);
+  color: #0f172a;
 }
 
 .public-quote-card--error {
@@ -1247,6 +1270,7 @@ html,
   display: block;
   font-size: 12px;
   margin-bottom: 4px;
+  color: var(--public-muted);
 }
 
 .public-quote-delivery {
@@ -1257,6 +1281,12 @@ html,
 .public-quote-actions {
   display: grid;
   gap: 10px;
+}
+
+.public-quote-actions button.primary {
+  background: linear-gradient(135deg, #4f46e5, #2563eb) !important;
+  color: #ffffff !important;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.24);
 }
 
 .public-quote-signature {
