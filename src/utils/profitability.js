@@ -26,10 +26,11 @@ export function computeOrderProfitability(quote, data = {}, options = {}) {
   const costs = normalizeProductionCosts(quote);
   const machineRate = Number(options.machineHourlyRate ?? DEFAULT_MACHINE_HOURLY);
   const operatorRate = Number(options.operatorHourlyRate ?? DEFAULT_OPERATOR_HOURLY);
+  const productCost = computeLineCostsFromProducts(quote?.lines, data.products);
 
   const minutes = costs.realMinutes > 0 ? costs.realMinutes : costs.estimatedMinutes;
   const timeCost =
-    Math.round(((minutes / 60) * (machineRate + operatorRate)) * 100) / 100;
+    Math.round(((minutes / 60) * operatorRate) * 100) / 100;
 
   const materialCost = costs.materialCost;
   const machineCost =
@@ -38,13 +39,13 @@ export function computeOrderProfitability(quote, data = {}, options = {}) {
       : Math.round(((minutes / 60) * machineRate) * 100) / 100;
 
   const subcontractingCost = costs.subcontractingCost;
-  const totalCost = Math.round((materialCost + machineCost + timeCost + subcontractingCost) * 100) / 100;
+  const totalCost = Math.round((productCost + materialCost + machineCost + timeCost + subcontractingCost) * 100) / 100;
   const marginHT = Math.round((revenueHT - totalCost) * 100) / 100;
   const marginRate = revenueHT > 0 ? Math.round((marginHT / revenueHT) * 1000) / 10 : 0;
   const estimatedTimeCost =
-    Math.round(((costs.estimatedMinutes / 60) * (machineRate + operatorRate)) * 100) / 100;
+    Math.round(((costs.estimatedMinutes / 60) * operatorRate) * 100) / 100;
   const estimatedCost = Math.round(
-    (costs.estimatedMaterialCost + costs.machineCost + estimatedTimeCost + costs.estimatedSubcontractingCost) * 100
+    (productCost + costs.estimatedMaterialCost + costs.machineCost + estimatedTimeCost + costs.estimatedSubcontractingCost) * 100
   ) / 100;
   const estimatedMarginHT = Math.round((revenueHT - estimatedCost) * 100) / 100;
 
@@ -64,6 +65,7 @@ export function computeOrderProfitability(quote, data = {}, options = {}) {
     operatorId: costs.operatorId,
     operatorName: operator?.name || operator?.email || "—",
     revenueHT,
+    productCost,
     materialCost,
     machineCost,
     timeCost,
@@ -183,7 +185,9 @@ export function computeInvoiceProfitability(invoice, data = {}, options = {}) {
 
   if (quoteHasProductionCosts(quote)) {
     const quoteRow = computeOrderProfitability(quote, data, options);
-    const totalCost = quoteRow.totalCost;
+    const fallbackProductCost =
+      quoteRow.productCost > 0 ? 0 : computeLineCostsFromProducts(invoice?.lines, data.products);
+    const totalCost = Math.round((quoteRow.totalCost + fallbackProductCost) * 100) / 100;
     const marginHT = Math.round((revenueHT - totalCost) * 100) / 100;
     return {
       invoiceId: invoice?.id,
@@ -448,7 +452,8 @@ export function buildOrderMarginTable(data = {}, options = {}) {
       clientName: row.clientName,
       status: invoice.status || "",
       revenueHT: row.revenueHT,
-      materialCost: quoteRow?.materialCost ?? computeLineCostsFromProducts(invoice.lines, data.products),
+      productCost: quoteRow?.productCost ?? computeLineCostsFromProducts(invoice.lines, data.products),
+      materialCost: quoteRow?.materialCost ?? 0,
       timeCost: quoteRow?.timeCost ?? 0,
       subcontractingCost: quoteRow?.subcontractingCost ?? 0,
       totalCost: row.totalCost,
@@ -476,6 +481,7 @@ export function buildOrderMarginTable(data = {}, options = {}) {
         clientName: row.clientName,
         status: quote.status || "",
         revenueHT: row.revenueHT,
+        productCost: row.productCost,
         materialCost: row.materialCost,
         timeCost: row.timeCost,
         subcontractingCost: row.subcontractingCost,

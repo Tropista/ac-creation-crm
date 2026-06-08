@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getPermissions, ROLE_PERMISSIONS } from "./permissions.js";
+import { canPerformAction, getPermissions, ROLE_PERMISSIONS } from "./permissions.js";
 
 function canAccessPage(role, page) {
   return getPermissions(role).pages.includes(page);
@@ -26,6 +26,15 @@ describe("getPermissions", () => {
       canDelete: false,
       canManageUsers: false,
     });
+  });
+});
+
+describe("canPerformAction", () => {
+  it("gère les droits fins par action", () => {
+    expect(canPerformAction("Admin", "restore")).toBe(true);
+    expect(canPerformAction("Comptable", "exportAccounting")).toBe(true);
+    expect(canPerformAction("Employé", "exportAccounting")).toBe(false);
+    expect(canPerformAction("Utilisateur", "viewMargins")).toBe(false);
   });
 });
 

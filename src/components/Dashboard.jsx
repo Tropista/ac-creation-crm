@@ -69,6 +69,7 @@ import {
 import {
   buildDashboardProfitability,
 } from "../utils/profitability";
+import { buildDirectionDashboard } from "../utils/directionDashboard";
 import AutomationCenter from "./AutomationCenter";
 const DashboardCharts = lazy(() => import("./DashboardCharts"));
 import ErrorBoundary from "./ErrorBoundary";
@@ -340,6 +341,9 @@ export default function Dashboard({
     invoices,
     expenses,
     data,
+    year: Number(annualStatsYear) || new Date().getFullYear(),
+  });
+  const directionDashboard = buildDirectionDashboard(data, {
     year: Number(annualStatsYear) || new Date().getFullYear(),
   });
 
@@ -1088,6 +1092,70 @@ export default function Dashboard({
                 ))}
               </ul>
             </div>
+          </div>
+        </div>
+      )}
+
+      {(canManageInvoices || canManageQuotes) && (
+        <div className="card dashboard-direction" data-testid="dashboard-direction">
+          <div className="dashboard-annual-stats__head">
+            <div>
+              <h3>Dashboard direction</h3>
+              <p className="muted">
+                Pilotage {directionDashboard.year} : CA, conversion, impayés, marge, clients et produits rentables.
+              </p>
+            </div>
+          </div>
+          <div className="dashboard-direction__kpis">
+            <div><span>CA HT</span><strong>{money(directionDashboard.revenueHT)}</strong></div>
+            <div><span>Conversion</span><strong>{directionDashboard.conversionRate} %</strong></div>
+            <div><span>Impayés</span><strong>{money(directionDashboard.unpaidAmount)}</strong></div>
+            <div>
+              <span>Marge connue</span>
+              <strong>
+                {directionDashboard.marginKnownRevenueHT > 0
+                  ? `${money(directionDashboard.marginHT)} (${directionDashboard.marginRate} %)`
+                  : "À compléter"}
+              </strong>
+              {directionDashboard.marginUnknownRevenueHT > 0 && (
+                <em className="dashboard-direction__kpi-note">
+                  Coûts manquants sur {money(directionDashboard.marginUnknownRevenueHT)} de CA
+                </em>
+              )}
+            </div>
+          </div>
+          <div className="dashboard-direction__grid">
+            <section>
+              <h4>CA mensuel</h4>
+              <div className="dashboard-direction__months">
+                {directionDashboard.monthlyRevenue.map((month) => (
+                  <span key={month.month} title={money(month.revenueHT)}>
+                    <b style={{ height: `${Math.max(4, Math.min(100, month.revenueHT / Math.max(directionDashboard.revenueHT, 1) * 240))}%` }} />
+                    <em>{month.label}</em>
+                  </span>
+                ))}
+              </div>
+            </section>
+            <section>
+              <h4>Meilleurs clients</h4>
+              {directionDashboard.topClients.length === 0 ? <p className="muted">Aucune vente.</p> : (
+                <ul className="dashboard-annual-top-clients">
+                  {directionDashboard.topClients.map((client) => (
+                    <li key={client.clientId}><span>{client.name}</span><strong>{money(client.revenueHT)}</strong></li>
+                  ))}
+                </ul>
+              )}
+            </section>
+            <section>
+              <h4>Produits rentables</h4>
+              {directionDashboard.profitableProducts.length === 0 ? <p className="muted">Aucune ligne produit.</p> : (
+                <ul className="dashboard-annual-top-clients">
+                  {directionDashboard.profitableProducts.map((product) => (
+                    <li key={product.key}><span>{product.name}</span><strong>{money(product.marginHT)}</strong></li>
+                  ))}
+                </ul>
+              )}
+            </section>
           </div>
         </div>
       )}

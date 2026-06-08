@@ -61,8 +61,8 @@ describe("profitability", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].materialCost).toBe(90);
     expect(rows[0].subcontractingCost).toBe(40);
-    expect(rows[0].timeCost).toBe(45);
-    expect(rows[0].marginHT).toBe(310);
+    expect(rows[0].timeCost).toBe(30);
+    expect(rows[0].marginHT).toBe(325);
     expect(rows[0].marginDeltaHT).toBeLessThan(0);
   });
 
@@ -169,5 +169,39 @@ describe("profitability", () => {
     expect(dashboard.supplementalQuoteCount).toBe(1);
     expect(dashboard.byClient[0].orderCount).toBe(2);
     expect(dashboard.byClient[0].revenueHT).toBe(450);
+  });
+
+  it("additionne support produit, matieres, temps et sous-traitance", () => {
+    const row = computeInvoiceProfitability(
+      {
+        id: "inv-shirt",
+        number: "FAC-SHIRT",
+        clientId: "c1",
+        totalHT: 120,
+        parentQuoteId: "q-shirt",
+        lines: [{ productId: "shirt", quantity: 2, totalHT: 120 }],
+      },
+      {
+        clients: [{ id: "c1", name: "Client" }],
+        products: [{ id: "shirt", purchasePrice: 5 }],
+        quotes: [
+          {
+            id: "q-shirt",
+            totalHT: 120,
+            lines: [{ productId: "shirt", quantity: 2, totalHT: 120 }],
+            productionSheet: {
+              materialCost: 8,
+              estimatedMinutes: 30,
+              subcontractingCost: 12,
+            },
+          },
+        ],
+      },
+      { machineHourlyRate: 10, operatorHourlyRate: 20 }
+    );
+
+    expect(row.totalCost).toBe(45);
+    expect(row.marginHT).toBe(75);
+    expect(row.costSource).toBe("atelier");
   });
 });

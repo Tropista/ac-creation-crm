@@ -5,6 +5,7 @@ import {
   formatAccountingMonthInput,
   parseAccountingMonthInput,
 } from "../utils/exportCsv";
+import { buildFiduciaryExportPack, downloadFiduciaryCsv } from "../utils/fiduciaryExport";
 import { showToast } from "../utils/toast";
 
 function useSelectedAccountingPeriod() {
@@ -59,6 +60,7 @@ export default function MonthlyAccountingExport({
       monthLabel: built.monthLabel,
       invoiceCount: built.invoiceCount,
       expenseCount: built.expenseCount,
+      fiduciary: buildFiduciaryExportPack(data, { year, month }),
     };
   }, [data, year, month]);
 
@@ -78,6 +80,12 @@ export default function MonthlyAccountingExport({
     );
   }
 
+  function handleFiduciaryExport() {
+    const filename = downloadFiduciaryCsv(data, { year, month });
+    logActivity?.("Export fiduciaire Luxembourg", filename);
+    showToast("Export fiduciaire Luxembourg téléchargé.", "success");
+  }
+
   const controls = (
     <div className="accounting-export-controls" data-testid={testId}>
       <MonthPicker
@@ -87,6 +95,9 @@ export default function MonthlyAccountingExport({
       />
       <button type="button" className="primary" onClick={handleExport}>
         Export mensuel comptable
+      </button>
+      <button type="button" onClick={handleFiduciaryExport}>
+        Export fiduciaire LU
       </button>
     </div>
   );

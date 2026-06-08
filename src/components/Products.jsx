@@ -115,6 +115,7 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
     sku: "",
     category: "",
     price: "",
+    purchasePrice: "",
     stock: "",
     stockMin: "",
     imageUrl: "",
@@ -669,7 +670,7 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
 
   function reset() {
     setEditing(null);
-    setForm({ name: "", sku: "", category: "", price: "", stock: "", stockMin: "", imageUrl: "", description: "" });
+    setForm({ name: "", sku: "", category: "", price: "", purchasePrice: "", stock: "", stockMin: "", imageUrl: "", description: "" });
   }
 
   async function submit(e) {
@@ -693,6 +694,7 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
       ...form,
       sku: finalSku,
       price: Number(form.price || 0),
+      purchasePrice: Number(form.purchasePrice || 0),
       stock: Number(form.stock || 0),
       stockMin: Number(form.stockMin || 0),
     };
@@ -754,6 +756,7 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
       sku: product.sku || "",
       category: product.category || "",
       price: product.price || "",
+      purchasePrice: product.purchasePrice || "",
       stock: product.stock || "",
       stockMin: product.stockMin || product.minStock || "",
       imageUrl: product.imageUrl || "",
@@ -1010,6 +1013,13 @@ function openLinkedDocument(doc) {
           placeholder="Prix HT"
           value={String(form.price).replace(".", ",")}
           onChange={(e) => setForm({ ...form, price: e.target.value.replace(",", ".") })}
+        />
+        <input
+          type="text"
+          inputMode="decimal"
+          placeholder="Prix d'achat HT"
+          value={String(form.purchasePrice).replace(".", ",")}
+          onChange={(e) => setForm({ ...form, purchasePrice: e.target.value.replace(",", ".") })}
         />
         <input type="number" min="0" placeholder="Stock actuel" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} />
         <input type="number" min="0" placeholder="Stock minimum / alerte" value={form.stockMin} onChange={(e) => setForm({ ...form, stockMin: e.target.value })} />
@@ -1363,6 +1373,9 @@ function openLinkedDocument(doc) {
                     <span className={`product-price-col${Number(product.price) > 0 ? "" : " muted"}`}>
                       Prix HT : {money(product.price)}
                     </span>
+                    <span className={`product-price-col${Number(product.purchasePrice) > 0 ? "" : " muted"}`}>
+                      Achat HT : {Number(product.purchasePrice) > 0 ? money(product.purchasePrice) : "non renseigné"}
+                    </span>
                     <span className={`product-stock-col${outOfStock ? " product-stock-col--out" : lowStock ? " product-stock-col--low" : ""}`}>
                       Stock : {stock}
                       {minStock > 0 ? ` / min ${minStock}` : ""}
@@ -1446,6 +1459,15 @@ function openLinkedDocument(doc) {
                   <div>
                     <strong>{money(selectedProduct.price)}</strong>
                     <span>Prix HT</span>
+                  </div>
+
+                  <div>
+                    <strong>
+                      {Number(selectedProduct.purchasePrice) > 0
+                        ? money(selectedProduct.purchasePrice)
+                        : "—"}
+                    </strong>
+                    <span>Achat HT</span>
                   </div>
                 </div>
 

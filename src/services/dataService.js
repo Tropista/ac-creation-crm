@@ -191,6 +191,7 @@ export const emptyData = {
   payments: [],
   clientFiles: [],
   clientNotes: [],
+  deletedItems: [],
   backups: [],
   logs: [],
 };
@@ -294,6 +295,10 @@ export function normalizeData(data) {
 
     clientNotes: dedupeItemsById(
       rest?.clientNotes || []
+    ),
+
+    deletedItems: dedupeItemsById(
+      rest?.deletedItems || []
     ),
 
     backups: dedupeItemsById(

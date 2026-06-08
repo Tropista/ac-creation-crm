@@ -829,7 +829,7 @@ function CrmApp() {
               path={pageToPath("logs")}
               element={
                 canAccessPage(currentRole, "logs") ? (
-                  <ActivityLogs data={data} />
+                  <ActivityLogs data={data} setData={updateData} currentRole={currentRole} />
                 ) : null
               }
             />

@@ -552,6 +552,38 @@ tbody tr:hover td { background: rgba(255,255,255,0.04); }
    Products
    ========================================================= */
 .products-premium-panel { background: #1a0e3a !important; }
+
+.audit-trash-card{
+  margin-bottom:16px;
+}
+
+.audit-trash-list{
+  display:grid;
+  gap:8px;
+  margin-top:12px;
+}
+
+.audit-trash-row{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  align-items:center;
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:10px 12px;
+  background:rgba(255,255,255,.06);
+}
+
+.audit-trash-row strong{
+  color:#fff;
+}
+
+.audit-trash-row span{
+  display:block;
+  color:var(--muted);
+  font-size:12px;
+  margin-top:3px;
+}
 .products-bulk-premium,
 .bulk-actions,
 .select-visible-row {

@@ -117,6 +117,27 @@ export default function AtelierProductionPanel({ quote, data, onUpdate, onDownlo
                 onChange={(e) => patch("materialCost", Number(e.target.value) || 0)}
               />
             </label>
+            <label>
+              Coût machine (€)
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={sheet.machineCost || ""}
+                onChange={(e) => patch("machineCost", Number(e.target.value) || 0)}
+                placeholder="Auto si vide"
+              />
+            </label>
+            <label>
+              Sous-traitance (€)
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={sheet.subcontractingCost || ""}
+                onChange={(e) => patch("subcontractingCost", Number(e.target.value) || 0)}
+              />
+            </label>
           </div>
 
           <label className="atelier-production-note">

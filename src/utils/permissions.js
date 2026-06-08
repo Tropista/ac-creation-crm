@@ -34,6 +34,15 @@ export const ROLE_PERMISSIONS = {
     canEditSettings: true,
     canManageUsers: true,
     canImport: true,
+    actions: {
+      delete: true,
+      restore: true,
+      exportAccounting: true,
+      manageUsers: true,
+      editSettings: true,
+      sendEmails: true,
+      viewMargins: true,
+    },
   },
 
   Employé: {
@@ -65,6 +74,15 @@ export const ROLE_PERMISSIONS = {
     canEditSettings: false,
     canManageUsers: false,
     canImport: false,
+    actions: {
+      delete: false,
+      restore: false,
+      exportAccounting: false,
+      manageUsers: false,
+      editSettings: false,
+      sendEmails: true,
+      viewMargins: true,
+    },
   },
 
   Comptable: {
@@ -73,6 +91,15 @@ export const ROLE_PERMISSIONS = {
     canEditSettings: false,
     canManageUsers: false,
     canImport: false,
+    actions: {
+      delete: false,
+      restore: false,
+      exportAccounting: true,
+      manageUsers: false,
+      editSettings: false,
+      sendEmails: true,
+      viewMargins: true,
+    },
   },
 
   Utilisateur: {
@@ -81,9 +108,22 @@ export const ROLE_PERMISSIONS = {
     canEditSettings: false,
     canManageUsers: false,
     canImport: false,
+    actions: {
+      delete: false,
+      restore: false,
+      exportAccounting: false,
+      manageUsers: false,
+      editSettings: false,
+      sendEmails: false,
+      viewMargins: false,
+    },
   },
 };
 
 export function getPermissions(role) {
   return ROLE_PERMISSIONS[role] || ROLE_PERMISSIONS.Utilisateur;
+}
+
+export function canPerformAction(role, action) {
+  return Boolean(getPermissions(role).actions?.[action]);
 }

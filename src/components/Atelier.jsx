@@ -1008,7 +1008,7 @@ export default function Atelier({
               <div key={row.id} className={row.marginHT < 0 ? "atelier-margin-row danger" : "atelier-margin-row"}>
                 <span>{row.number}</span>
                 <span>{row.clientName}</span>
-                <span>{money(row.materialCost + row.timeCost + row.subcontractingCost)}</span>
+                <span>{money(row.totalCost)}</span>
                 <strong>{money(row.marginHT)} ({row.marginRate}%)</strong>
                 <span>{money(row.marginDeltaHT)}</span>
               </div>

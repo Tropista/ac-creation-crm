@@ -1,7 +1,13 @@
 import { useState } from "react";
-export default function ActivityLogs({ data }) {
+import { canPerformAction } from "../utils/permissions";
+import { getRestorableDeletedItems, restoreDeletedItem } from "../utils/auditTrail";
+import { showToast } from "../utils/toast";
+
+export default function ActivityLogs({ data, setData, currentRole = "Admin" }) {
   const [search, setSearch] = useState("");
   const [actionFilter, setActionFilter] = useState("Toutes");
+  const restorableItems = getRestorableDeletedItems(data);
+  const canRestore = canPerformAction(currentRole, "restore");
 
   const logs = [...(data.logs || [])]
     .sort((a, b) => new Date(b.date || b.createdAt || 0) - new Date(a.date || a.createdAt || 0));
@@ -25,6 +31,15 @@ export default function ActivityLogs({ data }) {
     return matchesSearch && matchesAction;
   });
 
+  function restoreItem(id) {
+    if (!canRestore) {
+      showToast("Ton rôle ne permet pas de restaurer un objet supprimé.", "error");
+      return;
+    }
+    setData?.((current) => restoreDeletedItem(current, id));
+    showToast("Objet restauré.", "success");
+  }
+
   return (
     <section>
       <div className="page-header">
@@ -45,6 +60,30 @@ export default function ActivityLogs({ data }) {
             <option key={action} value={action}>{action}</option>
           ))}
         </select>
+      </div>
+
+      <div className="card audit-trash-card">
+        <div>
+          <h3>Corbeille restaurable</h3>
+          <p className="muted">Objets supprimés avec snapshot conservé pour restauration.</p>
+        </div>
+        {restorableItems.length === 0 ? (
+          <p className="muted">Aucun objet restaurable.</p>
+        ) : (
+          <div className="audit-trash-list">
+            {restorableItems.slice(0, 20).map((entry) => (
+              <div key={entry.id} className="audit-trash-row">
+                <div>
+                  <strong>{entry.label}</strong>
+                  <span>{entry.collection} · {entry.user || "Système"} · {entry.deletedAt ? new Date(entry.deletedAt).toLocaleString("fr-FR") : "-"}</span>
+                </div>
+                <button type="button" disabled={!canRestore} onClick={() => restoreItem(entry.id)}>
+                  Restaurer
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="table card">
