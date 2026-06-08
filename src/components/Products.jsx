@@ -16,6 +16,9 @@ import {
 } from "../utils/productImages";
 import {
   applyProductStockChange,
+  buildAdvancedStockRows,
+  buildSupplierReorderGroups,
+  createSupplierPurchaseOrderDraft,
   isBlankProduct,
   isConsumableProduct,
   isLowStock,
@@ -623,6 +626,37 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
     return { total, available, low, out };
   }, [allProducts]);
 
+  const advancedStockRows = useMemo(
+    () =>
+      buildAdvancedStockRows(
+        allProducts,
+        data.quotes || [],
+        data.suppliers || [],
+        data.settings || {}
+      ),
+    [allProducts, data.quotes, data.suppliers, data.settings]
+  );
+
+  const supplierReorderGroups = useMemo(
+    () =>
+      buildSupplierReorderGroups(
+        allProducts,
+        data.suppliers || [],
+        data.quotes || [],
+        data.settings || {}
+      ),
+    [allProducts, data.suppliers, data.quotes, data.settings]
+  );
+
+  const reservedStockCount = advancedStockRows.filter((row) => row.reservedQty > 0).length;
+  const criticalAvailableCount = advancedStockRows.filter((row) => row.outOfStock || row.lowStock).length;
+
+  function buildSupplierMailto(group) {
+    const draft = createSupplierPurchaseOrderDraft(group, data.settings || {});
+    const to = draft.supplierEmail ? encodeURIComponent(draft.supplierEmail) : "";
+    return `mailto:${to}?subject=${encodeURIComponent(draft.subject)}&body=${encodeURIComponent(draft.body)}`;
+  }
+
   function resetProductFilters() {
     setSearch("");
     setCategoryFilter("");
@@ -1176,6 +1210,55 @@ function openLinkedDocument(doc) {
           <button type="button" className="filters-reset-button" onClick={resetProductFilters}>
             ↺ Réinitialiser
           </button>
+        </div>
+      </div>
+
+      <div className="products-stock-ops card">
+        <div className="products-stock-ops__head">
+          <div>
+            <strong>Stock avancé</strong>
+            <span>
+              {reservedStockCount} produit(s) réservé(s) · {criticalAvailableCount} alerte(s) sur disponible réel
+            </span>
+          </div>
+          <div>
+            <b>{supplierReorderGroups.length}</b>
+            <span>commande(s) fournisseur suggérée(s)</span>
+          </div>
+        </div>
+
+        <div className="products-stock-ops__grid">
+          <section>
+            <h3>Disponible réel</h3>
+            {advancedStockRows.slice(0, 8).map((row) => (
+              <div key={row.productId} className={row.outOfStock ? "stock-op-row danger" : row.lowStock ? "stock-op-row warning" : "stock-op-row"}>
+                <div>
+                  <strong>{row.name}</strong>
+                  <span>{row.supplierName}</span>
+                </div>
+                <p>
+                  Stock {row.stock} · Réservé {row.reservedQty} · Dispo {row.availableStock}
+                </p>
+              </div>
+            ))}
+          </section>
+
+          <section>
+            <h3>Réassort fournisseur</h3>
+            {supplierReorderGroups.length === 0 ? (
+              <p className="muted">Aucun réassort nécessaire.</p>
+            ) : (
+              supplierReorderGroups.slice(0, 5).map((group) => (
+                <div key={group.supplierId || group.supplierName} className="stock-op-row">
+                  <div>
+                    <strong>{group.supplierName}</strong>
+                    <span>{group.lines.length} produit(s) · {group.totalSuggestedQty} pièce(s)</span>
+                  </div>
+                  <a href={buildSupplierMailto(group)}>Préparer email</a>
+                </div>
+              ))
+            )}
+          </section>
         </div>
       </div>
 

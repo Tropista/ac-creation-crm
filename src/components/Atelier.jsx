@@ -26,9 +26,12 @@ import { canDeleteData } from "../services/authService";
 import { useAtelierRealtime } from "../hooks/useAtelierRealtime";
 import { openOrderReadyWhatsApp } from "../utils/quoteShare";
 import {
+  buildOperatorCapacityPlanning,
   buildOperatorWeekPlanning,
+  detectWorkshopRisks,
   filterPlanningByOperator,
 } from "../utils/atelierPlanning";
+import { buildOrderMarginTable } from "../utils/profitability";
 import AtelierGantt from "./AtelierGantt";
 import { addDays, startOfWeekMonday } from "../utils/quoteDeliveryCalendar";
 import AtelierProductionPanel from "./AtelierProductionPanel";
@@ -43,6 +46,19 @@ const PROCESS_ICONS = {
 };
 
 const MOBILE_ATELIER_QUERY = "(max-width: 900px)";
+
+function money(value) {
+  return `${Number(value || 0).toLocaleString("fr-FR", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })} €`;
+}
+
+function formatHours(minutes) {
+  return `${(Number(minutes || 0) / 60).toLocaleString("fr-FR", {
+    maximumFractionDigits: 1,
+  })} h`;
+}
 
 function useMediaQuery(query) {
   const [matches, setMatches] = useState(() => {
@@ -521,6 +537,18 @@ export default function Atelier({
     const planning = buildOperatorWeekPlanning(filteredQuotes, activeUsers, planningWeekStart);
     return filterPlanningByOperator(planning, assigneeFilter);
   }, [filteredQuotes, activeUsers, planningWeekStart, assigneeFilter]);
+  const capacityPlanning = useMemo(() => {
+    const planning = buildOperatorCapacityPlanning(filteredQuotes, activeUsers, planningWeekStart);
+    return filterPlanningByOperator(planning, assigneeFilter);
+  }, [filteredQuotes, activeUsers, planningWeekStart, assigneeFilter]);
+  const workshopRisks = useMemo(
+    () => detectWorkshopRisks(filteredQuotes, activeUsers, planningWeekStart),
+    [filteredQuotes, activeUsers, planningWeekStart]
+  );
+  const marginRows = useMemo(
+    () => buildOrderMarginTable(data).slice(0, 8),
+    [data]
+  );
 
   useAtelierRealtime({
     enabled: cloudAvailable && typeof onCloudResync === "function",
@@ -909,6 +937,86 @@ export default function Atelier({
         </div>
       </div>
 
+      <div className="atelier-ops-grid">
+        <section className="card atelier-capacity-panel">
+          <div className="atelier-panel-head">
+            <strong>Charge atelier</strong>
+            <span>
+              {formatHours(capacityPlanning.totalPlannedMinutes)} / {formatHours(capacityPlanning.totalCapacityMinutes)}
+            </span>
+          </div>
+          <div className="atelier-capacity-list">
+            {capacityPlanning.operators.length === 0 ? (
+              <p className="muted">Aucun opérateur actif.</p>
+            ) : (
+              capacityPlanning.operators.map((row) => (
+                <div key={row.user.id} className={row.overloaded ? "atelier-capacity-row danger" : "atelier-capacity-row"}>
+                  <div>
+                    <strong>{row.user.name || row.user.email}</strong>
+                    <span>{formatHours(row.weekMinutes)} prévues · capacité {row.weeklyCapacityHours} h</span>
+                  </div>
+                  <b>{row.loadRate}%</b>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+
+        <section className="card atelier-risk-panel">
+          <div className="atelier-panel-head">
+            <strong>Retards prévisibles</strong>
+            <span>{workshopRisks.overloadedOperators.length + workshopRisks.overdueQuotes.length + workshopRisks.unassignedQuotes.length} alerte(s)</span>
+          </div>
+          <div className="atelier-risk-list">
+            {workshopRisks.overloadedOperators.slice(0, 3).map((row) => (
+              <p key={`overload-${row.user.id}`}>
+                Surcharge : {row.user.name || row.user.email} ({row.loadRate}%)
+              </p>
+            ))}
+            {workshopRisks.unassignedQuotes.slice(0, 3).map((quote) => (
+              <p key={`unassigned-${quote.id}`}>Non assigné : {quote.number}</p>
+            ))}
+            {workshopRisks.overdueQuotes.slice(0, 3).map((quote) => (
+              <p key={`late-${quote.id}`}>En retard : {quote.number}</p>
+            ))}
+            {workshopRisks.overloadedOperators.length === 0 &&
+            workshopRisks.overdueQuotes.length === 0 &&
+            workshopRisks.unassignedQuotes.length === 0 ? (
+              <p className="muted">Aucun risque détecté.</p>
+            ) : null}
+          </div>
+        </section>
+      </div>
+
+      <section className="card atelier-margin-panel">
+        <div className="atelier-panel-head">
+          <strong>Marge par commande</strong>
+          <span>Matières, temps atelier, sous-traitance, réel vs estimé</span>
+        </div>
+        {marginRows.length === 0 ? (
+          <p className="muted">Aucune commande avec marge calculable.</p>
+        ) : (
+          <div className="atelier-margin-table">
+            <div className="atelier-margin-row atelier-margin-row--head">
+              <span>Commande</span>
+              <span>Client</span>
+              <span>Coûts</span>
+              <span>Marge réelle</span>
+              <span>Écart</span>
+            </div>
+            {marginRows.map((row) => (
+              <div key={row.id} className={row.marginHT < 0 ? "atelier-margin-row danger" : "atelier-margin-row"}>
+                <span>{row.number}</span>
+                <span>{row.clientName}</span>
+                <span>{money(row.materialCost + row.timeCost + row.subcontractingCost)}</span>
+                <strong>{money(row.marginHT)} ({row.marginRate}%)</strong>
+                <span>{money(row.marginDeltaHT)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
       {viewMode === "planning" ? (
         <div className="card atelier-planning" data-testid="atelier-planning">
           <div className="atelier-planning__head">
@@ -946,9 +1054,11 @@ export default function Atelier({
               <div key={row.user?.id || "unassigned"} className="atelier-planning__row">
                 <div className="atelier-planning__operator">
                   {row.user?.name || row.user?.email || row.label}
+                  <span>{formatHours(row.weekMinutes)}</span>
                 </div>
                 {row.days.map((day) => (
                   <div key={day.date.toISOString()} className="atelier-planning__cell">
+                    {day.minutes > 0 ? <small>{formatHours(day.minutes)}</small> : null}
                     {day.quotes.length === 0 ? (
                       <span className="muted">—</span>
                     ) : (

@@ -32,6 +32,95 @@
   color: rgba(255, 255, 255, 0.82);
 }
 
+.atelier-ops-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.atelier-panel-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.atelier-panel-head strong {
+  color: #fff;
+  font-size: 16px;
+}
+
+.atelier-panel-head span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.atelier-capacity-list,
+.atelier-risk-list {
+  display: grid;
+  gap: 8px;
+}
+
+.atelier-capacity-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, .06);
+}
+
+.atelier-capacity-row.danger,
+.atelier-margin-row.danger {
+  border-color: rgba(248, 113, 113, .55);
+  background: rgba(248, 113, 113, .08);
+}
+
+.atelier-capacity-row strong,
+.atelier-capacity-row b {
+  color: #fff;
+}
+
+.atelier-capacity-row span,
+.atelier-risk-list p {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 2px 0 0;
+}
+
+.atelier-margin-table {
+  display: grid;
+  gap: 6px;
+}
+
+.atelier-margin-row {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr .8fr .9fr .7fr;
+  gap: 10px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 11px;
+  background: rgba(255, 255, 255, .06);
+  color: rgba(255, 255, 255, .82);
+  font-size: 12px;
+}
+
+.atelier-margin-row--head {
+  background: transparent;
+  color: var(--muted);
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.atelier-margin-row strong {
+  color: #fff;
+}
+
 .atelier-empty {
   padding: 28px;
   text-align: center;
@@ -617,6 +706,11 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .atelier-ops-grid,
+  .atelier-margin-row {
+    grid-template-columns: 1fr;
+  }
+
   .atelier-mobile-card {
     padding: 18px;
     border: 1px solid var(--border);
@@ -743,6 +837,15 @@
 .atelier-planning__operator {
   padding: 8px;
   font-weight: 700;
+}
+
+.atelier-planning__operator span,
+.atelier-planning__cell small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
 }
 
 .atelier-planning__day-head,

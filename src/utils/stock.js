@@ -209,6 +209,7 @@ export function applyStockByLines(products, lines, direction, options = {}) {
 }
 
 const QUOTE_PRODUCTION_STOCK_STATUSES = ["En production", "Prêt", "Livré"];
+const QUOTE_RESERVED_STOCK_STATUSES = ["Accepté", "En production", "Prêt"];
 
 export function shouldAdjustQuoteProductionStock(status) {
   return QUOTE_PRODUCTION_STOCK_STATUSES.includes(String(status || "").trim());
@@ -268,4 +269,138 @@ export function syncDocumentStock(products, previousDoc, nextDoc, options = {}) 
   }
 
   return nextProducts;
+}
+
+export function getReservedProductQuantities(quotes = []) {
+  const map = new Map();
+
+  for (const quote of quotes || []) {
+    if (!QUOTE_RESERVED_STOCK_STATUSES.includes(String(quote?.status || "").trim())) {
+      continue;
+    }
+
+    for (const line of quote.lines || []) {
+      if (!line.productId) continue;
+      const productId = String(line.productId);
+      const current = map.get(productId) || {
+        productId,
+        quantity: 0,
+        quotes: [],
+      };
+
+      current.quantity += Number(line.quantity || 0);
+      if (!current.quotes.some((entry) => String(entry.id) === String(quote.id))) {
+        current.quotes.push({
+          id: quote.id,
+          number: quote.number || quote.reference || "",
+          status: quote.status || "",
+          promisedDeliveryDate: quote.promisedDeliveryDate || "",
+        });
+      }
+      map.set(productId, current);
+    }
+  }
+
+  return map;
+}
+
+export function buildAdvancedStockRows(products = [], quotes = [], suppliers = [], settings = {}) {
+  const reservedMap = getReservedProductQuantities(quotes);
+
+  return (products || [])
+    .filter((product) => !product?.archived)
+    .map((product) => {
+      const reserved = reservedMap.get(String(product.id));
+      const stock = getStock(product);
+      const reservedQty = Math.round(Number(reserved?.quantity || 0) * 100) / 100;
+      const availableStock = Math.round((stock - reservedQty) * 100) / 100;
+      const minStock = getMinStock(product);
+      const supplier = resolveProductSupplier(product, suppliers);
+      const reorderQty =
+        minStock > 0 ? Math.max(0, Math.ceil(minStock * 2 - availableStock)) : 0;
+
+      return {
+        product,
+        productId: product.id,
+        name: product.name || product.sku || "Produit",
+        sku: product.sku || "",
+        stock,
+        reservedQty,
+        availableStock,
+        minStock,
+        supplier,
+        supplierId: supplier?.id || "",
+        supplierName: supplier?.name || product.supplier || "Sans fournisseur",
+        reorderQty,
+        lowStock: availableStock > 0 && minStock > 0 && availableStock <= minStock,
+        outOfStock: availableStock <= 0,
+        isConsumable: isConsumableProduct(product, settings),
+        reservations: reserved?.quotes || [],
+      };
+    })
+    .sort((a, b) => {
+      if (a.outOfStock !== b.outOfStock) return a.outOfStock ? -1 : 1;
+      if (a.lowStock !== b.lowStock) return a.lowStock ? -1 : 1;
+      return a.availableStock - b.availableStock;
+    });
+}
+
+export function buildSupplierReorderGroups(products = [], suppliers = [], quotes = [], settings = {}) {
+  const rows = buildAdvancedStockRows(products, quotes, suppliers, settings).filter(
+    (row) => row.minStock > 0 && row.reorderQty > 0
+  );
+  const groups = new Map();
+
+  for (const row of rows) {
+    const key = row.supplierId || row.supplierName || "unknown";
+    const current = groups.get(key) || {
+      supplier: row.supplier || null,
+      supplierId: row.supplierId,
+      supplierName: row.supplierName,
+      supplierEmail: row.supplier?.email || "",
+      lines: [],
+      totalSuggestedQty: 0,
+    };
+    current.lines.push({
+      productId: row.productId,
+      sku: row.sku,
+      name: row.name,
+      stock: row.stock,
+      reservedQty: row.reservedQty,
+      availableStock: row.availableStock,
+      minStock: row.minStock,
+      quantity: row.reorderQty,
+    });
+    current.totalSuggestedQty += row.reorderQty;
+    groups.set(key, current);
+  }
+
+  return [...groups.values()].sort((a, b) =>
+    String(a.supplierName).localeCompare(String(b.supplierName))
+  );
+}
+
+export function createSupplierPurchaseOrderDraft(group = {}, settings = {}) {
+  const company = settings.companyName || "AC Creation";
+  const supplierName = group.supplierName || "Fournisseur";
+  const lines = group.lines || [];
+
+  return {
+    supplierName,
+    supplierEmail: group.supplierEmail || "",
+    subject: `Commande fournisseur - ${company}`,
+    body: [
+      `Bonjour ${supplierName},`,
+      "",
+      "Pouvez-vous nous préparer la commande suivante ?",
+      "",
+      ...lines.map(
+        (line) =>
+          `- ${line.quantity} x ${line.sku ? `${line.sku} - ` : ""}${line.name}`
+      ),
+      "",
+      "Merci d'avance.",
+      company,
+    ].join("\n"),
+  };
 }

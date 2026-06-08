@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
   applyStockByLines,
+  buildAdvancedStockRows,
+  buildSupplierReorderGroups,
   countLowStockByKind,
+  createSupplierPurchaseOrderDraft,
+  getReservedProductQuantities,
   getLowStockProductsByKind,
   isBlankProduct,
   isConsumableProduct,
@@ -95,6 +99,51 @@ describe("applyStockByLines", () => {
     );
 
     expect(result[0].stock).toBe(7);
+  });
+});
+
+describe("stock avancé", () => {
+  it("calcule les réservations issues des devis acceptés", () => {
+    const reserved = getReservedProductQuantities([
+      {
+        id: "q1",
+        number: "DEV-1",
+        status: "Accepté",
+        lines: [{ productId: "p1", quantity: 3 }],
+      },
+      {
+        id: "q2",
+        number: "DEV-2",
+        status: "Brouillon",
+        lines: [{ productId: "p1", quantity: 10 }],
+      },
+    ]);
+
+    expect(reserved.get("p1").quantity).toBe(3);
+    expect(reserved.get("p1").quotes[0].number).toBe("DEV-1");
+  });
+
+  it("génère les lignes de réassort par fournisseur selon le disponible réel", () => {
+    const rows = buildAdvancedStockRows(
+      [{ id: "p1", name: "T-shirt blanc", stock: 5, stockMin: 4, supplier: "Textiles SA" }],
+      [{ id: "q1", status: "Accepté", lines: [{ productId: "p1", quantity: 3 }] }],
+      [{ id: "s1", name: "Textiles SA", email: "stock@example.com" }]
+    );
+
+    expect(rows[0].availableStock).toBe(2);
+    expect(rows[0].reorderQty).toBe(6);
+
+    const groups = buildSupplierReorderGroups(
+      rows.map((row) => row.product),
+      [{ id: "s1", name: "Textiles SA", email: "stock@example.com" }],
+      [{ id: "q1", status: "Accepté", lines: [{ productId: "p1", quantity: 3 }] }]
+    );
+    expect(groups).toHaveLength(1);
+    expect(groups[0].totalSuggestedQty).toBe(6);
+
+    const draft = createSupplierPurchaseOrderDraft(groups[0], { companyName: "AC" });
+    expect(draft.subject).toContain("AC");
+    expect(draft.body).toContain("T-shirt blanc");
   });
 });
 

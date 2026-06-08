@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildDashboardProfitability,
+  buildOrderMarginTable,
   computeInvoiceProfitability,
   computeOrderProfitability,
   getPaidInvoicesWithLedger,
@@ -25,6 +26,44 @@ describe("profitability", () => {
     expect(row.revenueHT).toBe(200);
     expect(row.totalCost).toBeGreaterThan(0);
     expect(row.marginHT).toBeLessThan(200);
+  });
+
+  it("produit un tableau de marge par commande avec sous-traitance et écart estimé/réel", () => {
+    const data = {
+      clients: [{ id: "c1", name: "Client" }],
+      quotes: [
+        {
+          id: "q1",
+          clientId: "c1",
+          number: "DEV-1",
+          status: "En production",
+          totalHT: 500,
+          productionSheet: {
+            materialCost: 90,
+            estimatedMaterialCost: 80,
+            estimatedMinutes: 60,
+            realMinutes: 90,
+            subcontractingCost: 40,
+            estimatedSubcontractingCost: 20,
+          },
+        },
+      ],
+      invoices: [],
+      payments: [],
+      products: [],
+    };
+
+    const rows = buildOrderMarginTable(data, {
+      machineHourlyRate: 10,
+      operatorHourlyRate: 20,
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].materialCost).toBe(90);
+    expect(rows[0].subcontractingCost).toBe(40);
+    expect(rows[0].timeCost).toBe(45);
+    expect(rows[0].marginHT).toBe(310);
+    expect(rows[0].marginDeltaHT).toBeLessThan(0);
   });
 
   it("utilise les coûts atelier d'un devis lié à une facture payée", () => {

@@ -10,7 +10,10 @@ export function normalizeProductionCosts(quote = {}) {
   const sheet = quote.productionSheet || {};
   return {
     materialCost: Number(sheet.materialCost ?? quote.materialCost ?? 0),
+    estimatedMaterialCost: Number(sheet.estimatedMaterialCost ?? quote.estimatedMaterialCost ?? sheet.materialCost ?? quote.materialCost ?? 0),
     machineCost: Number(sheet.machineCost ?? quote.machineCost ?? 0),
+    subcontractingCost: Number(sheet.subcontractingCost ?? quote.subcontractingCost ?? 0),
+    estimatedSubcontractingCost: Number(sheet.estimatedSubcontractingCost ?? quote.estimatedSubcontractingCost ?? sheet.subcontractingCost ?? quote.subcontractingCost ?? 0),
     estimatedMinutes: Number(sheet.estimatedMinutes ?? quote.estimatedMinutes ?? 0),
     realMinutes: Number(sheet.realMinutes ?? quote.realMinutes ?? 0),
     machine: sheet.machine || quote.productionMachine || "",
@@ -34,9 +37,16 @@ export function computeOrderProfitability(quote, data = {}, options = {}) {
       ? costs.machineCost
       : Math.round(((minutes / 60) * machineRate) * 100) / 100;
 
-  const totalCost = Math.round((materialCost + machineCost + timeCost) * 100) / 100;
+  const subcontractingCost = costs.subcontractingCost;
+  const totalCost = Math.round((materialCost + machineCost + timeCost + subcontractingCost) * 100) / 100;
   const marginHT = Math.round((revenueHT - totalCost) * 100) / 100;
   const marginRate = revenueHT > 0 ? Math.round((marginHT / revenueHT) * 1000) / 10 : 0;
+  const estimatedTimeCost =
+    Math.round(((costs.estimatedMinutes / 60) * (machineRate + operatorRate)) * 100) / 100;
+  const estimatedCost = Math.round(
+    (costs.estimatedMaterialCost + costs.machineCost + estimatedTimeCost + costs.estimatedSubcontractingCost) * 100
+  ) / 100;
+  const estimatedMarginHT = Math.round((revenueHT - estimatedCost) * 100) / 100;
 
   const process = resolveProcessType(quote);
   const operator = (data.users || []).find(
@@ -57,9 +67,13 @@ export function computeOrderProfitability(quote, data = {}, options = {}) {
     materialCost,
     machineCost,
     timeCost,
+    subcontractingCost,
     totalCost,
     marginHT,
     marginRate,
+    estimatedCost,
+    estimatedMarginHT,
+    marginDeltaHT: Math.round((marginHT - estimatedMarginHT) * 100) / 100,
     estimatedMinutes: costs.estimatedMinutes,
     realMinutes: costs.realMinutes,
   };
@@ -415,6 +429,68 @@ export function aggregateProfitabilityByOperator(quotes = [], data = {}, options
   return [...map.values()].sort((a, b) => b.marginHT - a.marginHT);
 }
 
+export function buildOrderMarginTable(data = {}, options = {}) {
+  const paidInvoices = getPaidInvoicesWithLedger(data.invoices || [], data.payments || []);
+  const invoicedQuoteIds = new Set(
+    paidInvoices
+      .map((invoice) => String(invoice.parentQuoteId || invoice.quoteId || ""))
+      .filter(Boolean)
+  );
+  const invoiceRows = paidInvoices.map((invoice) => {
+    const row = computeInvoiceProfitability(invoice, data, options);
+    const quote = findQuoteForInvoice(invoice, data.quotes || []);
+    const quoteRow = quote ? computeOrderProfitability(quote, data, options) : null;
+    return {
+      id: `invoice-${invoice.id}`,
+      source: "invoice",
+      number: invoice.number || row.invoiceNumber,
+      quoteNumber: row.quoteNumber,
+      clientName: row.clientName,
+      status: invoice.status || "",
+      revenueHT: row.revenueHT,
+      materialCost: quoteRow?.materialCost ?? computeLineCostsFromProducts(invoice.lines, data.products),
+      timeCost: quoteRow?.timeCost ?? 0,
+      subcontractingCost: quoteRow?.subcontractingCost ?? 0,
+      totalCost: row.totalCost,
+      estimatedMarginHT: quoteRow?.estimatedMarginHT ?? row.marginHT,
+      marginHT: row.marginHT,
+      marginRate: row.marginRate,
+      marginDeltaHT: quoteRow?.marginDeltaHT ?? 0,
+      processLabel: row.processLabel,
+    };
+  });
+
+  const activeQuoteRows = (data.quotes || [])
+    .filter(
+      (quote) =>
+        ["Accepté", "En production", "Prêt", "Livré"].includes(String(quote.status || "")) &&
+        !invoicedQuoteIds.has(String(quote.id))
+    )
+    .map((quote) => {
+      const row = computeOrderProfitability(quote, data, options);
+      return {
+        id: `quote-${quote.id}`,
+        source: "quote",
+        number: quote.number || quote.reference,
+        quoteNumber: quote.number || quote.reference,
+        clientName: row.clientName,
+        status: quote.status || "",
+        revenueHT: row.revenueHT,
+        materialCost: row.materialCost,
+        timeCost: row.timeCost,
+        subcontractingCost: row.subcontractingCost,
+        totalCost: row.totalCost,
+        estimatedMarginHT: row.estimatedMarginHT,
+        marginHT: row.marginHT,
+        marginRate: row.marginRate,
+        marginDeltaHT: row.marginDeltaHT,
+        processLabel: row.processLabel,
+      };
+    });
+
+  return [...invoiceRows, ...activeQuoteRows].sort((a, b) => a.marginHT - b.marginHT);
+}
+
 export const PRODUCTION_CHECKLIST_ITEMS = [
   "Fichiers vérifiés",
   "Matériau préparé",
@@ -441,6 +517,7 @@ export function normalizeProductionSheet(quote = {}) {
     operatorId: existing.operatorId || quote.assignedTo || "",
     materialCost: Number(existing.materialCost || 0),
     machineCost: Number(existing.machineCost || 0),
+    subcontractingCost: Number(existing.subcontractingCost || 0),
     productionNote: existing.productionNote || quote.atelierNotes || "",
     files: Array.isArray(existing.files) ? existing.files : [],
     checklist,
