@@ -34,7 +34,7 @@ test.describe("Atelier — changement de statut", () => {
     await page.goto("/atelier");
 
     await expect(page.getByTestId("atelier-page")).toBeVisible();
-    await expect(page.getByText("DEV-E2E-001")).toBeVisible();
+    await expect(page.getByRole("button", { name: "DEV-E2E-001", exact: true })).toBeVisible();
 
     const statusSelect = page.getByTestId("atelier-status-quote-atelier-1");
     await statusSelect.selectOption("En production");
@@ -74,13 +74,13 @@ test.describe("Atelier — changement de statut", () => {
     await seedCrm(page, { session: adminSession, data });
     await page.goto("/atelier");
 
-    await expect(page.getByText("DEV-E2E-DEL")).toBeVisible();
+    await expect(page.getByRole("button", { name: "DEV-E2E-DEL", exact: true })).toBeVisible();
     await page.getByTestId("atelier-delete-quote-atelier-delete").click();
     await page
       .getByRole("alertdialog", { name: "Supprimer la commande atelier" })
       .getByRole("button", { name: "Supprimer" })
       .click();
-    await expect(page.getByText("DEV-E2E-DEL")).not.toBeVisible();
+    await expect(page.getByRole("button", { name: "DEV-E2E-DEL", exact: true })).not.toBeVisible();
     await expect(page.getByText("Aucune commande en file")).toBeVisible();
   });
 });
