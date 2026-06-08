@@ -52,8 +52,9 @@ test.describe("Recherche globale (Ctrl+K)", () => {
     await page.goto("/dashboard");
     await openSearch(page);
     await page.getByPlaceholder(/Rechercher un client/).fill("FAC-SEARCH");
-    await expect(page.getByText("FAC-SEARCH-1").first()).toBeVisible({ timeout: 5000 });
-    await page.getByRole("button", { name: /FAC-SEARCH-1/ }).first().click();
+    const results = page.getByTestId("global-search-results");
+    await expect(results.getByText("FAC-SEARCH-1").first()).toBeVisible({ timeout: 5000 });
+    await results.getByRole("button", { name: /FAC-SEARCH-1/ }).first().click();
     await page.waitForURL(/\/factures/, { timeout: 5000 });
   });
 

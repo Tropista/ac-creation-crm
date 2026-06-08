@@ -108,7 +108,7 @@ export default function GlobalSearch({ isOpen, onClose, data, onOpenDoc }) {
         </div>
 
         {/* Results */}
-        <div style={{ maxHeight: 360, overflowY: "auto" }}>
+        <div data-testid="global-search-results" style={{ maxHeight: 360, overflowY: "auto" }}>
           {results.length === 0 ? (
             <p style={{ padding: "20px 16px", color: "var(--muted)", fontSize: 13, margin: 0, textAlign: "center" }}>Aucun résultat.</p>
           ) : (
