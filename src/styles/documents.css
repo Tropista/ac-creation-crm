@@ -1233,8 +1233,13 @@
 
   .document-form-header,
   .documents-form-header,
-  .document-line {
+  .document-line,
+  .document-margin-summary {
     grid-template-columns: 1fr;
+  }
+
+  .document-margin-summary__actions {
+    justify-content: flex-start;
   }
 
   .document-line-head {
@@ -1338,6 +1343,56 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
   padding: 0 8px 8px;
+}
+
+.document-margin-summary {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto auto;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.document-margin-summary--warning {
+  border-color: rgba(251, 191, 36, 0.36);
+  background: rgba(251, 191, 36, 0.08);
+}
+
+.document-margin-summary strong,
+.document-margin-summary span {
+  display: block;
+}
+
+.document-margin-summary > div:first-child span {
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 3px;
+}
+
+.document-margin-summary__signals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.document-margin-summary__signals span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.document-margin-summary__actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
 }
 
 .document-line-margin-assistant {

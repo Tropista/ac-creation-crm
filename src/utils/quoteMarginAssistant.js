@@ -172,6 +172,7 @@ export function computeLineInternalCosts(line = {}, products = [], options = {})
     quantity > 0 && totalCost > 0
       ? roundMoney(totalCost / quantity / Math.max(0.01, 1 - targetMarginRate / 100))
       : 0;
+  const maxCostForTargetMargin = roundMoney(revenueHT * Math.max(0.01, 1 - targetMarginRate / 100));
 
   return {
     supportCost,
@@ -187,6 +188,7 @@ export function computeLineInternalCosts(line = {}, products = [], options = {})
     marginRate,
     targetMarginRate,
     suggestedUnitPrice,
+    maxCostForTargetMargin,
     automaticCosts,
     hasCost: totalCost > 0.01,
     isLowMargin: revenueHT > 0 && marginRate < targetMarginRate,
@@ -239,10 +241,23 @@ export function applyAutomaticProductionCosts(line = {}) {
 
   return {
     ...line,
-    materialCost: automaticCosts.materialCost || "",
-    machineCost: automaticCosts.machineCost || "",
-    laborMinutes: automaticCosts.operatorMinutes || line.laborMinutes || "",
-    laborHourlyRate: automaticCosts.operatorHourlyRate || line.laborHourlyRate || "",
+    materialCost: automaticCosts.materialCost > 0 ? automaticCosts.materialCost : line.materialCost || "",
+    machineCost: automaticCosts.machineCost > 0 ? automaticCosts.machineCost : line.machineCost || "",
+    laborMinutes: automaticCosts.operatorMinutes > 0 ? automaticCosts.operatorMinutes : line.laborMinutes || "",
+    laborHourlyRate:
+      automaticCosts.operatorMinutes > 0
+        ? automaticCosts.operatorHourlyRate
+        : line.laborHourlyRate || automaticCosts.operatorHourlyRate || "",
+  };
+}
+
+export function estimateMissingLineCostFromTargetMargin(line = {}, products = [], options = {}) {
+  const margin = computeLineInternalCosts(line, products, options);
+  if (margin.hasCost || margin.revenueHT <= 0) return line;
+
+  return {
+    ...line,
+    materialCost: margin.maxCostForTargetMargin,
   };
 }
 

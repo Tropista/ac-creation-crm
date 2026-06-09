@@ -62,6 +62,7 @@ export default function Leads({ data, setData, logActivity, currentRole = "Admin
   const navigate = useNavigate();
   const [statusFilter, setStatusFilter] = useState("all");
   const [followUpFilter, setFollowUpFilter] = useState("all");
+  const [highlightedLeadId, setHighlightedLeadId] = useState("");
   const permissions = getPermissions(currentRole);
   const canConvertLeads =
     permissions.pages.includes("quotes") && permissions.pages.includes("clients");
@@ -80,6 +81,19 @@ export default function Leads({ data, setData, logActivity, currentRole = "Admin
       window.removeEventListener(PUBLIC_LEADS_UPDATED_EVENT, syncPendingLeads);
     };
   }, [setData]);
+
+  useEffect(() => {
+    const leadId = localStorage.getItem("crm_open_lead_id");
+    if (!leadId) return;
+    localStorage.removeItem("crm_open_lead_id");
+    setStatusFilter("all");
+    setFollowUpFilter("all");
+    setHighlightedLeadId(leadId);
+    window.setTimeout(() => {
+      const selector = `[data-testid="lead-row-${CSS.escape(leadId)}"]`;
+      document.querySelector(selector)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 80);
+  }, []);
 
   const leads = (data.leads || []).map(normalizeLeadCommercialFields);
   const filteredLeads = useMemo(() => {
@@ -264,7 +278,11 @@ export default function Leads({ data, setData, logActivity, currentRole = "Admin
                       const followUpState = getLeadFollowUpState(lead);
 
                       return (
-                        <article className="lead-card" key={lead.id} data-testid={`lead-row-${lead.id}`}>
+                        <article
+                          className={`lead-card${String(highlightedLeadId) === String(lead.id) ? " lead-card--highlight" : ""}`}
+                          key={lead.id}
+                          data-testid={`lead-row-${lead.id}`}
+                        >
                           <div className="lead-card__top">
                             <div>
                               <strong>{projectName || lead.email || "Lead"}</strong>

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { money } from "../../utils/money";
 import { QUOTE_STATUSES, PROCESS_TYPES, QUOTE_PRIORITY_OPTIONS } from "../../utils/production";
 import {
@@ -17,6 +17,7 @@ import { showToast } from "../../utils/toast";
 import { isSupabaseConfigured } from "../../supabase";
 import {
   applyAutomaticProductionCosts,
+  estimateMissingLineCostFromTargetMargin,
   applyProductionMarginTemplate,
   computeLineInternalCosts,
   PRODUCTION_MARGIN_TEMPLATES,
@@ -208,6 +209,61 @@ export default function DocumentForm({
   const unavailableCount = hydratedAttachments.filter(
     (entry) => !entry.url && entry.storagePath
   ).length;
+  const marginSummary = useMemo(() => {
+    const rows = (form.lines || []).map((line) => computeLineInternalCosts(line, products));
+    const totalCost = rows.reduce((sum, row) => sum + Number(row.totalCost || 0), 0);
+    const revenueHT = rows.reduce((sum, row) => sum + Number(row.revenueHT || 0), 0);
+    const marginHT = rows.reduce((sum, row) => sum + Number(row.marginHT || 0), 0);
+    const lowMarginCount = rows.filter((row) => row.isLowMargin).length;
+    const missingCostCount = rows.filter((row) => !row.hasCost && row.revenueHT > 0).length;
+    const autoCostCount = rows.filter((row) => row.automaticCosts?.hasAutoCost).length;
+    const estimableCostCount = rows.filter((row) => !row.hasCost && row.revenueHT > 0).length;
+    const suggestedPriceCount = rows.filter((row) => row.suggestedUnitPrice > 0 && row.isLowMargin).length;
+    return {
+      rows,
+      totalCost,
+      revenueHT,
+      marginHT,
+      marginRate: revenueHT > 0 ? Math.round((marginHT / revenueHT) * 1000) / 10 : 0,
+      lowMarginCount,
+      missingCostCount,
+      autoCostCount,
+      estimableCostCount,
+      suggestedPriceCount,
+    };
+  }, [form.lines, products]);
+
+  function applyAllAutomaticCosts() {
+    setForm({
+      ...form,
+      lines: (form.lines || []).map((line) =>
+        computeLineInternalCosts(line, products).automaticCosts.hasAutoCost
+          ? applyAutomaticProductionCosts(line)
+          : line
+      ),
+    });
+  }
+
+  function applySuggestedPrices() {
+    setForm({
+      ...form,
+      lines: (form.lines || []).map((line) => {
+        const margin = computeLineInternalCosts(line, products);
+        return margin.suggestedUnitPrice > 0 && margin.isLowMargin
+          ? { ...line, price: margin.suggestedUnitPrice }
+          : line;
+      }),
+    });
+  }
+
+  function estimateMissingCosts() {
+    setForm({
+      ...form,
+      lines: (form.lines || []).map((line) =>
+        estimateMissingLineCostFromTargetMargin(line, products)
+      ),
+    });
+  }
 
   async function handleAttachmentUpload(event) {
     const file = event.target.files?.[0];
@@ -427,6 +483,45 @@ export default function DocumentForm({
       )}
 
       <div className="documents-lines-wrap">
+        <div className={`document-margin-summary${marginSummary.lowMarginCount > 0 || marginSummary.missingCostCount > 0 ? " document-margin-summary--warning" : ""}`}>
+          <div>
+            <strong>Assistant rentabilite</strong>
+            <span>
+              Cout {money(marginSummary.totalCost)} - Marge {money(marginSummary.marginHT)} ({marginSummary.marginRate} %)
+            </span>
+          </div>
+          <div className="document-margin-summary__signals">
+            {marginSummary.missingCostCount > 0 ? <span>{marginSummary.missingCostCount} cout(s) inconnu(s)</span> : null}
+            {marginSummary.lowMarginCount > 0 ? <span>{marginSummary.lowMarginCount} marge(s) faible(s)</span> : null}
+            {marginSummary.missingCostCount === 0 && marginSummary.lowMarginCount === 0 ? <span>Rentabilite suivie</span> : null}
+          </div>
+          <div className="document-margin-summary__actions">
+            <button
+              type="button"
+              className="compact"
+              disabled={marginSummary.autoCostCount === 0}
+              onClick={applyAllAutomaticCosts}
+            >
+              Calculer tous les couts
+            </button>
+            <button
+              type="button"
+              className="compact"
+              disabled={marginSummary.estimableCostCount === 0}
+              onClick={estimateMissingCosts}
+            >
+              Estimer couts inconnus
+            </button>
+            <button
+              type="button"
+              className="compact"
+              disabled={marginSummary.suggestedPriceCount === 0}
+              onClick={applySuggestedPrices}
+            >
+              Appliquer prix conseilles
+            </button>
+          </div>
+        </div>
         <div className="document-lines">
           <div className="document-line document-line-head">
             <span>Produit</span>
@@ -600,6 +695,14 @@ export default function DocumentForm({
                       <button
                         type="button"
                         className="compact document-line-margin-assistant__price"
+                        disabled={margin.hasCost || margin.revenueHT <= 0}
+                        onClick={() => onUpdateLine(index, estimateMissingLineCostFromTargetMargin(line, products))}
+                      >
+                        Estimer coût {money(margin.maxCostForTargetMargin)}
+                      </button>
+                      <button
+                        type="button"
+                        className="compact document-line-margin-assistant__price"
                         disabled={!margin.suggestedUnitPrice}
                         onClick={() => onUpdateLine(index, { price: margin.suggestedUnitPrice })}
                       >
@@ -609,6 +712,11 @@ export default function DocumentForm({
                     {margin.automaticCosts.hasAutoCost && (
                       <p className="document-line-margin-assistant__auto">
                         Auto : {margin.automaticCosts.surfaceM2} m² · matière {money(margin.automaticCosts.materialCost)} · machine {money(margin.automaticCosts.machineCost)} · opérateur {money(margin.automaticCosts.operatorCost)}
+                      </p>
+                    )}
+                    {!margin.hasCost && margin.revenueHT > 0 && (
+                      <p className="document-line-margin-assistant__auto">
+                        Cout cible max pour {margin.targetMarginRate} % de marge : {money(margin.maxCostForTargetMargin)}
                       </p>
                     )}
                     {margin.isLowMargin && (

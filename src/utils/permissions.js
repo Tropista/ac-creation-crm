@@ -2,6 +2,7 @@ export const ROLE_PERMISSIONS = {
   Admin: {
     pages: [
       "dashboard",
+      "today",
       "clients",
       "products",
       "suppliers",
@@ -42,12 +43,19 @@ export const ROLE_PERMISSIONS = {
       editSettings: true,
       sendEmails: true,
       viewMargins: true,
+      editPrices: true,
+      managePayments: true,
+      manageStock: true,
+      manageWorkshop: true,
+      viewSensitiveFinance: true,
+      generateSupplierOrders: true,
     },
   },
 
   Employé: {
     pages: [
       "dashboard",
+      "today",
       "clients",
       "products",
       "suppliers",
@@ -81,12 +89,18 @@ export const ROLE_PERMISSIONS = {
       manageUsers: false,
       editSettings: false,
       sendEmails: true,
-      viewMargins: true,
+      viewMargins: false,
+      editPrices: false,
+      managePayments: false,
+      manageStock: true,
+      manageWorkshop: true,
+      viewSensitiveFinance: false,
+      generateSupplierOrders: true,
     },
   },
 
   Comptable: {
-    pages: ["dashboard", "invoices", "creditnotes", "expenses", "banque", "automations"],
+    pages: ["dashboard", "today", "invoices", "creditnotes", "expenses", "banque", "automations"],
     canDelete: false,
     canEditSettings: false,
     canManageUsers: false,
@@ -98,12 +112,18 @@ export const ROLE_PERMISSIONS = {
       manageUsers: false,
       editSettings: false,
       sendEmails: true,
-      viewMargins: true,
+      viewMargins: false,
+      editPrices: false,
+      managePayments: true,
+      manageStock: false,
+      manageWorkshop: false,
+      viewSensitiveFinance: true,
+      generateSupplierOrders: false,
     },
   },
 
   Utilisateur: {
-    pages: ["dashboard"],
+    pages: ["dashboard", "today"],
     canDelete: false,
     canEditSettings: false,
     canManageUsers: false,
@@ -116,6 +136,12 @@ export const ROLE_PERMISSIONS = {
       editSettings: false,
       sendEmails: false,
       viewMargins: false,
+      editPrices: false,
+      managePayments: false,
+      manageStock: false,
+      manageWorkshop: false,
+      viewSensitiveFinance: false,
+      generateSupplierOrders: false,
     },
   },
 };
@@ -126,4 +152,20 @@ export function getPermissions(role) {
 
 export function canPerformAction(role, action) {
   return Boolean(getPermissions(role).actions?.[action]);
+}
+
+export function canViewMargins(role) {
+  return canPerformAction(role, "viewMargins");
+}
+
+export function canEditPrices(role) {
+  return canPerformAction(role, "editPrices");
+}
+
+export function canManagePayments(role) {
+  return canPerformAction(role, "managePayments");
+}
+
+export function canManageWorkshop(role) {
+  return canPerformAction(role, "manageWorkshop");
 }

@@ -136,10 +136,20 @@ export function buildDirectionDashboard(data = {}, { year = new Date().getFullYe
   const unknownProfitabilityRows = profitabilityRows.filter((row) => row.costSource === "unknown");
   const marginByClientMap = new Map();
   const marginByProcessMap = new Map();
+  const marginByOperatorMap = new Map();
 
   for (const row of knownProfitabilityRows) {
     pushMarginAggregate(marginByClientMap, row.clientId || "unknown", row.clientName, row);
     pushMarginAggregate(marginByProcessMap, row.processKey || row.processLabel || "other", row.processLabel, row);
+    const quote = (data.quotes || []).find((entry) => String(entry.id) === String(row.quoteId));
+    const operatorId = quote?.productionSheet?.operatorId || quote?.assignedTo || "";
+    const operator = (data.users || []).find((user) => String(user.id) === String(operatorId));
+    pushMarginAggregate(
+      marginByOperatorMap,
+      operatorId || "unassigned",
+      operator?.name || operator?.email || "Non assigné",
+      row
+    );
   }
 
   const lowMarginRows = knownProfitabilityRows
@@ -187,6 +197,7 @@ export function buildDirectionDashboard(data = {}, { year = new Date().getFullYe
     lowMarginThreshold,
     marginByClient: finalizeMarginAggregate(marginByClientMap.values()),
     marginByProcess: finalizeMarginAggregate(marginByProcessMap.values()),
+    marginByOperator: finalizeMarginAggregate(marginByOperatorMap.values()),
     lowMarginOrders: lowMarginRows.map((row) => ({
       invoiceId: row.invoiceId,
       invoiceNumber: row.invoiceNumber,

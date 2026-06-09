@@ -3,6 +3,7 @@ export const PUBLIC_QUOTE_PATH = "/devis-public";
 
 export const PAGE_PATHS = {
   dashboard: "/dashboard",
+  today: "/aujourdhui",
   clients: "/clients",
   products: "/produits",
   suppliers: "/fournisseurs",

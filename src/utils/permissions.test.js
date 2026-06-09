@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { canPerformAction, getPermissions, ROLE_PERMISSIONS } from "./permissions.js";
+import {
+  canEditPrices,
+  canManagePayments,
+  canManageWorkshop,
+  canPerformAction,
+  canViewMargins,
+  getPermissions,
+  ROLE_PERMISSIONS,
+} from "./permissions.js";
 
 function canAccessPage(role, page) {
   return getPermissions(role).pages.includes(page);
@@ -35,6 +43,11 @@ describe("canPerformAction", () => {
     expect(canPerformAction("Comptable", "exportAccounting")).toBe(true);
     expect(canPerformAction("Employé", "exportAccounting")).toBe(false);
     expect(canPerformAction("Utilisateur", "viewMargins")).toBe(false);
+    expect(canViewMargins("Admin")).toBe(true);
+    expect(canViewMargins("Employé")).toBe(false);
+    expect(canEditPrices("Employé")).toBe(false);
+    expect(canManagePayments("Comptable")).toBe(true);
+    expect(canManageWorkshop("Employé")).toBe(true);
   });
 });
 

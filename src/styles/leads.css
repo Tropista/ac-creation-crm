@@ -112,6 +112,11 @@
   padding: 12px;
 }
 
+.lead-card--highlight {
+  border-color: rgba(167, 119, 255, 0.95);
+  box-shadow: 0 0 0 2px rgba(167, 119, 255, 0.28);
+}
+
 .lead-card__top,
 .lead-card__score,
 .lead-card__contacts {

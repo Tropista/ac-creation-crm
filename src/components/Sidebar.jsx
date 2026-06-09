@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Cloud,
   Coffee,
+  CalendarCheck,
   Download,
   Factory,
   FileSpreadsheet,
@@ -54,6 +55,7 @@ const SECTIONS_STORAGE_KEY = "crm_sidebar_sections_v1";
 
 const pageIcons = {
   dashboard: LayoutDashboard,
+  today: CalendarCheck,
   clients: Users,
   quotes: FileText,
   leads: Users,
@@ -89,6 +91,7 @@ const menuGroups = [
     label: "Commercial",
     items: [
       { page: "dashboard", label: "Tableau de bord", type: "page" },
+      { page: "today", label: "Aujourd'hui", type: "page" },
       { page: "clients", label: "Clients", type: "page" },
       { page: "quotes", label: "Devis & e-signature", type: "page" },
       { page: "leads", label: "Leads configurateur", type: "page" },

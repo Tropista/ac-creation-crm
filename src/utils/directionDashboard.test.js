@@ -34,6 +34,7 @@ describe("directionDashboard", () => {
     expect(result.marginUnknownRevenueHT).toBe(0);
     expect(result.marginByClient[0].marginHT).toBe(80);
     expect(result.marginByProcess[0].marginHT).toBe(80);
+    expect(result.marginByOperator[0].name).toBe("Non assigné");
     expect(result.topClients[0].name).toBe("Client A");
     expect(result.profitableProducts[0].marginHT).toBe(80);
   });

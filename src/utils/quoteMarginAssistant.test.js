@@ -5,6 +5,7 @@ import {
   buildProductionSheetFromLines,
   computeLineAutomaticProductionCosts,
   computeLineInternalCosts,
+  estimateMissingLineCostFromTargetMargin,
   syncQuoteProductionSheetFromLines,
 } from "./quoteMarginAssistant.js";
 
@@ -79,6 +80,30 @@ describe("quoteMarginAssistant", () => {
     expect(line.machineCost).toBe(2);
     expect(line.laborMinutes).toBe(12);
     expect(line.laborHourlyRate).toBe(25);
+  });
+
+  it("n'efface pas les couts manuels quand aucun cout automatique n'est calculable", () => {
+    const line = applyAutomaticProductionCosts({
+      quantity: 1,
+      materialCost: 3,
+      machineCost: 2,
+      laborMinutes: 8,
+      laborHourlyRate: 20,
+    });
+
+    expect(line.materialCost).toBe(3);
+    expect(line.machineCost).toBe(2);
+    expect(line.laborMinutes).toBe(8);
+  });
+
+  it("estime un cout inconnu depuis la marge cible", () => {
+    const line = estimateMissingLineCostFromTargetMargin({
+      quantity: 1,
+      price: 20,
+      targetMarginRate: 60,
+    });
+
+    expect(line.materialCost).toBe(8);
   });
 
   it("genere une fiche atelier depuis les couts internes des lignes", () => {

@@ -770,3 +770,64 @@
   border-color:#2563eb;
   color:#fff;
 }
+
+.product-profitability-assistant{
+  grid-column:1 / -1;
+  display:grid;
+  grid-template-columns:minmax(220px,1fr) 140px auto auto;
+  gap:10px;
+  align-items:end;
+  padding:12px;
+  border-radius:8px;
+  border:1px solid rgba(255,255,255,.12);
+  background:rgba(255,255,255,.05);
+}
+
+.product-profitability-assistant--missing{
+  border-color:rgba(251,191,36,.36);
+  background:rgba(251,191,36,.08);
+}
+
+.product-profitability-assistant strong,
+.product-profitability-card strong{
+  display:block;
+}
+
+.product-profitability-assistant span,
+.product-profitability-card span{
+  display:block;
+  margin-top:3px;
+  color:var(--muted);
+  font-size:12px;
+  font-weight:700;
+}
+
+.product-profitability-assistant label{
+  display:grid;
+  gap:4px;
+  color:var(--muted);
+  font-size:11px;
+  font-weight:800;
+  text-transform:uppercase;
+}
+
+.product-profitability-card{
+  border-color:rgba(34,197,94,.28);
+  background:rgba(34,197,94,.08);
+}
+
+.product-profitability-card--missing,
+.product-profitability-card--warning{
+  border-color:rgba(251,191,36,.36);
+  background:rgba(251,191,36,.08);
+}
+
+.product-profitability-card button{
+  width:max-content;
+}
+
+@media(max-width:900px){
+  .product-profitability-assistant{
+    grid-template-columns:1fr;
+  }
+}

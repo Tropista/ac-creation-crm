@@ -25,15 +25,22 @@ const TYPE_LABELS = {
 };
 
 const TYPE_ICONS = {
-  [AUTOMATION_ALERT_TYPES.STALE_QUOTE]: "🧾",
-  [AUTOMATION_ALERT_TYPES.UNPAID_INVOICE]: "💶",
-  [AUTOMATION_ALERT_TYPES.LOW_STOCK]: "📦",
-  [AUTOMATION_ALERT_TYPES.ORDER_READY]: "✅",
-  [AUTOMATION_ALERT_TYPES.STALE_SAV]: "🔧",
+  [AUTOMATION_ALERT_TYPES.STALE_QUOTE]: "DEV",
+  [AUTOMATION_ALERT_TYPES.UNPAID_INVOICE]: "EUR",
+  [AUTOMATION_ALERT_TYPES.LOW_STOCK]: "STK",
+  [AUTOMATION_ALERT_TYPES.ORDER_READY]: "OK",
+  [AUTOMATION_ALERT_TYPES.STALE_SAV]: "SAV",
   [AUTOMATION_ALERT_TYPES.UNASSIGNED_SAV]: "!",
   [AUTOMATION_ALERT_TYPES.LOW_MARGIN]: "%",
-  [AUTOMATION_ALERT_TYPES.MISSING_COST]: "€",
+  [AUTOMATION_ALERT_TYPES.MISSING_COST]: "COUT",
 };
+
+const SEVERITY_GROUPS = [
+  { key: "danger", label: "Critique", hint: "A traiter en premier" },
+  { key: "warning", label: "A surveiller", hint: "Risque ou action bientot necessaire" },
+  { key: "success", label: "Pret", hint: "Action positive a finaliser" },
+  { key: "info", label: "Information", hint: "Suivi normal" },
+];
 
 function alertTargetPath(alert) {
   if (alert.type === AUTOMATION_ALERT_TYPES.UNPAID_INVOICE) return pageToPath("invoices");
@@ -80,6 +87,23 @@ export default function AutomationCenter({
     const filtered = typeFilter ? all.filter((a) => a.type === typeFilter) : all;
     return compact ? filtered.slice(0, limit) : filtered;
   }, [data, typeFilter, compact, limit]);
+  const groupedAlerts = useMemo(
+    () =>
+      SEVERITY_GROUPS.map((group) => ({
+        ...group,
+        alerts: alerts.filter((alert) => (alert.severity || "info") === group.key),
+      })).filter((group) => group.alerts.length > 0),
+    [alerts]
+  );
+  const severityCounts = useMemo(
+    () =>
+      alerts.reduce((acc, alert) => {
+        const key = alert.severity || "info";
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+      }, {}),
+    [alerts]
+  );
 
   function openAlert(alert) {
     navigate(alertTargetPath(alert), { state: alertNavigationState(alert) });
@@ -233,6 +257,12 @@ export default function AutomationCenter({
           <span>Alertes actives</span>
           <strong>{total}</strong>
         </div>
+        {SEVERITY_GROUPS.map((group) => (
+          <div key={group.key} className={`card stat automation-priority automation-priority--${group.key}`}>
+            <span>{group.label}</span>
+            <strong>{severityCounts[group.key] || 0}</strong>
+          </div>
+        ))}
         {Object.entries(TYPE_LABELS).map(([type, label]) => (
           <div key={type} className="card stat">
             <span>{label}</span>
@@ -308,34 +338,47 @@ export default function AutomationCenter({
         {alerts.length === 0 ? (
           <p className="automations-empty">Rien à signaler — tout est à jour.</p>
         ) : (
-          <div className="automations-list">
-            {alerts.map((alert, index) => (
-              <div
-                key={`${alert.type}-${alert.title}-${index}`}
-                className={`automation-alert automation-alert--${alert.severity}`}
-              >
-                <span className="automation-alert__icon">{TYPE_ICONS[alert.type]}</span>
-                <div className="automation-alert__body">
-                  <p className="automation-alert__title">{alert.title}</p>
-                  <p className="automation-alert__message">{alert.message}</p>
+          <div className="automations-groups">
+            {groupedAlerts.map((group) => (
+              <section key={group.key} className={`automations-group automations-group--${group.key}`}>
+                <div className="automations-group__head">
+                  <div>
+                    <h3>{group.label}</h3>
+                    <p>{group.hint}</p>
+                  </div>
+                  <strong>{group.alerts.length}</strong>
                 </div>
-                <div className="automation-alert__actions">
-                  <button
-                    type="button"
-                    className="automation-alert__action"
-                    onClick={() => openAlert(alert)}
-                  >
-                    Voir
-                  </button>
-                  <button
-                    type="button"
-                    className="automation-alert__action automation-alert__action--ghost"
-                    onClick={() => dismissAlert(alert)}
-                  >
-                    Ignorer
-                  </button>
+                <div className="automations-list">
+                  {group.alerts.map((alert, index) => (
+                    <div
+                      key={`${alert.type}-${alert.title}-${index}`}
+                      className={`automation-alert automation-alert--${alert.severity}`}
+                    >
+                      <span className="automation-alert__icon">{TYPE_ICONS[alert.type]}</span>
+                      <div className="automation-alert__body">
+                        <p className="automation-alert__title">{alert.title}</p>
+                        <p className="automation-alert__message">{alert.message}</p>
+                      </div>
+                      <div className="automation-alert__actions">
+                        <button
+                          type="button"
+                          className="automation-alert__action"
+                          onClick={() => openAlert(alert)}
+                        >
+                          Voir
+                        </button>
+                        <button
+                          type="button"
+                          className="automation-alert__action automation-alert__action--ghost"
+                          onClick={() => dismissAlert(alert)}
+                        >
+                          Ignorer
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </div>
+              </section>
             ))}
           </div>
         )}

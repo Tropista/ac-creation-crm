@@ -30,7 +30,7 @@ import { getOverdueQuotes, getQuotesToLaunchToday } from "../utils/quoteDelivery
 import DeliveryUrgencyBadge from "./DeliveryUrgencyBadge";
 import { money } from "../utils/money";
 import { pageToPath } from "../utils/routes";
-import { getPermissions } from "../utils/permissions";
+import { canViewMargins, getPermissions } from "../utils/permissions";
 import { isExpenseInMonth, getExpenseDate } from "../utils/expenseSuppliers";
 import { exportInvoicesCsv, exportLowStockPurchaseOrderCsv, buildPurchaseOrderText } from "../utils/exportCsv";
 import MonthlyAccountingExport from "./MonthlyAccountingExport";
@@ -136,6 +136,7 @@ export default function Dashboard({
   const canConvertLeads = canManageQuotes && canManageClients;
   const canManageProducts = permissions.pages.includes("products");
   const canManageExpenses = permissions.pages.includes("expenses");
+  const canViewDirectionMargins = canViewMargins(currentRole);
 
   useAtelierRealtime({
     enabled: cloudAvailable && typeof onCloudResync === "function",
@@ -1096,7 +1097,7 @@ export default function Dashboard({
         </div>
       )}
 
-      {(canManageInvoices || canManageQuotes) && (
+      {(canManageInvoices || canManageQuotes) && canViewDirectionMargins && (
         <div className="card dashboard-direction" data-testid="dashboard-direction">
           <div className="dashboard-annual-stats__head">
             <div>
@@ -1192,6 +1193,19 @@ export default function Dashboard({
                     <li key={`${alert.type}-${alert.invoiceId || index}`} className={`is-${alert.severity}`}>
                       <strong>{alert.title}</strong>
                       <span>{alert.message}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+            <section>
+              <h4>Marge par opérateur</h4>
+              {directionDashboard.marginByOperator.length === 0 ? <p className="muted">Aucune marge calculable.</p> : (
+                <ul className="dashboard-annual-top-clients">
+                  {directionDashboard.marginByOperator.map((row) => (
+                    <li key={row.key}>
+                      <span>{row.name}</span>
+                      <strong>{money(row.marginHT)} ({row.marginRate} %)</strong>
                     </li>
                   ))}
                 </ul>

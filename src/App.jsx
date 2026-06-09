@@ -48,6 +48,7 @@ const Clients         = lazy(() => import("./components/Clients"));
 const Products        = lazy(() => import("./components/Products"));
 const Documents       = lazy(() => import("./components/Documents"));
 const Dashboard       = lazy(() => import("./components/Dashboard"));
+const TodayView       = lazy(() => import("./components/TodayView"));
 const Atelier         = lazy(() => import("./components/Atelier"));
 const Settings        = lazy(() => import("./components/Settings"));
 const Categories      = lazy(() => import("./components/Categories"));
@@ -583,6 +584,14 @@ function CrmApp() {
               }
             />
             <Route
+              path={pageToPath("today")}
+              element={
+                canAccessPage(currentRole, "today") ? (
+                  <TodayView data={data} />
+                ) : null
+              }
+            />
+            <Route
               path={pageToPath("clients")}
               element={
                 canAccessPage(currentRole, "clients") ? (
@@ -929,6 +938,7 @@ function CrmApp() {
         isOpen={globalSearchOpen}
         onClose={() => setGlobalSearchOpen(false)}
         data={data}
+        currentRole={currentRole}
         onOpenDoc={(doc) => { setPendingOpenDoc(doc); setGlobalSearchOpen(false); }}
       />
     </div>

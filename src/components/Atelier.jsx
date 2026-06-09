@@ -480,6 +480,7 @@ export default function Atelier({
   const [layoutMode, setLayoutMode] = useState("list");
   const [assigneeFilter, setAssigneeFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
+  const [mobileSearch, setMobileSearch] = useState("");
   const [planningWeekOffset, setPlanningWeekOffset] = useState(0);
   const [dragOverStatus, setDragOverStatus] = useState("");
   const [previewBl, setPreviewBl] = useState(null);
@@ -523,8 +524,37 @@ export default function Atelier({
     }
   }, [assigneeFilteredQuotes, priorityFilter, launchTodayIds]);
 
-  const statusBoard = getAtelierStatusBoard(filteredQuotes);
-  const processBoard = getAtelierBoard(filteredQuotes);
+  const mobileFilteredQuotes = useMemo(() => {
+    const query = mobileSearch.trim().toLowerCase();
+    if (!query) return filteredQuotes;
+    return filteredQuotes.filter((quote) =>
+      [
+        quote.number,
+        clientName(data, quote.clientId),
+        quote.status,
+        quote.atelierNotes,
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(query)
+    );
+  }, [filteredQuotes, mobileSearch, data]);
+
+  const mobilePriorityQueue = useMemo(() => {
+    return [...mobileFilteredQuotes]
+      .filter((quote) => quote.status !== "Livré")
+      .sort((a, b) => {
+        const overdueDelta = Number(isQuoteDeliveryOverdue(b)) - Number(isQuoteDeliveryOverdue(a));
+        if (overdueDelta) return overdueDelta;
+        const todayDelta = Number(launchTodayIds.has(String(b.id))) - Number(launchTodayIds.has(String(a.id)));
+        if (todayDelta) return todayDelta;
+        return String(a.promisedDeliveryDate || "9999").localeCompare(String(b.promisedDeliveryDate || "9999"));
+      })
+      .slice(0, 8);
+  }, [mobileFilteredQuotes, launchTodayIds]);
+
+  const statusBoard = getAtelierStatusBoard(isCompact ? mobileFilteredQuotes : filteredQuotes);
+  const processBoard = getAtelierBoard(isCompact ? mobileFilteredQuotes : filteredQuotes);
   const board = viewMode === "status" ? statusBoard : processBoard;
   const showListLayout = isCompact && layoutMode === "list";
   const overdueDeliveries = filteredQuotes.filter(isQuoteDeliveryOverdue);
@@ -1094,6 +1124,28 @@ export default function Atelier({
         </div>
       ) : showListLayout ? (
         <div className="atelier-list" data-testid="atelier-list-view">
+          <div className="card atelier-mobile-control">
+            <input
+              type="search"
+              value={mobileSearch}
+              onChange={(event) => setMobileSearch(event.target.value)}
+              placeholder="Rechercher une commande atelier..."
+            />
+            <div className="atelier-mobile-priority">
+              <strong>À traiter maintenant</strong>
+              {mobilePriorityQueue.length === 0 ? (
+                <p className="muted">Aucune commande prioritaire.</p>
+              ) : (
+                mobilePriorityQueue.map((quote) => (
+                  <button key={quote.id} type="button" onClick={() => openQuote(quote)}>
+                    <span>{quote.number}</span>
+                    <em>{clientName(data, quote.clientId)}</em>
+                    <DeliveryUrgencyBadge quote={quote} />
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
           {viewMode === "status"
             ? statusBoard.byStatus.map((column) => (
                 <AtelierListSection

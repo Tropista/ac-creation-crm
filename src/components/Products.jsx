@@ -59,6 +59,26 @@ function cleanText(value) {
   return String(value || "").trim().toLowerCase();
 }
 
+function computeProductProfitability(productOrForm, targetMarginRate = 60) {
+  const price = Number(productOrForm?.price || 0);
+  const purchasePrice = Number(productOrForm?.purchasePrice || 0);
+  const safeTarget = Math.min(95, Math.max(0, Number(targetMarginRate || 60)));
+  const targetCost = Math.round(price * Math.max(0.01, 1 - safeTarget / 100) * 100) / 100;
+  const marginHT = Math.round((price - purchasePrice) * 100) / 100;
+  const marginRate = price > 0 ? Math.round((marginHT / price) * 1000) / 10 : 0;
+
+  return {
+    price,
+    purchasePrice,
+    targetMarginRate: safeTarget,
+    targetCost,
+    marginHT,
+    marginRate,
+    hasPurchasePrice: purchasePrice > 0,
+    isLowMargin: price > 0 && purchasePrice > 0 && marginRate < safeTarget,
+  };
+}
+
 function getProductLineDocuments(data, product) {
   if (!product) return [];
   const productId = String(product.id || "");
@@ -105,6 +125,7 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
   const [bulkStock, setBulkStock] = useState(100);
   const [stockMoveQty, setStockMoveQty] = useState(1);
   const [stockMoveReason, setStockMoveReason] = useState("Ajustement manuel");
+  const [productTargetMarginRate, setProductTargetMarginRate] = useState(60);
   const [imageUploading, setImageUploading] = useState(false);
   const [imageDragActive, setImageDragActive] = useState(false);
   const [sideImageDragActive, setSideImageDragActive] = useState(false);
@@ -126,6 +147,7 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
     imageUrl: "",
     description: "",
   });
+  const formProfitability = computeProductProfitability(form, productTargetMarginRate);
 
   function applyProductImageUrl(imageUrl, productIdOverride) {
     const normalizedUrl = String(imageUrl || "").trim();
@@ -291,15 +313,19 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
 
 
   const categories = data.categories || [];
-  const allProducts = (data.products || []).map((product) => ({
-    ...product,
-    archived: Boolean(product.archived),
-    history: Array.isArray(product.history) ? product.history : [],
-    stock:
-      product.stock === undefined || product.stock === null || product.stock === ""
-        ? 100
-        : Number(product.stock || 0),
-  }));
+  const allProducts = useMemo(
+    () =>
+      (data.products || []).map((product) => ({
+        ...product,
+        archived: Boolean(product.archived),
+        history: Array.isArray(product.history) ? product.history : [],
+        stock:
+          product.stock === undefined || product.stock === null || product.stock === ""
+            ? 100
+            : Number(product.stock || 0),
+      })),
+    [data.products]
+  );
 
   useEffect(() => {
     function onNewItem(e) {
@@ -318,6 +344,7 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
   useEffect(() => {
     const stock = localStorage.getItem(PRODUCTS_STOCK_FILTER_KEY);
     const kind = localStorage.getItem(PRODUCTS_KIND_FILTER_KEY);
+    const productId = localStorage.getItem("crm_open_product_id");
     if (stock) {
       localStorage.removeItem(PRODUCTS_STOCK_FILTER_KEY);
       setStockFilter(stock);
@@ -328,7 +355,21 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
       setKindFilter(kind);
       setCurrentPage(1);
     }
-  }, []);
+    if (productId) {
+      localStorage.removeItem("crm_open_product_id");
+      const product = allProducts.find((entry) => String(entry.id) === String(productId));
+      if (product) {
+        setSelectedProduct(product);
+        setSearch(product.name || product.sku || "");
+        setCategoryFilter("");
+        setKindFilter("");
+        setPriceMin("");
+        setPriceMax("");
+        setStockFilter(product.archived ? "archived" : "all");
+        setCurrentPage(1);
+      }
+    }
+  }, [allProducts]);
 
   function getCategoryName(categoryName) {
     return String(categoryName || "").trim();
@@ -703,6 +744,29 @@ export default function Products({ data, setData, currentRole = 'Admin', logActi
     setForm({ name: "", sku: "", category: "", price: "", purchasePrice: "", supplierId: "", supplier: "", supplierSku: "", supplierPurchasePrice: "", supplierLeadTimeDays: "", stock: "", stockMin: "", imageUrl: "", description: "" });
   }
 
+  function estimateProductPurchasePrice() {
+    if (formProfitability.price <= 0) {
+      showToast("Indique d'abord un prix de vente HT.", "error");
+      return;
+    }
+    setForm((current) => ({
+      ...current,
+      purchasePrice: String(formProfitability.targetCost),
+    }));
+  }
+
+  function applySupplierPurchasePrice() {
+    const supplierCost = Number(form.supplierPurchasePrice || 0);
+    if (supplierCost <= 0) {
+      showToast("Indique d'abord un prix fournisseur HT.", "error");
+      return;
+    }
+    setForm((current) => ({
+      ...current,
+      purchasePrice: String(supplierCost),
+    }));
+  }
+
   async function submit(e) {
     e.preventDefault();
     const validationError = validateFields(form, {
@@ -1013,6 +1077,29 @@ function openLinkedDocument(doc) {
   }
 
 
+  async function estimateSelectedProductPurchasePrice() {
+    if (!selectedProduct) return;
+    const profitability = computeProductProfitability(selectedProduct, productTargetMarginRate);
+    if (profitability.price <= 0) {
+      showToast("Ce produit n'a pas de prix de vente HT.", "error");
+      return;
+    }
+
+    const nextProducts = allProducts.map((product) =>
+      String(product.id) === String(selectedProduct.id)
+        ? { ...product, purchasePrice: profitability.targetCost, updatedAt: today() }
+        : product
+    );
+    const nextSelected = nextProducts.find((product) => String(product.id) === String(selectedProduct.id)) || null;
+    await setData({ ...data, products: nextProducts });
+    setSelectedProduct(nextSelected);
+    if (editing === selectedProduct.id) {
+      setForm((current) => ({ ...current, purchasePrice: String(profitability.targetCost) }));
+    }
+    await logActivity?.("Estimation coût produit", selectedProduct.name, `${profitability.targetCost}`);
+    showToast("Prix d'achat estimé sur le produit.", "success");
+  }
+
   return (
     <section>
       <div className="page-header">
@@ -1061,6 +1148,38 @@ function openLinkedDocument(doc) {
           value={String(form.purchasePrice).replace(".", ",")}
           onChange={(e) => setForm({ ...form, purchasePrice: e.target.value.replace(",", ".") })}
         />
+        <div className={`product-profitability-assistant ${formProfitability.hasPurchasePrice ? "" : "product-profitability-assistant--missing"}`}>
+          <div>
+            <strong>Assistant rentabilité produit</strong>
+            <span>
+              {formProfitability.hasPurchasePrice
+                ? `Marge ${money(formProfitability.marginHT)} (${formProfitability.marginRate} %)`
+                : `Coût cible estimé : ${money(formProfitability.targetCost)}`}
+            </span>
+          </div>
+          <label>
+            Marge cible %
+            <input
+              type="number"
+              min="0"
+              max="95"
+              step="1"
+              value={productTargetMarginRate}
+              onChange={(e) => setProductTargetMarginRate(e.target.value)}
+            />
+          </label>
+          <button type="button" className="compact" onClick={estimateProductPurchasePrice}>
+            Estimer achat {money(formProfitability.targetCost)}
+          </button>
+          <button
+            type="button"
+            className="compact"
+            disabled={Number(form.supplierPurchasePrice || 0) <= 0}
+            onClick={applySupplierPurchasePrice}
+          >
+            Reprendre fournisseur
+          </button>
+        </div>
         <select value={form.supplierId} onChange={(e) => handleSupplierSelect(e.target.value)}>
           <option value="">Fournisseur principal</option>
           {(data.suppliers || []).map((supplier) => (
@@ -1535,6 +1654,26 @@ function openLinkedDocument(doc) {
                     <span>Achat HT</span>
                   </div>
                 </div>
+
+                {(() => {
+                  const profitability = computeProductProfitability(selectedProduct, productTargetMarginRate);
+                  return (
+                    <div className={`product-side-desc product-profitability-card${profitability.hasPurchasePrice ? "" : " product-profitability-card--missing"}${profitability.isLowMargin ? " product-profitability-card--warning" : ""}`}>
+                      <div>
+                        <strong>Rentabilité produit</strong>
+                        <span>
+                          {profitability.hasPurchasePrice
+                            ? `Marge ${money(profitability.marginHT)} (${profitability.marginRate} %)`
+                            : "Coût d'achat non renseigné"}
+                        </span>
+                      </div>
+                      <p>Coût cible pour {profitability.targetMarginRate} % de marge : {money(profitability.targetCost)}</p>
+                      <button type="button" className="compact" onClick={estimateSelectedProductPurchasePrice}>
+                        Estimer achat {money(profitability.targetCost)}
+                      </button>
+                    </div>
+                  );
+                })()}
 
                 {Number(selectedProduct.stockMin || selectedProduct.minStock || 0) > 0 && Number(selectedProduct.stock || 0) <= Number(selectedProduct.stockMin || selectedProduct.minStock || 0) && (
                   <div className="product-stock-alert">

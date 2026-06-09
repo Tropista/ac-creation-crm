@@ -711,6 +711,47 @@
     grid-template-columns: 1fr;
   }
 
+  .atelier-mobile-control {
+    display: grid;
+    gap: 12px;
+  }
+
+  .atelier-mobile-control input {
+    width: 100%;
+    min-height: 42px;
+  }
+
+  .atelier-mobile-priority {
+    display: grid;
+    gap: 8px;
+  }
+
+  .atelier-mobile-priority button {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    min-height: 38px;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface-2);
+    color: var(--text);
+    text-align: left;
+  }
+
+  .atelier-mobile-priority button span,
+  .atelier-mobile-priority button em {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .atelier-mobile-priority button em {
+    color: var(--muted);
+    font-style: normal;
+  }
+
   .atelier-mobile-card {
     padding: 18px;
     border: 1px solid var(--border);
