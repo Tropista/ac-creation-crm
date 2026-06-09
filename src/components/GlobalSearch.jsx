@@ -304,7 +304,7 @@ export default function GlobalSearch({ isOpen, onClose, data, onOpenDoc, current
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={onKeyDown}
-            placeholder="Client, devis, facture, produit, fichier, note..."
+            placeholder="Rechercher un client, devis, facture, produit, fichier, note..."
             style={{ flex: 1, border: "none", background: "transparent", fontSize: 15, color: "var(--text)", outline: "none" }}
           />
           <kbd style={{ fontSize: 11, color: "var(--muted)", padding: "2px 6px", background: "var(--surface-2)", borderRadius: 4, border: "1px solid var(--border)" }}>Echap</kbd>
