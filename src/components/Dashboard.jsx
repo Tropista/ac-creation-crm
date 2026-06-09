@@ -1109,8 +1109,16 @@ export default function Dashboard({
           </div>
           <div className="dashboard-direction__kpis">
             <div><span>CA HT</span><strong>{money(directionDashboard.revenueHT)}</strong></div>
+            <div><span>CA projeté</span><strong>{money(directionDashboard.forecast.projectedRevenueHT)}</strong></div>
             <div><span>Conversion</span><strong>{directionDashboard.conversionRate} %</strong></div>
             <div><span>Impayés</span><strong>{money(directionDashboard.unpaidAmount)}</strong></div>
+            <div>
+              <span>Charge atelier</span>
+              <strong>{directionDashboard.atelierLoad.loadRate} %</strong>
+              <em className="dashboard-direction__kpi-note">
+                {directionDashboard.atelierLoad.estimatedHours} h / {directionDashboard.atelierLoad.weeklyCapacityHours} h
+              </em>
+            </div>
             <div>
               <span>Marge connue</span>
               <strong>
@@ -1156,6 +1164,42 @@ export default function Dashboard({
                   ))}
                 </ul>
               )}
+            </section>
+          </div>
+          <div className="dashboard-direction__grid dashboard-direction__grid--ops">
+            <section>
+              <h4>Prévisionnel</h4>
+              <div className="dashboard-direction__insights">
+                <p><span>CA moyen mensuel</span><strong>{money(directionDashboard.forecast.averageMonthlyRevenueHT)}</strong></p>
+                <p><span>Projection annuelle</span><strong>{money(directionDashboard.forecast.projectedRevenueHT)}</strong></p>
+                <p><span>Reste projeté</span><strong>{money(directionDashboard.forecast.remainingForecastHT)}</strong></p>
+              </div>
+            </section>
+            <section>
+              <h4>Charge atelier</h4>
+              <div className="dashboard-direction__insights">
+                <p><span>Commandes en cours</span><strong>{directionDashboard.atelierLoad.total}</strong></p>
+                <p><span>Heures estimées</span><strong>{directionDashboard.atelierLoad.estimatedHours} h</strong></p>
+                <p><span>Urgent / retard</span><strong>{directionDashboard.atelierLoad.urgentCount}</strong></p>
+              </div>
+              {directionDashboard.atelierLoad.byProcess.length > 0 && (
+                <ul className="dashboard-annual-top-clients">
+                  {directionDashboard.atelierLoad.byProcess.slice(0, 4).map((row) => (
+                    <li key={row.key}>
+                      <span>{row.name}</span>
+                      <strong>{row.count} cmd · {row.estimatedHours} h</strong>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+            <section>
+              <h4>Risque encaissement</h4>
+              <div className="dashboard-direction__insights">
+                <p><span>Factures ouvertes</span><strong>{directionDashboard.unpaidCount}</strong></p>
+                <p><span>Ratio impayé / CA</span><strong>{directionDashboard.unpaidRatio} %</strong></p>
+                <p><span>Couverture marge</span><strong>{directionDashboard.marginCoverageRate} %</strong></p>
+              </div>
             </section>
           </div>
           <div className="dashboard-direction__grid dashboard-direction__grid--margins">

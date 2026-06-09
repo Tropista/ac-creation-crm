@@ -22,7 +22,7 @@ describe("directionDashboard", () => {
           { id: "q2", date: "2026-02-02", status: "Refusé" },
         ],
       },
-      { year: 2026 }
+      { year: 2026, referenceDate: new Date("2026-02-15") }
     );
 
     expect(result.revenueHT).toBe(100);
@@ -35,6 +35,9 @@ describe("directionDashboard", () => {
     expect(result.marginByClient[0].marginHT).toBe(80);
     expect(result.marginByProcess[0].marginHT).toBe(80);
     expect(result.marginByOperator[0].name).toBe("Non assigné");
+    expect(result.forecast.projectedRevenueHT).toBe(600);
+    expect(result.unpaidRatio).toBe(20);
+    expect(result.atelierLoad.total).toBe(1);
     expect(result.topClients[0].name).toBe("Client A");
     expect(result.profitableProducts[0].marginHT).toBe(80);
   });
@@ -118,5 +121,39 @@ describe("directionDashboard", () => {
     expect(result.marginUnknownRevenueHT).toBe(100);
     expect(result.hasCompleteMargin).toBe(false);
     expect(result.marginAlerts.some((alert) => alert.type === "missing_cost")).toBe(true);
+  });
+
+  it("calcule la charge atelier en heures et urgences", () => {
+    const result = buildDirectionDashboard(
+      {
+        invoices: [],
+        quotes: [
+          {
+            id: "q1",
+            date: "2026-01-10",
+            status: "Accepté",
+            promisedDeliveryDate: "2026-02-14",
+            productionSheet: { estimatedMinutes: 120 },
+            lines: [{ description: "DTF textile" }],
+          },
+          {
+            id: "q2",
+            date: "2026-01-11",
+            status: "Prêt",
+            promisedDeliveryDate: "2026-02-20",
+            productionSheet: { estimatedMinutes: 60 },
+            lines: [{ description: "Laser bois" }],
+          },
+        ],
+        settings: { atelierWeeklyCapacityHours: 5 },
+      },
+      { year: 2026, referenceDate: new Date("2026-02-15") }
+    );
+
+    expect(result.atelierLoad.total).toBe(2);
+    expect(result.atelierLoad.estimatedHours).toBe(3);
+    expect(result.atelierLoad.loadRate).toBe(60);
+    expect(result.atelierLoad.urgentCount).toBe(1);
+    expect(result.atelierLoad.byProcess[0].count).toBe(1);
   });
 });

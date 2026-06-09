@@ -3,6 +3,8 @@ import { isCancelledInvoice, isPaidInvoice, parseDocumentDate } from "./invoices
 import { buildPaymentSummary } from "./payments";
 import { clientName } from "./documents";
 import { computeLineInternalCosts } from "./quoteMarginAssistant";
+import { getProductionQueue, resolveProcessType } from "./production";
+import { getDeliveryUrgencyMeta } from "./quoteDelivery";
 
 function round2(value) {
   return Math.round(Number(value || 0) * 100) / 100;
@@ -20,6 +22,74 @@ function isAccepted(status) {
 function isRefused(status) {
   const value = String(status || "").toLowerCase();
   return value.includes("refus") || value.includes("perdu");
+}
+
+function buildRevenueForecast(monthlyRevenue, year, referenceDate = new Date()) {
+  const currentMonth = referenceDate.getFullYear() === Number(year) ? referenceDate.getMonth() : 11;
+  const elapsedMonths = Math.max(1, Math.min(12, currentMonth + 1));
+  const elapsedRevenueHT = round2(
+    monthlyRevenue
+      .slice(0, elapsedMonths)
+      .reduce((sum, entry) => sum + Number(entry.revenueHT || 0), 0)
+  );
+  const averageMonthlyRevenueHT = round2(elapsedRevenueHT / elapsedMonths);
+  const projectedRevenueHT = round2(averageMonthlyRevenueHT * 12);
+
+  return {
+    elapsedMonths,
+    elapsedRevenueHT,
+    averageMonthlyRevenueHT,
+    projectedRevenueHT,
+    remainingForecastHT: round2(Math.max(0, projectedRevenueHT - elapsedRevenueHT)),
+  };
+}
+
+function buildAtelierLoad(quotes = [], settings = {}, referenceDate = new Date()) {
+  const queue = getProductionQueue(quotes);
+  const estimatedMinutes = queue.items.reduce((sum, quote) => {
+    const sheet = quote.productionSheet || {};
+    const lineMinutes = (quote.lines || []).reduce(
+      (lineSum, line) => lineSum + Number(line.laborMinutes || 0),
+      0
+    );
+    return sum + Number(sheet.estimatedMinutes || lineMinutes || 0);
+  }, 0);
+  const weeklyCapacityHours = Number(settings.atelierWeeklyCapacityHours || 40);
+  const weeklyCapacityMinutes = Math.max(1, weeklyCapacityHours * 60);
+  const loadRate = Math.round((estimatedMinutes / weeklyCapacityMinutes) * 1000) / 10;
+  const urgentCount = queue.items.filter((quote) => {
+    const urgency = getDeliveryUrgencyMeta(quote, referenceDate);
+    return urgency?.key === "overdue" || urgency?.key === "today";
+  }).length;
+
+  const byProcessMap = new Map();
+  for (const quote of queue.items) {
+    const process = resolveProcessType(quote);
+    const current = byProcessMap.get(process.key) || {
+      key: process.key,
+      name: process.label,
+      count: 0,
+      estimatedMinutes: 0,
+    };
+    const sheet = quote.productionSheet || {};
+    current.count += 1;
+    current.estimatedMinutes += Number(sheet.estimatedMinutes || 0);
+    byProcessMap.set(process.key, current);
+  }
+
+  return {
+    total: queue.total,
+    estimatedHours: Math.round((estimatedMinutes / 60) * 10) / 10,
+    weeklyCapacityHours,
+    loadRate,
+    urgentCount,
+    byProcess: [...byProcessMap.values()]
+      .map((entry) => ({
+        ...entry,
+        estimatedHours: Math.round((entry.estimatedMinutes / 60) * 10) / 10,
+      }))
+      .sort((a, b) => b.count - a.count),
+  };
 }
 
 function getOpenInvoiceAmount(invoice, payments = []) {
@@ -76,7 +146,7 @@ function finalizeMarginAggregate(entries, limit = 5) {
     .slice(0, limit);
 }
 
-export function buildDirectionDashboard(data = {}, { year = new Date().getFullYear() } = {}) {
+export function buildDirectionDashboard(data = {}, { year = new Date().getFullYear(), referenceDate = new Date() } = {}) {
   const invoices = (data.invoices || []).filter((invoice) => inYear(invoice.date, year));
   const quotes = (data.quotes || []).filter((quote) => inYear(quote.date || quote.createdAt, year));
   const monthlyRevenue = Array.from({ length: 12 }, (_, month) => ({
@@ -178,6 +248,11 @@ export function buildDirectionDashboard(data = {}, { year = new Date().getFullYe
   const marginKnownRevenueHT = round2(knownProfitabilityRows.reduce((sum, row) => sum + row.revenueHT, 0));
   const revenueHT = round2(invoices.reduce((sum, invoice) => sum + Number(invoice.totalHT || 0), 0));
   const marginUnknownRevenueHT = round2(Math.max(0, revenueHT - marginKnownRevenueHT));
+  const forecast = buildRevenueForecast(monthlyRevenue, year, referenceDate);
+  const atelierLoad = buildAtelierLoad(data.quotes || [], data.settings || {}, referenceDate);
+  const unpaidRatio = revenueHT > 0
+    ? Math.round((unpaidInvoices.reduce((sum, entry) => sum + entry.openAmount, 0) / revenueHT) * 1000) / 10
+    : 0;
 
   return {
     year: Number(year),
@@ -188,6 +263,9 @@ export function buildDirectionDashboard(data = {}, { year = new Date().getFullYe
     conversionRate: decidedQuotes > 0 ? Math.round((acceptedQuotes.length / decidedQuotes) * 1000) / 10 : 0,
     unpaidAmount: round2(unpaidInvoices.reduce((sum, entry) => sum + entry.openAmount, 0)),
     unpaidCount: unpaidInvoices.length,
+    unpaidRatio,
+    forecast,
+    atelierLoad,
     marginHT,
     marginRate: marginKnownRevenueHT > 0 ? Math.round((marginHT / marginKnownRevenueHT) * 1000) / 10 : 0,
     marginKnownRevenueHT,
