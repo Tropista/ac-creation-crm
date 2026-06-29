@@ -49,7 +49,7 @@ const sampleInvoice = {
 
 describe("documentPdf helpers", () => {
   it("formate les montants en français", () => {
-    expect(formatPdfMoney(1234.5)).toBe("1 234,50");
+    expect(formatPdfMoney(1234.5)).toBe("1.234,50");
   });
 
   it("formate les quantités", () => {
