@@ -14,6 +14,16 @@ const DARK = [17, 24, 39];
 const MUTED = [100, 116, 139];
 const BORDER = [229, 231, 235];
 
+// fr-LU (et non fr-FR) : même locale que money() utilisé par l'aperçu et le téléchargement.
+// fr-FR insère un espace fine insécable (U+202F) comme séparateur de milliers, caractère que
+// la police standard "helvetica" de jsPDF ne sait pas rendre (il s'affiche comme un "/" corrompu).
+export function formatCataloguePrice(value) {
+  return Number(value || 0).toLocaleString("fr-LU", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
 function drawCard(pdf, product, x, y) {
   // Fond carte
   pdf.setFillColor(255, 255, 255);
@@ -77,7 +87,7 @@ function drawCard(pdf, product, x, y) {
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(10);
     pdf.setTextColor(...ROSE);
-    const priceStr = `${Number(product.price).toLocaleString("fr-FR", { minimumFractionDigits: 2 })} €`;
+    const priceStr = `${formatCataloguePrice(product.price)} €`;
     pdf.text(priceStr, x + COL_W - 4, y + CARD_H - 6, { align: "right" });
   }
 }
