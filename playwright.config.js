@@ -18,6 +18,7 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,
     env: {
+      ...process.env,
       VITE_SUPABASE_URL: "",
       VITE_SUPABASE_ANON_KEY: "",
     },
