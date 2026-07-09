@@ -65,7 +65,7 @@ const AutomationCenter = lazy(() => import("./components/AutomationCenter"));
 
 import {
   createCloudBackup
-} from "./services/backupservice";
+} from "./services/backupService";
 
 import { getPermissions } from "./utils/permissions";
 
