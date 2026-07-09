@@ -182,6 +182,24 @@ describe("convertQuoteToInvoiceData", () => {
     expect(invoice.remaining).toBe(120);
   });
 
+  it("transmet le snapshot societe du devis a la facture convertie", () => {
+    const data = {
+      ...baseData(),
+      settings: { companyName: "Nouvelle Societe", vatNumber: "LUNEW" },
+    };
+    const result = convertQuoteToInvoiceData(data, {
+      ...acceptedQuote,
+      companySnapshot: {
+        companyName: "Ancienne Societe",
+        vatNumber: "LUOLD",
+      },
+    });
+    const invoice = result.invoices.at(-1);
+
+    expect(invoice.companySnapshot.companyName).toBe("Ancienne Societe");
+    expect(invoice.companySnapshot.vatNumber).toBe("LUOLD");
+  });
+
   it("n'altère pas les produits sans ligne correspondante", () => {
     const data = {
       ...baseData(),

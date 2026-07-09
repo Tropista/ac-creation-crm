@@ -78,6 +78,7 @@ import {
   PAYMENT_METHODS,
 } from "../utils/payments";
 import { getInvoicePaymentLink } from "../utils/onlinePayments";
+import { buildCompanySnapshot } from "../utils/companySnapshot";
 import { confirmAction } from "../utils/confirmAction";
 
 function Documents({ type, data, setData, currentRole = 'Admin', logActivity, pendingOpenDoc = null, onClearPendingOpenDoc }) {
@@ -676,6 +677,7 @@ const [form, setForm] = useState({
       const existingDoc = documents.find((d) => d.id === editingId);
       const updatedDocBase = enrichInvoicePaymentFields({
         ...existingDoc,
+        companySnapshot: existingDoc?.companySnapshot || buildCompanySnapshot(data.settings || {}),
         clientId: form.clientId,
         status: form.status,
         globalDiscount: Number(form.globalDiscount || 0),
@@ -726,6 +728,7 @@ const [form, setForm] = useState({
       const docBase = {
         id: uid(),
         number: form.numberOverride?.trim() || nextAutoNumber,
+        companySnapshot: buildCompanySnapshot(data.settings || {}),
         date: isQuote ? today() : invoiceDate,
         taxRate: effectiveTaxRate,
         clientId: form.clientId,
@@ -901,6 +904,7 @@ reset();
       ...doc,
       id:          newId,
       number:      newNum,
+      companySnapshot: buildCompanySnapshot(data.settings || {}),
       date:        today(),
       acceptedAt:  null,
       sentAt:      null,

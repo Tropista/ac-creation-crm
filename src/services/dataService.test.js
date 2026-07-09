@@ -9,6 +9,7 @@ import {
   STORAGE_KEY,
   isQuotaExceededError,
   prepareDataForLocalStorage,
+  normalizeData,
 } from "./dataService.js";
 import { stampDataChanges } from "./syncMerge.js";
 
@@ -94,6 +95,34 @@ describe("dataService", () => {
 
     expect(loaded.clientFiles).toHaveLength(1);
     expect(loaded.clientNotes).toHaveLength(1);
+  });
+
+  it("ajoute un snapshot societe aux anciens devis et factures sans ecraser l'existant", () => {
+    const loaded = normalizeData({
+      ...emptyData,
+      settings: {
+        ...emptyData.settings,
+        companyName: "Societe courante",
+        vatNumber: "LUCURRENT",
+      },
+      quotes: [{ id: "q1", number: "DEV-2026-0001" }],
+      invoices: [
+        { id: "i1", number: "FAC-2026-0001" },
+        {
+          id: "i2",
+          number: "FAC-2026-0002",
+          companySnapshot: {
+            companyName: "Societe deja figee",
+            vatNumber: "LUOLD",
+          },
+        },
+      ],
+    });
+
+    expect(loaded.quotes[0].companySnapshot.companyName).toBe("Societe courante");
+    expect(loaded.invoices[0].companySnapshot.vatNumber).toBe("LUCURRENT");
+    expect(loaded.invoices[1].companySnapshot.companyName).toBe("Societe deja figee");
+    expect(loaded.invoices[1].companySnapshot.vatNumber).toBe("LUOLD");
   });
 
   it("saveData retire les images produits base64 trop lourdes du localStorage", () => {

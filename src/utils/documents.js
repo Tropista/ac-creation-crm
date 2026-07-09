@@ -1,4 +1,5 @@
 import { applyStockByLines } from "./stock";
+import { buildCompanySnapshot } from "./companySnapshot";
 import { computeDueDate } from "./invoiceReminders";
 import { getInvoicePaidAmount } from "./invoices";
 
@@ -314,6 +315,7 @@ export function convertQuoteToInvoiceData(data, quote) {
     ...quote,
     id: uid(),
     number: nextInvoiceNumber(data.invoices || [], data.settings),
+    companySnapshot: quote.companySnapshot || buildCompanySnapshot(data.settings || {}),
     date: today(),
     status: "Non payée",
     dueDate: computeDueDate(today(), data.settings?.paymentDays),
@@ -403,6 +405,7 @@ export function createDeliveryNoteFromQuote(data, quote, options = {}) {
   const deliveryNote = {
     id: uid(),
     number: nextDocumentNumber(data.deliveryNotes || [], "BL"),
+    companySnapshot: quote.companySnapshot || buildCompanySnapshot(data.settings || {}),
     date: today(),
     quoteNumber: quote.number,
     quoteId: quote.id,
@@ -447,6 +450,7 @@ export function createDepositInvoiceFromQuote(data, quote, percent) {
   const invoice = {
     id: uid(),
     number: nextInvoiceNumber(data.invoices || [], data.settings),
+    companySnapshot: quote.companySnapshot || buildCompanySnapshot(data.settings || {}),
     date: today(),
     clientId: quote.clientId,
     status: "Non payée",
@@ -529,6 +533,7 @@ export function createBalanceInvoiceFromQuote(data, quote) {
   const invoice = {
     id: uid(),
     number: nextInvoiceNumber(data.invoices || [], data.settings),
+    companySnapshot: quote.companySnapshot || buildCompanySnapshot(data.settings || {}),
     date: today(),
     clientId: quote.clientId,
     status: "Non payée",

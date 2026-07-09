@@ -7,6 +7,7 @@ import {
   sanitizeProductImageUrl,
 } from "../utils/productImages";
 import { sanitizeQuotesForPersistence } from "../utils/quoteAttachments";
+import { backfillCompanySnapshots } from "../utils/companySnapshot";
 
 export const STORAGE_KEY = "crm_local_data_v2";
 export const SAVE_DEBOUNCE_MS = 400;
@@ -222,28 +223,27 @@ export function dedupeItemsById(items = []) {
 
 export function normalizeData(data) {
   const rest = { ...(data || {}) };
+  const storedSettings = rest?.settings || {};
+  const companyEmail =
+    !storedSettings.companyEmail || storedSettings.companyEmail === LEGACY_PLACEHOLDER_EMAIL
+      ? emptyData.settings.companyEmail
+      : storedSettings.companyEmail;
+  const normalizedSettings = {
+    ...emptyData.settings,
+    ...storedSettings,
+    companyEmail,
+    paymentTerms: storedSettings.paymentTerms?.trim()
+      ? storedSettings.paymentTerms
+      : emptyData.settings.paymentTerms,
+    paymentDays: normalizePaymentDays(storedSettings.paymentDays),
+    invoiceStyle: normalizeInvoiceStyle(),
+  };
 
-  return {
+  return backfillCompanySnapshots({
     ...emptyData,
     ...rest,
 
-    settings: (() => {
-      const stored = rest?.settings || {};
-      const companyEmail =
-        !stored.companyEmail || stored.companyEmail === LEGACY_PLACEHOLDER_EMAIL
-          ? emptyData.settings.companyEmail
-          : stored.companyEmail;
-      return {
-        ...emptyData.settings,
-        ...stored,
-        companyEmail,
-        paymentTerms: stored.paymentTerms?.trim()
-          ? stored.paymentTerms
-          : emptyData.settings.paymentTerms,
-        paymentDays: normalizePaymentDays(stored.paymentDays),
-        invoiceStyle: normalizeInvoiceStyle(),
-      };
-    })(),
+    settings: normalizedSettings,
 
     users: dedupeItemsById(rest?.users || []),
     clients: dedupeItemsById(rest?.clients || []),
@@ -311,7 +311,7 @@ export function normalizeData(data) {
     logs: dedupeItemsById(
       rest?.logs || []
     ),
-  };
+  });
 }
 
 export function loadData() {

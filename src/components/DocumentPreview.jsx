@@ -24,6 +24,7 @@ import { cleanupNavigationBlockers, CRM_ROUTE_CHANGE_EVENT } from "../utils/uiCl
 import { isQuoteSigned, getSignatureDisplayLabel } from "../utils/quoteSignature";
 import { formatPaymentDate } from "../utils/payments";
 import { getInvoicePaymentLink } from "../utils/onlinePayments";
+import { getDocumentCompanySnapshot } from "../utils/companySnapshot";
 import QuoteSignaturePanel from "./QuoteSignaturePanel";
 
 function IconUser() {
@@ -83,6 +84,11 @@ export default function DocumentPreview({
     : "";
   const footerTotals = getDocumentFooterTotals(doc, type);
   const amountDue = getDocumentAmountDue(doc, type, { remaining });
+  const company = getDocumentCompanySnapshot(doc, data.settings || {});
+  const companyLogoUrl =
+    company.logoUrl && company.logoUrl.trim() !== ""
+      ? company.logoUrl
+      : APP_LOGO_URL;
 
   const lines = doc.lines?.length
     ? doc.lines
@@ -366,11 +372,7 @@ export default function DocumentPreview({
               <div className="ac-company-inner">
                 <div className="ac-company-logo">
                   <img
-                    src={
-                      data.settings.logoUrl && data.settings.logoUrl.trim() !== ""
-                        ? data.settings.logoUrl
-                        : APP_LOGO_URL
-                    }
+                    src={companyLogoUrl}
                     alt="Logo entreprise"
                     onError={(event) => {
                       event.currentTarget.src = APP_LOGO_URL;
@@ -378,12 +380,12 @@ export default function DocumentPreview({
                   />
                 </div>
                 <div className="ac-company-text">
-                  <h1>{data.settings.companyName || "AC Creation"}</h1>
-                  <p>{data.settings.companyAddress}</p>
-                  <p>{data.settings.companyPhone}</p>
-                  <p>{data.settings.companyEmail}</p>
+                  <h1>{company.companyName || "AC Creation"}</h1>
+                  <p>{company.companyAddress}</p>
+                  <p>{company.companyPhone}</p>
+                  <p>{company.companyEmail}</p>
                   <p>
-                    <strong>N° TVA :</strong> {data.settings.vatNumber || "-"}
+                    <strong>N° TVA :</strong> {company.vatNumber || "-"}
                   </p>
                 </div>
               </div>
@@ -553,8 +555,8 @@ export default function DocumentPreview({
             <div className="ac-after-table-left">
               <div className="ac-payment-card">
                 <h3>CONDITIONS DE PAIEMENT</h3>
-                <pre>{data.settings.paymentTerms}</pre>
-                <pre>{data.settings.bankInfo}</pre>
+                <pre>{company.paymentTerms}</pre>
+                <pre>{company.bankInfo}</pre>
                 {paymentLink ? (
                   <p className="ac-online-payment-link">
                     Paiement en ligne : <a href={paymentLink}>{paymentLink}</a>
@@ -698,12 +700,12 @@ export default function DocumentPreview({
           </div>
 
           <div className="ac-footer">
-            <strong>{data.settings.companyName} — Personnalisation</strong>
+            <strong>{company.companyName} — Personnalisation</strong>
             <span>
-              {data.settings.companyAddress} — {data.settings.companyPhone} —{" "}
-              {data.settings.companyEmail}
+              {company.companyAddress} — {company.companyPhone} —{" "}
+              {company.companyEmail}
             </span>
-            <span>N° TVA : {data.settings.vatNumber || "-"}</span>
+            <span>N° TVA : {company.vatNumber || "-"}</span>
           </div>
           </div>
         </div>

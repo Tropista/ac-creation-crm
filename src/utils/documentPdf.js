@@ -8,6 +8,7 @@ import {
 } from "./documents";
 import { formatLineDescriptionWithProduction } from "./quoteLines";
 import { isQuoteSigned } from "./quoteSignature";
+import { getDocumentCompanySnapshot } from "./companySnapshot";
 
 const PAGE_WIDTH = 210;
 const PAGE_HEIGHT = 297;
@@ -60,6 +61,13 @@ export function getDocumentFileName(doc, type) {
   }
   const isQuote = type === "quote";
   return `${isQuote ? "devis" : "facture"}-${String(doc.number || "document").replace(/[^\w.-]+/g, "_")}.pdf`;
+}
+
+export function resolveDocumentCompanyForPdf(doc, settings = {}) {
+  return {
+    ...settings,
+    ...getDocumentCompanySnapshot(doc, settings),
+  };
 }
 
 // fr-LU (et non fr-FR) : même locale que money() utilisé par l'aperçu et le téléchargement.
@@ -717,7 +725,7 @@ function drawClientInfoGrid(pdf, doc, data, y, style, { isQuote, isDelivery }) {
 }
 
 export function buildDeliveryNotePdf({ doc, data, logoDataUrl = null }) {
-  const settings = data.settings || {};
+  const settings = resolveDocumentCompanyForPdf(doc, data.settings || {});
   const style = getPdfStyleConfig();
   const lines = doc.lines?.length ? doc.lines : [];
   const documentTitle = "BON DE LIVRAISON";
@@ -780,7 +788,7 @@ export function buildDocumentPdf({ doc, type, data, logoDataUrl = null }) {
   }
 
   const isQuote = type === "quote";
-  const settings = data.settings || {};
+  const settings = resolveDocumentCompanyForPdf(doc, data.settings || {});
   const style = getPdfStyleConfig();
   const lines = normalizeLines(doc);
   const paidAmount = Number(doc.paidAmount || 0);

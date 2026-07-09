@@ -4,6 +4,7 @@ import {
   formatPdfMoney,
   formatPdfQuantity,
   getDocumentFileName,
+  resolveDocumentCompanyForPdf,
 } from "./documentPdf.js";
 
 const sampleData = {
@@ -71,6 +72,33 @@ describe("documentPdf helpers", () => {
 });
 
 describe("buildDocumentPdf", () => {
+  it("utilise le snapshot societe du document pour le PDF", () => {
+    const resolved = resolveDocumentCompanyForPdf(
+      {
+        ...sampleInvoice,
+        companySnapshot: {
+          companyName: "Ancienne Societe",
+          companyAddress: "Ancienne adresse",
+          companyPhone: "+352 111",
+          companyEmail: "old@example.com",
+          vatNumber: "LUOLD",
+          logoUrl: "https://example.com/old.png",
+          paymentTerms: "Anciennes conditions",
+          bankInfo: "Ancienne banque",
+        },
+      },
+      {
+        ...sampleData.settings,
+        companyName: "Nouvelle Societe",
+        vatNumber: "LUNEW",
+      }
+    );
+
+    expect(resolved.companyName).toBe("Ancienne Societe");
+    expect(resolved.vatNumber).toBe("LUOLD");
+    expect(resolved.paymentTerms).toBe("Anciennes conditions");
+  });
+
   it("produit un PDF avec au moins une page", () => {
     const pdf = buildDocumentPdf({
       doc: sampleInvoice,
