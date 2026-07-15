@@ -52,6 +52,10 @@ export function statusClass(status) {
   );
 }
 
+export function getDocumentBillingDetail(doc = {}) {
+  return String(doc.billingDetail || "").trim();
+}
+
 export function dedupeDocuments(items = []) {
   const map = new Map();
 
@@ -410,6 +414,7 @@ export function createDeliveryNoteFromQuote(data, quote, options = {}) {
     quoteNumber: quote.number,
     quoteId: quote.id,
     clientId: quote.clientId,
+    billingDetail: quote.billingDetail || "",
     status: quote.status === "Livré" ? "Livré" : "Prêt",
     lines,
     deliveryAddress: options.deliveryAddress || client?.address || "",
@@ -453,6 +458,7 @@ export function createDepositInvoiceFromQuote(data, quote, percent) {
     companySnapshot: quote.companySnapshot || buildCompanySnapshot(data.settings || {}),
     date: today(),
     clientId: quote.clientId,
+    billingDetail: quote.billingDetail || "",
     status: "Non payée",
     dueDate: computeDueDate(today(), data.settings?.paymentDays),
     invoiceType: "acompte",
@@ -536,6 +542,7 @@ export function createBalanceInvoiceFromQuote(data, quote) {
     companySnapshot: quote.companySnapshot || buildCompanySnapshot(data.settings || {}),
     date: today(),
     clientId: quote.clientId,
+    billingDetail: quote.billingDetail || "",
     status: "Non payée",
     dueDate: computeDueDate(today(), data.settings?.paymentDays),
     invoiceType: "solde",
@@ -589,6 +596,92 @@ export function scaleDocumentLinesByRatio(lines = [], ratio = 1) {
   });
 }
 
+export function roundDocumentAmount(value) {
+  return Math.round((Number(value) || 0) * 100) / 100;
+}
+
+export function computeDocumentLineTotals(line = {}) {
+  const quantity = Number(line.quantity || 0);
+  const price = Number(line.price || 0);
+  const discount = Math.min(100, Math.max(0, Number(line.discount || 0)));
+  const subtotal = roundDocumentAmount(quantity * price);
+  const totalHT = roundDocumentAmount(subtotal * (1 - discount / 100));
+
+  return { subtotal, totalHT };
+}
+
+export function computeDocumentTotals(lines = [], options = {}) {
+  const subtotal = roundDocumentAmount(
+    (lines || []).reduce((sum, line) => {
+      const lineTotals = computeDocumentLineTotals(line);
+      return sum + lineTotals.totalHT;
+    }, 0)
+  );
+  const globalDiscountRate = Math.min(100, Math.max(0, Number(options.globalDiscount || 0)));
+  const globalDiscountAmount = roundDocumentAmount(subtotal * (globalDiscountRate / 100));
+  const totalHT = roundDocumentAmount(Math.max(0, subtotal - globalDiscountAmount));
+  const taxRate = Number(options.taxRate || 0);
+  const taxAmount = roundDocumentAmount(totalHT * (taxRate / 100));
+  const totalTTC = roundDocumentAmount(totalHT + taxAmount);
+  const deposit = computeDepositTotals(totalTTC, options.depositPercent);
+
+  return {
+    subtotal,
+    globalDiscountRate,
+    globalDiscountAmount,
+    totalHT,
+    taxAmount,
+    totalTTC,
+    ...deposit,
+  };
+}
+
+export function getInvoiceAmountPaid(invoice = {}) {
+  const direct = Number(invoice.amountPaid);
+  if (!Number.isNaN(direct) && direct >= 0) return direct;
+
+  const paid = Number(invoice.paidAmount);
+  if (!Number.isNaN(paid) && paid >= 0) return paid;
+
+  return 0;
+}
+
+export function recalculateInvoicePaymentFields(invoice = {}) {
+  const totalTTC = roundDocumentAmount(invoice.totalTTC || 0);
+  const paidAmount = roundDocumentAmount(getInvoiceAmountPaid(invoice));
+  const remaining = roundDocumentAmount(Math.max(0, totalTTC - paidAmount));
+
+  return {
+    ...invoice,
+    paidAmount,
+    remaining,
+    remainingAmount: remaining,
+    balanceDue: remaining,
+    amountDue: remaining,
+  };
+}
+
+export function recalculateDocumentAmounts(document = {}, options = {}) {
+  const lines = (document.lines || []).map((line) => ({
+    ...line,
+    ...computeDocumentLineTotals(line),
+  }));
+  const totals = computeDocumentTotals(lines, {
+    globalDiscount: document.globalDiscount,
+    depositPercent: document.depositPercent,
+    taxRate: document.taxRate,
+  });
+  const nextDocument = {
+    ...document,
+    lines,
+    ...totals,
+  };
+
+  return options.type === "invoice"
+    ? recalculateInvoicePaymentFields(nextDocument)
+    : nextDocument;
+}
+
 export function computeDepositTotals(totalTTC, depositPercent = 0) {
   const rate = Math.min(100, Math.max(0, Number(depositPercent) || 0));
   const total = Number(totalTTC || 0);
@@ -627,35 +720,23 @@ export function getDocumentFooterTotals(doc, type) {
 /** Montant « À payer » sur PDF / aperçu. */
 export function getDocumentAmountDue(doc, type, { remaining } = {}) {
   if (type === "delivery") return 0;
-  if (doc.status === "Payée") return 0;
   if (type === "quote" && Number(doc.depositPercent || 0) > 0) {
     return computeDepositTotals(doc.totalTTC, doc.depositPercent).depositAmount;
   }
   const rem = remaining != null ? Number(remaining) : Number(doc.remaining);
   if (rem != null && !Number.isNaN(rem)) return Math.max(0, rem);
+  if (doc.status === "Payée") return 0;
   return Number(doc.totalTTC || 0);
 }
 
 export function enrichInvoicePaymentFields(invoice) {
-  const totalTTC = Number(invoice?.totalTTC || 0);
-  const paidAmount = Number(invoice?.paidAmount);
-  const remaining = Number(invoice?.remaining);
+  if (!invoice) return invoice;
+  const totalTTC = roundDocumentAmount(invoice.totalTTC || 0);
+  const paidAmount = roundDocumentAmount(getInvoiceAmountPaid(invoice));
 
-  if (Number.isNaN(paidAmount)) {
-    const nextPaid = invoice?.status === "Payée" ? totalTTC : 0;
-    return {
-      ...invoice,
-      paidAmount: nextPaid,
-      remaining: Number.isNaN(remaining) ? Math.max(0, totalTTC - nextPaid) : remaining,
-    };
-  }
-
-  if (Number.isNaN(remaining)) {
-    return {
-      ...invoice,
-      remaining: Math.max(0, totalTTC - paidAmount),
-    };
-  }
-
-  return invoice;
+  return recalculateInvoicePaymentFields({
+    ...invoice,
+    totalTTC,
+    paidAmount,
+  });
 }

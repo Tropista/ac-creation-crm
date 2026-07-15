@@ -361,6 +361,17 @@ export default function DocumentForm({
         </div>
 
         <label className="documents-field">
+          <span>Service / classe concerné(e)</span>
+          <input
+            type="text"
+            value={form.billingDetail || ""}
+            placeholder="Ex. Service scolaire - Classe de Mme Dupont"
+            onChange={(e) => setForm({ ...form, billingDetail: e.target.value })}
+            data-testid="billing-detail-input"
+          />
+        </label>
+
+        <label className="documents-field">
           <span>Statut</span>
           <select
             value={form.status}

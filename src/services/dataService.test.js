@@ -97,6 +97,25 @@ describe("dataService", () => {
     expect(loaded.clientNotes).toHaveLength(1);
   });
 
+  it("ancienne sauvegarde sans vatReports reste compatible", () => {
+    const storage = createStorage();
+    vi.stubGlobal("localStorage", storage);
+
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        ...emptyData,
+        vatReports: undefined,
+        clients: [{ id: "c1", name: "Client" }],
+      })
+    );
+
+    const loaded = loadData();
+
+    expect(loaded.vatReports).toEqual([]);
+    expect(loaded.clients).toHaveLength(1);
+  });
+
   it("ajoute un snapshot societe aux anciens devis et factures sans ecraser l'existant", () => {
     const loaded = normalizeData({
       ...emptyData,

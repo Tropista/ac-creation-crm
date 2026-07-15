@@ -8,6 +8,7 @@ import { sendDocumentByEmail } from "../services/emailService";
 import { buildEmailFromTemplate, buildDocVars } from "../utils/emailTemplates";
 import {
   getDocumentAmountDue,
+  getDocumentBillingDetail,
   getDocumentFooterTotals,
 } from "../utils/documents";
 import { getInvoicePaidAmount, getInvoiceRemaining } from "../utils/invoices";
@@ -84,6 +85,7 @@ export default function DocumentPreview({
     : "";
   const footerTotals = getDocumentFooterTotals(doc, type);
   const amountDue = getDocumentAmountDue(doc, type, { remaining });
+  const billingDetail = getDocumentBillingDetail(doc);
   const company = getDocumentCompanySnapshot(doc, data.settings || {});
   const companyLogoUrl =
     company.logoUrl && company.logoUrl.trim() !== ""
@@ -422,6 +424,7 @@ export default function DocumentPreview({
               <div>
                 <h3>{isDelivery ? "LIVRÉ À" : "FACTURÉ À"}</h3>
                 <strong>{client?.name || "Client supprimé"}</strong>
+                {billingDetail && <p>{billingDetail}</p>}
                 {client?.company && <p>{client.company}</p>}
                 {client?.address && <p>{client.address}</p>}
                 {client?.email && <p>{client.email}</p>}

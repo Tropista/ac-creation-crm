@@ -328,6 +328,152 @@ input[type="file"]::-webkit-file-upload-button:hover {
 .muted,
 .small-warning { color: var(--muted) !important; }
 .error { color: var(--red); font-weight: 700; }
+.warning { color: #fbbf24; font-weight: 700; }
+.success { color: #34d399; font-weight: 700; }
+
+/* =========================================================
+   Declaration TVA
+   ========================================================= */
+.vat-declaration-page .vat-status-card,
+.vat-declaration-page .vat-report-card,
+.vat-declaration-page .vat-assistant-entry {
+  display: grid;
+  gap: 14px;
+}
+.vat-status-header,
+.vat-assistant-entry,
+.section-title,
+.section-title-row,
+.button-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.button-row { justify-content: flex-start; }
+.vat-status-header strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 24px;
+}
+.vat-status-counts,
+.vat-control-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.vat-status-main-issues ul {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+.badge.danger,
+.badge.error {
+  background: rgba(248, 113, 113, 0.16);
+  border-color: rgba(248, 113, 113, 0.42);
+  color: #fecaca;
+}
+.badge.info {
+  background: rgba(96, 165, 250, 0.16);
+  border-color: rgba(96, 165, 250, 0.42);
+  color: #bfdbfe;
+}
+.vat-summary-cards {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+.vat-summary-card {
+  display: grid;
+  gap: 8px;
+  min-height: 118px;
+  margin-bottom: 0;
+}
+.vat-summary-card.success { border-color: rgba(52, 211, 153, 0.42); }
+.vat-summary-card.accent { border-color: rgba(129, 140, 248, 0.5); }
+.vat-summary-card.warning { border-color: rgba(251, 191, 36, 0.5); }
+.vat-summary-card.danger { border-color: rgba(248, 113, 113, 0.5); }
+.vat-summary-label {
+  color: var(--muted);
+  font-weight: 700;
+}
+.vat-summary-value {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: 24px;
+  line-height: 1.15;
+}
+.vat-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.vat-tabs button {
+  flex: 0 0 auto;
+  border: 1px solid rgba(255,255,255,0.16);
+}
+.vat-tabs button.active {
+  border-color: #a78bfa;
+  box-shadow: 0 0 0 2px rgba(167,139,250,.18);
+}
+.vat-control-list {
+  display: grid;
+  gap: 10px;
+}
+.vat-control-card {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  background: rgba(255,255,255,0.04);
+}
+.vat-control-card.error { border-color: rgba(248,113,113,.4); }
+.vat-control-card.warning { border-color: rgba(251,191,36,.4); }
+.vat-control-card.info { border-color: rgba(96,165,250,.4); }
+.vat-assistant-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  overflow: auto;
+  padding: 24px;
+  background: rgba(3, 7, 18, 0.72);
+}
+.vat-assistant-modal {
+  width: min(1500px, 96vw);
+  max-height: none;
+  margin: 0 auto;
+}
+.vat-assistant-modal table {
+  min-width: 1100px;
+}
+.vat-assistant-modal input,
+.vat-assistant-modal select {
+  min-width: 110px;
+}
+.vat-impact-grid {
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+.vat-impact-card {
+  margin-bottom: 0;
+  display: grid;
+  gap: 6px;
+}
+.vat-impact-card strong { font-size: 20px; }
+
+@media (max-width: 760px) {
+  .vat-assistant-backdrop { padding: 10px; }
+  .vat-summary-value { font-size: 19px; }
+  .vat-status-header,
+  .vat-assistant-entry,
+  .section-title,
+  .section-title-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
 
 /* =========================================================
    Dashboard / stats

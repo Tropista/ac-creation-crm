@@ -59,6 +59,7 @@ describe("canAccessPage", () => {
       "quotes",
       "atelier",
       "invoices",
+      "vatdeclaration",
       "users",
       "settings",
       "banque",
@@ -70,6 +71,7 @@ describe("canAccessPage", () => {
   it("limite le Comptable aux pages financières", () => {
     expect(canAccessPage("Comptable", "invoices")).toBe(true);
     expect(canAccessPage("Comptable", "expenses")).toBe(true);
+    expect(canAccessPage("Comptable", "vatdeclaration")).toBe(true);
     expect(canAccessPage("Comptable", "banque")).toBe(true);
     expect(canAccessPage("Comptable", "dashboard")).toBe(true);
 
@@ -93,5 +95,10 @@ describe("canAccessPage", () => {
     expect(canAccessPage("Utilisateur", "dashboard")).toBe(true);
     expect(canAccessPage("Utilisateur", "clients")).toBe(false);
     expect(canAccessPage("Utilisateur", "invoices")).toBe(false);
+    expect(canAccessPage("Utilisateur", "vatdeclaration")).toBe(false);
+  });
+
+  it("refuse la declaration TVA au role employe", () => {
+    expect(canAccessPage("Employ\u00e9", "vatdeclaration")).toBe(false);
   });
 });

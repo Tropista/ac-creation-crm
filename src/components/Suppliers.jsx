@@ -8,6 +8,14 @@ import {
 import { showToast } from "../utils/toast";
 import { confirmAction } from "../utils/confirmAction";
 import { isNonNegativeNumber, isRequired, parseLocaleNumber, validateFields } from "../utils/validation";
+import {
+  COUNTRY_OPTIONS,
+  getCountryName,
+  getVatOriginFromCountry,
+  isEuCountry,
+  normalizeCountryCode,
+} from "../utils/countries";
+import { EU_TRANSACTION_TYPE, VAT_ORIGIN } from "../utils/vatDeclaration";
 
 function uid() {
   return crypto.randomUUID();
@@ -39,6 +47,12 @@ const emptySupplierForm = {
   email: "",
   phone: "",
   website: "",
+  country_code: "",
+  country_name: "",
+  vat_number: "",
+  is_eu: false,
+  default_vat_origin: "",
+  default_transaction_type: EU_TRANSACTION_TYPE.NONE,
   notes: "",
 };
 
@@ -118,6 +132,11 @@ export default function Suppliers({
         supplier.email,
         supplier.phone,
         supplier.website,
+        supplier.country_code,
+        supplier.country_name,
+        supplier.vat_number,
+        supplier.default_vat_origin,
+        supplier.default_transaction_type,
         supplier.notes,
         linkText,
       ]
@@ -168,6 +187,50 @@ export default function Suppliers({
     setForm((current) => ({ ...current, [field]: value }));
   }
 
+  function updateSupplierCountry(countryCode) {
+    setForm((current) => {
+      const previousSuggestedOrigin = getVatOriginFromCountry(current.country_code);
+      const code = normalizeCountryCode(countryCode);
+      const suggestedOrigin = getVatOriginFromCountry(code) || "";
+      const shouldUpdateOrigin =
+        !current.default_vat_origin ||
+        current.default_vat_origin === previousSuggestedOrigin;
+
+      return {
+        ...current,
+        country_code: code,
+        country_name: getCountryName(code),
+        is_eu: code ? isEuCountry(code) : false,
+        default_vat_origin: shouldUpdateOrigin
+          ? suggestedOrigin
+          : current.default_vat_origin,
+        default_transaction_type:
+          suggestedOrigin === VAT_ORIGIN.EU
+            ? current.default_transaction_type || EU_TRANSACTION_TYPE.NONE
+            : EU_TRANSACTION_TYPE.NONE,
+      };
+    });
+  }
+
+  function buildSupplierPayload() {
+    const countryCode = normalizeCountryCode(form.country_code);
+    return {
+      ...form,
+      name: form.name.trim(),
+      contact: form.contact.trim(),
+      email: form.email.trim(),
+      phone: form.phone.trim(),
+      website: form.website.trim(),
+      country_code: countryCode || null,
+      country_name: form.country_name || getCountryName(countryCode),
+      vat_number: form.vat_number.trim(),
+      is_eu: countryCode ? isEuCountry(countryCode) : false,
+      default_vat_origin: form.default_vat_origin || null,
+      default_transaction_type: form.default_transaction_type || null,
+      notes: form.notes.trim(),
+    };
+  }
+
   function submitSupplier(e) {
     e.preventDefault();
 
@@ -179,23 +242,27 @@ export default function Suppliers({
       return;
     }
 
+    const payload = buildSupplierPayload();
+    if (payload.is_eu && payload.country_code !== "LU" && !payload.vat_number) {
+      showToast("Fournisseur UE sans numero TVA : a verifier.", "warning");
+    }
+
     if (editing) {
       setData({
         ...data,
         suppliers: suppliers.map((supplier) =>
           supplier.id === editing
-            ? { ...supplier, ...form, name: form.name.trim() }
+            ? { ...supplier, ...payload }
             : supplier
         ),
       });
-      logActivity?.("Modification fournisseur", form.name.trim());
+      logActivity?.("Modification fournisseur", payload.name);
       showToast("Fournisseur modifié.", "success");
     } else {
       const supplier = {
         id: uid(),
         createdAt: today(),
-        ...form,
-        name: form.name.trim(),
+        ...payload,
         productLinks: [],
       };
 
@@ -220,6 +287,12 @@ export default function Suppliers({
       email: supplier.email || "",
       phone: supplier.phone || "",
       website: supplier.website || "",
+      country_code: supplier.country_code || "",
+      country_name: supplier.country_name || getCountryName(supplier.country_code),
+      vat_number: supplier.vat_number || "",
+      is_eu: Boolean(supplier.is_eu),
+      default_vat_origin: supplier.default_vat_origin || "",
+      default_transaction_type: supplier.default_transaction_type || EU_TRANSACTION_TYPE.NONE,
       notes: supplier.notes || "",
     });
   }
@@ -437,6 +510,47 @@ export default function Suppliers({
             value={form.website}
             onChange={(e) => updateSupplierForm("website", e.target.value)}
           />
+          <select
+            value={form.country_code || ""}
+            onChange={(e) => updateSupplierCountry(e.target.value)}
+          >
+            {COUNTRY_OPTIONS.map((country) => (
+              <option key={country.code || "none"} value={country.code}>
+                {country.code ? `${country.name} (${country.code})` : country.name}
+              </option>
+            ))}
+          </select>
+          <input
+            placeholder="Code pays"
+            value={form.country_code || ""}
+            onChange={(e) => updateSupplierCountry(e.target.value)}
+            maxLength={2}
+          />
+          <input
+            placeholder="Numero TVA fournisseur"
+            value={form.vat_number}
+            onChange={(e) => updateSupplierForm("vat_number", e.target.value)}
+          />
+          <select
+            value={form.default_vat_origin || ""}
+            onChange={(e) => updateSupplierForm("default_vat_origin", e.target.value)}
+          >
+            <option value="">Origine TVA proposee</option>
+            <option value={VAT_ORIGIN.LU}>LU</option>
+            <option value={VAT_ORIGIN.EU}>EU</option>
+            <option value={VAT_ORIGIN.NON_EU}>NON_EU</option>
+          </select>
+          <select
+            value={form.default_transaction_type || EU_TRANSACTION_TYPE.NONE}
+            onChange={(e) => updateSupplierForm("default_transaction_type", e.target.value)}
+          >
+            <option value={EU_TRANSACTION_TYPE.NONE}>Type UE: none</option>
+            <option value={EU_TRANSACTION_TYPE.GOODS}>Biens UE</option>
+            <option value={EU_TRANSACTION_TYPE.SERVICE}>Services UE</option>
+          </select>
+          <p className="muted">
+            Valeur proposee automatiquement a partir du pays, modifiable manuellement.
+          </p>
           <textarea
             placeholder="Notes"
             value={form.notes}
@@ -566,6 +680,25 @@ export default function Suppliers({
                       "—"
                     )}
                   </span>
+                </div>
+                <div className="supplier-field">
+                  <strong>Pays</strong>
+                  <span>
+                    {selectedSupplier.country_name || getCountryName(selectedSupplier.country_code) || "â€”"}
+                    {selectedSupplier.country_code ? ` (${selectedSupplier.country_code})` : ""}
+                  </span>
+                </div>
+                <div className="supplier-field">
+                  <strong>Numero TVA</strong>
+                  <span>{selectedSupplier.vat_number || "â€”"}</span>
+                </div>
+                <div className="supplier-field">
+                  <strong>Origine TVA</strong>
+                  <span>{selectedSupplier.default_vat_origin || "â€”"}</span>
+                </div>
+                <div className="supplier-field">
+                  <strong>Type UE par defaut</strong>
+                  <span>{selectedSupplier.default_transaction_type || EU_TRANSACTION_TYPE.NONE}</span>
                 </div>
                 <div className="supplier-field supplier-field-wide">
                   <strong>Notes</strong>

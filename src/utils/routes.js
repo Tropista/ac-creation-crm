@@ -8,6 +8,7 @@ export const PAGE_PATHS = {
   products: "/produits",
   suppliers: "/fournisseurs",
   expenses: "/depenses",
+  vatdeclaration: "/declaration-tva",
   labels: "/etiquettes",
   scan: "/scan",
   categories: "/categories",

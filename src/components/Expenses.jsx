@@ -14,6 +14,21 @@ import {
 import {
   resolveSupplierForExpense,
 } from "../utils/expenseSuppliers";
+import {
+  NEW_EXPENSE_VAT_DEFAULTS,
+  applyExpenseVatSuggestions,
+  normalizeExpenseVatFields,
+  suggestExpenseVatClassification,
+  validateExpenseVatClassification,
+} from "../utils/expenseVatClassification";
+import {
+  EU_TRANSACTION_TYPE,
+  EXPENSE_TAX_CATEGORY,
+  REVERSE_CHARGE_RATE_STATUS,
+  VAT_DEDUCTIBILITY,
+  VAT_ORIGIN,
+  VAT_REVIEW_STATUS,
+} from "../utils/vatDeclaration";
 import { exportExpensesCsv } from "../utils/exportCsv";
 import MonthlyAccountingExport from "./MonthlyAccountingExport";
 import {
@@ -70,6 +85,7 @@ const emptyExpenseForm = {
   totalTTC: "",
   category: "",
   notes: "",
+  ...NEW_EXPENSE_VAT_DEFAULTS,
 };
 
 export default function Expenses({
@@ -253,6 +269,55 @@ export default function Expenses({
     setPage("suppliers");
   }
 
+  function getFormSupplier(formValue = form) {
+    return resolveSupplierForExpense(
+      {
+        supplierId: formValue.supplierId,
+        supplierName: formValue.supplierName,
+      },
+      suppliers
+    );
+  }
+
+  function applyVatSuggestion({ overwrite = false } = {}) {
+    const supplier = getFormSupplier();
+    const result = suggestExpenseVatClassification({ expense: form, supplier });
+    const hasManualValues = [
+      "vat_origin",
+      "expense_tax_category",
+      "eu_transaction_type",
+      "vat_deductibility",
+    ].some((key) => form[key] && form[key] !== NEW_EXPENSE_VAT_DEFAULTS[key]);
+
+    if (
+      hasManualValues &&
+      !overwrite &&
+      !window.confirm("Remplacer les valeurs TVA deja saisies par la proposition ?")
+    ) {
+      return;
+    }
+
+    setForm((current) =>
+      applyExpenseVatSuggestions(current, result.suggestions, { overwrite: true })
+    );
+
+    const reason = result.reasons[0] || result.warnings[0] || "Classification proposee.";
+    showToast(reason, result.warnings.length ? "warning" : "success");
+  }
+
+  function getVatValidationErrors() {
+    return validateExpenseVatClassification(form, getFormSupplier()).errors;
+  }
+
+  function markVatReviewed() {
+    const errors = getVatValidationErrors();
+    if (errors.length > 0) {
+      showToast(errors[0], "error");
+      return;
+    }
+    setForm((current) => ({ ...current, vat_review_status: VAT_REVIEW_STATUS.REVIEWED }));
+  }
+
   function handleExportCsv() {
     if (filteredExpenses.length === 0) {
       showToast("Aucune dépense à exporter.", "error");
@@ -377,7 +442,7 @@ export default function Expenses({
         expense.vatRate !== "" &&
         !isPresetVatRate(expense.vatRate)
     );
-    setForm({
+    setForm(normalizeExpenseVatFields({
       supplierId: expense.supplierId || "",
       supplierName: expense.supplierName || "",
       invoiceNumber: expense.invoiceNumber || "",
@@ -388,7 +453,7 @@ export default function Expenses({
       totalTTC: expense.totalTTC != null ? String(expense.totalTTC) : "",
       category: expense.category || "",
       notes: expense.notes || "",
-    });
+    }));
   }
 
   function submitExpense(e) {
@@ -429,6 +494,12 @@ export default function Expenses({
       return;
     }
 
+    const vatErrors = getVatValidationErrors();
+    if (form.vat_review_status === VAT_REVIEW_STATUS.REVIEWED && vatErrors.length > 0) {
+      showToast(vatErrors[0], "error");
+      return;
+    }
+
     const payload = {
       supplierId: form.supplierId || null,
       supplierName: form.supplierName.trim(),
@@ -441,6 +512,26 @@ export default function Expenses({
       category: form.category.trim(),
       notes: form.notes.trim(),
       source: "manual",
+      vat_origin: form.vat_origin || null,
+      expense_tax_category: form.expense_tax_category || null,
+      eu_transaction_type: form.eu_transaction_type || EU_TRANSACTION_TYPE.NONE,
+      vat_deductibility: form.vat_deductibility || null,
+      deductible_percentage: Number(form.deductible_percentage || 100),
+      vat_review_status: form.vat_review_status || VAT_REVIEW_STATUS.TO_REVIEW,
+      reverse_charge_vat_rate: Number(form.reverse_charge_vat_rate || 17),
+      reverse_charge_rate_status:
+        form.reverse_charge_rate_status || REVERSE_CHARGE_RATE_STATUS.TO_REVIEW,
+      is_fixed_asset: Boolean(form.is_fixed_asset),
+      asset_name: String(form.asset_name || "").trim(),
+      asset_purchase_date: form.asset_purchase_date || "",
+      asset_value_ht:
+        form.asset_value_ht === "" || form.asset_value_ht == null
+          ? ""
+          : Number(form.asset_value_ht || 0),
+      asset_useful_life_years:
+        form.asset_useful_life_years === "" || form.asset_useful_life_years == null
+          ? ""
+          : Number(form.asset_useful_life_years || 0),
     };
 
     if (editingId) {
@@ -501,6 +592,11 @@ export default function Expenses({
     logActivity?.("Suppression dépense", expense?.supplierName || "");
     showToast("Facture de dépense supprimée.", "success");
   }
+
+  const vatValidationErrors = showForm ? getVatValidationErrors() : [];
+  const showFixedAssetFields =
+    form.expense_tax_category === EXPENSE_TAX_CATEGORY.INVESTMENT ||
+    Boolean(form.is_fixed_asset);
 
   return (
     <section className="expenses-page">
@@ -865,6 +961,145 @@ export default function Expenses({
             value={form.notes}
             onChange={(e) => updateForm("notes", e.target.value)}
           />
+
+          <details className="expenses-vat-classification" open>
+            <summary>Classification TVA</summary>
+            <div className="form-grid">
+              <select
+                value={form.vat_origin || ""}
+                onChange={(e) => updateForm("vat_origin", e.target.value || null)}
+              >
+                <option value="">Origine TVA</option>
+                <option value={VAT_ORIGIN.LU}>LU</option>
+                <option value={VAT_ORIGIN.EU}>EU</option>
+                <option value={VAT_ORIGIN.NON_EU}>NON_EU</option>
+              </select>
+              <select
+                value={form.expense_tax_category || ""}
+                onChange={(e) => updateForm("expense_tax_category", e.target.value || null)}
+              >
+                <option value="">Categorie fiscale</option>
+                <option value={EXPENSE_TAX_CATEGORY.MERCHANDISE}>Marchandises</option>
+                <option value={EXPENSE_TAX_CATEGORY.RAW_MATERIAL}>Matieres / consommables</option>
+                <option value={EXPENSE_TAX_CATEGORY.INVESTMENT}>Immobilisation</option>
+                <option value={EXPENSE_TAX_CATEGORY.GENERAL_EXPENSE}>Frais generaux</option>
+                <option value={EXPENSE_TAX_CATEGORY.SERVICE}>Service</option>
+                <option value={EXPENSE_TAX_CATEGORY.VEHICLE}>Vehicule</option>
+                <option value={EXPENSE_TAX_CATEGORY.NON_DEDUCTIBLE}>Non deductible</option>
+                <option value={EXPENSE_TAX_CATEGORY.OTHER}>Autre</option>
+              </select>
+              <select
+                value={form.eu_transaction_type || EU_TRANSACTION_TYPE.NONE}
+                onChange={(e) => updateForm("eu_transaction_type", e.target.value || null)}
+              >
+                <option value={EU_TRANSACTION_TYPE.NONE}>Type UE: none</option>
+                <option value={EU_TRANSACTION_TYPE.GOODS}>Bien UE</option>
+                <option value={EU_TRANSACTION_TYPE.SERVICE}>Service UE</option>
+              </select>
+              <select
+                value={form.vat_deductibility || ""}
+                onChange={(e) => updateForm("vat_deductibility", e.target.value || null)}
+              >
+                <option value="">Deductibilite</option>
+                <option value={VAT_DEDUCTIBILITY.FULLY}>100 % deductible</option>
+                <option value={VAT_DEDUCTIBILITY.PARTIALLY}>Partielle</option>
+                <option value={VAT_DEDUCTIBILITY.NONE}>Non deductible</option>
+              </select>
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="1"
+                placeholder="Pourcentage deductible"
+                value={form.deductible_percentage ?? 100}
+                onChange={(e) => updateForm("deductible_percentage", e.target.value)}
+              />
+              <input
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                placeholder="Taux autoliquidation"
+                value={form.reverse_charge_vat_rate ?? 17}
+                onChange={(e) => updateForm("reverse_charge_vat_rate", e.target.value)}
+              />
+              <select
+                value={form.reverse_charge_rate_status || REVERSE_CHARGE_RATE_STATUS.SUGGESTED}
+                onChange={(e) => updateForm("reverse_charge_rate_status", e.target.value)}
+              >
+                <option value={REVERSE_CHARGE_RATE_STATUS.CONFIRMED}>Taux confirme</option>
+                <option value={REVERSE_CHARGE_RATE_STATUS.SUGGESTED}>Taux suggere</option>
+                <option value={REVERSE_CHARGE_RATE_STATUS.TO_REVIEW}>Taux a verifier</option>
+              </select>
+              <select
+                value={form.vat_review_status || VAT_REVIEW_STATUS.TO_REVIEW}
+                onChange={(e) => updateForm("vat_review_status", e.target.value)}
+              >
+                <option value={VAT_REVIEW_STATUS.TO_REVIEW}>A verifier</option>
+                <option value={VAT_REVIEW_STATUS.AUTO_SUGGESTED}>Suggestion auto</option>
+                <option value={VAT_REVIEW_STATUS.REVIEWED}>Verifie</option>
+              </select>
+              <label className="checkbox-line">
+                <input
+                  type="checkbox"
+                  checked={Boolean(form.is_fixed_asset)}
+                  onChange={(e) => updateForm("is_fixed_asset", e.target.checked)}
+                />
+                Immobilisation
+              </label>
+            </div>
+
+            {vatValidationErrors.length > 0 && (
+              <div className="muted">
+                {vatValidationErrors.map((error) => (
+                  <div key={error}>{error}</div>
+                ))}
+              </div>
+            )}
+
+            <div className="expenses-form-actions">
+              <button type="button" onClick={() => applyVatSuggestion()}>
+                Proposer la classification TVA
+              </button>
+              <button
+                type="button"
+                onClick={markVatReviewed}
+                disabled={vatValidationErrors.length > 0}
+              >
+                Marquer comme verifie
+              </button>
+            </div>
+          </details>
+
+          {showFixedAssetFields && (
+            <details className="expenses-vat-classification" open>
+              <summary>Immobilisation</summary>
+              <div className="form-grid">
+                <input
+                  placeholder="Nom de l'immobilisation"
+                  value={form.asset_name || ""}
+                  onChange={(e) => updateForm("asset_name", e.target.value)}
+                />
+                <input
+                  type="date"
+                  value={form.asset_purchase_date || ""}
+                  onChange={(e) => updateForm("asset_purchase_date", e.target.value)}
+                />
+                <input
+                  placeholder="Valeur HT"
+                  value={form.asset_value_ht || ""}
+                  onChange={(e) => updateForm("asset_value_ht", e.target.value)}
+                />
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="Duree utilisation estimee"
+                  value={form.asset_useful_life_years || ""}
+                  onChange={(e) => updateForm("asset_useful_life_years", e.target.value)}
+                />
+              </div>
+            </details>
+          )}
 
           <div className="expenses-form-actions">
             <button className="primary" type="submit">

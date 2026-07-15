@@ -12,7 +12,7 @@ export default defineConfig({
     __APP_VERSION__: JSON.stringify(pkg.version),
   },
   optimizeDeps: {
-    include: ["recharts"],
+    include: ["html2canvas", "qrcode", "recharts"],
   },
   test: {
     environment: "node",

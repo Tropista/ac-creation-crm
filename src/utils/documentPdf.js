@@ -4,11 +4,13 @@ import {
   clientName,
   computeDepositTotals,
   getDocumentAmountDue,
+  getDocumentBillingDetail,
   getDocumentFooterTotals,
 } from "./documents";
 import { formatLineDescriptionWithProduction } from "./quoteLines";
 import { isQuoteSigned } from "./quoteSignature";
 import { getDocumentCompanySnapshot } from "./companySnapshot";
+import { getInvoicePaidAmount, getInvoiceRemaining } from "./invoices";
 
 const PAGE_WIDTH = 210;
 const PAGE_HEIGHT = 297;
@@ -649,6 +651,10 @@ function drawClientInfoGrid(pdf, doc, data, y, style, { isQuote, isDelivery }) {
   const client = (data.clients || []).find((c) => c.id === doc.clientId);
 
   const leftEntries = [{ value: client?.name || clientName(data, doc.clientId), bold: true }];
+  const billingDetail = getDocumentBillingDetail(doc);
+  if (billingDetail) {
+    leftEntries.push({ value: billingDetail });
+  }
   const clientVat = client?.vatNumber || client?.vat || client?.tva;
   [client?.company, client?.address, client?.email, client?.phone]
     .filter(Boolean)
@@ -791,11 +797,8 @@ export function buildDocumentPdf({ doc, type, data, logoDataUrl = null }) {
   const settings = resolveDocumentCompanyForPdf(doc, data.settings || {});
   const style = getPdfStyleConfig();
   const lines = normalizeLines(doc);
-  const paidAmount = Number(doc.paidAmount || 0);
-  const remaining =
-    doc.remaining != null
-      ? Number(doc.remaining)
-      : Math.max(0, Number(doc.totalTTC || 0) - paidAmount);
+  const paidAmount = getInvoicePaidAmount(doc);
+  const remaining = getInvoiceRemaining(doc);
   const footerTotals = getDocumentFooterTotals(doc, type);
   const amountDue = getDocumentAmountDue(doc, type, { remaining });
   const documentTitle =

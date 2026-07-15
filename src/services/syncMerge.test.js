@@ -308,6 +308,85 @@ describe("syncMerge", () => {
     expect(merged.products[0].name).toBe("Produit cloud");
   });
 
+  it("mergeCloudWithLocal conserve les nouveaux champs TVA fournisseurs et depenses", () => {
+    setLastSyncAt(Date.parse("2026-05-23T09:00:00.000Z"));
+
+    const local = {
+      settings: { companyName: "Local" },
+      suppliers: [
+        {
+          id: "s1",
+          name: "Fournisseur LU",
+          country_code: "LU",
+          default_vat_origin: "LU",
+          updatedAt: "2026-05-23T10:00:00.000Z",
+        },
+      ],
+      expenses: [
+        {
+          id: "e1",
+          supplierId: "s1",
+          vat_origin: "LU",
+          expense_tax_category: "raw_material",
+          vat_review_status: "reviewed",
+          updatedAt: "2026-05-23T10:00:00.000Z",
+        },
+      ],
+    };
+
+    const cloud = {
+      settings: { companyName: "Cloud" },
+      suppliers: [
+        {
+          id: "s1",
+          name: "Fournisseur LU",
+          country_code: "FR",
+          default_vat_origin: "EU",
+          updatedAt: "2026-05-23T08:00:00.000Z",
+        },
+      ],
+      expenses: [
+        {
+          id: "e1",
+          supplierId: "s1",
+          vat_origin: "EU",
+          expense_tax_category: "service",
+          vat_review_status: "auto_suggested",
+          updatedAt: "2026-05-23T08:00:00.000Z",
+        },
+      ],
+    };
+
+    const merged = mergeCloudWithLocal(local, cloud);
+
+    expect(merged.suppliers[0]).toMatchObject({
+      country_code: "LU",
+      default_vat_origin: "LU",
+    });
+    expect(merged.expenses[0]).toMatchObject({
+      vat_origin: "LU",
+      expense_tax_category: "raw_material",
+      vat_review_status: "reviewed",
+    });
+  });
+
+  it("fusionne vatReports sans perte", () => {
+    setLastSyncAt(Date.parse("2026-07-15T09:00:00.000Z"));
+
+    const local = {
+      settings: {},
+      vatReports: [{ id: "vat-1", status: "draft", updatedAt: "2026-07-15T10:00:00.000Z" }],
+    };
+    const cloud = {
+      settings: {},
+      vatReports: [{ id: "vat-2", status: "reviewed", updatedAt: "2026-07-15T10:30:00.000Z" }],
+    };
+
+    const merged = mergeCloudWithLocal(local, cloud);
+
+    expect(merged.vatReports.map((entry) => entry.id).sort()).toEqual(["vat-1", "vat-2"]);
+  });
+
   it("setLastSyncAt persiste dans localStorage", () => {
     setLastSyncAt(1234567890);
     expect(localStorage.getItem(LAST_SYNC_AT_KEY)).toBe("1234567890");

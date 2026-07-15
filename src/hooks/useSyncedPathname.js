@@ -1,6 +1,18 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { CRM_ROUTE_CHANGE_EVENT } from "../utils/uiCleanup";
+import { isHashRouterMode } from "../utils/routes";
+
+function getBrowserRoutePathname(fallback = "/") {
+  if (typeof window === "undefined") return fallback;
+
+  if (isHashRouterMode()) {
+    const hashPath = window.location.hash.replace(/^#/, "").split(/[?#]/)[0];
+    return hashPath?.startsWith("/") ? hashPath : fallback;
+  }
+
+  return window.location.pathname || fallback;
+}
 
 /**
  * Pathname aligné sur l'URL réelle du navigateur.
@@ -9,9 +21,7 @@ import { CRM_ROUTE_CHANGE_EVENT } from "../utils/uiCleanup";
 export function useSyncedPathname() {
   const location = useLocation();
   const [browserPathname, setBrowserPathname] = useState(
-    () =>
-      (typeof window !== "undefined" ? window.location.pathname : location.pathname) ||
-      "/"
+    () => getBrowserRoutePathname(location.pathname)
   );
 
   useEffect(() => {
@@ -22,7 +32,7 @@ export function useSyncedPathname() {
     if (typeof window === "undefined") return undefined;
 
     const syncFromBrowser = () => {
-      setBrowserPathname(window.location.pathname || "/");
+      setBrowserPathname(getBrowserRoutePathname(location.pathname));
     };
 
     const pushState = history.pushState.bind(history);
@@ -38,15 +48,17 @@ export function useSyncedPathname() {
     };
 
     window.addEventListener("popstate", syncFromBrowser);
+    window.addEventListener("hashchange", syncFromBrowser);
     window.addEventListener(CRM_ROUTE_CHANGE_EVENT, syncFromBrowser);
 
     return () => {
       history.pushState = pushState;
       history.replaceState = replaceState;
       window.removeEventListener("popstate", syncFromBrowser);
+      window.removeEventListener("hashchange", syncFromBrowser);
       window.removeEventListener(CRM_ROUTE_CHANGE_EVENT, syncFromBrowser);
     };
-  }, []);
+  }, [location.pathname]);
 
   return browserPathname;
 }

@@ -2,6 +2,7 @@ import {
   normalizeSupplierName,
   resolveSupplierForExpense,
 } from "./expenseSuppliers";
+import { NEW_EXPENSE_VAT_DEFAULTS } from "./expenseVatClassification";
 
 const HEADER_ALIASES = {
   date: ["date", "date achat", "date d achat", "purchase date"],
@@ -368,6 +369,7 @@ export function buildExpensesFromImportRows(validRows, { uid, now } = {}) {
   return validRows.map((row) => ({
     id: createId(),
     createdAt: timestamp,
+    ...NEW_EXPENSE_VAT_DEFAULTS,
     supplierId: row.supplierId,
     supplierName: row.supplierName,
     invoiceNumber: row.invoiceNumber,

@@ -193,6 +193,7 @@ export const emptyData = {
   creditNotes: [],
   afterSalesCases: [],
   payments: [],
+  vatReports: [],
   clientFiles: [],
   clientNotes: [],
   deletedItems: [],
@@ -292,6 +293,10 @@ export function normalizeData(data) {
       rest?.payments || []
     ),
 
+    vatReports: dedupeItemsById(
+      rest?.vatReports || []
+    ),
+
     clientFiles: dedupeItemsById(
       rest?.clientFiles || []
     ),
@@ -353,6 +358,7 @@ export function hasLocalBusinessData(data) {
     data.deliveryNotes?.length ||
     data.creditNotes?.length ||
     data.afterSalesCases?.length ||
-    data.payments?.length
+    data.payments?.length ||
+    data.vatReports?.length
   );
 }

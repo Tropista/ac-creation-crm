@@ -170,6 +170,40 @@ describe("buildDocumentPdf", () => {
     expect(pdf.getNumberOfPages()).toBeGreaterThanOrEqual(1);
   });
 
+  it("affiche le service ou la classe concernée dans le PDF", () => {
+    const pdf = buildDocumentPdf({
+      doc: {
+        ...sampleInvoice,
+        billingDetail: "Service scolaire - Classe de Mme Dupont",
+      },
+      type: "invoice",
+      data: {
+        ...sampleData,
+        clients: [{ id: "c1", name: "Commune Grosbous" }],
+      },
+      logoDataUrl: null,
+    });
+
+    const renderedPdf = pdf.output();
+    expect(renderedPdf).toContain("Commune Grosbous");
+    expect(renderedPdf).toContain("Service scolaire - Classe de Mme Dupont");
+  });
+
+  it("n'ajoute pas de ligne PDF quand le service ou la classe est vide", () => {
+    const pdf = buildDocumentPdf({
+      doc: {
+        ...sampleInvoice,
+        billingDetail: "   ",
+      },
+      type: "invoice",
+      data: sampleData,
+      logoDataUrl: null,
+    });
+
+    const renderedPdf = pdf.output();
+    expect(renderedPdf).not.toContain("(   )");
+  });
+
   it("garde une facture courte sur une page avec date d'émission", () => {
     const pdf = buildDocumentPdf({
       doc: {

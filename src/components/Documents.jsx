@@ -21,7 +21,8 @@ import {
   createBalanceInvoiceFromQuote,
   getQuoteDepositSummary,
   quoteRequiresDepositFlow,
-  computeDepositTotals,
+  computeDocumentLineTotals,
+  computeDocumentTotals,
   enrichInvoicePaymentFields,
   uid,
   today,
@@ -134,6 +135,7 @@ function Documents({ type, data, setData, currentRole = 'Admin', logActivity, pe
 const [form, setForm] = useState({
   clientId: prefilledClientId,
   status: defaultStatus,
+  billingDetail: "",
   globalDiscount: 0,
   depositPercent: 0,
   promisedDeliveryDateInput: "",
@@ -191,6 +193,7 @@ const [form, setForm] = useState({
       setForm({
         clientId: "",
         status: defaultStatus,
+        billingDetail: "",
         globalDiscount: 0,
         depositPercent: 0,
         promisedDeliveryDateInput: "",
@@ -322,6 +325,7 @@ const [form, setForm] = useState({
       setForm({
         clientId: draft.clientId || prefilledClientId || "",
         status: "Brouillon",
+        billingDetail: draft.billingDetail || "",
         globalDiscount: 0,
         depositPercent: 0,
         promisedDeliveryDateInput: "",
@@ -510,27 +514,15 @@ const [form, setForm] = useState({
   }, [documents, isQuote, data]);
 
   function lineTotal(line) {
-    const subtotal = Number(line.quantity || 0) * Number(line.price || 0);
-    return { subtotal, totalHT: subtotal };
+    return computeDocumentLineTotals(line);
   }
 
   const totals = useMemo(() => {
-    const subtotal = form.lines.reduce((sum, line) => sum + lineTotal(line).subtotal, 0);
-    const globalDiscountRate = Math.min(100, Math.max(0, Number(form.globalDiscount || 0)));
-    const globalDiscountAmount = subtotal * (globalDiscountRate / 100);
-    const totalHT = Math.max(0, subtotal - globalDiscountAmount);
-    const taxAmount = totalHT * (Number(effectiveTaxRate || 0) / 100);
-    const totalTTC = totalHT + taxAmount;
-    const deposit = computeDepositTotals(totalTTC, form.depositPercent);
-    return {
-      subtotal,
-      globalDiscountRate,
-      globalDiscountAmount,
-      totalHT,
-      taxAmount,
-      totalTTC,
-      ...deposit,
-    };
+    return computeDocumentTotals(form.lines, {
+      globalDiscount: form.globalDiscount,
+      depositPercent: form.depositPercent,
+      taxRate: effectiveTaxRate,
+    });
   }, [form.lines, form.globalDiscount, form.depositPercent, effectiveTaxRate]);
 
   function updateLine(index, changes) {
@@ -593,6 +585,7 @@ const [form, setForm] = useState({
     setForm({
       clientId: "",
       status: defaultStatus,
+      billingDetail: "",
       globalDiscount: 0,
       depositPercent: 0,
       promisedDeliveryDateInput: "",
@@ -623,7 +616,7 @@ const [form, setForm] = useState({
     const cleanLines = form.lines
       .map((line) => {
         const product = (data.products || []).find((p) => String(p.id) === String(line.productId));
-        return {
+        const cleanLine = {
           ...line,
           productId: product?.id || line.productId || "",
           sku: product?.sku || line.sku || "",
@@ -651,7 +644,10 @@ const [form, setForm] = useState({
             emplacementMarquage: String(line.emplacementMarquage || "").trim(),
             technique: String(line.technique || "").trim(),
           }),
-          ...lineTotal(line),
+        };
+        return {
+          ...cleanLine,
+          ...lineTotal(cleanLine),
         };
       })
       .filter((line) => line.description && line.quantity > 0);
@@ -679,6 +675,7 @@ const [form, setForm] = useState({
         ...existingDoc,
         companySnapshot: existingDoc?.companySnapshot || buildCompanySnapshot(data.settings || {}),
         clientId: form.clientId,
+        billingDetail: String(form.billingDetail || "").trim(),
         status: form.status,
         globalDiscount: Number(form.globalDiscount || 0),
         depositPercent: totals.depositPercent,
@@ -732,6 +729,7 @@ const [form, setForm] = useState({
         date: isQuote ? today() : invoiceDate,
         taxRate: effectiveTaxRate,
         clientId: form.clientId,
+        billingDetail: String(form.billingDetail || "").trim(),
         status: form.status,
         globalDiscount: Number(form.globalDiscount || 0),
         depositPercent: totals.depositPercent,
@@ -838,6 +836,7 @@ reset();
     setForm({
       clientId: doc.clientId || "",
       status: doc.status || defaultStatus,
+      billingDetail: doc.billingDetail || "",
       globalDiscount: Number(doc.globalDiscount || 0),
       depositPercent: Number(doc.depositPercent || 0),
       promisedDeliveryDateInput: toDateInputValue(doc.promisedDeliveryDate),

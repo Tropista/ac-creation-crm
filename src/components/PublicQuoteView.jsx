@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
 import DocumentPreview from "./DocumentPreview";
 import { money } from "../utils/money";
-import { statusClass } from "../utils/documents";
+import { getDocumentBillingDetail, statusClass } from "../utils/documents";
 import {
   getClientPortalProgress,
   getClientPortalSummary,
@@ -196,6 +196,7 @@ export default function PublicQuoteView() {
 
   const { quote, client, settings } = context;
   const clientLabel = client?.name || quote.clientSnapshot?.name || "Client";
+  const billingDetail = getDocumentBillingDetail(quote);
   const companyName = settings?.companyName || "AC Creation";
   const invoicePaymentUrl = (invoice) => getInvoicePaymentLink(invoice, settings, client);
 
@@ -214,6 +215,7 @@ export default function PublicQuoteView() {
           <div>
             <span className="muted">Client</span>
             <strong>{clientLabel}</strong>
+            {billingDetail ? <small>{billingDetail}</small> : null}
           </div>
           <div>
             <span className="muted">Date</span>

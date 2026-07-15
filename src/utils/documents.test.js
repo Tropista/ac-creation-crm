@@ -19,6 +19,9 @@ import {
   getDocumentAmountDue,
   scaleDocumentLinesByRatio,
   resolveDocumentTaxRate,
+  recalculateDocumentAmounts,
+  getInvoiceAmountPaid,
+  getDocumentBillingDetail,
 } from "./documents.js";
 
 const baseData = () => ({
@@ -200,6 +203,18 @@ describe("convertQuoteToInvoiceData", () => {
     expect(invoice.companySnapshot.vatNumber).toBe("LUOLD");
   });
 
+  it("conserve le service ou la classe concernée lors de la conversion en facture", () => {
+    const data = baseData();
+    const result = convertQuoteToInvoiceData(data, {
+      ...acceptedQuote,
+      billingDetail: "Service scolaire - Classe de Mme Dupont",
+    });
+    const invoice = result.invoices.at(-1);
+
+    expect(invoice.billingDetail).toBe("Service scolaire - Classe de Mme Dupont");
+    expect(getDocumentBillingDetail(invoice)).toBe("Service scolaire - Classe de Mme Dupont");
+  });
+
   it("n'altère pas les produits sans ligne correspondante", () => {
     const data = {
       ...baseData(),
@@ -253,6 +268,15 @@ describe("bons de livraison", () => {
     expect(result.deliveryNote.lines).toHaveLength(1);
     expect(getDeliveryNoteForQuote(result, readyQuote)?.id).toBe(result.deliveryNote.id);
   });
+
+  it("copie le service ou la classe concernée sur le bon de livraison", () => {
+    const result = createDeliveryNoteFromQuote(base(), {
+      ...readyQuote,
+      billingDetail: "Classe 4.2 - Ecole fondamentale de Grosbous",
+    });
+
+    expect(result.deliveryNote.billingDetail).toBe("Classe 4.2 - Ecole fondamentale de Grosbous");
+  });
 });
 
 describe("computeDepositTotals", () => {
@@ -305,6 +329,115 @@ describe("getDocumentFooterTotals / getDocumentAmountDue", () => {
   });
 });
 
+describe("recalculateDocumentAmounts", () => {
+  function invoiceWithLine(overrides = {}) {
+    return {
+      id: "fac-0011",
+      number: "FAC-2026-0011",
+      type: "invoice",
+      status: "Non payée",
+      taxRate: 17,
+      globalDiscount: 0,
+      paidAmount: 0,
+      remaining: 3811.86,
+      lines: [{ description: "Prestation", quantity: 362, price: 9 }],
+      ...overrides,
+    };
+  }
+
+  it("recalcule le total TTC et le reste à payer quand une facture existante est modifiée", () => {
+    const original = recalculateDocumentAmounts(invoiceWithLine(), { type: "invoice" });
+    expect(original.totalHT).toBe(3258);
+    expect(original.taxAmount).toBe(553.86);
+    expect(original.totalTTC).toBe(3811.86);
+    expect(original.remaining).toBe(3811.86);
+    expect(getDocumentAmountDue(original, "invoice", { remaining: original.remaining })).toBe(3811.86);
+
+    const updated = recalculateDocumentAmounts(
+      {
+        ...original,
+        lines: [{ description: "Prestation", quantity: 363, price: 9 }],
+      },
+      { type: "invoice" }
+    );
+    const savedToDatabase = { ...updated };
+
+    expect(updated.totalHT).toBe(3267);
+    expect(updated.taxAmount).toBe(555.39);
+    expect(updated.totalTTC).toBe(3822.39);
+    expect(updated.remaining).toBe(3822.39);
+    expect(updated.remainingAmount).toBe(3822.39);
+    expect(updated.balanceDue).toBe(3822.39);
+    expect(updated.amountDue).toBe(3822.39);
+    expect(getDocumentAmountDue(updated, "invoice", { remaining: updated.remaining })).toBe(3822.39);
+    expect(savedToDatabase.remaining).toBe(3822.39);
+  });
+
+  it("conserve le montant déjà payé et recalcule le reste après modification", () => {
+    const updated = recalculateDocumentAmounts(
+      invoiceWithLine({
+        paidAmount: 1000,
+        remaining: 2811.86,
+        lines: [{ description: "Prestation", quantity: 363, price: 9 }],
+      }),
+      { type: "invoice" }
+    );
+
+    expect(updated.totalTTC).toBe(3822.39);
+    expect(updated.paidAmount).toBe(1000);
+    expect(updated.remaining).toBe(2822.39);
+    expect(getInvoiceAmountPaid(updated)).toBe(1000);
+  });
+
+  it("ne produit jamais de reste à payer négatif sur une facture déjà payée", () => {
+    const updated = recalculateDocumentAmounts(
+      invoiceWithLine({
+        status: "Payée",
+        paidAmount: 3811.86,
+        remaining: 0,
+        lines: [{ description: "Prestation", quantity: 100, price: 9 }],
+      }),
+      { type: "invoice" }
+    );
+
+    expect(updated.totalTTC).toBe(1053);
+    expect(updated.remaining).toBe(0);
+    expect(getDocumentAmountDue(updated, "invoice", { remaining: updated.remaining })).toBe(0);
+  });
+
+  it("recalcule correctement les remises globales dans le reste à payer", () => {
+    const updated = recalculateDocumentAmounts(
+      invoiceWithLine({
+        globalDiscount: 10,
+        paidAmount: 100,
+        remaining: 0,
+        lines: [{ description: "Prestation", quantity: 10, price: 100 }],
+      }),
+      { type: "invoice" }
+    );
+
+    expect(updated.subtotal).toBe(1000);
+    expect(updated.globalDiscountAmount).toBe(100);
+    expect(updated.totalHT).toBe(900);
+    expect(updated.taxAmount).toBe(153);
+    expect(updated.totalTTC).toBe(1053);
+    expect(updated.remaining).toBe(953);
+  });
+
+  it("conserve et normalise l'information de service/classe d'un document", () => {
+    const invoice = recalculateDocumentAmounts(
+      invoiceWithLine({
+        billingDetail: "  Maison relais  ",
+      }),
+      { type: "invoice" }
+    );
+
+    expect(invoice.billingDetail).toBe("  Maison relais  ");
+    expect(getDocumentBillingDetail(invoice)).toBe("Maison relais");
+    expect(getDocumentBillingDetail({ billingDetail: "   " })).toBe("");
+  });
+});
+
 describe("scaleDocumentLinesByRatio", () => {
   it("réduit prix unitaire et total HT par ligne", () => {
     const scaled = scaleDocumentLinesByRatio(
@@ -341,6 +474,17 @@ describe("factures d'acompte", () => {
     expect(invoice.stockAdjusted).toBe(false);
     expect(invoice.convertedFrom).toBe("DEV-2025-0200");
     expect(invoice.parentQuoteId).toBe("q-dep");
+  });
+
+  it("copie le service ou la classe concernée sur la facture d'acompte", () => {
+    const data = { ...baseData(), settings: { taxRate: 17, paymentDays: 30 } };
+    const result = createDepositInvoiceFromQuote(
+      data,
+      { ...quote, billingDetail: "Service technique" },
+      30
+    );
+
+    expect(result.invoice.billingDetail).toBe("Service technique");
   });
 });
 
@@ -400,6 +544,26 @@ describe("factures de solde", () => {
     expect(balance.totalTTC).toBeCloseTo(81.9, 2);
     expect(balance.stockAdjusted).toBe(true);
     expect(balance.depositPaidAmount).toBeCloseTo(35.1, 2);
+  });
+
+  it("copie le service ou la classe concernée sur la facture de solde", () => {
+    let data = { ...baseData(), settings: { taxRate: 17, paymentDays: 30 } };
+    const quoteWithBillingDetail = {
+      ...quote,
+      billingDetail: "Projet Schoulfest 2025-2026",
+    };
+    data = createDepositInvoiceFromQuote(data, quoteWithBillingDetail, 30);
+    const deposit = data.invoices.at(-1);
+    data = {
+      ...data,
+      invoices: data.invoices.map((inv) =>
+        inv.id === deposit.id ? { ...inv, status: "Payée", paidAmount: inv.totalTTC, remaining: 0 } : inv
+      ),
+    };
+
+    const result = createBalanceInvoiceFromQuote(data, quoteWithBillingDetail);
+
+    expect(result.invoice.billingDetail).toBe("Projet Schoulfest 2025-2026");
   });
 
   it("aligne les lignes du solde sur le ratio 70 % (DEV-2026-0002)", () => {

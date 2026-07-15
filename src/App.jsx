@@ -54,6 +54,7 @@ const Settings        = lazy(() => import("./components/Settings"));
 const Categories      = lazy(() => import("./components/Categories"));
 const Suppliers       = lazy(() => import("./components/Suppliers"));
 const Expenses        = lazy(() => import("./components/Expenses"));
+const VatDeclaration  = lazy(() => import("./components/VatDeclaration"));
 const UsersAdmin      = lazy(() => import("./components/UsersAdmin"));
 const ActivityLogs    = lazy(() => import("./components/ActivityLogs"));
 const Backups         = lazy(() => import("./components/Backups"));
@@ -228,7 +229,7 @@ function CrmApp() {
     if (pathname === location.pathname) return;
     // Ne pas annuler configurateur → Devis (brouillon dans location.state).
     if (location.state?.quoteDraft) return;
-    navigate(`${pathname}${window.location.search}${window.location.hash}`, {
+    navigate(`${pathname}${location.search}${location.hash}`, {
       replace: true,
       state: location.state,
     });
@@ -641,6 +642,20 @@ function CrmApp() {
                     currentRole={currentRole}
                     logActivity={handleLogActivity}
                     setPage={setPage}
+                  />
+                ) : null
+              }
+            />
+            <Route
+              path={pageToPath("vatdeclaration")}
+              element={
+                canAccessPage(currentRole, "vatdeclaration") ? (
+                  <VatDeclaration
+                    data={data}
+                    setData={updateData}
+                    currentRole={currentRole}
+                    currentUser={currentUser}
+                    logActivity={handleLogActivity}
                   />
                 ) : null
               }
