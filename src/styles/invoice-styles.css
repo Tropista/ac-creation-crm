@@ -445,6 +445,10 @@
   margin-bottom: 1mm;
 }
 
+.ac-footer > span + span {
+  margin-left: 6px;
+}
+
 .ac-line-production {
   margin-top: 2px;
   color: #64748b;
