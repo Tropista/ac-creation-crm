@@ -87,6 +87,17 @@ describe("filterInvoicesByPeriod / computeInvoicePeriodTotals", () => {
       formatInvoicePeriodLabel({ mode: INVOICE_PERIOD_MODES.ALL })
     ).toBe("Depuis la création");
   });
+  it("additionne les restes dus reels pour le montant a encaisser", () => {
+    const totals = computeInvoicePeriodTotals([
+      { id: "paid", totalTTC: 100, paidAmount: 0, remaining: 999, status: "Payee" },
+      { id: "partial", totalTTC: 200, paidAmount: 50, remaining: 150, status: "Partiellement payÃ©e" },
+      { id: "unpaid", totalTTC: 80, paidAmount: 0, remaining: 80, status: "Non payÃ©e" },
+    ]);
+
+    expect(totals.billedTTC).toBe(380);
+    expect(totals.paidTTC).toBe(150);
+    expect(totals.unpaidTTC).toBe(230);
+  });
 });
 
 describe("collectInvoiceYears", () => {

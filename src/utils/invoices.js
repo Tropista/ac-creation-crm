@@ -71,23 +71,23 @@ export function sortOverdueInvoices(invoices) {
 }
 
 export function getInvoicePaidAmount(invoice) {
+  if (isPaidInvoice(invoice)) {
+    return Number(invoice?.totalTTC || invoice?.amountPaid || invoice?.paidAmount || 0);
+  }
   const direct = Number(invoice?.amountPaid);
   if (!Number.isNaN(direct) && direct >= 0) return direct;
   const paid = Number(invoice?.paidAmount);
   if (!Number.isNaN(paid) && paid >= 0) return paid;
-  if (isPaidInvoice(invoice)) {
-    return Number(invoice?.totalTTC || 0);
-  }
   return 0;
 }
 
 export function getInvoiceRemaining(invoice) {
   const total = Number(invoice?.totalTTC || 0);
+  if (isPaidInvoice(invoice)) return 0;
   const directPaid = Number(invoice?.amountPaid ?? invoice?.paidAmount);
   if (!Number.isNaN(directPaid) && directPaid >= 0) {
     return Math.max(0, total - directPaid);
   }
-  if (isPaidInvoice(invoice)) return 0;
   const remaining = Number(invoice?.remaining);
   if (!Number.isNaN(remaining) && remaining >= 0) return remaining;
   return Math.max(0, total - getInvoicePaidAmount(invoice));

@@ -6,6 +6,12 @@ import {
   Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 import { getExpenseDate } from "../utils/expenseSuppliers";
+import {
+  getInvoicePaidAmount,
+  getInvoiceRemaining,
+  isCancelledInvoice,
+  parseDocumentDate,
+} from "../utils/invoices";
 
 const ROSE   = "#c084fc";
 const ORANGE = "#f472b6";
@@ -49,6 +55,10 @@ export default function DashboardCharts({
   year,
 }) {
   const safeYear = Number(year) || new Date().getFullYear();
+  const invoicesForYear = (invoices || []).filter((invoice) => {
+    const date = parseDocumentDate(invoice.date);
+    return date && date.getFullYear() === safeYear;
+  });
 
   // ── 1. CA mensuel + dépenses ─────────────────────────────────────────
   const monthlyData = (annualStats?.monthlyRevenue ?? []).map(({ month, label, ht }) => {
@@ -97,6 +107,13 @@ export default function DashboardCharts({
     const st  = String(inv.status || "").toLowerCase();
     if (st.includes("payée") || st.includes("payee")) paidTTC   += ttc;
     else                                               unpaidTTC += ttc;
+  }
+  paidTTC = 0;
+  unpaidTTC = 0;
+  for (const inv of invoicesForYear) {
+    if (isCancelledInvoice(inv)) continue;
+    paidTTC += getInvoicePaidAmount(inv);
+    unpaidTTC += getInvoiceRemaining(inv);
   }
   paidTTC   = Math.round(paidTTC   * 100) / 100;
   unpaidTTC = Math.round(unpaidTTC * 100) / 100;

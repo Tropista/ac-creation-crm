@@ -14,6 +14,7 @@ import {
 } from "../utils/invoices";
 import {
   INVOICE_PERIOD_MODES,
+  INVOICES_PERIOD_FILTER_KEY,
   collectInvoiceYears,
   computeInvoicePeriodTotals,
   filterInvoicesByPeriod,
@@ -588,6 +589,7 @@ export default function Dashboard({
     if (filter) {
       localStorage.setItem(INVOICES_FILTER_KEY, filter);
     }
+    localStorage.setItem(INVOICES_PERIOD_FILTER_KEY, JSON.stringify(billingPeriod));
     navigateToInvoicesList(navigate);
   }
 

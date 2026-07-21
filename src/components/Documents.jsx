@@ -39,6 +39,7 @@ import {
   DEPOSIT_PRESETS,
 } from "../utils/invoices";
 import { computeDueDate, openInvoiceReminderMailto } from "../utils/invoiceReminders";
+import { INVOICE_PERIOD_MODES, INVOICES_PERIOD_FILTER_KEY } from "../utils/invoicePeriodStats";
 import { syncQuoteProductionSheetFromLines } from "../utils/quoteMarginAssistant";
 import {
   clearInvoiceDraft,
@@ -81,6 +82,38 @@ import {
 import { getInvoicePaymentLink } from "../utils/onlinePayments";
 import { buildCompanySnapshot } from "../utils/companySnapshot";
 import { confirmAction } from "../utils/confirmAction";
+
+function toInputDate(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getPeriodDateRange(period) {
+  if (!period || period.mode === INVOICE_PERIOD_MODES.ALL) {
+    return { from: "", to: "" };
+  }
+  const year = Number(period.year);
+  if (!Number.isFinite(year)) return { from: "", to: "" };
+  if (period.mode === INVOICE_PERIOD_MODES.YEAR) {
+    return {
+      from: `${year}-01-01`,
+      to: `${year}-12-31`,
+    };
+  }
+  if (period.mode === INVOICE_PERIOD_MODES.MONTH) {
+    const month = Number(period.month);
+    if (!Number.isFinite(month) || month < 0 || month > 11) {
+      return { from: "", to: "" };
+    }
+    return {
+      from: toInputDate(new Date(year, month, 1)),
+      to: toInputDate(new Date(year, month + 1, 0)),
+    };
+  }
+  return { from: "", to: "" };
+}
 
 function Documents({ type, data, setData, currentRole = 'Admin', logActivity, pendingOpenDoc = null, onClearPendingOpenDoc }) {
   const location = useLocation();
@@ -402,14 +435,30 @@ const [form, setForm] = useState({
     }
 
     const filter = localStorage.getItem(INVOICES_FILTER_KEY);
-    if (!filter) return;
-    localStorage.removeItem(INVOICES_FILTER_KEY);
+    const periodFilter = localStorage.getItem(INVOICES_PERIOD_FILTER_KEY);
+    if (!filter && !periodFilter) return;
+    if (filter) {
+      localStorage.removeItem(INVOICES_FILTER_KEY);
+    }
+    if (periodFilter) {
+      localStorage.removeItem(INVOICES_PERIOD_FILTER_KEY);
+    }
     if (filter === "overdue") {
       setOverdueOnly(true);
     } else if (filter === "unpaid") {
       setUnpaidOnly(true);
     } else if (filter === "paid") {
       setPaidOnly(true);
+    }
+    if (periodFilter) {
+      try {
+        const { from, to } = getPeriodDateRange(JSON.parse(periodFilter));
+        setDateFrom(from);
+        setDateTo(to);
+      } catch {
+        setDateFrom("");
+        setDateTo("");
+      }
     }
     setCurrentPage(1);
   }, [isQuote]);

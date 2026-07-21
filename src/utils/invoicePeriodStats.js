@@ -1,4 +1,6 @@
-import { getInvoicePaidAmount, parseDocumentDate } from "./invoices";
+import { getInvoicePaidAmount, getInvoiceRemaining, parseDocumentDate } from "./invoices";
+
+export const INVOICES_PERIOD_FILTER_KEY = "crm_invoices_period_filter";
 
 export const INVOICE_PERIOD_MODES = {
   MONTH: "month",
@@ -44,7 +46,10 @@ export function computeInvoicePeriodTotals(invoices) {
     (sum, invoice) => sum + getInvoicePaidAmount(invoice),
     0
   );
-  const unpaidTTC = Math.max(0, billedTTC - paidTTC);
+  const unpaidTTC = list.reduce(
+    (sum, invoice) => sum + getInvoiceRemaining(invoice),
+    0
+  );
   return {
     billedTTC,
     paidTTC,
