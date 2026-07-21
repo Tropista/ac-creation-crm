@@ -90,8 +90,8 @@ describe("filterInvoicesByPeriod / computeInvoicePeriodTotals", () => {
   it("additionne les restes dus reels pour le montant a encaisser", () => {
     const totals = computeInvoicePeriodTotals([
       { id: "paid", totalTTC: 100, paidAmount: 0, remaining: 999, status: "Payee" },
-      { id: "partial", totalTTC: 200, paidAmount: 50, remaining: 150, status: "Partiellement payÃ©e" },
-      { id: "unpaid", totalTTC: 80, paidAmount: 0, remaining: 80, status: "Non payÃ©e" },
+      { id: "partial", totalTTC: 200, paidAmount: 50, remaining: 150, status: "Partiellement payee" },
+      { id: "unpaid", totalTTC: 80, paidAmount: 0, remaining: 80, status: "Non payee" },
     ]);
 
     expect(totals.billedTTC).toBe(380);
