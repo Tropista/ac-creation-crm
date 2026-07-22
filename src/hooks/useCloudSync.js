@@ -81,7 +81,7 @@ export function useCloudSync({ currentUserEmail, setData, setLoading }) {
     setLastSyncAtState(timestamp);
   }
 
-  async function initializeCloudData({ silent = false } = {}) {
+  const initializeCloudData = useCallback(async ({ silent = false } = {}) => {
     if (cloudInitPromise.current) {
       return cloudInitPromise.current;
     }
@@ -203,9 +203,9 @@ export function useCloudSync({ currentUserEmail, setData, setLoading }) {
 
     cloudInitPromise.current = task;
     return task;
-  }
+  }, [setData, setLoading]);
 
-  async function resyncFromCloud() {
+  const resyncFromCloud = useCallback(async () => {
     if (resyncing) return;
 
     setResyncing(true);
@@ -221,12 +221,15 @@ export function useCloudSync({ currentUserEmail, setData, setLoading }) {
       setLastSyncAtState(getLastSyncAt());
       setSyncConflictCountState(getLastSyncConflictCount());
     }
-  }
+  }, [initializeCloudData, resyncing]);
 
-  async function updateDataWithCloudSync(next) {
+  const updateDataWithCloudSync = useCallback(async (next) => {
     const task = saveQueueRef.current.then(async () => {
       const current = dataRef.current;
       const resolved = typeof next === "function" ? next(current) : next;
+      if (resolved === current) {
+        return current;
+      }
       const stamped = stampDataChanges(current, resolved);
       const normalized = normalizeData({
         ...stamped,
@@ -314,12 +317,12 @@ export function useCloudSync({ currentUserEmail, setData, setLoading }) {
 
     saveQueueRef.current = task.catch(() => {});
     return task;
-  }
+  }, [setData]);
 
   useEffect(() => {
     cloudInitPromise.current = null;
     initializeCloudData();
-  }, [currentUserEmail]);
+  }, [currentUserEmail, initializeCloudData]);
 
   return {
     cloudAvailable,

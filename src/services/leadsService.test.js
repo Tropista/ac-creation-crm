@@ -215,14 +215,34 @@ describe("leadsService", () => {
     expect(loadLocalPublicLeads()).toEqual([]);
   });
 
-  it("conserve la file locale si le lead est déjà dans le CRM", () => {
+  it("retourne les memes donnees quand la file locale est vide", () => {
+    const data = { leads: [], clients: [] };
+
+    const merged = mergePublicLeadsIntoData(data);
+
+    expect(merged).toBe(data);
+    expect(loadLocalPublicLeads()).toEqual([]);
+  });
+
+  it("nettoie la file locale si le lead est deja dans le CRM", () => {
     const pendingLead = { ...sampleLead, id: "pending-lead" };
     localStorage.setItem(PUBLIC_LEADS_KEY, JSON.stringify([pendingLead]));
 
-    mergePublicLeadsIntoData({ leads: [pendingLead], clients: [] });
+    const data = { leads: [pendingLead], clients: [] };
+    const merged = mergePublicLeadsIntoData(data);
 
-    expect(loadLocalPublicLeads()).toHaveLength(1);
-    expect(loadLocalPublicLeads()[0].id).toBe("pending-lead");
+    expect(merged).toBe(data);
+    expect(loadLocalPublicLeads()).toEqual([]);
+  });
+
+  it("nettoie un lead local invalide sans creer de nouvel objet data", () => {
+    localStorage.setItem(PUBLIC_LEADS_KEY, JSON.stringify([{ email: "sans-id@example.com" }]));
+    const data = { leads: [], clients: [] };
+
+    const merged = mergePublicLeadsIntoData(data);
+
+    expect(merged).toBe(data);
+    expect(loadLocalPublicLeads()).toEqual([]);
   });
 
   it("enregistre un lead configurateur dans la file locale", async () => {

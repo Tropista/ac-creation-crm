@@ -54,20 +54,22 @@ export function mergePublicLeadsIntoData(data = {}) {
 
   const existingIds = new Set((data.leads || []).map((lead) => String(lead.id)));
   const merged = [...(data.leads || [])];
+  const remaining = [];
   let added = 0;
 
   for (const lead of pending) {
-    if (!lead?.id || existingIds.has(String(lead.id))) continue;
+    if (!lead?.id) continue;
+    if (existingIds.has(String(lead.id))) continue;
     merged.push(lead);
     existingIds.add(String(lead.id));
     added += 1;
   }
 
-  if (added > 0) {
-    saveLocalPublicLeads([]);
+  if (remaining.length !== pending.length) {
+    saveLocalPublicLeads(remaining);
   }
 
-  return { ...data, leads: merged };
+  return added > 0 ? { ...data, leads: merged } : data;
 }
 
 export async function submitPublicLead({ email, phone = "", source = "configurateur-tshirt", metadata = {} } = {}) {
