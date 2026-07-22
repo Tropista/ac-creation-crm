@@ -146,6 +146,7 @@ export default function DocumentForm({
   attachments = [],
   onAttachmentsChange,
   nextAutoNumber = "",
+  paymentMethods = [],
 }) {
   const fileInputRef = useRef(null);
   const resolvedAttachmentsRef = useRef([]);
@@ -448,6 +449,66 @@ export default function DocumentForm({
           </label>
         )}
       </div>
+
+      {!isQuote && (
+        <div className="documents-form-header">
+          <label className="documents-field">
+            <span>Paiement - statut</span>
+            <select
+              value={form.paymentStatus || form.status || "Non payée"}
+              onChange={(e) => setForm({ ...form, paymentStatus: e.target.value, status: e.target.value })}
+            >
+              <option>Non payée</option>
+              <option>Partiellement payée</option>
+              <option>Payée</option>
+              <option>En retard</option>
+              <option>Annulée</option>
+            </select>
+          </label>
+
+          <label className="documents-field">
+            <span>Montant encaissé</span>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={form.paymentAmount || ""}
+              onChange={(e) => setForm({ ...form, paymentAmount: e.target.value })}
+              placeholder="0,00"
+            />
+          </label>
+
+          <label className="documents-field">
+            <span>Date d'encaissement</span>
+            <input
+              type="date"
+              value={form.paymentDateInput || ""}
+              onChange={(e) => setForm({ ...form, paymentDateInput: e.target.value })}
+            />
+          </label>
+
+          <label className="documents-field">
+            <span>Mode de paiement</span>
+            <select
+              value={form.paymentMethod || "Virement"}
+              onChange={(e) => setForm({ ...form, paymentMethod: e.target.value })}
+            >
+              {(paymentMethods || []).map((method) => (
+                <option key={method}>{method}</option>
+              ))}
+            </select>
+          </label>
+
+          <label className="documents-field documents-field--wide">
+            <span>Transaction bancaire liée (facultatif)</span>
+            <input
+              value={form.bankTransactionId || ""}
+              onChange={(e) => setForm({ ...form, bankTransactionId: e.target.value })}
+              placeholder="ID ou référence de transaction"
+            />
+          </label>
+        </div>
+      )}
 
       {isQuote && (
         <div className="documents-form-header documents-form-header--quote">

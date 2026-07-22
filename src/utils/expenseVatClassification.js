@@ -2,6 +2,7 @@ import {
   EU_TRANSACTION_TYPE,
   EXPENSE_TAX_CATEGORY,
   FOREIGN_EU_VAT_RATES,
+  LUXEMBOURG_VAT_RATES,
   REVERSE_CHARGE_RATE_STATUS,
   VAT_DEDUCTIBILITY,
   VAT_ORIGIN,
@@ -163,7 +164,7 @@ function inferEuTransactionType(expense, category) {
 }
 
 export function getSupplierVatDefaults(supplier = {}) {
-  const countryCode = normalizeCountryCode(supplier.country_code);
+  const countryCode = normalizeCountryCode(supplier.country_code || supplier.country_name || supplier.country);
   const origin = supplier.default_vat_origin || getVatOriginFromCountry(countryCode);
   const warnings = [];
 
@@ -193,24 +194,48 @@ export function suggestExpenseVatClassification({ expense = {}, supplier = {} } 
   const vatOrigin = expense.vat_origin || supplierDefaults.default_vat_origin || null;
   const warnings = [...supplierDefaults.warnings];
   const reasons = [];
+  const currentEuTransactionType =
+    expense.eu_transaction_type && expense.eu_transaction_type !== EU_TRANSACTION_TYPE.NONE
+      ? expense.eu_transaction_type
+      : "";
+  let expenseCategory =
+    expense.expense_tax_category ||
+    (expense.is_fixed_asset ? EXPENSE_TAX_CATEGORY.INVESTMENT : null) ||
+    categorySuggestion.category;
+  let isFixedAsset = Boolean(expense.is_fixed_asset ?? categorySuggestion.isFixedAsset);
+  let categoryConfidence = categorySuggestion.confidence;
+  let categoryReason = categorySuggestion.reason;
+  if (!expenseCategory && vatOrigin === VAT_ORIGIN.LU && LUXEMBOURG_VAT_RATES.includes(vatRate)) {
+    expenseCategory = EXPENSE_TAX_CATEGORY.GENERAL_EXPENSE;
+    isFixedAsset = false;
+    categoryConfidence = "medium";
+    categoryReason = "Depense LU sans categorie: proposition en frais generaux a confirmer";
+  }
   const suggestions = {
     vat_origin: vatOrigin,
-    expense_tax_category: categorySuggestion.category,
-    eu_transaction_type: EU_TRANSACTION_TYPE.NONE,
-    vat_deductibility: VAT_DEDUCTIBILITY.FULLY,
-    deductible_percentage: 100,
-    vat_review_status: VAT_REVIEW_STATUS.AUTO_SUGGESTED,
-    reverse_charge_vat_rate: 17,
-    reverse_charge_rate_status: REVERSE_CHARGE_RATE_STATUS.SUGGESTED,
-    is_fixed_asset: categorySuggestion.isFixedAsset,
+    expense_tax_category: expenseCategory,
+    eu_transaction_type: currentEuTransactionType || EU_TRANSACTION_TYPE.NONE,
+    vat_deductibility: expense.vat_deductibility || VAT_DEDUCTIBILITY.FULLY,
+    deductible_percentage:
+      expense.deductible_percentage == null || expense.deductible_percentage === ""
+        ? 100
+        : expense.deductible_percentage,
+    vat_review_status: expense.vat_review_status || VAT_REVIEW_STATUS.AUTO_SUGGESTED,
+    reverse_charge_vat_rate:
+      expense.reverse_charge_vat_rate == null || expense.reverse_charge_vat_rate === ""
+        ? 17
+        : expense.reverse_charge_vat_rate,
+    reverse_charge_rate_status:
+      expense.reverse_charge_rate_status || REVERSE_CHARGE_RATE_STATUS.SUGGESTED,
+    is_fixed_asset: isFixedAsset,
   };
 
   if (supplierDefaults.default_vat_origin) {
     reasons.push(`Origine TVA proposee depuis le pays fournisseur: ${supplierDefaults.default_vat_origin}`);
   }
 
-  if (categorySuggestion.category) {
-    reasons.push(categorySuggestion.reason);
+  if (expenseCategory) {
+    reasons.push(categoryReason);
   } else {
     warnings.push("Categorie fiscale non reconnue automatiquement");
   }
@@ -223,10 +248,12 @@ export function suggestExpenseVatClassification({ expense = {}, supplier = {} } 
   if (vatOrigin === VAT_ORIGIN.EU) {
     if (vatRate === 0) {
       const euType = inferEuTransactionType(expense, categorySuggestion.category);
-      suggestions.eu_transaction_type = supplier.default_transaction_type || euType.type;
+      suggestions.eu_transaction_type =
+        currentEuTransactionType || supplier.default_transaction_type || euType.type;
       reasons.push(euType.reason);
     } else {
-      suggestions.eu_transaction_type = supplier.default_transaction_type || EU_TRANSACTION_TYPE.NONE;
+      suggestions.eu_transaction_type =
+        currentEuTransactionType || supplier.default_transaction_type || EU_TRANSACTION_TYPE.NONE;
     }
 
     if (FOREIGN_EU_VAT_RATES.includes(vatRate) && vatAmount > 0) {
@@ -242,7 +269,7 @@ export function suggestExpenseVatClassification({ expense = {}, supplier = {} } 
   const confidence =
     warnings.length > 0 || !suggestions.vat_origin || !suggestions.expense_tax_category
       ? "low"
-      : categorySuggestion.confidence;
+      : categoryConfidence;
 
   return {
     suggestions,

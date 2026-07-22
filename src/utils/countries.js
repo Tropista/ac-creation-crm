@@ -27,9 +27,34 @@ export const COUNTRY_OPTIONS = [
   { code: "CN", name: "Chine" },
 ];
 
+const COUNTRY_CODE_ALIASES = {
+  LUX: "LU",
+  LUXEMBOURG: "LU",
+  FRA: "FR",
+  FRANCE: "FR",
+  BEL: "BE",
+  BELGIQUE: "BE",
+  DEU: "DE",
+  GER: "DE",
+  ALLEMAGNE: "DE",
+  NLD: "NL",
+  "PAYS BAS": "NL",
+  "PAYS-BAS": "NL",
+};
+
 export function normalizeCountryCode(countryCode) {
   const code = String(countryCode || "").trim().toUpperCase();
-  return /^[A-Z]{2}$/.test(code) ? code : "";
+  if (/^[A-Z]{2}$/.test(code)) return code;
+  const normalizedName = code
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  if (COUNTRY_CODE_ALIASES[normalizedName]) return COUNTRY_CODE_ALIASES[normalizedName];
+  return COUNTRY_OPTIONS.find((country) =>
+    country.name
+      .toUpperCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "") === normalizedName
+  )?.code || "";
 }
 
 export function isEuCountry(countryCode) {

@@ -8,7 +8,7 @@ import {
   VAT_REVIEW_STATUS,
   calculateVatDeclaration,
 } from "./vatDeclaration";
-import { normalizeCountryCode } from "./countries";
+import { getCountryName, getVatOriginFromCountry, normalizeCountryCode } from "./countries";
 import { suggestExpenseVatClassification } from "./expenseVatClassification";
 
 function normalizeText(value) {
@@ -109,6 +109,17 @@ function supplierForExpense(expense = {}, suppliers = []) {
     null;
 }
 
+function supplierCountryCode(supplier = {}, expense = {}) {
+  return normalizeCountryCode(
+    supplier.country_code ||
+    supplier.country_name ||
+    supplier.country ||
+    expense.country ||
+    expense.country_code ||
+    expense.country_name
+  );
+}
+
 function sumHT(expenses = []) {
   return expenses.reduce((sum, expense) => sum + Number(expense.amountHT ?? expense.totalHT ?? 0), 0);
 }
@@ -128,7 +139,7 @@ export function buildSupplierSuggestions({ data = {}, periodStart, periodEnd, ta
     .filter(({ supplier }) => !supplier?.country_code || !supplier?.default_vat_origin)
     .map(({ supplier, expenses: rows }) => {
       const firstSuggestion = suggestExpenseVatClassification({ expense: rows[0], supplier: supplier || {} });
-      const countryCode = normalizeCountryCode(supplier?.country_code);
+      const countryCode = supplierCountryCode(supplier || {}, rows[0] || {});
       return {
         id: supplier?.id || rows[0]?.supplierName || "unknown",
         supplierId: supplier?.id || "",
@@ -140,7 +151,7 @@ export function buildSupplierSuggestions({ data = {}, periodStart, periodEnd, ta
         country_code: countryCode,
         vat_number: supplier?.vat_number || "",
         proposed_country_code: countryCode || "",
-        proposed_vat_origin: firstSuggestion.suggestions.vat_origin || VAT_ORIGIN.LU,
+        proposed_vat_origin: firstSuggestion.suggestions.vat_origin || getVatOriginFromCountry(countryCode) || VAT_ORIGIN.LU,
         proposed_transaction_type: firstSuggestion.suggestions.eu_transaction_type || EU_TRANSACTION_TYPE.NONE,
         confidence: countryCode ? "medium" : "low",
         reasons: firstSuggestion.reasons.length ? firstSuggestion.reasons : ["Pays fournisseur a completer"],
@@ -216,7 +227,7 @@ export function buildVatClassificationAssistantState({ data = {}, periodStart, p
 }
 
 function isExpenseComplete(expense = {}, supplier = {}) {
-  const supplierCountryCode = normalizeCountryCode(supplier.country_code);
+  const countryCode = supplierCountryCode(supplier, expense);
   return expense.vat_origin &&
     expense.expense_tax_category &&
     expense.vat_deductibility &&
@@ -225,7 +236,7 @@ function isExpenseComplete(expense = {}, supplier = {}) {
       (
         expense.eu_transaction_type &&
         expense.eu_transaction_type !== EU_TRANSACTION_TYPE.NONE &&
-        supplierCountryCode
+        countryCode
       )
     );
 }
@@ -234,19 +245,58 @@ export function applyVatClassificationSelections(data = {}, selections = {}) {
   const supplierUpdates = new Map((selections.suppliers || []).map((item) => [String(item.supplierId || item.id), item]));
   const saleUpdates = new Map((selections.sales || []).map((item) => [String(item.id), item]));
   const expenseUpdates = new Map((selections.expenses || []).map((item) => [String(item.id), item]));
+  const createdSuppliers = [];
+  const newSupplierIdsByName = new Map();
 
   const suppliers = (data.suppliers || []).map((supplier) => {
     const update = supplierUpdates.get(String(supplier.id));
     if (!update) return supplier;
+    const countryCode = normalizeCountryCode(update.proposed_country_code || update.country_code || supplier.country_code);
+    const vatOrigin = update.proposed_vat_origin || getVatOriginFromCountry(countryCode) || supplier.default_vat_origin || "";
     return {
       ...supplier,
-      country_code: update.proposed_country_code || update.country_code || supplier.country_code || "",
+      country_code: countryCode || "",
+      country_name: getCountryName(countryCode) || supplier.country_name || "",
       vat_number: update.vat_number ?? supplier.vat_number ?? "",
-      default_vat_origin: update.proposed_vat_origin || supplier.default_vat_origin || "",
-      default_transaction_type: update.proposed_transaction_type || supplier.default_transaction_type || EU_TRANSACTION_TYPE.NONE,
+      default_vat_origin: vatOrigin,
+      default_transaction_type:
+        vatOrigin === VAT_ORIGIN.EU
+          ? update.proposed_transaction_type || supplier.default_transaction_type || EU_TRANSACTION_TYPE.NONE
+          : EU_TRANSACTION_TYPE.NONE,
       updatedAt: new Date().toISOString(),
     };
   });
+
+  for (const update of selections.suppliers || []) {
+    if (update.supplierId && suppliers.some((supplier) => String(supplier.id) === String(update.supplierId))) {
+      continue;
+    }
+    const supplierName = String(update.supplierName || update.id || "").trim();
+    if (!supplierName) continue;
+    const alreadyExists = suppliers.some((supplier) => normalizeText(supplier.name) === normalizeText(supplierName));
+    if (alreadyExists) continue;
+    const countryCode = normalizeCountryCode(update.proposed_country_code || update.country_code);
+    const vatOrigin = update.proposed_vat_origin || getVatOriginFromCountry(countryCode) || "";
+    const id = `supplier-${Date.now()}-${createdSuppliers.length + 1}`;
+    createdSuppliers.push({
+      id,
+      name: supplierName,
+      country_code: countryCode || "",
+      country_name: getCountryName(countryCode) || "",
+      vat_number: update.vat_number || "",
+      is_eu: vatOrigin === VAT_ORIGIN.EU || countryCode === "LU",
+      default_vat_origin: vatOrigin,
+      default_transaction_type:
+        vatOrigin === VAT_ORIGIN.EU
+          ? update.proposed_transaction_type || EU_TRANSACTION_TYPE.NONE
+          : EU_TRANSACTION_TYPE.NONE,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    newSupplierIdsByName.set(normalizeText(supplierName), id);
+  }
+
+  const nextSuppliers = [...suppliers, ...createdSuppliers];
 
   const invoices = (data.invoices || []).map((invoice) => {
     const update = saleUpdates.get(String(invoice.id));
@@ -259,12 +309,19 @@ export function applyVatClassificationSelections(data = {}, selections = {}) {
     };
   });
 
-  const nextData = { ...data, suppliers, invoices };
+  const nextData = { ...data, suppliers: nextSuppliers, invoices };
   const expenses = (data.expenses || []).map((expense) => {
+    const supplierNameKey = normalizeText(expense.supplierName);
+    const newSupplierId = supplierNameKey ? newSupplierIdsByName.get(supplierNameKey) : "";
     const update = expenseUpdates.get(String(expense.id));
-    if (!update) return expense;
+    if (!update) {
+      return newSupplierId
+        ? { ...expense, supplierId: expense.supplierId || newSupplierId, updatedAt: new Date().toISOString() }
+        : expense;
+    }
     const next = {
       ...expense,
+      supplierId: expense.supplierId || newSupplierId || expense.supplierId,
       ...update.suggestions,
       reverse_charge_rate_status:
         update.suggestions.reverse_charge_rate_status === REVERSE_CHARGE_RATE_STATUS.SUGGESTED
@@ -272,7 +329,7 @@ export function applyVatClassificationSelections(data = {}, selections = {}) {
           : update.suggestions.reverse_charge_rate_status,
       updatedAt: new Date().toISOString(),
     };
-    const supplier = supplierForExpense(next, suppliers) || {};
+    const supplier = supplierForExpense(next, nextSuppliers) || {};
     next.vat_review_status = isExpenseComplete(next, supplier)
       ? VAT_REVIEW_STATUS.REVIEWED
       : VAT_REVIEW_STATUS.TO_REVIEW;

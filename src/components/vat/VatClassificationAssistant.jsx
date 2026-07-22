@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   EU_TRANSACTION_TYPE,
   EXPENSE_TAX_CATEGORY,
@@ -11,6 +11,11 @@ import {
   buildVatClassificationAssistantState,
   previewVatClassificationImpact,
 } from "../../utils/vatClassificationAssistant";
+import {
+  createHistoricalInvoicePaymentsBatch,
+  hasValidPaymentForInvoice,
+  PAYMENT_METHODS,
+} from "../../utils/payments";
 import { centsMoney, money } from "./vatUiUtils";
 
 const SALE_LABELS = {
@@ -39,22 +44,95 @@ function ImpactCard({ label, before, after }) {
   );
 }
 
+function normalizedStatus(value = "") {
+  return String(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function reliablePaymentDate(invoice = {}) {
+  return invoice.paymentDate || invoice.paidDate || invoice.datePaid || invoice.settledAt || invoice.paidAt || "";
+}
+
+function historicalPaidAmount(invoice = {}) {
+  const paid = Number(invoice.paidAmount ?? invoice.amountPaid ?? 0);
+  const status = normalizedStatus(invoice.status);
+  if (paid > 0) return paid;
+  if (!status.includes("non payee") && status.includes("payee")) return Number(invoice.totalTTC || 0);
+  return 0;
+}
+
+function buildPaymentRows({ data = {}, report = {} }) {
+  const clientsById = new Map((data.clients || []).map((client) => [String(client.id), client]));
+  const invoiceIds = new Set(
+    (report.anomalies || [])
+      .filter((entry) => entry.code === "CASH_BASIS_PAYMENTS_INCOMPLETE")
+      .map((entry) => String(entry.sourceId || "").replace(/^sale:/, ""))
+      .filter(Boolean)
+  );
+
+  return (data.invoices || [])
+    .filter((invoice) => {
+      const ids = [invoice.id, invoice.number].filter(Boolean).map(String);
+      return ids.some((id) => invoiceIds.has(id));
+    })
+    .filter((invoice) => {
+      const status = normalizedStatus(invoice.status);
+      return !status.includes("non payee") && status.includes("payee");
+    })
+    .filter((invoice) => !hasValidPaymentForInvoice(data.payments || [], invoice))
+    .map((invoice) => {
+      const amount = historicalPaidAmount(invoice);
+      const date = reliablePaymentDate(invoice);
+      const method = invoice.paymentMethod || invoice.paymentMode || invoice.method || "Virement";
+      const reliable = amount > 0 && Boolean(date);
+      const client = clientsById.get(String(invoice.clientId));
+      return {
+        invoiceId: invoice.id,
+        invoiceNumber: invoice.number || invoice.id,
+        clientName: invoice.clientName || client?.name || "Client non renseigné",
+        invoiceDate: invoice.date || "",
+        totalTTC: Number(invoice.totalTTC || 0),
+        historicalPaidAmount: amount,
+        paymentDate: date,
+        paymentMethod: PAYMENT_METHODS.includes(method) ? method : "Autre",
+        checked: reliable,
+        reliable,
+      };
+    });
+}
+
 export default function VatClassificationAssistant({
   data,
+  report,
   taxYear,
   periodStart,
   periodEnd,
+  initialTab = "suppliers",
   onClose,
   onSave,
+  onSavePayments,
   logActivity,
 }) {
   const initial = useMemo(
     () => buildVatClassificationAssistantState({ data, taxYear, periodStart, periodEnd }),
     [data, taxYear, periodStart, periodEnd]
   );
-  const [tab, setTab] = useState("suppliers");
+  const [tab, setTab] = useState(initialTab);
   const [draft, setDraft] = useState(() => cloneSuggestions(initial));
+  const initialPaymentRows = useMemo(
+    () => buildPaymentRows({ data, report }),
+    [data, report]
+  );
+  const [paymentRows, setPaymentRows] = useState(initialPaymentRows);
+  const [bulkDate, setBulkDate] = useState("");
+  const [bulkMethod, setBulkMethod] = useState("Virement");
   const [summary, setSummary] = useState(null);
+
+  useEffect(() => {
+    setPaymentRows(initialPaymentRows);
+  }, [initialPaymentRows]);
 
   const selections = useMemo(() => ({
     suppliers: draft.suppliers.filter((item) => item.checked),
@@ -107,7 +185,67 @@ export default function VatClassificationAssistant({
     }));
   }
 
-  function saveSelections() {
+  function updatePaymentRow(index, patch) {
+    setPaymentRows((current) =>
+      current.map((item, i) => (i === index ? { ...item, ...patch } : item))
+    );
+  }
+
+  function applyDateToSelected() {
+    if (!bulkDate) return;
+    setPaymentRows((current) =>
+      current.map((item) => (item.checked ? { ...item, paymentDate: bulkDate } : item))
+    );
+  }
+
+  function applyMethodToSelected() {
+    setPaymentRows((current) =>
+      current.map((item) => (item.checked ? { ...item, paymentMethod: bulkMethod } : item))
+    );
+  }
+
+  async function createSelectedPayments() {
+    const selected = paymentRows.filter((item) => item.checked);
+    const ready = selected.filter((item) => item.historicalPaidAmount > 0 && item.paymentDate);
+    const missing = selected.length - ready.length;
+    if (!ready.length) {
+      setSummary({ payments: { created: 0, skipped: 0, needsReview: paymentRows.length } });
+      return;
+    }
+    const total = ready.reduce((sum, item) => sum + Number(item.historicalPaidAmount || 0), 0);
+    if (
+      !window.confirm(
+        `Vous allez créer ${ready.length} paiement${ready.length > 1 ? "s" : ""} historique${ready.length > 1 ? "s" : ""} pour ${money(total)}. ${missing} facture${missing > 1 ? "s" : ""} sélectionnée${missing > 1 ? "s" : ""} rester${missing > 1 ? "ont" : "a"} à vérifier.`
+      )
+    ) {
+      return;
+    }
+
+    const result = createHistoricalInvoicePaymentsBatch(
+      data,
+      ready.map((item) => ({
+        invoiceId: item.invoiceId,
+        invoiceNumber: item.invoiceNumber,
+        amount: item.historicalPaidAmount,
+        date: item.paymentDate,
+        method: item.paymentMethod,
+      }))
+    );
+    if (onSavePayments) {
+      await onSavePayments(result.data, result);
+    } else {
+      await onSave?.(result.data);
+    }
+    logActivity?.({
+      action: "Paiements historiques TVA",
+      target: "Declaration TVA",
+      details: `crees=${result.created}; ignores=${result.skipped}; a_verifier=${result.needsReview + missing}`,
+    });
+    setPaymentRows(buildPaymentRows({ data: result.data, report }));
+    setSummary({ payments: { ...result, needsReview: result.needsReview + missing } });
+  }
+
+  async function saveSelections() {
     const counts = {
       suppliers: selections.suppliers.length,
       sales: selections.sales.length,
@@ -117,7 +255,7 @@ export default function VatClassificationAssistant({
       return;
     }
     const nextData = applyVatClassificationSelections(data, selections);
-    onSave(nextData);
+    await onSave?.(nextData);
     logActivity?.({
       action: "Classification TVA",
       target: "Declaration TVA",
@@ -150,6 +288,7 @@ export default function VatClassificationAssistant({
           <button type="button" className={tab === "suppliers" ? "active" : ""} onClick={() => setTab("suppliers")}>Fournisseurs ({draft.suppliers.length})</button>
           <button type="button" className={tab === "sales" ? "active" : ""} onClick={() => setTab("sales")}>Ventes ({draft.sales.length})</button>
           <button type="button" className={tab === "expenses" ? "active" : ""} onClick={() => setTab("expenses")}>Dépenses ({draft.expenses.length})</button>
+          <button type="button" className={tab === "payments" ? "active" : ""} onClick={() => setTab("payments")}>Paiements ({paymentRows.length})</button>
         </div>
 
         {tab === "suppliers" && (
@@ -286,13 +425,100 @@ export default function VatClassificationAssistant({
           </div>
         )}
 
+        {tab === "payments" && (
+          <div className="table card">
+            <div className="section-title-row">
+              <label>
+                <span>Date d'encaissement</span>
+                <input type="date" value={bulkDate} onChange={(event) => setBulkDate(event.target.value)} />
+              </label>
+              <button type="button" onClick={applyDateToSelected} disabled={!bulkDate}>
+                Appliquer la date sélectionnée aux factures choisies
+              </button>
+              <label>
+                <span>Mode de paiement</span>
+                <select value={bulkMethod} onChange={(event) => setBulkMethod(event.target.value)}>
+                  {PAYMENT_METHODS.map((method) => <option key={method} value={method}>{method}</option>)}
+                </select>
+              </label>
+              <button type="button" onClick={applyMethodToSelected}>Appliquer le mode de paiement sélectionné</button>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Choix</th>
+                  <th>Facture</th>
+                  <th>Client</th>
+                  <th>Date facture</th>
+                  <th>TTC</th>
+                  <th>Payé historique</th>
+                  <th>Date encaiss.</th>
+                  <th>Mode</th>
+                  <th>Statut</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paymentRows.map((item, index) => (
+                  <tr key={item.invoiceId}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={item.checked}
+                        onChange={(event) => updatePaymentRow(index, { checked: event.target.checked })}
+                      />
+                    </td>
+                    <td>{item.invoiceNumber}</td>
+                    <td>{item.clientName}</td>
+                    <td>{item.invoiceDate}</td>
+                    <td>{money(item.totalTTC)}</td>
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={item.historicalPaidAmount || ""}
+                        onChange={(event) => updatePaymentRow(index, { historicalPaidAmount: Number(event.target.value || 0), checked: true })}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="date"
+                        value={item.paymentDate || ""}
+                        onChange={(event) => updatePaymentRow(index, { paymentDate: event.target.value, checked: true })}
+                      />
+                    </td>
+                    <td>
+                      <select
+                        value={item.paymentMethod}
+                        onChange={(event) => updatePaymentRow(index, { paymentMethod: event.target.value, checked: true })}
+                      >
+                        {PAYMENT_METHODS.map((method) => <option key={method} value={method}>{method}</option>)}
+                      </select>
+                    </td>
+                    <td>{item.reliable ? "Prêt" : "Date à saisir"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {paymentRows.length === 0 ? <p className="muted">Aucune facture payée sans paiement valide.</p> : null}
+          </div>
+        )}
+
         <div className="modal-actions">
-          <button type="button" className="primary" onClick={saveSelections}>Enregistrer les classifications</button>
+          {tab === "payments" ? (
+            <button type="button" className="primary" onClick={createSelectedPayments}>
+              Créer les paiements historiques sélectionnés
+            </button>
+          ) : (
+            <button type="button" className="primary" onClick={saveSelections}>Enregistrer les classifications</button>
+          )}
           <button type="button" onClick={onClose}>Fermer</button>
         </div>
         {summary ? (
           <p className="success">
-            Mis à jour : {summary.suppliers} fournisseurs, {summary.sales} ventes et {summary.expenses} dépenses.
+            {summary.payments
+              ? `${summary.payments.created} paiement${summary.payments.created > 1 ? "s" : ""} créé${summary.payments.created > 1 ? "s" : ""} ; ${summary.payments.skipped} ignoré${summary.payments.skipped > 1 ? "s" : ""} ; ${summary.payments.errors.length} erreur${summary.payments.errors.length > 1 ? "s" : ""} ; ${summary.payments.needsReview} restant à vérifier.`
+              : `Mis à jour : ${summary.suppliers} fournisseurs, ${summary.sales} ventes et ${summary.expenses} dépenses.`}
           </p>
         ) : null}
       </div>

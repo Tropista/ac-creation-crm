@@ -78,6 +78,7 @@ import {
   recordInvoicePayment,
   buildPaymentSummary,
   PAYMENT_METHODS,
+  upsertHistoricalInvoicePayment,
 } from "../utils/payments";
 import { getInvoicePaymentLink } from "../utils/onlinePayments";
 import { buildCompanySnapshot } from "../utils/companySnapshot";
@@ -178,6 +179,12 @@ const [form, setForm] = useState({
   atelierNotes: "",
   priority: "normal",
   numberOverride: "",
+  paymentId: "",
+  paymentStatus: "",
+  paymentAmount: "",
+  paymentDateInput: "",
+  paymentMethod: "Virement",
+  bankTransactionId: "",
   lines: [{ ...emptyLine }],
 });
   const [attachments, setAttachments] = useState([]);
@@ -236,6 +243,12 @@ const [form, setForm] = useState({
         atelierNotes: "",
         priority: "normal",
         numberOverride: "",
+        paymentId: "",
+        paymentStatus: "",
+        paymentAmount: "",
+        paymentDateInput: "",
+        paymentMethod: "Virement",
+        bankTransactionId: "",
         lines: [{ ...emptyLine }],
       });
       setFormSessionKey((value) => value + 1);
@@ -643,6 +656,12 @@ const [form, setForm] = useState({
       assignedTo: "",
       atelierNotes: "",
       priority: "normal",
+      paymentId: "",
+      paymentStatus: "",
+      paymentAmount: "",
+      paymentDateInput: "",
+      paymentMethod: "Virement",
+      bankTransactionId: "",
       lines: [{ ...emptyLine }],
     });
   }
@@ -656,10 +675,32 @@ const [form, setForm] = useState({
     };
   }
 
+  function parsePaymentAmount(value) {
+    return Number(String(value || "").replace(",", ".").replace(/[^\d.]/g, ""));
+  }
+
+  function applyInvoiceFormPayment(nextData, invoice) {
+    if (isQuote) return nextData;
+    const amount = parsePaymentAmount(form.paymentAmount);
+    if (!amount || amount <= 0) return nextData;
+    return upsertHistoricalInvoicePayment(nextData, invoice, {
+      paymentId: form.paymentId || "",
+      amount,
+      method: form.paymentMethod || "Virement",
+      date: form.paymentDateInput || "",
+      bankTransactionId: form.bankTransactionId || "",
+      notes: "Paiement saisi depuis la fiche facture",
+    });
+  }
+
   function submit(e) {
     e.preventDefault();
     if (!form.clientId && (!isQuote || form.status !== "Brouillon")) {
       return showToast("Choisis un client.", "error");
+    }
+    const formPaymentAmount = !isQuote ? parsePaymentAmount(form.paymentAmount) : 0;
+    if (!isQuote && formPaymentAmount > 0 && !form.paymentDateInput) {
+      return showToast("Date d'encaissement obligatoire pour enregistrer un paiement.", "error");
     }
 
     const cleanLines = form.lines
@@ -762,13 +803,14 @@ const [form, setForm] = useState({
         ? { ...updatedDoc, productionStockAdjusted: stockSync.productionStockAdjusted }
         : updatedDoc;
 
-      setData({
+      const nextData = {
         ...data,
         products: nextProducts,
         [listKey]: documents.map((d) =>
           d.id === editingId ? savedDoc : d
         ),
-      });
+      };
+      setData(isQuote ? nextData : applyInvoiceFormPayment(nextData, savedDoc));
       logActivity?.(`Modification ${isQuote ? "devis" : "facture"}`, existingDoc?.number || editingId, money(totals.totalTTC));
     } else {
       const docBase = {
@@ -820,7 +862,8 @@ const [form, setForm] = useState({
         ? { ...doc, productionStockAdjusted: quoteStockSync.productionStockAdjusted }
         : doc;
 
-      setData({ ...data, products: nextProducts, [listKey]: [...documents, savedDoc] });
+      const nextData = { ...data, products: nextProducts, [listKey]: [...documents, savedDoc] };
+      setData(isQuote ? nextData : applyInvoiceFormPayment(nextData, savedDoc));
       logActivity?.(`Création ${isQuote ? "devis" : "facture"}`, doc.number, money(doc.totalTTC));
     }
 
@@ -882,6 +925,8 @@ reset();
         );
       }
     }
+    const paymentSummary = !isQuote ? buildPaymentSummary(doc, data.payments || []) : null;
+    const primaryPayment = paymentSummary?.paymentHistory?.[0] || null;
     setForm({
       clientId: doc.clientId || "",
       status: doc.status || defaultStatus,
@@ -894,6 +939,12 @@ reset();
       assignedTo: doc.assignedTo || "",
       atelierNotes: doc.atelierNotes || "",
       priority: doc.priority || "normal",
+      paymentId: primaryPayment?.id || "",
+      paymentStatus: paymentSummary?.status || doc.status || defaultStatus,
+      paymentAmount: primaryPayment?.amount ?? doc.paidAmount ?? "",
+      paymentDateInput: primaryPayment?.date || doc.paymentDate || "",
+      paymentMethod: primaryPayment?.method || doc.paymentMethod || "Virement",
+      bankTransactionId: primaryPayment?.bankTransactionId || doc.bankTransactionId || "",
       lines,
     });
   }
@@ -1516,6 +1567,7 @@ reset();
         attachments={isQuote ? attachments : undefined}
         onAttachmentsChange={isQuote ? setAttachments : undefined}
         nextAutoNumber={nextAutoNumber}
+        paymentMethods={PAYMENT_METHODS}
       />
 
       <DocumentList

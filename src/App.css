@@ -352,6 +352,12 @@ input[type="file"]::-webkit-file-upload-button:hover {
   flex-wrap: wrap;
 }
 .button-row { justify-content: flex-start; }
+.vat-assistant-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
 .vat-status-header strong {
   display: block;
   margin-top: 4px;
@@ -368,6 +374,19 @@ input[type="file"]::-webkit-file-upload-button:hover {
   gap: 6px;
   margin: 8px 0 0;
   padding-left: 20px;
+}
+.vat-help-box,
+.vat-control-help {
+  border: 1px solid rgba(129, 140, 248, 0.28);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.22);
+  padding: 10px 12px;
+}
+.vat-help-box p,
+.vat-control-help span {
+  display: block;
+  margin: 4px 0 0;
+  color: var(--muted);
 }
 .badge.danger,
 .badge.error {
@@ -402,6 +421,39 @@ input[type="file"]::-webkit-file-upload-button:hover {
   overflow-wrap: anywhere;
   font-size: 24px;
   line-height: 1.15;
+}
+.vat-result-breakdown {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+}
+.vat-result-rows {
+  display: grid;
+  gap: 8px;
+}
+.vat-result-row,
+.vat-result-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.04);
+}
+.vat-result-row span {
+  color: var(--muted);
+}
+.vat-result-total {
+  border-color: rgba(139, 92, 246, 0.42);
+  background: rgba(139, 92, 246, 0.12);
+}
+.vat-result-total.due strong {
+  color: #fecaca;
+}
+.vat-result-total.credit strong {
+  color: #86efac;
 }
 .vat-tabs {
   display: flex;

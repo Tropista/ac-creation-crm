@@ -29,6 +29,7 @@ export const VAT_ANOMALY_CODES = {
   EU_ZERO_MISSING_TRANSACTION_TYPE: "EU_ZERO_MISSING_TRANSACTION_TYPE",
   EU_EXPENSE_CATEGORY_MISSING: "EU_EXPENSE_CATEGORY_MISSING",
   REVERSE_CHARGE_RATE_NOT_CONFIRMED: "REVERSE_CHARGE_RATE_NOT_CONFIRMED",
+  CASH_BASIS_PAYMENTS_INCOMPLETE: "CASH_BASIS_PAYMENTS_INCOMPLETE",
 };
 
 const BALANCE_AFFECTING_ERROR_CODES = new Set([
@@ -37,9 +38,9 @@ const BALANCE_AFFECTING_ERROR_CODES = new Set([
   VAT_ANOMALY_CODES.UNKNOWN_INVOICE_STATUS,
   VAT_ANOMALY_CODES.EU_ZERO_MISSING_TRANSACTION_TYPE,
   VAT_ANOMALY_CODES.EU_EXPENSE_CATEGORY_MISSING,
+  VAT_ANOMALY_CODES.CASH_BASIS_PAYMENTS_INCOMPLETE,
   "sale_ttc_mismatch",
   "expense_ttc_mismatch",
-  "CASH_BASIS_PAYMENTS_INCOMPLETE",
 ]);
 
 export const ACCOUNTING_BASIS = {
@@ -245,9 +246,62 @@ export function getInvoiceFiscalInclusion(invoice = {}) {
 function resolveInvoiceDate(invoice, options, payments = []) {
   if (options.accounting_basis !== ACCOUNTING_BASIS.CASH) return invoice.date;
   const received = payments
-    .filter((payment) => String(payment.invoiceId || "") === String(invoice.id || ""))
-    .filter((payment) => normalizeText(payment.status).includes("recu"));
+    .filter((payment) => isPaymentLinkedToInvoice(payment, invoice))
+    .filter((payment) => isValidCashBasisPayment(payment));
   return received[0]?.date || received[0]?.createdAt || null;
+}
+
+function isPaymentLinkedToInvoice(payment = {}, invoice = {}) {
+  const invoiceIds = [invoice.id, invoice.number].filter(Boolean).map(String);
+  const paymentIds = [payment.invoiceId, payment.invoiceNumber].filter(Boolean).map(String);
+  return paymentIds.some((id) => invoiceIds.includes(id));
+}
+
+function isReceivedPayment(payment = {}) {
+  const status = normalizeText(payment.status);
+  return status.includes("recu") || status.includes("received") || status.includes("paye");
+}
+
+function isValidCashBasisPayment(payment = {}) {
+  return isReceivedPayment(payment) && moneyToCents(payment.amount) > 0 && Boolean(payment.date);
+}
+
+function getCashBasisInvoiceDiagnostic(invoice = {}, payments = []) {
+  const linkedPayments = (payments || []).filter((payment) => {
+    const status = normalizeText(payment.status);
+    return isPaymentLinkedToInvoice(payment, invoice) && !status.includes("annul") && !status.includes("rembours");
+  });
+  const validPayments = linkedPayments.filter(isValidCashBasisPayment);
+  const paymentPaidCents = validPayments.reduce((sum, payment) => sum + moneyToCents(payment.amount), 0);
+  const invoicePaidCents = moneyToCents(invoice.paidAmount ?? invoice.amountPaid ?? 0);
+  const totalTtcCents = moneyToCents(invoice.totalTTC);
+  const status = normalizeText(invoice.status);
+  const isUnpaidStatus = status.includes("non payee");
+  const isFullyPaidStatus = !isUnpaidStatus && status.includes("payee");
+  const isPartiallyPaidStatus = status.includes("partiellement");
+  const hasPaidSignal = isFullyPaidStatus || isPartiallyPaidStatus || invoicePaidCents > 0;
+
+  let reason = "";
+  if (hasPaidSignal && validPayments.length === 0) {
+    reason = "Facture marquee payee ou partiellement payee sans paiement valide avec date et montant";
+  } else if (isFullyPaidStatus && totalTtcCents > 0 && paymentPaidCents + 1 < totalTtcCents) {
+    reason = "Facture marquee payee mais paiements recus inferieurs au total TTC";
+  } else if (invoicePaidCents > 0 && paymentPaidCents + 1 < invoicePaidCents) {
+    reason = "Montant paye de la facture superieur aux paiements recus lies";
+  }
+
+  return {
+    invoiceNumber: invoice.number || invoice.id || "",
+    status: invoice.status || "",
+    totalTtcCents,
+    invoicePaidCents,
+    paymentPaidCents,
+    linkedPaymentCount: linkedPayments.length,
+    receivedPaymentCount: linkedPayments.filter(isReceivedPayment).length,
+    validPaymentCount: validPayments.length,
+    reason,
+    incomplete: Boolean(reason),
+  };
 }
 
 function getInvoiceTaxRate(invoice = {}) {
@@ -259,7 +313,8 @@ function getInvoiceSaleCategory(invoice = {}) {
   const category = String(invoice.sale_tax_category || invoice.saleCategory || invoice.ecdfSaleCategory || "").trim();
   if (Object.values(SALE_TAX_CATEGORY).includes(category)) return category;
   if (category === "manufactured") return SALE_TAX_CATEGORY.MANUFACTURED_PRODUCT;
-  if (category === "merchandise") return SALE_TAX_CATEGORY.RESOLD_GOODS;
+  if (category === "merchandise" || category === "resale_goods") return SALE_TAX_CATEGORY.RESOLD_GOODS;
+  if (category === "fixed_asset_sale") return SALE_TAX_CATEGORY.FIXED_ASSET_DISPOSAL;
   return SALE_TAX_CATEGORY.TO_REVIEW;
 }
 
@@ -480,6 +535,7 @@ function addVisibleExcludedInvoiceLine(result, invoice, inclusion, clients = [])
   };
   const entry = anomaly("error", inclusion.code, inclusion.reason, line.id, {
     status: inclusion.status,
+    ...(inclusion.meta || {}),
   });
   pushLineAnomaly(result, line, entry);
   result.lines.push(line);
@@ -709,13 +765,24 @@ function addExpenseLine(result, expense, suppliers = []) {
 }
 
 function finalizeTotals(result) {
-  const inputDeductible =
-    (result.boxes["080"]?.amountCents || 0) +
-    (result.boxes["084"]?.amountCents || 0) +
-    (result.boxes["088"]?.amountCents || 0) +
-    (result.boxes["404"]?.amountCents || 0);
-  const outputVat = result.boxes["103"]?.amountCents || result.boxes["076"]?.amountCents || 0;
-  const balance = outputVat - inputDeductible;
+  const salesOutputVat =
+    result.lines
+      .filter((line) => line.type === "sale" && !line.officialExcluded)
+      .reduce((sum, line) => sum + (line.vatCents || 0), 0);
+  const reverseChargeGoodsVat = result.boxes["712"]?.amountCents || 0;
+  const reverseChargeServicesVat = result.boxes["742"]?.amountCents || 0;
+  const luDeductibleVat =
+    result.lines
+      .filter((line) => line.type === "expense" && line.vatOrigin === VAT_ORIGIN.LU)
+      .reduce((sum, line) => sum + (line.deductibleVatCents || 0), 0);
+  const reverseChargeDeductibleVat =
+    result.lines
+      .filter((line) => line.type === "expense" && line.vatOrigin === VAT_ORIGIN.EU)
+      .reduce((sum, line) => sum + (line.deductibleVatCents || 0), 0);
+  const previousVatReports = result.totals.previousVatReportsCents || 0;
+  const inputDeductible = luDeductibleVat + reverseChargeDeductibleVat;
+  const outputVat = salesOutputVat + reverseChargeGoodsVat + reverseChargeServicesVat;
+  const balance = outputVat - inputDeductible - previousVatReports;
 
   addCents(result.boxes, "093", inputDeductible);
   addCents(result.boxes, "102", inputDeductible);
@@ -726,6 +793,12 @@ function finalizeTotals(result) {
     .filter((line) => line.type === "sale" && !line.officialExcluded)
     .reduce((sum, line) => sum + line.htCents, 0);
   result.totals.outputVatCents = outputVat;
+  result.totals.salesOutputVatCents = salesOutputVat;
+  result.totals.reverseChargeGoodsVatCents = reverseChargeGoodsVat;
+  result.totals.reverseChargeServicesVatCents = reverseChargeServicesVat;
+  result.totals.luDeductibleVatCents = luDeductibleVat;
+  result.totals.reverseChargeDeductibleVatCents = reverseChargeDeductibleVat;
+  result.totals.previousVatReportsCents = previousVatReports;
   result.totals.expensesHTCents = result.lines
     .filter((line) => line.type === "expense")
     .reduce((sum, line) => sum + line.htCents, 0);
@@ -788,6 +861,10 @@ export function buildVatDeclaration(data = {}, options = {}) {
   for (const invoice of data.invoices || []) {
     const inclusion = getInvoiceFiscalInclusion(invoice);
     const fiscalDate = resolveInvoiceDate(invoice, { accounting_basis: accountingBasis }, data.payments || []);
+    const cashDiagnostic =
+      accountingBasis === ACCOUNTING_BASIS.CASH
+        ? getCashBasisInvoiceDiagnostic(invoice, data.payments || [])
+        : null;
 
     if (!inclusion.included) {
       result.excluded.push({
@@ -800,6 +877,26 @@ export function buildVatDeclaration(data = {}, options = {}) {
         addVisibleExcludedInvoiceLine(result, invoice, inclusion, data.clients || []);
       }
       continue;
+    }
+
+    if (accountingBasis === ACCOUNTING_BASIS.CASH) {
+      if (cashDiagnostic?.incomplete) {
+        if (inPeriod(invoice.date, { ...period, year: taxYear })) {
+          addVisibleExcludedInvoiceLine(
+            result,
+            invoice,
+            {
+              reason: `Mode recettes: ${cashDiagnostic.reason}`,
+              code: VAT_ANOMALY_CODES.CASH_BASIS_PAYMENTS_INCOMPLETE,
+              status: invoice.status || "",
+              meta: { cashBasis: cashDiagnostic },
+            },
+            data.clients || []
+          );
+        }
+        continue;
+      }
+      if (!fiscalDate) continue;
     }
 
     if (!inPeriod(fiscalDate || invoice.date, { ...period, year: taxYear })) continue;

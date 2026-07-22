@@ -8,7 +8,12 @@ import {
 describe("countries", () => {
   it("normalise les codes pays ISO 2 lettres", () => {
     expect(normalizeCountryCode(" lu ")).toBe("LU");
-    expect(normalizeCountryCode("lux")).toBe("");
+    expect(normalizeCountryCode("xxl")).toBe("");
+  });
+
+  it("accepte les alias pays courants", () => {
+    expect(normalizeCountryCode("lux")).toBe("LU");
+    expect(normalizeCountryCode("FRANCE")).toBe("FR");
   });
 
   it("pays LU => origine LU", () => {

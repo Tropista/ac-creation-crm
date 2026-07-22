@@ -14,6 +14,13 @@ describe("expenseVatClassification", () => {
     expect(defaults.warnings).toContain("Pays fournisseur non renseigne");
   });
 
+  it("fournisseur avec pays en toutes lettres => origine UE reconnue", () => {
+    const defaults = getSupplierVatDefaults({ country_name: "FRANCE" });
+
+    expect(defaults.country_code).toBe("FR");
+    expect(defaults.default_vat_origin).toBe("EU");
+  });
+
   it("machine => investment + is_fixed_asset", () => {
     const result = suggestExpenseVatClassification({
       expense: { notes: "Achat machine laser", vatRate: 17 },
@@ -31,6 +38,17 @@ describe("expenseVatClassification", () => {
     });
 
     expect(result.suggestions.expense_tax_category).toBe("raw_material");
+  });
+
+  it("depense LU sans categorie reconnue => frais generaux a confirmer", () => {
+    const result = suggestExpenseVatClassification({
+      expense: { notes: "Facture diverse bureau", vatRate: 17, vatAmount: 17 },
+      supplier: { country_code: "LU" },
+    });
+
+    expect(result.confidence).toBe("medium");
+    expect(result.suggestions.vat_origin).toBe("LU");
+    expect(result.suggestions.expense_tax_category).toBe("general_expense");
   });
 
   it("logiciel/abonnement => service", () => {
@@ -92,6 +110,24 @@ describe("expenseVatClassification", () => {
 
     expect(next.vat_origin).toBe("LU");
     expect(next.expense_tax_category).toBe("service");
+  });
+
+  it("suggestion conserve une classification deja enregistree", () => {
+    const result = suggestExpenseVatClassification({
+      expense: {
+        expense_tax_category: "merchandise",
+        eu_transaction_type: "eu_service",
+        vat_origin: "EU",
+        vat_review_status: "reviewed",
+        reverse_charge_rate_status: "confirmed",
+      },
+      supplier: { country_name: "FRANCE" },
+    });
+
+    expect(result.suggestions.expense_tax_category).toBe("merchandise");
+    expect(result.suggestions.eu_transaction_type).toBe("eu_service");
+    expect(result.suggestions.vat_review_status).toBe("reviewed");
+    expect(result.suggestions.reverse_charge_rate_status).toBe("confirmed");
   });
 
   it("deductibilite partielle invalide => erreur", () => {

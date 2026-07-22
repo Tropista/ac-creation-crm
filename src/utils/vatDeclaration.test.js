@@ -8,6 +8,7 @@ import {
   REPORT_VALIDATION_STATUS,
   SALE_TAX_CATEGORY,
   VAT_CALCULATION_VERSION,
+  VAT_ANOMALY_CODES,
   VAT_DEDUCTIBILITY,
   VAT_ORIGIN,
   VAT_REVIEW_STATUS,
@@ -88,6 +89,45 @@ describe("vatDeclaration", () => {
     expect(box(report, "103")).toBe(81);
   });
 
+  it("detaille le resultat TVA sans melanger TVA collectee, autoliquidation et deductible", () => {
+    const report = buildVatDeclaration({
+      invoices: [makeSale({ id: "sale", totalHT: 100, taxAmount: 17, totalTTC: 117 })],
+      expenses: [
+        makeExpense({ id: "lu", amountHT: 100, vatRate: 17, vatAmount: 17, totalTTC: 117 }),
+        makeExpense({
+          id: "eu-goods",
+          amountHT: 100,
+          vatRate: 0,
+          vatAmount: 0,
+          totalTTC: 100,
+          vat_origin: VAT_ORIGIN.EU,
+          eu_transaction_type: EU_TRANSACTION_TYPE.GOODS,
+          expense_tax_category: EXPENSE_TAX_CATEGORY.MERCHANDISE,
+          reverse_charge_rate_status: REVERSE_CHARGE_RATE_STATUS.CONFIRMED,
+        }),
+        makeExpense({
+          id: "eu-service",
+          amountHT: 100,
+          vatRate: 0,
+          vatAmount: 0,
+          totalTTC: 100,
+          vat_origin: VAT_ORIGIN.EU,
+          eu_transaction_type: EU_TRANSACTION_TYPE.SERVICE,
+          expense_tax_category: EXPENSE_TAX_CATEGORY.SERVICE,
+          reverse_charge_rate_status: REVERSE_CHARGE_RATE_STATUS.CONFIRMED,
+        }),
+      ],
+    }, { year: 2026 });
+
+    expect(report.totals.salesOutputVatCents).toBe(1700);
+    expect(report.totals.reverseChargeGoodsVatCents).toBe(1700);
+    expect(report.totals.reverseChargeServicesVatCents).toBe(1700);
+    expect(report.totals.luDeductibleVatCents).toBe(1700);
+    expect(report.totals.reverseChargeDeductibleVatCents).toBe(3400);
+    expect(report.totals.previousVatReportsCents).toBe(0);
+    expect(report.totals.balanceCents).toBe(0);
+  });
+
   it("vente sans categorie => erreur bloquante et aucune affectation automatique a 001", () => {
     const report = buildVatDeclaration({
       invoices: [
@@ -115,6 +155,22 @@ describe("vatDeclaration", () => {
     expect(box(report, "001")).toBe(100);
     expect(box(report, "002")).toBe(200);
     expect(box(report, "004")).toBe(300);
+    expect(box(report, "005")).toBe(400);
+  });
+
+  it("accepte les alias de categorie utilises par l'interface metier", () => {
+    const report = buildVatDeclaration({
+      invoices: [
+        makeSale({ id: "resale", totalHT: 200, sale_tax_category: "resale_goods" }),
+        makeSale({ id: "fixed-asset", totalHT: 400, sale_tax_category: "fixed_asset_sale" }),
+      ],
+    }, { year: 2026 });
+
+    expect(report.lines.map((line) => line.sale_tax_category)).toEqual([
+      SALE_TAX_CATEGORY.RESOLD_GOODS,
+      SALE_TAX_CATEGORY.FIXED_ASSET_DISPOSAL,
+    ]);
+    expect(box(report, "002")).toBe(200);
     expect(box(report, "005")).toBe(400);
   });
 
@@ -411,6 +467,136 @@ describe("vatDeclaration", () => {
     }, { year: 2026, accounting_basis: ACCOUNTING_BASIS.CASH });
 
     expect(report.anomalies.some((entry) => entry.code === "cash_basis_requires_payments")).toBe(true);
+  });
+
+  it("mode recettes: une facture payee sans paiement lie est incomplète et identifie la facture", () => {
+    const report = buildVatDeclaration({
+      invoices: [
+        makeSale({
+          id: "bancomat-13",
+          number: "FAC-BANCOMAT",
+          status: "Payée",
+          totalHT: 11.11,
+          taxAmount: 1.89,
+          totalTTC: 13,
+          paidAmount: 13,
+        }),
+      ],
+      payments: [],
+    }, { year: 2026, accounting_basis: ACCOUNTING_BASIS.CASH });
+
+    const cashError = report.anomalies.find(
+      (entry) => entry.code === VAT_ANOMALY_CODES.CASH_BASIS_PAYMENTS_INCOMPLETE
+    );
+    expect(cashError).toMatchObject({
+      level: "error",
+      sourceId: "sale:bancomat-13",
+      status: "Payée",
+    });
+    expect(cashError.cashBasis).toMatchObject({
+      invoiceNumber: "FAC-BANCOMAT",
+      totalTtcCents: 1300,
+      paymentPaidCents: 0,
+      linkedPaymentCount: 0,
+      reason: "Facture marquee payee ou partiellement payee sans paiement valide avec date et montant",
+    });
+    expect(report.lines[0]).toMatchObject({
+      sourceId: "bancomat-13",
+      officialExcluded: true,
+    });
+    expect(box(report, "012")).toBe(0);
+  });
+
+  it("mode recettes: une facture payee avec paiement recu lie est calculee", () => {
+    const report = buildVatDeclaration({
+      invoices: [
+        makeSale({
+          id: "cash-paid",
+          number: "FAC-CASH-PAID",
+          status: "Payée",
+          totalHT: 100,
+          taxAmount: 17,
+          totalTTC: 117,
+          paidAmount: 117,
+        }),
+      ],
+      payments: [
+        {
+          id: "pay-1",
+          invoiceId: "cash-paid",
+          invoiceNumber: "FAC-CASH-PAID",
+          amount: 117,
+          status: "Reçu",
+          date: "2026-05-12",
+        },
+      ],
+    }, { year: 2026, accounting_basis: ACCOUNTING_BASIS.CASH });
+
+    expect(report.anomalies.some((entry) => entry.code === VAT_ANOMALY_CODES.CASH_BASIS_PAYMENTS_INCOMPLETE)).toBe(false);
+    expect(box(report, "012")).toBe(100);
+  });
+
+  it("mode recettes: un paiement manuel valide sans transaction bancaire suffit", () => {
+    const report = buildVatDeclaration({
+      invoices: [
+        makeSale({
+          id: "manual-paid",
+          number: "FAC-MANUAL",
+          status: "Payée",
+          totalHT: 100,
+          taxAmount: 17,
+          totalTTC: 117,
+          paidAmount: 117,
+        }),
+      ],
+      payments: [
+        {
+          id: "manual-payment",
+          invoiceId: "manual-paid",
+          invoiceNumber: "FAC-MANUAL",
+          amount: 117,
+          status: "Reçu",
+          date: "2026-05-12",
+          method: "Bancomat",
+        },
+      ],
+    }, { year: 2026, accounting_basis: ACCOUNTING_BASIS.CASH });
+
+    expect(report.anomalies.some((entry) => entry.code === VAT_ANOMALY_CODES.CASH_BASIS_PAYMENTS_INCOMPLETE)).toBe(false);
+    expect(box(report, "012")).toBe(100);
+  });
+
+  it("mode recettes: un paiement sans date reste incomplet", () => {
+    const report = buildVatDeclaration({
+      invoices: [
+        makeSale({
+          id: "missing-date",
+          number: "FAC-NO-DATE",
+          status: "Payée",
+          totalHT: 100,
+          taxAmount: 17,
+          totalTTC: 117,
+        }),
+      ],
+      payments: [
+        {
+          id: "payment-no-date",
+          invoiceId: "missing-date",
+          amount: 117,
+          status: "Reçu",
+        },
+      ],
+    }, { year: 2026, accounting_basis: ACCOUNTING_BASIS.CASH });
+
+    const cashError = report.anomalies.find(
+      (entry) => entry.code === VAT_ANOMALY_CODES.CASH_BASIS_PAYMENTS_INCOMPLETE
+    );
+    expect(cashError.cashBasis).toMatchObject({
+      linkedPaymentCount: 1,
+      receivedPaymentCount: 1,
+      validPaymentCount: 0,
+    });
+    expect(box(report, "012")).toBe(0);
   });
 
   it("interdit ready_for_review en presence d'une vente ou depense a revoir", () => {

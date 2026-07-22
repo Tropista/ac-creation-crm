@@ -14,6 +14,10 @@ import VatControlsPanel from "./vat/VatControlsPanel";
 import VatSourceLinesTable from "./vat/VatSourceLinesTable";
 import VatClassificationAssistant from "./vat/VatClassificationAssistant";
 import { anomalyCounts, centsMoney, groupAnomaliesByType } from "./vat/vatUiUtils";
+import {
+  applyVatClassificationSelections,
+  buildVatClassificationAssistantState,
+} from "../utils/vatClassificationAssistant";
 import { exportVatEcdfBoxesCsv, exportVatSourceLinesCsv } from "../utils/vatReportCsv";
 import { downloadVatReportPdf } from "../utils/vatReportPdf";
 import {
@@ -31,6 +35,7 @@ import {
   markVatReportReviewed,
   updateVatReport,
 } from "../services/vatReportService";
+import { PAYMENT_METHODS, upsertHistoricalInvoicePayment } from "../utils/payments";
 
 const TABS = [
   ["summary", "Résumé"],
@@ -199,20 +204,17 @@ export default function VatDeclaration({
   const [exportMessage, setExportMessage] = useState("");
   const [exportError, setExportError] = useState("");
   const [assistantOpen, setAssistantOpen] = useState(false);
-
-  const cashModeBlocking =
-    accountingBasis === ACCOUNTING_BASIS.CASH &&
-    (!(data.payments || []).length || !(data.invoices || []).length);
+  const [assistantInitialTab, setAssistantInitialTab] = useState("suppliers");
 
   const report = useMemo(() => {
-    const built = calculateVatDeclaration({
+    return calculateVatDeclaration({
       taxYear,
       periodStart,
       periodEnd,
       _recalcKey: manualRecalcKey,
       accounting_basis: accountingBasis,
       data: {
-        invoices: cashModeBlocking ? [] : (data.invoices || []),
+        invoices: data.invoices || [],
         expenses: data.expenses || [],
         suppliers: data.suppliers || [],
         payments: data.payments || [],
@@ -220,20 +222,7 @@ export default function VatDeclaration({
       },
     });
 
-    if (!cashModeBlocking) return built;
-    const cashError = {
-      level: "error",
-      code: "CASH_BASIS_PAYMENTS_INCOMPLETE",
-      message: "Le mode recettes nécessite des paiements correctement enregistrés",
-      sourceId: "report",
-    };
-    return {
-      ...built,
-      anomalies: [cashError, ...(built.anomalies || [])],
-      report_validation_status: REPORT_VALIDATION_STATUS.INCOMPLETE,
-      is_final_balance_reliable: false,
-    };
-  }, [taxYear, periodStart, periodEnd, accountingBasis, data, cashModeBlocking, manualRecalcKey]);
+  }, [taxYear, periodStart, periodEnd, accountingBasis, data, manualRecalcKey]);
 
   const counts = anomalyCounts(report.anomalies || []);
   const anomalyGroups = useMemo(() => groupAnomaliesByType(report.anomalies || []), [report.anomalies]);
@@ -315,6 +304,11 @@ export default function VatDeclaration({
     }
   }
 
+  function openAssistant(tab = "suppliers") {
+    setAssistantInitialTab(tab);
+    setAssistantOpen(true);
+  }
+
   function applyReportOutcome(outcome, action, previousStatus = "") {
     setSelectedReportId(outcome.report.id);
     setLoadedReportUpdatedAt(outcome.report.updatedAt || "");
@@ -394,6 +388,67 @@ export default function VatDeclaration({
     ));
   }
 
+  function handleQuickFixClassifications() {
+    if (!setData || !canManageReports || isFiledReport) return;
+    const assistantState = buildVatClassificationAssistantState({
+      data,
+      taxYear,
+      periodStart,
+      periodEnd,
+    });
+    const selections = {
+      suppliers: assistantState.suppliers.filter((item) =>
+        item.proposed_country_code && item.proposed_vat_origin
+      ),
+      sales: assistantState.sales.filter((item) =>
+        item.selected_category && item.selected_category !== SALE_TAX_CATEGORY.TO_REVIEW
+      ),
+      expenses: assistantState.expenses.filter((item) => {
+        const suggestion = item.suggestions || {};
+        if (!suggestion.vat_origin || !suggestion.expense_tax_category || !suggestion.vat_deductibility) {
+          return false;
+        }
+        if (
+          suggestion.vat_origin === VAT_ORIGIN.EU &&
+          (!suggestion.eu_transaction_type || suggestion.eu_transaction_type === EU_TRANSACTION_TYPE.NONE)
+        ) {
+          return false;
+        }
+        return true;
+      }),
+    };
+    const total =
+      selections.suppliers.length + selections.sales.length + selections.expenses.length;
+    if (total === 0) {
+      setReportError("Aucune correction automatique fiable disponible. Ouvre l'assistant pour traiter les lignes restantes.");
+      setReportMessage("");
+      setShowOnlyFixes(true);
+      setActiveTab("controls");
+      return;
+    }
+    if (
+      !window.confirm(
+        `Appliquer ${total} correction(s) TVA exploitables ? Les lignes ambigues resteront a verifier manuellement.`
+      )
+    ) {
+      return;
+    }
+    const nextData = applyVatClassificationSelections(data, selections);
+    setData(nextData);
+    setManualRecalcKey((value) => value + 1);
+    setReportError("");
+    setReportMessage(
+      `Corrections appliquees : ${selections.sales.length} ventes, ${selections.expenses.length} depenses, ${selections.suppliers.length} fournisseurs.`
+    );
+    setShowOnlyFixes(true);
+    setActiveTab("controls");
+    logActivity?.({
+      action: "Correction TVA automatique",
+      target: "Declaration TVA",
+      details: `ventes=${selections.sales.length}; depenses=${selections.expenses.length}; fournisseurs=${selections.suppliers.length}`,
+    });
+  }
+
   function selectSavedReport(reportId) {
     const nextReport = savedReports.find((entry) => String(entry.id) === String(reportId)) || null;
     setSelectedReportId(reportId);
@@ -421,10 +476,133 @@ export default function VatDeclaration({
     setActiveTab("lines");
   }
 
-  function saveClassifications(nextData) {
-    setData?.(nextData);
-    setManualRecalcKey((key) => key + 1);
-    setReportMessage("Classifications TVA enregistrées. Déclaration recalculée.");
+  function createHistoricalPayment(entry = {}) {
+    if (!setData || !canManageReports || isFiledReport) return;
+    const sourceId = String(entry.sourceId || "").replace(/^sale:/, "");
+    const invoice = (data.invoices || []).find(
+      (item) => String(item.id) === sourceId || String(item.number) === sourceId
+    );
+    if (!invoice) {
+      setReportError("Facture introuvable pour créer le paiement historique.");
+      setReportMessage("");
+      return;
+    }
+
+    const cashBasis = entry.cashBasis || {};
+    const amountDefault =
+      Number(cashBasis.invoicePaidCents || 0) > 0
+        ? Number(cashBasis.invoicePaidCents || 0) / 100
+        : Number(invoice.totalTTC || 0);
+    const rawAmount = window.prompt(
+      `Montant encaissé pour ${invoice.number || invoice.id}`,
+      String(amountDefault.toFixed(2)).replace(".", ",")
+    );
+    if (rawAmount === null) return;
+    const amount = Number(String(rawAmount).replace(",", ".").replace(/[^\d.]/g, ""));
+    if (!amount || amount <= 0) {
+      setReportError("Montant encaissé invalide.");
+      setReportMessage("");
+      return;
+    }
+
+    const date = window.prompt("Date d'encaissement obligatoire (AAAA-MM-JJ)", invoice.paymentDate || invoice.paidDate || invoice.datePaid || "");
+    if (date === null) return;
+    if (!String(date).trim()) {
+      setReportError("Date d'encaissement obligatoire pour le régime recettes.");
+      setReportMessage("");
+      return;
+    }
+
+    const defaultMethod = invoice.paymentMethod || invoice.paymentMode || "Virement";
+    const methodInput = window.prompt(
+      `Mode de paiement (${PAYMENT_METHODS.join(", ")})`,
+      defaultMethod
+    );
+    if (methodInput === null) return;
+    const method = PAYMENT_METHODS.includes(methodInput) ? methodInput : "Autre";
+
+    try {
+      const nextData = upsertHistoricalInvoicePayment(data, invoice, {
+        amount,
+        method,
+        date: String(date).trim(),
+        notes: "Paiement historique créé depuis la déclaration TVA",
+      });
+      setData(nextData);
+      setManualRecalcKey((key) => key + 1);
+      setReportError("");
+      setReportMessage(`Paiement historique créé pour ${invoice.number || invoice.id}. Déclaration recalculée.`);
+      logActivity?.({
+        action: "Paiement historique TVA",
+        target: invoice.number || invoice.id,
+        details: `${amount.toFixed(2)} EUR; date=${String(date).trim()}; mode=${method}`,
+      });
+    } catch (error) {
+      setReportMessage("");
+      setReportError(error.message || "Impossible de créer le paiement historique.");
+    }
+  }
+
+  async function updateSaleTaxCategories(sourceIds = [], category = "") {
+    const allowedCategories = [
+      SALE_TAX_CATEGORY.MANUFACTURED_PRODUCT,
+      SALE_TAX_CATEGORY.RESOLD_GOODS,
+      SALE_TAX_CATEGORY.SERVICE,
+      SALE_TAX_CATEGORY.FIXED_ASSET_DISPOSAL,
+    ];
+    if (!setData || !allowedCategories.includes(category) || sourceIds.length === 0) return;
+
+    const targetIds = new Set(sourceIds.map(String));
+    try {
+      await setData((current) => ({
+        ...current,
+        invoices: (current.invoices || []).map((invoice) => {
+          const invoiceIds = [invoice.id, invoice.number].filter(Boolean).map(String);
+          if (!invoiceIds.some((id) => targetIds.has(id))) return invoice;
+          return {
+            ...invoice,
+            sale_tax_category: category,
+            sale_tax_review_status: "reviewed",
+            updatedAt: new Date().toISOString(),
+          };
+        }),
+      }));
+      setManualRecalcKey((key) => key + 1);
+      setReportError("");
+      setReportMessage("Catégorie fiscale de vente enregistrée. Déclaration recalculée.");
+    } catch (error) {
+      setReportMessage("");
+      setReportError(error.message || "Impossible d'enregistrer la catégorie fiscale de vente.");
+      throw error;
+    }
+  }
+
+  async function saveClassifications(nextData) {
+    try {
+      await setData?.(nextData);
+      setManualRecalcKey((key) => key + 1);
+      setReportError("");
+      setReportMessage("Classifications TVA enregistrées. Déclaration recalculée.");
+    } catch (error) {
+      setReportMessage("");
+      setReportError(error.message || "Impossible d'enregistrer les classifications TVA.");
+      throw error;
+    }
+  }
+
+  async function saveHistoricalPayments(nextData, result = {}) {
+    try {
+      await setData?.(nextData);
+      setManualRecalcKey((key) => key + 1);
+      setReportError("");
+      setReportMessage(
+        `${result.created || 0} paiement(s) historique(s) créé(s), ${result.skipped || 0} ignoré(s), ${(result.errors || []).length} erreur(s).`
+      );
+    } catch (error) {
+      setReportMessage("");
+      setReportError(error.message || "Impossible d'enregistrer les paiements historiques.");
+      throw error;
+    }
   }
 
   function confirmIncompleteExport(targetReport) {
@@ -647,9 +825,14 @@ export default function VatDeclaration({
           <h3>Assistant de classification TVA</h3>
           <p className="muted">Traite en masse les anciennes ventes, dépenses, fournisseurs incomplets et taux d'autoliquidation à confirmer.</p>
         </div>
-        <button type="button" className="primary" onClick={() => setAssistantOpen(true)}>
-          Assistant de classification TVA
-        </button>
+        <div className="vat-assistant-actions">
+          <button type="button" onClick={handleQuickFixClassifications} disabled={!canManageReports || isFiledReport}>
+            Corriger les erreurs exploitables
+          </button>
+          <button type="button" className="primary" onClick={() => openAssistant()}>
+            Assistant de classification TVA
+          </button>
+        </div>
       </div>
 
       <div className="card vat-export-card">
@@ -800,7 +983,9 @@ export default function VatDeclaration({
       {activeTab === "controls" && (
         <VatControlsPanel
           anomalies={report.anomalies || []}
-          onOpenAssistant={() => setAssistantOpen(true)}
+          onOpenAssistant={openAssistant}
+          onQuickFix={handleQuickFixClassifications}
+          onCreateHistoricalPayment={createHistoricalPayment}
           onFilterFixes={() => {
             setShowOnlyFixes(true);
             setActiveTab("lines");
@@ -814,16 +999,20 @@ export default function VatDeclaration({
           setFilters={setFilters}
           showOnlyFixes={showOnlyFixes}
           setShowOnlyFixes={setShowOnlyFixes}
+          onUpdateSaleCategories={canManageReports && !isFiledReport ? updateSaleTaxCategories : null}
         />
       )}
       {assistantOpen ? (
         <VatClassificationAssistant
           data={data}
+          report={report}
           taxYear={taxYear}
           periodStart={periodStart}
           periodEnd={periodEnd}
+          initialTab={assistantInitialTab}
           onClose={() => setAssistantOpen(false)}
           onSave={saveClassifications}
+          onSavePayments={saveHistoricalPayments}
           logActivity={logActivity}
         />
       ) : null}

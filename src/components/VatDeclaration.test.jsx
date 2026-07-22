@@ -1,8 +1,8 @@
 ﻿/* @vitest-environment jsdom */
 import { useState } from "react";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../utils/vatReportPdf", () => ({
   downloadVatReportPdf: vi.fn(() => "preparation-tva-2025-ac-creation.pdf"),
@@ -119,6 +119,10 @@ describe("VatDeclaration", () => {
     exportVatSourceLinesCsv.mockImplementation(() => "lignes-sources-tva-2025.csv");
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("affiche la page avec donnees et le statut ready_for_review sans erreur", () => {
     render(<VatDeclaration data={baseData} />);
 
@@ -127,6 +131,10 @@ describe("VatDeclaration", () => {
     expect(screen.getByText("Document préparatoire - aucune transmission automatique à l'AED")).toBeInTheDocument();
     expect(screen.getByText("Année fiscale 2025")).toBeInTheDocument();
     expect(screen.getByText(/Formulaire eCDF : version 2026/)).toBeInTheDocument();
+    expect(screen.getByText("Résultat TVA")).toBeInTheDocument();
+    expect(screen.getByText(/TVA due sur acquisitions UE/)).toBeInTheDocument();
+    expect(screen.getByText(/TVA déductible sur autoliquidation/)).toBeInTheDocument();
+    expect(screen.getByText("À payer")).toBeInTheDocument();
   });
 
   it("changement d'annee met a jour la periode et calcule avec taxYear correct", async () => {
@@ -244,14 +252,152 @@ describe("VatDeclaration", () => {
     expect(screen.getByText("FAC-REVIEW")).toBeInTheDocument();
   });
 
+  it("permet de classer une vente depuis les lignes sources et recalcule le rapport", async () => {
+    const user = userEvent.setup();
+    const onDataChange = vi.fn();
+    render(
+      <StatefulVatDeclaration
+        initialData={{ ...baseData, invoices: [invoice({ id: "review", number: "FAC-REVIEW", sale_tax_category: "" })] }}
+        onDataChange={onDataChange}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "Lignes sources" }));
+    expect(screen.getByText("SALE_CLASSIFICATION_TO_REVIEW")).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText("Catégorie fiscale FAC-REVIEW"), "service");
+
+    await waitFor(() => expect(onDataChange).toHaveBeenCalled());
+    const next = onDataChange.mock.calls.at(-1)[0];
+    expect(next.invoices[0].sale_tax_category).toBe("service");
+    expect(next.invoices[0].sale_tax_review_status).toBe("reviewed");
+    await waitFor(() => expect(screen.queryByText("SALE_CLASSIFICATION_TO_REVIEW")).not.toBeInTheDocument());
+    expect(screen.getByText("Catégorie fiscale de vente enregistrée. Déclaration recalculée.")).toBeInTheDocument();
+  });
+
+  it("applique une categorie fiscale a plusieurs ventes selectionnees", async () => {
+    const user = userEvent.setup();
+    const onDataChange = vi.fn();
+    render(
+      <StatefulVatDeclaration
+        initialData={{
+          ...baseData,
+          invoices: [
+            invoice({ id: "r1", number: "FAC-BULK-1", sale_tax_category: "" }),
+            invoice({ id: "r2", number: "FAC-BULK-2", sale_tax_category: "" }),
+          ],
+        }}
+        onDataChange={onDataChange}
+      />
+    );
+
+    await user.click(screen.getByRole("button", { name: "Lignes sources" }));
+    await user.click(screen.getByLabelText("Sélectionner FAC-BULK-1"));
+    await user.click(screen.getByLabelText("Sélectionner FAC-BULK-2"));
+    await user.selectOptions(screen.getByLabelText("Catégorie à appliquer aux ventes sélectionnées"), "resold_goods");
+    await user.click(screen.getByRole("button", { name: "Appliquer aux lignes sélectionnées" }));
+
+    await waitFor(() => expect(onDataChange).toHaveBeenCalled());
+    const next = onDataChange.mock.calls.at(-1)[0];
+    expect(next.invoices.map((entry) => entry.sale_tax_category)).toEqual(["resold_goods", "resold_goods"]);
+    expect(next.invoices.map((entry) => entry.sale_tax_review_status)).toEqual(["reviewed", "reviewed"]);
+    await waitFor(() => expect(screen.queryByText("SALE_CLASSIFICATION_TO_REVIEW")).not.toBeInTheDocument());
+  });
+
   it("mode cash incomplet genere une erreur", async () => {
     const user = userEvent.setup();
+    vi.spyOn(console, "info").mockImplementation(() => {});
     render(<VatDeclaration data={baseData} />);
 
     await user.selectOptions(screen.getByTestId("vat-accounting-basis"), "cash");
 
-    expect(screen.getAllByText(/Le mode recettes nécessite des paiements correctement enregistrés/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Facture marquee payee ou partiellement payee sans paiement valide avec date et montant/).length).toBeGreaterThan(0);
+    expect(screen.getByText("1 erreurs bloquantes")).toBeInTheDocument();
     expect(screen.getAllByText("Incomplet").length).toBeGreaterThan(0);
+  });
+
+  it("cree un paiement historique manuel depuis le controle cash sans banque", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(console, "info").mockImplementation(() => {});
+    vi.spyOn(window, "prompt")
+      .mockReturnValueOnce("117,00")
+      .mockReturnValueOnce("2025-05-12")
+      .mockReturnValueOnce("Virement");
+    const onDataChange = vi.fn();
+    render(<StatefulVatDeclaration initialData={baseData} onDataChange={onDataChange} />);
+
+    await user.selectOptions(screen.getByTestId("vat-accounting-basis"), "cash");
+    await user.click(screen.getByRole("button", { name: "Voir tous les contrôles" }));
+    await user.click(screen.getByRole("button", { name: /Créer le paiement historique/i }));
+
+    await waitFor(() => expect(onDataChange).toHaveBeenCalled());
+    const next = onDataChange.mock.calls.at(-1)[0];
+    expect(next.payments).toHaveLength(1);
+    expect(next.payments[0]).toMatchObject({
+      invoiceId: "inv-made",
+      invoiceNumber: "FAC-MADE",
+      amount: 117,
+      method: "Virement",
+      status: "Reçu",
+      date: "2025-05-12",
+      bankTransactionId: "",
+    });
+    await waitFor(() => expect(screen.queryByText("CASH_BASIS_PAYMENTS_INCOMPLETE")).not.toBeInTheDocument());
+  });
+
+  it("cree en masse le paiement historique de la facture N°19 depuis l'assistant", async () => {
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const onDataChange = vi.fn();
+    const data = {
+      ...baseData,
+      invoices: [
+        invoice({
+          id: "invoice-19",
+          number: "19",
+          date: "2025-06-11",
+          totalHT: 132.999,
+          taxAmount: 22.61,
+          totalTTC: 155.61,
+          paidAmount: 155.61,
+          status: "Payée",
+        }),
+      ],
+      payments: [],
+    };
+    render(<StatefulVatDeclaration initialData={data} onDataChange={onDataChange} />);
+
+    await user.selectOptions(screen.getByTestId("vat-accounting-basis"), "cash");
+    await user.click(screen.getByRole("button", { name: "Assistant de classification TVA" }));
+    await user.click(screen.getByRole("button", { name: "Paiements (1)" }));
+
+    expect(screen.getByText("19")).toBeInTheDocument();
+    expect(screen.getByText("Date à saisir")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Enregistrer les classifications" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("checkbox"));
+    await user.type(screen.getByLabelText("Date d'encaissement"), "2025-06-11");
+    await user.click(screen.getByRole("button", { name: "Appliquer la date sélectionnée aux factures choisies" }));
+    await user.click(screen.getByRole("button", { name: "Créer les paiements historiques sélectionnés" }));
+
+    expect(confirmSpy).toHaveBeenCalledWith(expect.stringContaining("Vous allez créer 1 paiement historique"));
+    await waitFor(() => expect(onDataChange).toHaveBeenCalled());
+    const next = onDataChange.mock.calls.at(-1)[0];
+    expect(next.payments).toHaveLength(1);
+    expect(next.payments[0]).toMatchObject({
+      invoiceId: "invoice-19",
+      invoiceNumber: "19",
+      saleId: "invoice-19",
+      documentType: "invoice",
+      amount: 155.61,
+      method: "Virement",
+      status: "Reçu",
+      date: "2025-06-11",
+      paymentDate: "2025-06-11",
+      receivedAt: "2025-06-11",
+    });
+    expect(screen.getByText("1 paiement créé ; 0 ignoré ; 0 erreur ; 0 restant à vérifier.")).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText("CASH_BASIS_PAYMENTS_INCOMPLETE")).not.toBeInTheDocument());
   });
 
   it("absence de donnees affiche un etat vide", () => {
@@ -283,7 +429,7 @@ describe("VatDeclaration", () => {
   it("masque le solde final quand il n'est pas fiable", () => {
     render(<VatDeclaration data={{ ...baseData, invoices: [invoice({ id: "review", sale_tax_category: "" })] }} />);
 
-    expect(screen.getByText("Solde TVA provisoire non disponible")).toBeInTheDocument();
+    expect(screen.getAllByText("Solde TVA provisoire non disponible").length).toBeGreaterThan(0);
     expect(screen.getByText("Des ventes ou dépenses doivent encore être classées avant de calculer un montant fiable.")).toBeInTheDocument();
   });
 
@@ -363,6 +509,79 @@ describe("VatDeclaration", () => {
     expect(next.expenses[0].reverse_charge_rate_status).toBe("confirmed");
   });
 
+  it("correction rapide applique les classifications exploitables", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const onDataChange = vi.fn();
+    const data = {
+      ...baseData,
+      invoices: [invoice({ id: "sale-review", description: "Impression DTF textile personnalise", sale_tax_category: "" })],
+      expenses: [
+        expense({
+          id: "exp-lu-review",
+          supplierId: "sup-lu",
+          supplierName: "Fournisseur LU",
+          vat_origin: "LU",
+          vatRate: 17,
+          vatAmount: 17,
+          totalTTC: 117,
+          expense_tax_category: "",
+          vat_review_status: "to_review",
+          description: "Facture diverse bureau",
+        }),
+      ],
+      vatReports: [],
+    };
+    render(<StatefulVatDeclaration initialData={data} onDataChange={onDataChange} />);
+
+    await user.click(screen.getByRole("button", { name: "Corriger les erreurs exploitables" }));
+
+    const next = onDataChange.mock.calls.at(-1)[0];
+    expect(next.invoices[0].sale_tax_category).toBe("manufactured_product");
+    expect(next.expenses[0].expense_tax_category).toBe("general_expense");
+    expect(next.expenses[0].vat_review_status).toBe("reviewed");
+  });
+
+  it("controle guide vers le bon onglet de l'assistant", async () => {
+    const user = userEvent.setup();
+    render(<VatDeclaration data={{ ...baseData, invoices: [invoice({ id: "review", number: "FAC-REVIEW", sale_tax_category: "" })] }} />);
+
+    await user.click(screen.getByRole("button", { name: "Voir tous les contrôles" }));
+    await user.click(screen.getAllByRole("button", { name: "Ouvrir Ventes" })[0]);
+
+    expect(screen.getByRole("dialog", { name: "Assistant de classification TVA" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Ventes \(1\)/ })).toHaveClass("active");
+  });
+
+  it("assistant recharge les classifications depenses deja enregistrees", async () => {
+    const user = userEvent.setup();
+    const data = {
+      ...baseData,
+      suppliers: [{ id: "sup-fr-name", name: "Fournisseur France", country_name: "FRANCE" }],
+      expenses: [
+        expense({
+          id: "exp-saved",
+          supplierId: "sup-fr-name",
+          supplierName: "Fournisseur France",
+          vat_origin: "EU",
+          expense_tax_category: "merchandise",
+          eu_transaction_type: "eu_service",
+          vat_review_status: "to_review",
+          reverse_charge_rate_status: "confirmed",
+          description: "Achat deja classe",
+        }),
+      ],
+      vatReports: [],
+    };
+    render(<VatDeclaration data={data} />);
+
+    await user.click(screen.getByRole("button", { name: "Assistant de classification TVA" }));
+    await user.click(screen.getByRole("button", { name: /Dépenses \(1\)/ }));
+
+    expect(screen.getByDisplayValue("merchandise")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("Service UE")).toBeInTheDocument();
+  });
+
   it("cartes affichent titres et montants separement avec donnees TVA 2025 classees", () => {
     const data = {
       ...baseData,
@@ -384,9 +603,9 @@ describe("VatDeclaration", () => {
 
     const caCard = screen.getByText("Chiffre d'affaires HT").closest(".vat-summary-card");
     expect(within(caCard).getByText("6 465,88 €")).toBeInTheDocument();
-    expect(screen.getByText("1 099,21 €")).toBeInTheDocument();
+    expect(screen.getAllByText("1 099,21 €").length).toBeGreaterThan(0);
     expect(screen.getByText("19 035,42 €")).toBeInTheDocument();
-    expect(screen.getByText("187,61 €")).toBeInTheDocument();
+    expect(screen.getAllByText("187,61 €").length).toBeGreaterThan(0);
     expect(screen.getByText("17 521,10 €")).toBeInTheDocument();
     expect(screen.getByText("68,72 €")).toBeInTheDocument();
   });
