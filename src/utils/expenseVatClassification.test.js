@@ -141,6 +141,18 @@ describe("expenseVatClassification", () => {
     expect(validation.errors.join(" ")).toContain("pourcentage invalide");
   });
 
+  it("valide une depense en saisie manuelle sans fournisseur selectionne sans planter", () => {
+    const validation = validateExpenseVatClassification({
+      vat_origin: "LU",
+      expense_tax_category: "general_expense",
+      vat_deductibility: "fully_deductible",
+      reverse_charge_vat_rate: 17,
+    }, null);
+
+    expect(validation.valid).toBe(true);
+    expect(validation.errors).toEqual([]);
+  });
+
   it("investissement incomplet => erreur", () => {
     const validation = validateExpenseVatClassification({
       vat_origin: "LU",

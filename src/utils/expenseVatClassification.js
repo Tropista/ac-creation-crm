@@ -293,7 +293,10 @@ export function applyExpenseVatSuggestions(current = {}, suggestions = {}, { ove
 export function validateExpenseVatClassification(expense = {}, supplier = {}) {
   const errors = [];
   const normalized = normalizeExpenseVatFields(expense);
-  const supplierCountryCode = normalizeCountryCode(supplier.country_code);
+  const safeSupplier = supplier || {};
+  const supplierCountryCode = normalizeCountryCode(
+    safeSupplier.country_code || safeSupplier.country_name || safeSupplier.country
+  );
 
   if (
     normalized.vat_origin === VAT_ORIGIN.EU &&
