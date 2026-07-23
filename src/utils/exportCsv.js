@@ -88,6 +88,10 @@ export function exportExpensesCsv(expenses, filename) {
     "TVA €",
     "TTC",
     "Catégorie",
+    "Compte personnel",
+    "Personne ayant payé",
+    "Statut remboursement",
+    "Traitement TVA",
   ];
 
   const rows = expenses.map((expense) => [
@@ -101,6 +105,10 @@ export function exportExpensesCsv(expenses, filename) {
     formatCsvNumber(expense.vatAmount),
     formatCsvNumber(expense.totalTTC),
     expense.category || "",
+    expense.personalAccountPurchase ? "Oui" : "Non",
+    expense.paidByPerson || "",
+    expense.companyReimbursementStatus || "not_reimbursable",
+    expense.vatDeductionStatus || "accountant_review",
   ]);
 
   downloadCsv(filename, headers, rows);
@@ -253,6 +261,10 @@ export function buildMonthlyAccountingCsvRows(data, { year, month } = {}) {
       "TVA €",
       "TTC",
       "Catégorie",
+      "Compte personnel",
+      "Personne ayant payé",
+      "Statut remboursement",
+      "Traitement TVA",
     ],
     ...expenses.map((expense) => [
       expense.supplierName || "",
@@ -265,6 +277,10 @@ export function buildMonthlyAccountingCsvRows(data, { year, month } = {}) {
       formatCsvNumber(expense.vatAmount),
       formatCsvNumber(expense.totalTTC),
       expense.category || "",
+      expense.personalAccountPurchase ? "Oui" : "Non",
+      expense.paidByPerson || "",
+      expense.companyReimbursementStatus || "not_reimbursable",
+      expense.vatDeductionStatus || "accountant_review",
     ]),
   ];
 

@@ -32,6 +32,49 @@ export const NEW_EXPENSE_VAT_DEFAULTS = {
   reverse_charge_rate_status: REVERSE_CHARGE_RATE_STATUS.SUGGESTED,
 };
 
+export const VAT_DEDUCTION_STATUS = {
+  DEDUCTIBLE: "deductible",
+  NON_DEDUCTIBLE: "non_deductible",
+  FOREIGN_VAT: "foreign_vat",
+  ACCOUNTANT_REVIEW: "accountant_review",
+};
+
+export const PERSONAL_ACCOUNT_PURCHASE_DEFAULTS = {
+  personalAccountPurchase: false,
+  paidByPerson: "",
+  paidByRole: "",
+  companyReimbursementStatus: "not_reimbursable",
+  reimbursementDate: null,
+  reimbursementMethod: "",
+  vatDeductionStatus: VAT_DEDUCTION_STATUS.ACCOUNTANT_REVIEW,
+  invoiceInCompanyName: false,
+  invoiceCustomerName: "",
+  companyAddressOnInvoice: false,
+  companyVatNumberOnInvoice: false,
+};
+
+function inferVatDeductionStatus(expense = {}) {
+  if (Object.values(VAT_DEDUCTION_STATUS).includes(expense.vatDeductionStatus)) {
+    return expense.vatDeductionStatus;
+  }
+  if (expense.vat_deductibility === VAT_DEDUCTIBILITY.NONE) {
+    return VAT_DEDUCTION_STATUS.NON_DEDUCTIBLE;
+  }
+  if (
+    ((expense.vat_origin === VAT_ORIGIN.EU || expense.vat_origin === VAT_ORIGIN.NON_EU) && Number(expense.vatAmount || 0) > 0) ||
+    (FOREIGN_EU_VAT_RATES.includes(Number(expense.vatRate)) && Number(expense.vatAmount || 0) > 0)
+  ) {
+    return VAT_DEDUCTION_STATUS.FOREIGN_VAT;
+  }
+  if (
+    expense.vat_deductibility === VAT_DEDUCTIBILITY.FULLY ||
+    expense.vat_deductibility === VAT_DEDUCTIBILITY.PARTIALLY
+  ) {
+    return VAT_DEDUCTION_STATUS.DEDUCTIBLE;
+  }
+  return VAT_DEDUCTION_STATUS.ACCOUNTANT_REVIEW;
+}
+
 function normalizeText(value) {
   return String(value || "")
     .normalize("NFD")
@@ -64,10 +107,39 @@ const GENERAL_EXPENSE_WORDS = [
   "banque", "bank", "gebuhr", "fee", "marketing",
 ];
 
+const SUPPLIER_TAX_PROFILES = [
+  { names: ["atome3d", "amazon fr", "amazon"], category: EXPENSE_TAX_CATEGORY.MERCHANDISE, euType: EU_TRANSACTION_TYPE.GOODS },
+  { names: ["bambu lab", "bambulab"], category: EXPENSE_TAX_CATEGORY.MERCHANDISE, euType: EU_TRANSACTION_TYPE.GOODS },
+  { names: ["canva", "adobe", "meta", "google", "ovh", "microsoft"], category: EXPENSE_TAX_CATEGORY.GENERAL_EXPENSE, euType: EU_TRANSACTION_TYPE.SERVICE },
+];
+
+export function getSuggestedEuTransactionType(vatOrigin, category) {
+  if (vatOrigin !== VAT_ORIGIN.EU) return EU_TRANSACTION_TYPE.NONE;
+  if ([
+    EXPENSE_TAX_CATEGORY.MERCHANDISE,
+    EXPENSE_TAX_CATEGORY.RAW_MATERIAL,
+    EXPENSE_TAX_CATEGORY.INVESTMENT,
+  ].includes(category)) {
+    return EU_TRANSACTION_TYPE.GOODS;
+  }
+  if ([EXPENSE_TAX_CATEGORY.GENERAL_EXPENSE, EXPENSE_TAX_CATEGORY.SERVICE].includes(category)) {
+    return EU_TRANSACTION_TYPE.SERVICE;
+  }
+  return EU_TRANSACTION_TYPE.NONE;
+}
+
+function findSupplierTaxProfile(supplier = {}, expense = {}) {
+  const text = normalizeText([supplier.name, expense.supplierName].filter(Boolean).join(" "));
+  return SUPPLIER_TAX_PROFILES.find((profile) =>
+    profile.names.some((name) => text.includes(name))
+  ) || null;
+}
+
 export function normalizeExpenseVatFields(expense = {}, { forNew = false } = {}) {
   const defaults = forNew ? NEW_EXPENSE_VAT_DEFAULTS : DEFAULT_EXPENSE_VAT_FIELDS;
   return {
     ...defaults,
+    ...PERSONAL_ACCOUNT_PURCHASE_DEFAULTS,
     ...expense,
     eu_transaction_type: expense.eu_transaction_type ?? defaults.eu_transaction_type,
     deductible_percentage:
@@ -82,6 +154,17 @@ export function normalizeExpenseVatFields(expense = {}, { forNew = false } = {})
       expense.reverse_charge_rate_status || defaults.reverse_charge_rate_status,
     vat_review_status: expense.vat_review_status || defaults.vat_review_status,
     is_fixed_asset: Boolean(expense.is_fixed_asset ?? defaults.is_fixed_asset),
+    personalAccountPurchase: Boolean(expense.personalAccountPurchase),
+    paidByPerson: String(expense.paidByPerson || ""),
+    paidByRole: String(expense.paidByRole || ""),
+    companyReimbursementStatus: expense.companyReimbursementStatus || "not_reimbursable",
+    reimbursementDate: expense.reimbursementDate || null,
+    reimbursementMethod: String(expense.reimbursementMethod || ""),
+    vatDeductionStatus: inferVatDeductionStatus(expense),
+    invoiceInCompanyName: Boolean(expense.invoiceInCompanyName),
+    invoiceCustomerName: String(expense.invoiceCustomerName || ""),
+    companyAddressOnInvoice: Boolean(expense.companyAddressOnInvoice),
+    companyVatNumberOnInvoice: Boolean(expense.companyVatNumberOnInvoice),
   };
 }
 
@@ -188,10 +271,13 @@ export function getSupplierVatDefaults(supplier = {}) {
 
 export function suggestExpenseVatClassification({ expense = {}, supplier = {} } = {}) {
   const supplierDefaults = getSupplierVatDefaults(supplier);
+  const supplierProfile = findSupplierTaxProfile(supplier, expense);
   const categorySuggestion = inferCategory(expense);
   const vatRate = Number(expense.vatRate ?? expense.taxRate ?? 0);
   const vatAmount = Number(expense.vatAmount ?? expense.tva ?? 0);
-  const vatOrigin = expense.vat_origin || supplierDefaults.default_vat_origin || null;
+  const vatOrigin = (expense.vat_origin || supplierProfile)
+    ? (expense.vat_origin || VAT_ORIGIN.EU)
+    : supplierDefaults.default_vat_origin || null;
   const warnings = [...supplierDefaults.warnings];
   const reasons = [];
   const currentEuTransactionType =
@@ -201,10 +287,15 @@ export function suggestExpenseVatClassification({ expense = {}, supplier = {} } 
   let expenseCategory =
     expense.expense_tax_category ||
     (expense.is_fixed_asset ? EXPENSE_TAX_CATEGORY.INVESTMENT : null) ||
+    supplierProfile?.category ||
     categorySuggestion.category;
   let isFixedAsset = Boolean(expense.is_fixed_asset ?? categorySuggestion.isFixedAsset);
-  let categoryConfidence = categorySuggestion.confidence;
-  let categoryReason = categorySuggestion.reason;
+  let categoryConfidence = expense.vat_classification_confidence || categorySuggestion.confidence;
+  let categoryReason = expense.expense_tax_category
+    ? "Categorie fiscale enregistree"
+    : supplierProfile
+      ? "Proposition issue du profil fournisseur"
+      : categorySuggestion.reason;
   if (!expenseCategory && vatOrigin === VAT_ORIGIN.LU && LUXEMBOURG_VAT_RATES.includes(vatRate)) {
     expenseCategory = EXPENSE_TAX_CATEGORY.GENERAL_EXPENSE;
     isFixedAsset = false;
@@ -228,9 +319,13 @@ export function suggestExpenseVatClassification({ expense = {}, supplier = {} } 
     reverse_charge_rate_status:
       expense.reverse_charge_rate_status || REVERSE_CHARGE_RATE_STATUS.SUGGESTED,
     is_fixed_asset: isFixedAsset,
+    vat_classification_confidence: expense.vat_classification_confidence || (supplierProfile ? "high" : categoryConfidence),
+    eu_transaction_type_source: expense.eu_transaction_type_source || "automatic",
   };
 
-  if (supplierDefaults.default_vat_origin) {
+  if (supplierProfile) {
+    reasons.push("Classification proposee depuis le fournisseur");
+  } else if (supplierDefaults.default_vat_origin) {
     reasons.push(`Origine TVA proposee depuis le pays fournisseur: ${supplierDefaults.default_vat_origin}`);
   }
 
@@ -246,15 +341,13 @@ export function suggestExpenseVatClassification({ expense = {}, supplier = {} } 
   }
 
   if (vatOrigin === VAT_ORIGIN.EU) {
-    if (vatRate === 0) {
-      const euType = inferEuTransactionType(expense, categorySuggestion.category);
-      suggestions.eu_transaction_type =
-        currentEuTransactionType || supplier.default_transaction_type || euType.type;
-      reasons.push(euType.reason);
-    } else {
-      suggestions.eu_transaction_type =
-        currentEuTransactionType || supplier.default_transaction_type || EU_TRANSACTION_TYPE.NONE;
-    }
+    const categoryEuType = getSuggestedEuTransactionType(vatOrigin, expenseCategory);
+    const euType = categoryEuType !== EU_TRANSACTION_TYPE.NONE
+      ? { type: categoryEuType, reason: "Type UE deduit automatiquement de la categorie" }
+      : inferEuTransactionType(expense, expenseCategory);
+    suggestions.eu_transaction_type =
+      currentEuTransactionType || supplier.default_transaction_type || euType.type;
+    reasons.push(euType.reason);
 
     if (FOREIGN_EU_VAT_RATES.includes(vatRate) && vatAmount > 0) {
       warnings.push("TVA etrangere non deductible dans la declaration TVA luxembourgeoise");
@@ -266,10 +359,13 @@ export function suggestExpenseVatClassification({ expense = {}, supplier = {} } 
     reasons.push("Fournisseur hors UE");
   }
 
-  const confidence =
-    warnings.length > 0 || !suggestions.vat_origin || !suggestions.expense_tax_category
-      ? "low"
-      : categoryConfidence;
+  const confidence = !suggestions.vat_origin || !suggestions.expense_tax_category
+    ? "low"
+    : supplierProfile
+      ? "high"
+      : warnings.length > 0
+        ? "low"
+        : categoryConfidence;
 
   return {
     suggestions,
@@ -328,6 +424,24 @@ export function validateExpenseVatClassification(expense = {}, supplier = {}) {
 
   if (normalized.vat_origin === VAT_ORIGIN.EU && (!supplierCountryCode || !isEuCountry(supplierCountryCode))) {
     errors.push("Fournisseur UE sans pays UE coherent.");
+  }
+
+  if (
+    normalized.companyReimbursementStatus === "reimbursed" &&
+    !normalized.reimbursementDate
+  ) {
+    errors.push("Remboursement effectue : date de remboursement obligatoire.");
+  }
+
+  const isForeignVat =
+    normalized.vat_origin === VAT_ORIGIN.EU ||
+    normalized.vat_origin === VAT_ORIGIN.NON_EU ||
+    (FOREIGN_EU_VAT_RATES.includes(Number(normalized.vatRate)) && Number(normalized.vatAmount || 0) > 0);
+  if (
+    normalized.vatDeductionStatus === VAT_DEDUCTION_STATUS.DEDUCTIBLE &&
+    isForeignVat
+  ) {
+    errors.push("TVA deductible incoherente : la TVA etrangere ne peut pas etre deduite au Luxembourg.");
   }
 
   return {

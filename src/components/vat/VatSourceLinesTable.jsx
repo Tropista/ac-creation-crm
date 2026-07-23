@@ -105,6 +105,21 @@ export default function VatSourceLinesTable({
           <option value="">Taux</option>
           {rates.map((value) => <option key={value} value={value}>{value} %</option>)}
         </select>
+        <select value={filters.personalPurchase || ""} onChange={(e) => setFilters((current) => ({ ...current, personalPurchase: e.target.value }))}>
+          <option value="">Achats personnels</option>
+          <option value="personal">Compte personnel</option>
+        </select>
+        <select value={filters.reimbursement || ""} onChange={(e) => setFilters((current) => ({ ...current, reimbursement: e.target.value }))}>
+          <option value="">Remboursement</option>
+          <option value="pending">A rembourser</option>
+          <option value="reimbursed">Deja rembourse</option>
+        </select>
+        <select value={filters.vatDeductionStatus || ""} onChange={(e) => setFilters((current) => ({ ...current, vatDeductionStatus: e.target.value }))}>
+          <option value="">Traitement TVA</option>
+          <option value="non_deductible">TVA non deductible</option>
+          <option value="foreign_vat">TVA etrangere</option>
+          <option value="accountant_review">A verifier</option>
+        </select>
         <input
           placeholder="Case eCDF"
           value={filters.ecdfBox}
@@ -159,6 +174,12 @@ export default function VatSourceLinesTable({
               <th>Type</th>
               <th>Numéro</th>
               <th>Client/Fournisseur</th>
+              <th>Compte personnel</th>
+              <th>Payee par</th>
+              <th>Remboursement</th>
+              <th>Traitement TVA</th>
+              <th>Facture societe</th>
+              <th>N TVA present</th>
               <th>Pays</th>
               <th>Description</th>
               <th>HT</th>
@@ -177,7 +198,7 @@ export default function VatSourceLinesTable({
           <tbody>
             {lines.length === 0 && (
               <tr>
-                <td colSpan={canEditSales ? 18 : 17} className="muted">Aucune ligne source.</td>
+                <td colSpan={canEditSales ? 24 : 23} className="muted">Aucune ligne source.</td>
               </tr>
             )}
             {visibleLines.map((line) => {
@@ -204,6 +225,12 @@ export default function VatSourceLinesTable({
                   <td>{line.type === "sale" ? "Vente" : "Dépense"}</td>
                   <td>{line.number || line.sourceId}</td>
                   <td>{linePartner(line)}</td>
+                  <td>{line.personalAccountPurchase ? "Oui" : "-"}</td>
+                  <td>{line.paidByPerson || "-"}</td>
+                  <td>{line.companyReimbursementStatus === "pending" ? "A rembourser" : line.companyReimbursementStatus === "reimbursed" ? "Rembourse" : "Non"}</td>
+                  <td>{line.vatDeductionStatus || "-"}</td>
+                  <td>{line.invoiceInCompanyName ? "Oui" : "-"}</td>
+                  <td>{line.companyVatNumberOnInvoice ? "Oui" : "-"}</td>
                   <td>{line.country || "-"}</td>
                   <td>{line.description || "-"}</td>
                   <td>{centsMoney(line.htCents)}</td>

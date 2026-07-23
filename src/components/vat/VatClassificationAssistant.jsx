@@ -11,6 +11,7 @@ import {
   buildVatClassificationAssistantState,
   previewVatClassificationImpact,
 } from "../../utils/vatClassificationAssistant";
+import { getSuggestedEuTransactionType } from "../../utils/expenseVatClassification";
 import {
   createHistoricalInvoicePaymentsBatch,
   hasValidPaymentForInvoice,
@@ -166,7 +167,23 @@ export default function VatClassificationAssistant({
     setDraft((current) => ({
       ...current,
       expenses: current.expenses.map((item, i) =>
-        i === index ? { ...item, suggestions: { ...item.suggestions, ...patch }, checked: true } : item
+        i === index ? (() => {
+          const suggestions = { ...item.suggestions, ...patch };
+          const categoryOrOriginChanged =
+            Object.prototype.hasOwnProperty.call(patch, "expense_tax_category") ||
+            Object.prototype.hasOwnProperty.call(patch, "vat_origin");
+          if (categoryOrOriginChanged) {
+            suggestions.eu_transaction_type = getSuggestedEuTransactionType(
+              suggestions.vat_origin,
+              suggestions.expense_tax_category
+            );
+            suggestions.eu_transaction_type_source = "automatic";
+          } else if (Object.prototype.hasOwnProperty.call(patch, "eu_transaction_type")) {
+            suggestions.eu_transaction_type_source = "manual";
+          }
+          suggestions.vat_classification_confidence = "manual";
+          return { ...item, suggestions, confidence: "manual", checked: true };
+        })() : item
       ),
     }));
   }
@@ -401,11 +418,22 @@ export default function VatClassificationAssistant({
                       </select>
                     </td>
                     <td>
-                      <select value={item.suggestions.eu_transaction_type || EU_TRANSACTION_TYPE.NONE} onChange={(event) => updateExpense(index, { eu_transaction_type: event.target.value })}>
-                        <option value={EU_TRANSACTION_TYPE.NONE}>Aucun</option>
-                        <option value={EU_TRANSACTION_TYPE.GOODS}>Bien UE</option>
-                        <option value={EU_TRANSACTION_TYPE.SERVICE}>Service UE</option>
-                      </select>
+                      {item.suggestions.vat_origin === VAT_ORIGIN.EU ? (
+                        <>
+                          <select value={item.suggestions.eu_transaction_type || EU_TRANSACTION_TYPE.NONE} onChange={(event) => updateExpense(index, { eu_transaction_type: event.target.value })}>
+                            <option value={EU_TRANSACTION_TYPE.NONE}>Aucun</option>
+                            <option value={EU_TRANSACTION_TYPE.GOODS}>Bien UE</option>
+                            <option value={EU_TRANSACTION_TYPE.SERVICE}>Service UE</option>
+                          </select>
+                          <small className="muted">
+                            {item.suggestions.eu_transaction_type_source === "manual"
+                              ? "Classification personnalisee."
+                              : "Deduit automatiquement de la categorie."}
+                          </small>
+                        </>
+                      ) : (
+                        <span className="muted">Non applicable</span>
+                      )}
                     </td>
                     <td>
                       <select value={item.suggestions.vat_deductibility || VAT_DEDUCTIBILITY.FULLY} onChange={(event) => updateExpense(index, { vat_deductibility: event.target.value })}>

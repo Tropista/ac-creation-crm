@@ -16,7 +16,10 @@ import {
 } from "../utils/expenseSuppliers";
 import {
   NEW_EXPENSE_VAT_DEFAULTS,
+  PERSONAL_ACCOUNT_PURCHASE_DEFAULTS,
+  VAT_DEDUCTION_STATUS,
   applyExpenseVatSuggestions,
+  getSuggestedEuTransactionType,
   normalizeExpenseVatFields,
   suggestExpenseVatClassification,
   validateExpenseVatClassification,
@@ -86,6 +89,7 @@ const emptyExpenseForm = {
   category: "",
   notes: "",
   ...NEW_EXPENSE_VAT_DEFAULTS,
+  ...PERSONAL_ACCOUNT_PURCHASE_DEFAULTS,
 };
 
 export default function Expenses({
@@ -209,6 +213,18 @@ export default function Expenses({
     setForm((current) => {
       const next = { ...current, [field]: value };
 
+      if (field === "vat_origin" || field === "expense_tax_category") {
+        next.eu_transaction_type = getSuggestedEuTransactionType(
+          field === "vat_origin" ? value : current.vat_origin,
+          field === "expense_tax_category" ? value : current.expense_tax_category
+        );
+        next.eu_transaction_type_source = "automatic";
+      }
+
+      if (field === "eu_transaction_type") {
+        next.eu_transaction_type_source = "manual";
+      }
+
       if (field === "amountHT" || field === "vatRate") {
         resetAmountOverrides();
         return applyHtRateCalculation(
@@ -257,6 +273,8 @@ export default function Expenses({
         );
         if (supplier) {
           next.supplierName = supplier.name;
+          const suggestion = suggestExpenseVatClassification({ expense: next, supplier });
+          return applyExpenseVatSuggestions(next, suggestion.suggestions, { overwrite: false });
         }
       }
       return next;
@@ -443,6 +461,7 @@ export default function Expenses({
         !isPresetVatRate(expense.vatRate)
     );
     setForm(normalizeExpenseVatFields({
+      ...expense,
       supplierId: expense.supplierId || "",
       supplierName: expense.supplierName || "",
       invoiceNumber: expense.invoiceNumber || "",
@@ -532,7 +551,23 @@ export default function Expenses({
         form.asset_useful_life_years === "" || form.asset_useful_life_years == null
           ? ""
           : Number(form.asset_useful_life_years || 0),
+      personalAccountPurchase: Boolean(form.personalAccountPurchase),
+      paidByPerson: String(form.paidByPerson || "").trim(),
+      paidByRole: String(form.paidByRole || "").trim(),
+      companyReimbursementStatus: form.companyReimbursementStatus || "not_reimbursable",
+      reimbursementDate: form.reimbursementDate || null,
+      reimbursementMethod: String(form.reimbursementMethod || "").trim(),
+      vatDeductionStatus: form.vatDeductionStatus || VAT_DEDUCTION_STATUS.ACCOUNTANT_REVIEW,
+      invoiceInCompanyName: Boolean(form.invoiceInCompanyName),
+      invoiceCustomerName: String(form.invoiceCustomerName || "").trim(),
+      companyAddressOnInvoice: Boolean(form.companyAddressOnInvoice),
+      companyVatNumberOnInvoice: Boolean(form.companyVatNumberOnInvoice),
     };
+
+    if (vatErrors.length > 0) {
+      showToast(vatErrors[0], "error");
+      return;
+    }
 
     if (editingId) {
       setData({
@@ -962,6 +997,66 @@ export default function Expenses({
             onChange={(e) => updateForm("notes", e.target.value)}
           />
 
+          <label className="checkbox-line expenses-personal-toggle">
+            <input
+              type="checkbox"
+              checked={Boolean(form.personalAccountPurchase)}
+              onChange={(e) => updateForm("personalAccountPurchase", e.target.checked)}
+            />
+            Achat effectue avec un compte personnel
+          </label>
+
+          {form.personalAccountPurchase ? (
+            <details className="expenses-vat-classification expenses-personal-advance" open>
+              <summary>Avance personnelle</summary>
+              <div className="form-grid">
+                <input
+                  placeholder="Personne ayant paye"
+                  value={form.paidByPerson || ""}
+                  onChange={(e) => updateForm("paidByPerson", e.target.value)}
+                />
+                <input
+                  placeholder="Fonction dans la societe"
+                  value={form.paidByRole || ""}
+                  onChange={(e) => updateForm("paidByRole", e.target.value)}
+                />
+                <select
+                  value={form.companyReimbursementStatus || "not_reimbursable"}
+                  onChange={(e) => updateForm("companyReimbursementStatus", e.target.value)}
+                >
+                  <option value="pending">Remboursable par la societe : oui</option>
+                  <option value="not_reimbursable">Remboursable par la societe : non</option>
+                  <option value="reimbursed">Deja rembourse</option>
+                </select>
+                {form.companyReimbursementStatus === "reimbursed" ? (
+                  <>
+                    <input
+                      type="date"
+                      value={form.reimbursementDate || ""}
+                      onChange={(e) => updateForm("reimbursementDate", e.target.value)}
+                    />
+                    <select
+                      value={form.reimbursementMethod || ""}
+                      onChange={(e) => updateForm("reimbursementMethod", e.target.value)}
+                    >
+                      <option value="">Mode de remboursement</option>
+                      <option value="Virement">Virement</option>
+                      <option value="Especes">Especes</option>
+                      <option value="Carte">Carte</option>
+                      <option value="Autre">Autre</option>
+                    </select>
+                  </>
+                ) : null}
+                <label className="checkbox-line"><input type="checkbox" checked={Boolean(form.invoiceInCompanyName)} onChange={(e) => updateForm("invoiceInCompanyName", e.target.checked)} />Facture au nom de la societe</label>
+                <input placeholder="Nom indique sur la facture" value={form.invoiceCustomerName || ""} onChange={(e) => updateForm("invoiceCustomerName", e.target.value)} />
+                <label className="checkbox-line"><input type="checkbox" checked={Boolean(form.companyAddressOnInvoice)} onChange={(e) => updateForm("companyAddressOnInvoice", e.target.checked)} />Adresse de la societe presente</label>
+                <label className="checkbox-line"><input type="checkbox" checked={Boolean(form.companyVatNumberOnInvoice)} onChange={(e) => updateForm("companyVatNumberOnInvoice", e.target.checked)} />Numero de TVA de la societe present</label>
+              </div>
+              <p className="muted">TVA deductible : recuperable au Luxembourg. TVA non deductible : conservee dans le cout TTC. TVA etrangere : exclue de la TVA deductible LU. A verifier : controle comptable requis.</p>
+              {!form.companyVatNumberOnInvoice ? <p className="warning">Le numero de TVA de la societe n'est pas present sur cette facture. Verifiez la deductibilite de la TVA.</p> : null}
+            </details>
+          ) : null}
+
           <details className="expenses-vat-classification" open>
             <summary>Classification TVA</summary>
             <div className="form-grid">
@@ -988,14 +1083,23 @@ export default function Expenses({
                 <option value={EXPENSE_TAX_CATEGORY.NON_DEDUCTIBLE}>Non deductible</option>
                 <option value={EXPENSE_TAX_CATEGORY.OTHER}>Autre</option>
               </select>
-              <select
-                value={form.eu_transaction_type || EU_TRANSACTION_TYPE.NONE}
-                onChange={(e) => updateForm("eu_transaction_type", e.target.value || null)}
-              >
-                <option value={EU_TRANSACTION_TYPE.NONE}>Type UE: none</option>
-                <option value={EU_TRANSACTION_TYPE.GOODS}>Bien UE</option>
-                <option value={EU_TRANSACTION_TYPE.SERVICE}>Service UE</option>
-              </select>
+              {form.vat_origin === VAT_ORIGIN.EU ? (
+                <label>
+                  <select
+                    value={form.eu_transaction_type || EU_TRANSACTION_TYPE.NONE}
+                    onChange={(e) => updateForm("eu_transaction_type", e.target.value || null)}
+                  >
+                    <option value={EU_TRANSACTION_TYPE.NONE}>Type UE: none</option>
+                    <option value={EU_TRANSACTION_TYPE.GOODS}>Bien UE</option>
+                    <option value={EU_TRANSACTION_TYPE.SERVICE}>Service UE</option>
+                  </select>
+                  <small className="muted">
+                    {form.eu_transaction_type_source === "manual"
+                      ? "Classification personnalisee."
+                      : "Deduit automatiquement de la categorie."}
+                  </small>
+                </label>
+              ) : null}
               <select
                 value={form.vat_deductibility || ""}
                 onChange={(e) => updateForm("vat_deductibility", e.target.value || null)}
@@ -1004,6 +1108,16 @@ export default function Expenses({
                 <option value={VAT_DEDUCTIBILITY.FULLY}>100 % deductible</option>
                 <option value={VAT_DEDUCTIBILITY.PARTIALLY}>Partielle</option>
                 <option value={VAT_DEDUCTIBILITY.NONE}>Non deductible</option>
+              </select>
+              <select
+                required
+                value={form.vatDeductionStatus || VAT_DEDUCTION_STATUS.ACCOUNTANT_REVIEW}
+                onChange={(e) => updateForm("vatDeductionStatus", e.target.value)}
+              >
+                <option value={VAT_DEDUCTION_STATUS.DEDUCTIBLE}>Traitement TVA : deductible</option>
+                <option value={VAT_DEDUCTION_STATUS.NON_DEDUCTIBLE}>Traitement TVA : non deductible</option>
+                <option value={VAT_DEDUCTION_STATUS.FOREIGN_VAT}>Traitement TVA : TVA etrangere</option>
+                <option value={VAT_DEDUCTION_STATUS.ACCOUNTANT_REVIEW}>Traitement TVA : a verifier par le comptable</option>
               </select>
               <input
                 type="number"

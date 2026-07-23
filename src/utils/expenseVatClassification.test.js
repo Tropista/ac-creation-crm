@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyExpenseVatSuggestions,
   getSupplierVatDefaults,
+  getSuggestedEuTransactionType,
   normalizeExpenseVatFields,
   suggestExpenseVatClassification,
   validateExpenseVatClassification,
@@ -70,6 +71,52 @@ describe("expenseVatClassification", () => {
     expect(result.suggestions.eu_transaction_type).toBe("eu_goods");
   });
 
+  it.each([
+    ["Atome3D", "merchandise", "eu_goods"],
+    ["Amazon FR", "merchandise", "eu_goods"],
+    ["Canva", "general_expense", "eu_service"],
+    ["Adobe", "general_expense", "eu_service"],
+  ])("propose un profil fournisseur fiable pour %s", (supplierName, category, euType) => {
+    const result = suggestExpenseVatClassification({
+      expense: { supplierName, vatRate: 0, vatAmount: 0 },
+      supplier: { name: supplierName, country_code: "FR" },
+    });
+
+    expect(result.suggestions).toMatchObject({
+      vat_origin: "EU",
+      expense_tax_category: category,
+      eu_transaction_type: euType,
+      vat_deductibility: "fully_deductible",
+    });
+    expect(result.confidence).toBe("high");
+  });
+
+  it("deduit le Type UE de la categorie choisie", () => {
+    expect(getSuggestedEuTransactionType("EU", "merchandise")).toBe("eu_goods");
+    expect(getSuggestedEuTransactionType("EU", "investment")).toBe("eu_goods");
+    expect(getSuggestedEuTransactionType("EU", "general_expense")).toBe("eu_service");
+    expect(getSuggestedEuTransactionType("EU", "service")).toBe("eu_service");
+    expect(getSuggestedEuTransactionType("LU", "merchandise")).toBe("none");
+  });
+
+  it("ne conserve pas une anomalie automatique lorsque la categorie manuelle est valide", () => {
+    const result = suggestExpenseVatClassification({
+      expense: {
+        supplierName: "Atome3D",
+        vat_origin: "EU",
+        expense_tax_category: "merchandise",
+        eu_transaction_type: "eu_goods",
+        vat_deductibility: "fully_deductible",
+        vat_classification_confidence: "manual",
+      },
+      supplier: { name: "Atome3D", country_code: "FR" },
+    });
+
+    expect(result.confidence).toBe("high");
+    expect(result.warnings.join(" ")).not.toContain("Categorie fiscale non reconnue");
+    expect(result.reasons.join(" ")).not.toContain("Type UE non reconnu");
+  });
+
   it("fournisseur UE avec taux 0 et logiciel => eu_service", () => {
     const result = suggestExpenseVatClassification({
       expense: { notes: "Software subscription", vatRate: 0 },
@@ -98,6 +145,54 @@ describe("expenseVatClassification", () => {
     expect(legacy.vat_review_status).toBeUndefined();
     expect(normalized.vat_review_status).toBe("to_review");
     expect(normalized.reverse_charge_rate_status).toBe("to_review");
+    expect(normalized.personalAccountPurchase).toBe(false);
+    expect(normalized.vatDeductionStatus).toBe("accountant_review");
+  });
+
+  it("conserve les informations d'un achat Amazon paye personnellement", () => {
+    const normalized = normalizeExpenseVatFields({
+      supplierName: "Amazon",
+      personalAccountPurchase: true,
+      paidByPerson: "Couto Da Silva Carla",
+      paidByRole: "Gerante",
+      companyReimbursementStatus: "pending",
+      vatDeductionStatus: "foreign_vat",
+      invoiceInCompanyName: false,
+      companyAddressOnInvoice: true,
+      companyVatNumberOnInvoice: false,
+    });
+
+    expect(normalized).toMatchObject({
+      personalAccountPurchase: true,
+      paidByPerson: "Couto Da Silva Carla",
+      companyReimbursementStatus: "pending",
+      vatDeductionStatus: "foreign_vat",
+      companyAddressOnInvoice: true,
+      companyVatNumberOnInvoice: false,
+    });
+  });
+
+  it("exige une date lorsqu'un remboursement est deja effectue", () => {
+    const validation = validateExpenseVatClassification({
+      companyReimbursementStatus: "reimbursed",
+      vatDeductionStatus: "non_deductible",
+    });
+
+    expect(validation.valid).toBe(false);
+    expect(validation.errors.join(" ")).toContain("date de remboursement obligatoire");
+  });
+
+  it("refuse la TVA deductible lorsque la facture porte une TVA etrangere", () => {
+    const validation = validateExpenseVatClassification({
+      vat_origin: "EU",
+      vatRate: 20,
+      vatAmount: 20,
+      vatDeductionStatus: "deductible",
+      eu_transaction_type: "eu_service",
+    }, { country_code: "FR" });
+
+    expect(validation.valid).toBe(false);
+    expect(validation.errors.join(" ")).toContain("TVA etrangere");
   });
 
   it("correction manuelle non ecrasee silencieusement", () => {

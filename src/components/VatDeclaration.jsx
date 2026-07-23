@@ -65,6 +65,9 @@ const emptyFilters = {
   origin: "",
   category: "",
   rate: "",
+  personalPurchase: "",
+  reimbursement: "",
+  vatDeductionStatus: "",
   reviewStatus: "",
   anomaly: "",
   ecdfBox: "",
@@ -269,6 +272,9 @@ export default function VatDeclaration({
       if (filters.origin && line.vatOrigin !== filters.origin) return false;
       if (filters.category && category !== filters.category) return false;
       if (filters.rate && String(line.rate ?? "") !== filters.rate) return false;
+      if (filters.personalPurchase === "personal" && !line.personalAccountPurchase) return false;
+      if (filters.reimbursement && line.companyReimbursementStatus !== filters.reimbursement) return false;
+      if (filters.vatDeductionStatus && line.vatDeductionStatus !== filters.vatDeductionStatus) return false;
       if (filters.ecdfBox && !(line.ecdfBoxes || []).includes(filters.ecdfBox)) return false;
       if (showOnlyFixes) {
         const toReview =

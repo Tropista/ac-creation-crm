@@ -30,6 +30,7 @@ export const VAT_ANOMALY_CODES = {
   EU_EXPENSE_CATEGORY_MISSING: "EU_EXPENSE_CATEGORY_MISSING",
   REVERSE_CHARGE_RATE_NOT_CONFIRMED: "REVERSE_CHARGE_RATE_NOT_CONFIRMED",
   CASH_BASIS_PAYMENTS_INCOMPLETE: "CASH_BASIS_PAYMENTS_INCOMPLETE",
+  PERSONAL_PURCHASE_VAT_REVIEW_REQUIRED: "PERSONAL_PURCHASE_VAT_REVIEW_REQUIRED",
 };
 
 const BALANCE_AFFECTING_ERROR_CODES = new Set([
@@ -177,6 +178,43 @@ export function moneyToCents(value) {
   const amount = Number(normalized);
   if (!Number.isFinite(amount)) return 0;
   return Math.round(amount * 100);
+}
+
+function toMoneyNumber(value) {
+  if (value === "" || value == null) return null;
+  const normalized = String(value).replace(/\s/g, "").replace(",", ".");
+  const amount = Number(normalized);
+  return Number.isFinite(amount) ? amount : null;
+}
+
+function firstExpenseMoneyValue(expense = {}, fields = [], fallback = 0) {
+  for (const field of fields) {
+    const amount = toMoneyNumber(expense[field]);
+    if (amount != null) return amount;
+  }
+  return fallback;
+}
+
+/**
+ * Montants presents sur la facture fournisseur. L'autoliquidation UE est une
+ * ecriture TVA luxembourgeoise separee et ne fait jamais partie du TTC facture.
+ */
+export function resolveExpenseInvoiceAmounts(expense = {}) {
+  const netAmount = firstExpenseMoneyValue(expense, [
+    "amountHT", "amountHt", "totalHT", "totalHt", "subtotal", "netAmount",
+  ]);
+  const invoicedVatAmount = firstExpenseMoneyValue(expense, [
+    "vatAmount", "amountTVA", "tva", "totalVat",
+  ]);
+  const grossAmount = firstExpenseMoneyValue(expense, [
+    "totalTTC", "amountTTC", "totalTtc", "grossAmount", "total", "amount",
+  ], netAmount + invoicedVatAmount);
+
+  return { netAmount, invoicedVatAmount, grossAmount };
+}
+
+export function isMoneyEqualInCents(left, right, toleranceCents = 1) {
+  return Math.abs(moneyToCents(left) - moneyToCents(right)) <= toleranceCents;
 }
 
 export function centsToMoney(cents) {
@@ -673,9 +711,22 @@ function addExpenseLine(result, expense, suppliers = []) {
   const origin = resolveExpenseOrigin(expense, supplier);
   const category = resolveExpenseCategory(expense);
   const rate = Number(expense.vatRate ?? expense.taxRate ?? 0);
-  const htCents = moneyToCents(expense.amountHT ?? expense.totalHT);
-  const vatCents = moneyToCents(expense.vatAmount ?? expense.amountTVA ?? expense.tva);
-  const ttcCents = moneyToCents(expense.totalTTC ?? expense.amountTTC) || htCents + vatCents;
+  const invoiceAmounts = resolveExpenseInvoiceAmounts(expense);
+  const htCents = moneyToCents(invoiceAmounts.netAmount);
+  const vatCents = moneyToCents(invoiceAmounts.invoicedVatAmount);
+  const ttcCents = moneyToCents(invoiceAmounts.grossAmount);
+  const vatDeductionStatus = expense.vatDeductionStatus ||
+    (expense.vat_deductibility === VAT_DEDUCTIBILITY.NONE
+      ? "non_deductible"
+      : ((expense.vat_origin === VAT_ORIGIN.EU || expense.vat_origin === VAT_ORIGIN.NON_EU) && vatCents > 0)
+        ? "foreign_vat"
+        : expense.vat_deductibility === VAT_DEDUCTIBILITY.FULLY || expense.vat_deductibility === VAT_DEDUCTIBILITY.PARTIALLY
+          ? "deductible"
+          : "accountant_review");
+  const vatExpense =
+    vatDeductionStatus === "deductible"
+      ? expense
+      : { ...expense, vat_deductibility: VAT_DEDUCTIBILITY.NONE };
   const line = {
     id: `expense:${sourceId}`,
     sourceId,
@@ -693,7 +744,18 @@ function addExpenseLine(result, expense, suppliers = []) {
     category,
     vatOrigin: origin,
     euTransactionType: expense.eu_transaction_type || EU_TRANSACTION_TYPE.NONE,
-    deductiblePercentage: normalizeDeductiblePercentage(expense),
+    deductiblePercentage: normalizeDeductiblePercentage(vatExpense),
+    personalAccountPurchase: Boolean(expense.personalAccountPurchase),
+    paidByPerson: expense.paidByPerson || "",
+    paidByRole: expense.paidByRole || "",
+    companyReimbursementStatus: expense.companyReimbursementStatus || "not_reimbursable",
+    reimbursementDate: expense.reimbursementDate || null,
+    reimbursementMethod: expense.reimbursementMethod || "",
+    vatDeductionStatus,
+    invoiceInCompanyName: Boolean(expense.invoiceInCompanyName),
+    invoiceCustomerName: expense.invoiceCustomerName || "",
+    companyAddressOnInvoice: Boolean(expense.companyAddressOnInvoice),
+    companyVatNumberOnInvoice: Boolean(expense.companyVatNumberOnInvoice),
     ecdfBoxes: [],
     anomalies: [],
   };
@@ -743,7 +805,20 @@ function addExpenseLine(result, expense, suppliers = []) {
     pushLineAnomaly(result, line, anomaly("warning", "lu_supplier_foreign_rate", "Fournisseur LU avec taux TVA etranger", line.id));
   }
 
-  if (FOREIGN_EU_VAT_RATES.includes(Number(rate)) && vatCents > 0) {
+  if (expense.personalAccountPurchase && vatDeductionStatus === "accountant_review") {
+    pushLineAnomaly(
+      result,
+      line,
+      anomaly(
+        "warning",
+        VAT_ANOMALY_CODES.PERSONAL_PURCHASE_VAT_REVIEW_REQUIRED,
+        "Achat professionnel effectue avec un compte personnel : traitement TVA a verifier.",
+        line.id
+      )
+    );
+  }
+
+  if (vatDeductionStatus === "foreign_vat" && vatCents > 0) {
     result.totals.foreignVatNonDeductibleCents += vatCents;
     line.foreignVatCents = vatCents;
     pushLineAnomaly(
@@ -752,13 +827,23 @@ function addExpenseLine(result, expense, suppliers = []) {
       anomaly("info", "foreign_vat_not_deductible", "TVA etrangere non deductible dans la declaration TVA luxembourgeoise", line.id)
     );
   } else if (origin === VAT_ORIGIN.LU) {
-    addLuxembourgExpense(result, line, expense, category, htCents, vatCents, ttcCents, rate);
+    addLuxembourgExpense(result, line, vatExpense, category, htCents, vatCents, ttcCents, rate);
   } else if (origin === VAT_ORIGIN.EU) {
-    addEuExpense(result, line, expense, category, htCents, vatCents, rate);
+    addEuExpense(result, line, vatExpense, category, htCents, vatCents, rate);
   }
 
-  if (ttcCents && Math.abs(htCents + vatCents - ttcCents) > 1) {
-    pushLineAnomaly(result, line, anomaly("error", "expense_ttc_mismatch", "Difference entre total HT + TVA et TTC", line.id));
+  const expectedTtcCents = htCents + vatCents;
+  if (Math.abs(expectedTtcCents - ttcCents) > 1) {
+    pushLineAnomaly(
+      result,
+      line,
+      anomaly(
+        "error",
+        "expense_ttc_mismatch",
+        "Difference entre total HT + TVA et TTC",
+        line.id
+      )
+    );
   }
 
   result.lines.push(line);

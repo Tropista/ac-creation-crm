@@ -18,6 +18,7 @@ import {
   createVatReportPayload,
   getEcdfBoxSourceLines,
   getInvoiceFiscalInclusion,
+  resolveExpenseInvoiceAmounts,
 } from "./vatDeclaration";
 
 function box(report, number) {
@@ -435,6 +436,68 @@ describe("vatDeclaration", () => {
     expect(report.anomalies.some((entry) => entry.code === "expense_ttc_mismatch")).toBe(true);
   });
 
+  it("utilise les montants de facture fournisseur pour une acquisition UE Atome3D", () => {
+    const expense = makeExpense({
+      id: "cae0a7d1-ab1e-4c60-a61f-b001afec30b8",
+      amountHT: 70.94,
+      vatAmount: 0,
+      totalTTC: 70.94,
+      vatRate: 0,
+      vat_origin: VAT_ORIGIN.EU,
+      expense_tax_category: EXPENSE_TAX_CATEGORY.MERCHANDISE,
+      eu_transaction_type: EU_TRANSACTION_TYPE.GOODS,
+      reverse_charge_vat_rate: 17,
+      reverse_charge_rate_status: REVERSE_CHARGE_RATE_STATUS.CONFIRMED,
+    });
+    const report = buildVatDeclaration({ expenses: [expense] }, { year: 2026 });
+
+    expect(resolveExpenseInvoiceAmounts(expense)).toEqual({
+      netAmount: 70.94,
+      invoicedVatAmount: 0,
+      grossAmount: 70.94,
+    });
+    expect(report.anomalies.some((entry) => entry.code === "expense_ttc_mismatch")).toBe(false);
+    expect(report.lines[0].reverseChargeVatCents).toBe(1206);
+    expect(report.lines[0].ttcCents).toBe(7094);
+  });
+
+  it("tolere un ecart d'arrondi inferieur ou egal a un centime", () => {
+    const report = buildVatDeclaration({
+      expenses: [makeExpense({ amountHT: 70.94, vatAmount: 0, totalTTC: 70.939999 })],
+    }, { year: 2026 });
+
+    expect(report.anomalies.some((entry) => entry.code === "expense_ttc_mismatch")).toBe(false);
+  });
+
+  it("signale une difference TTC reelle superieure a un centime", () => {
+    const report = buildVatDeclaration({
+      expenses: [makeExpense({ amountHT: 70.94, vatAmount: 0, totalTTC: 70.92 })],
+    }, { year: 2026 });
+
+    expect(report.anomalies.some((entry) => entry.code === "expense_ttc_mismatch")).toBe(true);
+  });
+
+  it("ignore un ancien taxAmount contradictoire lorsqu'une TVA facturee canonique existe", () => {
+    const expense = makeExpense({
+      amountHT: 70.94,
+      vatAmount: 0,
+      totalTTC: 70.94,
+      taxAmount: 12.06,
+    });
+    const report = buildVatDeclaration({ expenses: [expense] }, { year: 2026 });
+
+    expect(resolveExpenseInvoiceAmounts(expense).invoicedVatAmount).toBe(0);
+    expect(report.anomalies.some((entry) => entry.code === "expense_ttc_mismatch")).toBe(false);
+  });
+
+  it("recalcule les anomalies depuis les montants actuels sans conserver une ancienne erreur", () => {
+    const invalid = makeExpense({ id: "recalculate-ttc", amountHT: 70.94, vatAmount: 0, totalTTC: 80 });
+    const corrected = { ...invalid, totalTTC: 70.94 };
+
+    expect(buildVatDeclaration({ expenses: [invalid] }, { year: 2026 }).anomalies.some((entry) => entry.code === "expense_ttc_mismatch")).toBe(true);
+    expect(buildVatDeclaration({ expenses: [corrected] }, { year: 2026 }).anomalies.some((entry) => entry.code === "expense_ttc_mismatch")).toBe(false);
+  });
+
   it("retourne les lignes sources d'une case eCDF", () => {
     const report = buildVatDeclaration({
       invoices: [
@@ -609,5 +672,57 @@ describe("vatDeclaration", () => {
 
     expect(saleReport.report_validation_status).toBe(REPORT_VALIDATION_STATUS.INCOMPLETE);
     expect(expenseReport.report_validation_status).toBe(REPORT_VALIDATION_STATUS.INCOMPLETE);
+  });
+
+  it("conserve un achat personnel professionnel dans les charges et deduit sa TVA LU", () => {
+    const report = buildVatDeclaration({
+      expenses: [makeExpense({
+        id: "amazon-personal-lu",
+        personalAccountPurchase: true,
+        paidByPerson: "Couto Da Silva Carla",
+        companyReimbursementStatus: "pending",
+        vatDeductionStatus: "deductible",
+      })],
+    }, { year: 2026 });
+
+    expect(report.lines[0]).toMatchObject({
+      personalAccountPurchase: true,
+      paidByPerson: "Couto Da Silva Carla",
+      companyReimbursementStatus: "pending",
+      deductibleVatCents: 1700,
+    });
+    expect(report.anomalies.some((entry) => entry.code === VAT_ANOMALY_CODES.PERSONAL_PURCHASE_VAT_REVIEW_REQUIRED)).toBe(false);
+  });
+
+  it("n'ajoute jamais la TVA etrangere d'un achat personnel a la TVA deductible LU", () => {
+    const report = buildVatDeclaration({
+      expenses: [makeExpense({
+        id: "amazon-personal-foreign",
+        personalAccountPurchase: true,
+        vat_origin: VAT_ORIGIN.EU,
+        vatRate: 20,
+        vatAmount: 20,
+        totalTTC: 120,
+        vatDeductionStatus: "foreign_vat",
+      })],
+    }, { year: 2026 });
+
+    expect(report.totals.foreignVatNonDeductibleCents).toBe(2000);
+    expect(report.lines[0].deductibleVatCents || 0).toBe(0);
+  });
+
+  it("signale seulement un avertissement lorsqu'un achat personnel attend le comptable", () => {
+    const report = buildVatDeclaration({
+      expenses: [makeExpense({
+        id: "personal-review",
+        personalAccountPurchase: true,
+        vatDeductionStatus: "accountant_review",
+      })],
+    }, { year: 2026 });
+
+    const warning = report.anomalies.find(
+      (entry) => entry.code === VAT_ANOMALY_CODES.PERSONAL_PURCHASE_VAT_REVIEW_REQUIRED
+    );
+    expect(warning?.level).toBe("warning");
   });
 });

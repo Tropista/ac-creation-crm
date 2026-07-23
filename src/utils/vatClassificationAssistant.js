@@ -324,9 +324,13 @@ export function applyVatClassificationSelections(data = {}, selections = {}) {
       supplierId: expense.supplierId || newSupplierId || expense.supplierId,
       ...update.suggestions,
       reverse_charge_rate_status:
-        update.suggestions.reverse_charge_rate_status === REVERSE_CHARGE_RATE_STATUS.SUGGESTED
+        update.suggestions.vat_origin === VAT_ORIGIN.EU &&
+        update.suggestions.eu_transaction_type &&
+        update.suggestions.eu_transaction_type !== EU_TRANSACTION_TYPE.NONE
           ? REVERSE_CHARGE_RATE_STATUS.CONFIRMED
-          : update.suggestions.reverse_charge_rate_status,
+          : update.suggestions.reverse_charge_rate_status || expense.reverse_charge_rate_status,
+      vat_classification_confidence:
+        update.suggestions.vat_classification_confidence || "manual",
       updatedAt: new Date().toISOString(),
     };
     const supplier = supplierForExpense(next, nextSuppliers) || {};

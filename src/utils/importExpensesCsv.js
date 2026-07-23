@@ -35,6 +35,10 @@ const HEADER_ALIASES = {
   ],
   category: ["categorie", "catégorie", "category"],
   notes: ["notes", "commentaire", "commentaires"],
+  personalAccountPurchase: ["compte personnel", "achat personnel", "personal account purchase"],
+  paidByPerson: ["personne ayant payé", "personne ayant paye", "payé par", "paye par"],
+  companyReimbursementStatus: ["statut remboursement", "remboursement"],
+  vatDeductionStatus: ["traitement tva", "statut deduction tva"],
 };
 
 function normalizeHeader(value) {
@@ -201,6 +205,10 @@ function getCell(row, index) {
   return row[index] ?? "";
 }
 
+function parseBoolean(value) {
+  return ["oui", "yes", "true", "1"].includes(normalizeHeader(value));
+}
+
 function resolveAmounts({ amountHT, vatRate, vatAmount, totalTTC }) {
   let ht = amountHT;
   let rate = vatRate;
@@ -309,6 +317,10 @@ export function parseExpenseImportRow(row, mapping, suppliers = [], rowIndex = 0
     invoiceNumber: String(invoiceNumber || "").trim(),
     category: String(category || "").trim(),
     notes,
+    personalAccountPurchase: parseBoolean(getCell(row, mapping.personalAccountPurchase)),
+    paidByPerson: String(getCell(row, mapping.paidByPerson) || "").trim(),
+    companyReimbursementStatus: String(getCell(row, mapping.companyReimbursementStatus) || "not_reimbursable").trim(),
+    vatDeductionStatus: String(getCell(row, mapping.vatDeductionStatus) || "accountant_review").trim(),
     ...amounts,
     valid: errors.length === 0,
     errors,
@@ -380,6 +392,10 @@ export function buildExpensesFromImportRows(validRows, { uid, now } = {}) {
     totalTTC: row.totalTTC,
     category: row.category,
     notes: row.notes,
+    personalAccountPurchase: row.personalAccountPurchase,
+    paidByPerson: row.paidByPerson,
+    companyReimbursementStatus: row.companyReimbursementStatus,
+    vatDeductionStatus: row.vatDeductionStatus,
     source: "csv-import",
   }));
 }

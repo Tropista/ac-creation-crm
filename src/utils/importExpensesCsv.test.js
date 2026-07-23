@@ -119,6 +119,25 @@ describe("importExpensesCsv", () => {
     });
   });
 
+  it("importe les informations d'avance personnelle et le traitement TVA", () => {
+    const result = parseExpensesCsv([
+      "date;fournisseur;montant_ht;montant_ttc;compte personnel;personne ayant paye;statut remboursement;traitement tva",
+      "15/05/2026;Amazon;100;120;Oui;Couto Da Silva Carla;pending;foreign_vat",
+    ].join("\n"), suppliers);
+
+    const expense = buildExpensesFromImportRows(result.validRows, {
+      uid: () => "personal-import",
+      now: "2026-05-15T10:00:00.000Z",
+    })[0];
+
+    expect(expense).toMatchObject({
+      personalAccountPurchase: true,
+      paidByPerson: "Couto Da Silva Carla",
+      companyReimbursementStatus: "pending",
+      vatDeductionStatus: "foreign_vat",
+    });
+  });
+
   it("reports missing required headers", () => {
     const result = parseExpensesCsv("libelle;montant\nTest;10", suppliers);
 

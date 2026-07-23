@@ -51,6 +51,10 @@ describe("exportCsv", () => {
           vatAmount: 8.5,
           totalTTC: 58.5,
           category: "Matières",
+          personalAccountPurchase: true,
+          paidByPerson: "Couto Da Silva Carla",
+          companyReimbursementStatus: "pending",
+          vatDeductionStatus: "non_deductible",
         },
       ],
     };
@@ -67,6 +71,8 @@ describe("exportCsv", () => {
     expect(built.rows.some((row) => row[0] === "Journal des achats (dépenses)")).toBe(
       true
     );
+    expect(built.rows.some((row) => row.includes("Compte personnel"))).toBe(true);
+    expect(built.rows.some((row) => row.includes("Couto Da Silva Carla"))).toBe(true);
   });
 
   it("filters monthly accounting export by selected month", () => {
