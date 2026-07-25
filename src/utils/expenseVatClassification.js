@@ -28,6 +28,7 @@ export const DEFAULT_EXPENSE_VAT_FIELDS = {
 
 export const NEW_EXPENSE_VAT_DEFAULTS = {
   ...DEFAULT_EXPENSE_VAT_FIELDS,
+  vatClassificationSource: "automatic",
   vat_review_status: VAT_REVIEW_STATUS.AUTO_SUGGESTED,
   reverse_charge_rate_status: REVERSE_CHARGE_RATE_STATUS.SUGGESTED,
 };
@@ -37,6 +38,59 @@ export const VAT_DEDUCTION_STATUS = {
   NON_DEDUCTIBLE: "non_deductible",
   FOREIGN_VAT: "foreign_vat",
   ACCOUNTANT_REVIEW: "accountant_review",
+};
+
+export const VAT_CLASSIFICATION_SOURCE = {
+  AUTOMATIC: "automatic",
+  MANUAL: "manual",
+};
+
+export const EXPENSE_CATEGORY_OPTIONS = [
+  { value: "goods", label: "Marchandises / matières premières" },
+  { value: "consumables", label: "Consommables" },
+  { value: "small_equipment", label: "Petit matériel et outillage" },
+  { value: "general_expenses", label: "Frais généraux" },
+  { value: "software_subscription", label: "Logiciels et abonnements" },
+  { value: "external_services", label: "Services externes" },
+  { value: "advertising", label: "Publicité et marketing" },
+  { value: "transport", label: "Transport et livraison" },
+  { value: "telecommunications", label: "Télécommunications" },
+  { value: "office_supplies", label: "Fournitures de bureau" },
+  { value: "fixed_asset", label: "Immobilisation" },
+  { value: "maintenance", label: "Entretien et réparation" },
+  { value: "travel", label: "Déplacements" },
+  { value: "other", label: "Autre" },
+];
+
+const EXPENSE_CATEGORY_VALUES = new Set(EXPENSE_CATEGORY_OPTIONS.map(({ value }) => value));
+
+const LEGACY_EXPENSE_CATEGORY_ALIASES = {
+  materiel: "small_equipment",
+  outillage: "small_equipment",
+  marchandise: "goods",
+  marchandises: "goods",
+  matiere: "goods",
+  matieres: "goods",
+  consommable: "consumables",
+  consommables: "consumables",
+  fourniture: "office_supplies",
+  fournitures: "office_supplies",
+  logiciel: "software_subscription",
+  logiciels: "software_subscription",
+  abonnement: "software_subscription",
+  abonnements: "software_subscription",
+  publicite: "advertising",
+  marketing: "advertising",
+  transport: "transport",
+  livraison: "transport",
+  frais_generaux: "general_expenses",
+  service: "external_services",
+  services: "external_services",
+  immobilisation: "fixed_asset",
+  entretien: "maintenance",
+  reparation: "maintenance",
+  deplacement: "travel",
+  deplacements: "travel",
 };
 
 export const PERSONAL_ACCOUNT_PURCHASE_DEFAULTS = {
@@ -52,6 +106,47 @@ export const PERSONAL_ACCOUNT_PURCHASE_DEFAULTS = {
   companyAddressOnInvoice: false,
   companyVatNumberOnInvoice: false,
 };
+
+export const PERSONAL_PURCHASE_CONTACT_DEFAULTS = {
+  paidByPerson: "Couto Da Silva Carla",
+  paidByRole: "Gérante",
+};
+
+function firstNonEmptyText(...values) {
+  return values.find((value) => String(value || "").trim()) || "";
+}
+
+export function resolvePersonalPurchaseDefaults(settings = {}) {
+  const configuredDefaults = settings.personalPurchaseDefaults || {};
+
+  return {
+    paidByPerson: firstNonEmptyText(
+      configuredDefaults.paidByPerson,
+      settings.personalPurchasePaidByPerson,
+      settings.managerName,
+      settings.managingDirectorName,
+      PERSONAL_PURCHASE_CONTACT_DEFAULTS.paidByPerson
+    ),
+    paidByRole: firstNonEmptyText(
+      configuredDefaults.paidByRole,
+      settings.personalPurchasePaidByRole,
+      settings.managerRole,
+      settings.managingDirectorRole,
+      PERSONAL_PURCHASE_CONTACT_DEFAULTS.paidByRole
+    ),
+  };
+}
+
+export function applyPersonalPurchaseDefaults(expense = {}, settings = {}) {
+  if (!expense.personalAccountPurchase) return { ...expense };
+
+  const defaults = resolvePersonalPurchaseDefaults(settings);
+  return {
+    ...expense,
+    paidByPerson: firstNonEmptyText(expense.paidByPerson, defaults.paidByPerson),
+    paidByRole: firstNonEmptyText(expense.paidByRole, defaults.paidByRole),
+  };
+}
 
 function inferVatDeductionStatus(expense = {}) {
   if (Object.values(VAT_DEDUCTION_STATUS).includes(expense.vatDeductionStatus)) {
@@ -80,6 +175,88 @@ function normalizeText(value) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
+}
+
+export function normalizeExpenseCategory(value) {
+  const normalized = normalizeText(value).replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  if (!normalized) return "";
+  if (EXPENSE_CATEGORY_VALUES.has(normalized)) return normalized;
+  return LEGACY_EXPENSE_CATEGORY_ALIASES[normalized] || "other";
+}
+
+export function getExpenseCategoryLabel(value) {
+  const normalized = normalizeExpenseCategory(value);
+  return EXPENSE_CATEGORY_OPTIONS.find((option) => option.value === normalized)?.label || "Autre";
+}
+
+function getVatDeductionStatusRecommendation(expense = {}, vatOrigin) {
+  const vatRate = Number(expense.vatRate ?? expense.taxRate ?? 0);
+  const vatAmount = Number(expense.vatAmount ?? expense.tva ?? 0);
+
+  if (expense.vat_deductibility === VAT_DEDUCTIBILITY.NONE) {
+    return VAT_DEDUCTION_STATUS.NON_DEDUCTIBLE;
+  }
+  if ((vatOrigin === VAT_ORIGIN.EU || vatOrigin === VAT_ORIGIN.NON_EU) && vatAmount > 0) {
+    return VAT_DEDUCTION_STATUS.FOREIGN_VAT;
+  }
+  if (vatOrigin === VAT_ORIGIN.LU && LUXEMBOURG_VAT_RATES.includes(vatRate) && vatAmount >= 0) {
+    return VAT_DEDUCTION_STATUS.DEDUCTIBLE;
+  }
+  if (vatOrigin === VAT_ORIGIN.EU && !(FOREIGN_EU_VAT_RATES.includes(vatRate) && vatAmount > 0)) {
+    return VAT_DEDUCTION_STATUS.DEDUCTIBLE;
+  }
+  return VAT_DEDUCTION_STATUS.ACCOUNTANT_REVIEW;
+}
+
+export function getExpenseCategoryVatRecommendation(expense = {}) {
+  const category = normalizeExpenseCategory(expense.category);
+  const vatOrigin = expense.vat_origin || null;
+  const goodsCategories = new Set(["goods", "consumables", "small_equipment", "office_supplies"]);
+  const serviceCategories = new Set([
+    "general_expenses", "software_subscription", "external_services", "advertising",
+    "transport", "telecommunications", "maintenance", "travel",
+  ]);
+  const isFixedAsset = category === "fixed_asset";
+  const expenseTaxCategory = isFixedAsset
+    ? EXPENSE_TAX_CATEGORY.INVESTMENT
+    : goodsCategories.has(category)
+      ? EXPENSE_TAX_CATEGORY.MERCHANDISE
+      : serviceCategories.has(category)
+        ? category === "software_subscription" || category === "external_services"
+          ? EXPENSE_TAX_CATEGORY.SERVICE
+          : EXPENSE_TAX_CATEGORY.GENERAL_EXPENSE
+        : EXPENSE_TAX_CATEGORY.OTHER;
+
+  return {
+    category,
+    vat_origin: vatOrigin,
+    expense_tax_category: expenseTaxCategory,
+    eu_transaction_type:
+      vatOrigin === VAT_ORIGIN.EU
+        ? (isFixedAsset || goodsCategories.has(category)
+          ? EU_TRANSACTION_TYPE.GOODS
+          : serviceCategories.has(category)
+            ? EU_TRANSACTION_TYPE.SERVICE
+            : EU_TRANSACTION_TYPE.NONE)
+        : EU_TRANSACTION_TYPE.NONE,
+    vat_deductibility: VAT_DEDUCTIBILITY.FULLY,
+    deductible_percentage: 100,
+    is_fixed_asset: isFixedAsset,
+    vatDeductionStatus: getVatDeductionStatusRecommendation(expense, vatOrigin),
+    vatClassificationSource: VAT_CLASSIFICATION_SOURCE.AUTOMATIC,
+    eu_transaction_type_source: "automatic",
+  };
+}
+
+export function applyExpenseCategoryVatRecommendation(expense = {}) {
+  return {
+    ...expense,
+    ...getExpenseCategoryVatRecommendation(expense),
+  };
+}
+
+export function shouldConfirmExpenseCategoryChange(expense = {}) {
+  return expense.vatClassificationSource === VAT_CLASSIFICATION_SOURCE.MANUAL;
 }
 
 function includesAny(text, words) {
@@ -165,6 +342,9 @@ export function normalizeExpenseVatFields(expense = {}, { forNew = false } = {})
     invoiceCustomerName: String(expense.invoiceCustomerName || ""),
     companyAddressOnInvoice: Boolean(expense.companyAddressOnInvoice),
     companyVatNumberOnInvoice: Boolean(expense.companyVatNumberOnInvoice),
+    category: normalizeExpenseCategory(expense.category),
+    vatClassificationSource:
+      expense.vatClassificationSource || VAT_CLASSIFICATION_SOURCE.AUTOMATIC,
   };
 }
 
@@ -434,9 +614,8 @@ export function validateExpenseVatClassification(expense = {}, supplier = {}) {
   }
 
   const isForeignVat =
-    normalized.vat_origin === VAT_ORIGIN.EU ||
-    normalized.vat_origin === VAT_ORIGIN.NON_EU ||
-    (FOREIGN_EU_VAT_RATES.includes(Number(normalized.vatRate)) && Number(normalized.vatAmount || 0) > 0);
+    (normalized.vat_origin === VAT_ORIGIN.EU || normalized.vat_origin === VAT_ORIGIN.NON_EU) &&
+    Number(normalized.vatAmount || 0) > 0;
   if (
     normalized.vatDeductionStatus === VAT_DEDUCTION_STATUS.DEDUCTIBLE &&
     isForeignVat

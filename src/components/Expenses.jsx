@@ -17,10 +17,15 @@ import {
 import {
   NEW_EXPENSE_VAT_DEFAULTS,
   PERSONAL_ACCOUNT_PURCHASE_DEFAULTS,
+  EXPENSE_CATEGORY_OPTIONS,
   VAT_DEDUCTION_STATUS,
+  VAT_CLASSIFICATION_SOURCE,
+  applyExpenseCategoryVatRecommendation,
+  applyPersonalPurchaseDefaults,
   applyExpenseVatSuggestions,
-  getSuggestedEuTransactionType,
+  normalizeExpenseCategory,
   normalizeExpenseVatFields,
+  shouldConfirmExpenseCategoryChange,
   suggestExpenseVatClassification,
   validateExpenseVatClassification,
 } from "../utils/expenseVatClassification";
@@ -213,12 +218,30 @@ export default function Expenses({
     setForm((current) => {
       const next = { ...current, [field]: value };
 
-      if (field === "vat_origin" || field === "expense_tax_category") {
-        next.eu_transaction_type = getSuggestedEuTransactionType(
-          field === "vat_origin" ? value : current.vat_origin,
-          field === "expense_tax_category" ? value : current.expense_tax_category
-        );
-        next.eu_transaction_type_source = "automatic";
+      if (field === "personalAccountPurchase" && value) {
+        return applyPersonalPurchaseDefaults(next, data.settings || {});
+      }
+
+      if (field === "vat_origin") {
+        if (value !== VAT_ORIGIN.EU) {
+          next.eu_transaction_type = EU_TRANSACTION_TYPE.NONE;
+          next.eu_transaction_type_source = "automatic";
+        }
+        if (current.category && current.vatClassificationSource !== VAT_CLASSIFICATION_SOURCE.MANUAL) {
+          return applyExpenseCategoryVatRecommendation(next);
+        }
+        return next;
+      }
+
+      if ([
+        "expense_tax_category",
+        "eu_transaction_type",
+        "vat_deductibility",
+        "deductible_percentage",
+        "is_fixed_asset",
+        "vatDeductionStatus",
+      ].includes(field)) {
+        next.vatClassificationSource = VAT_CLASSIFICATION_SOURCE.MANUAL;
       }
 
       if (field === "eu_transaction_type") {
@@ -251,6 +274,23 @@ export default function Expenses({
       }
 
       return next;
+    });
+  }
+
+  async function handleExpenseCategoryChange(value) {
+    const category = normalizeExpenseCategory(value);
+    const needsConfirmation = Boolean(category) && shouldConfirmExpenseCategoryChange(form);
+    const applyRecommendation = !needsConfirmation || await confirmAction({
+      title: "Mettre à jour la classification TVA ?",
+      message: "La catégorie a changé. Voulez-vous appliquer la classification TVA recommandée ?",
+      detail: "Conserver ma classification laisse vos choix TVA actuels inchangés.",
+      confirmLabel: "Appliquer la recommandation",
+      cancelLabel: "Conserver ma classification",
+    });
+
+    setForm((current) => {
+      const next = { ...current, category };
+      return applyRecommendation ? applyExpenseCategoryVatRecommendation(next) : next;
     });
   }
 
@@ -460,7 +500,7 @@ export default function Expenses({
         expense.vatRate !== "" &&
         !isPresetVatRate(expense.vatRate)
     );
-    setForm(normalizeExpenseVatFields({
+    const normalizedExpense = normalizeExpenseVatFields({
       ...expense,
       supplierId: expense.supplierId || "",
       supplierName: expense.supplierName || "",
@@ -470,9 +510,10 @@ export default function Expenses({
       vatRate: expense.vatRate != null ? String(expense.vatRate) : "",
       vatAmount: expense.vatAmount != null ? String(expense.vatAmount) : "",
       totalTTC: expense.totalTTC != null ? String(expense.totalTTC) : "",
-      category: expense.category || "",
+      category: normalizeExpenseCategory(expense.category),
       notes: expense.notes || "",
-    }));
+    });
+    setForm(applyPersonalPurchaseDefaults(normalizedExpense, data.settings || {}));
   }
 
   function submitExpense(e) {
@@ -528,7 +569,7 @@ export default function Expenses({
       vatRate: vatRate ?? 0,
       vatAmount: vatAmount ?? 0,
       totalTTC: totalTTC ?? 0,
-      category: form.category.trim(),
+      category: normalizeExpenseCategory(form.category),
       notes: form.notes.trim(),
       source: "manual",
       vat_origin: form.vat_origin || null,
@@ -537,6 +578,8 @@ export default function Expenses({
       vat_deductibility: form.vat_deductibility || null,
       deductible_percentage: Number(form.deductible_percentage || 100),
       vat_review_status: form.vat_review_status || VAT_REVIEW_STATUS.TO_REVIEW,
+      vatClassificationSource:
+        form.vatClassificationSource || VAT_CLASSIFICATION_SOURCE.AUTOMATIC,
       reverse_charge_vat_rate: Number(form.reverse_charge_vat_rate || 17),
       reverse_charge_rate_status:
         form.reverse_charge_rate_status || REVERSE_CHARGE_RATE_STATUS.TO_REVIEW,
@@ -985,11 +1028,15 @@ export default function Expenses({
             onChange={(e) => updateForm("totalTTC", e.target.value)}
           />
 
-          <input
-            placeholder="Catégorie (matériel, consommables...)"
-            value={form.category}
-            onChange={(e) => updateForm("category", e.target.value)}
-          />
+          <select
+            value={form.category || ""}
+            onChange={(e) => handleExpenseCategoryChange(e.target.value)}
+          >
+            <option value="">Catégorie</option>
+            {EXPENSE_CATEGORY_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
 
           <textarea
             placeholder="Notes"
@@ -1083,23 +1130,17 @@ export default function Expenses({
                 <option value={EXPENSE_TAX_CATEGORY.NON_DEDUCTIBLE}>Non deductible</option>
                 <option value={EXPENSE_TAX_CATEGORY.OTHER}>Autre</option>
               </select>
-              {form.vat_origin === VAT_ORIGIN.EU ? (
-                <label>
-                  <select
-                    value={form.eu_transaction_type || EU_TRANSACTION_TYPE.NONE}
-                    onChange={(e) => updateForm("eu_transaction_type", e.target.value || null)}
-                  >
-                    <option value={EU_TRANSACTION_TYPE.NONE}>Type UE: none</option>
-                    <option value={EU_TRANSACTION_TYPE.GOODS}>Bien UE</option>
-                    <option value={EU_TRANSACTION_TYPE.SERVICE}>Service UE</option>
-                  </select>
-                  <small className="muted">
-                    {form.eu_transaction_type_source === "manual"
-                      ? "Classification personnalisee."
-                      : "Deduit automatiquement de la categorie."}
-                  </small>
-                </label>
-              ) : null}
+              <select
+                disabled={form.vat_origin !== VAT_ORIGIN.EU}
+                value={form.vat_origin === VAT_ORIGIN.EU
+                  ? form.eu_transaction_type || EU_TRANSACTION_TYPE.NONE
+                  : EU_TRANSACTION_TYPE.NONE}
+                onChange={(e) => updateForm("eu_transaction_type", e.target.value || null)}
+              >
+                <option value={EU_TRANSACTION_TYPE.NONE}>Type UE : non applicable</option>
+                <option value={EU_TRANSACTION_TYPE.GOODS}>Bien UE</option>
+                <option value={EU_TRANSACTION_TYPE.SERVICE}>Service UE</option>
+              </select>
               <select
                 value={form.vat_deductibility || ""}
                 onChange={(e) => updateForm("vat_deductibility", e.target.value || null)}
@@ -1162,6 +1203,12 @@ export default function Expenses({
                 Immobilisation
               </label>
             </div>
+
+            <p className="muted">
+              {form.vatClassificationSource === VAT_CLASSIFICATION_SOURCE.MANUAL
+                ? "Classification personnalisée."
+                : "Classification déduite automatiquement de la catégorie."}
+            </p>
 
             {vatValidationErrors.length > 0 && (
               <div className="muted">

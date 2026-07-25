@@ -3,6 +3,7 @@ import {
   resolveProductSupplier,
   suggestedReorderQty,
 } from "./stock";
+import { getExpenseCategoryLabel } from "./expenseVatClassification";
 
 function escapeCsvCell(value) {
   const str = String(value ?? "");
@@ -90,6 +91,7 @@ export function exportExpensesCsv(expenses, filename) {
     "Catégorie",
     "Compte personnel",
     "Personne ayant payé",
+    "Fonction",
     "Statut remboursement",
     "Traitement TVA",
   ];
@@ -104,9 +106,10 @@ export function exportExpensesCsv(expenses, filename) {
       : "",
     formatCsvNumber(expense.vatAmount),
     formatCsvNumber(expense.totalTTC),
-    expense.category || "",
+    getExpenseCategoryLabel(expense.category),
     expense.personalAccountPurchase ? "Oui" : "Non",
     expense.paidByPerson || "",
+    expense.paidByRole || "",
     expense.companyReimbursementStatus || "not_reimbursable",
     expense.vatDeductionStatus || "accountant_review",
   ]);
@@ -263,6 +266,7 @@ export function buildMonthlyAccountingCsvRows(data, { year, month } = {}) {
       "Catégorie",
       "Compte personnel",
       "Personne ayant payé",
+      "Fonction",
       "Statut remboursement",
       "Traitement TVA",
     ],
@@ -276,9 +280,10 @@ export function buildMonthlyAccountingCsvRows(data, { year, month } = {}) {
         : "",
       formatCsvNumber(expense.vatAmount),
       formatCsvNumber(expense.totalTTC),
-      expense.category || "",
+      getExpenseCategoryLabel(expense.category),
       expense.personalAccountPurchase ? "Oui" : "Non",
       expense.paidByPerson || "",
+      expense.paidByRole || "",
       expense.companyReimbursementStatus || "not_reimbursable",
       expense.vatDeductionStatus || "accountant_review",
     ]),

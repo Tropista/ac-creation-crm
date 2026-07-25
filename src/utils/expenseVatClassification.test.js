@@ -1,14 +1,148 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyPersonalPurchaseDefaults,
   applyExpenseVatSuggestions,
+  applyExpenseCategoryVatRecommendation,
+  getExpenseCategoryVatRecommendation,
   getSupplierVatDefaults,
   getSuggestedEuTransactionType,
+  normalizeExpenseCategory,
   normalizeExpenseVatFields,
+  resolvePersonalPurchaseDefaults,
+  shouldConfirmExpenseCategoryChange,
   suggestExpenseVatClassification,
   validateExpenseVatClassification,
 } from "./expenseVatClassification";
 
 describe("expenseVatClassification", () => {
+  it.each([
+    ["small_equipment", "EU", "merchandise", "eu_goods", false],
+    ["goods", "EU", "merchandise", "eu_goods", false],
+    ["fixed_asset", "EU", "investment", "eu_goods", true],
+    ["software_subscription", "EU", "service", "eu_service", false],
+    ["general_expenses", "EU", "general_expense", "eu_service", false],
+    ["goods", "LU", "merchandise", "none", false],
+    ["goods", "NON_EU", "merchandise", "none", false],
+  ])("propose la classification TVA de %s pour l'origine %s", (category, origin, taxCategory, euType, isFixedAsset) => {
+    expect(getExpenseCategoryVatRecommendation({
+      category,
+      vat_origin: origin,
+      vatRate: 0,
+      vatAmount: 0,
+    })).toMatchObject({
+      expense_tax_category: taxCategory,
+      eu_transaction_type: euType,
+      vat_deductibility: "fully_deductible",
+      is_fixed_asset: isFixedAsset,
+      vatClassificationSource: "automatic",
+    });
+  });
+
+  it("met à jour une classification automatique quand la catégorie change", () => {
+    const result = applyExpenseCategoryVatRecommendation({
+      category: "small_equipment",
+      vat_origin: "EU",
+      vatRate: 0,
+      vatAmount: 0,
+    });
+
+    expect(result).toMatchObject({
+      expense_tax_category: "merchandise",
+      eu_transaction_type: "eu_goods",
+      vatClassificationSource: "automatic",
+    });
+  });
+
+  it("identifie une classification personnalisée avant un changement de catégorie", () => {
+    expect(shouldConfirmExpenseCategoryChange({ vatClassificationSource: "manual" })).toBe(true);
+    expect(shouldConfirmExpenseCategoryChange({ vatClassificationSource: "automatic" })).toBe(false);
+  });
+
+  it("normalise les anciennes catégories et classe une valeur inconnue en autre", () => {
+    expect(normalizeExpenseCategory("matériel")).toBe("small_equipment");
+    expect(normalizeExpenseCategory("marchandises")).toBe("goods");
+    expect(normalizeExpenseCategory("catégorie inconnue")).toBe("other");
+  });
+
+  it("laisse une acquisition UE à 0 % déductible", () => {
+    const validation = validateExpenseVatClassification({
+      vat_origin: "EU",
+      eu_transaction_type: "eu_goods",
+      vat_deductibility: "fully_deductible",
+      vatDeductionStatus: "deductible",
+      vatRate: 0,
+      vatAmount: 0,
+    }, { country_code: "FR" });
+
+    expect(validation.errors).toEqual([]);
+  });
+
+  it("préremplit la personne et la fonction pour un achat personnel", () => {
+    expect(applyPersonalPurchaseDefaults({ personalAccountPurchase: true })).toMatchObject({
+      paidByPerson: "Couto Da Silva Carla",
+      paidByRole: "Gérante",
+    });
+  });
+
+  it("conserve les informations déjà saisies pour un achat personnel", () => {
+    expect(applyPersonalPurchaseDefaults({
+      personalAccountPurchase: true,
+      paidByPerson: "Autre personne",
+      paidByRole: "Associée",
+    })).toMatchObject({
+      paidByPerson: "Autre personne",
+      paidByRole: "Associée",
+    });
+  });
+
+  it("ne modifie pas les valeurs lorsque l'achat personnel est décoché", () => {
+    const expense = {
+      personalAccountPurchase: false,
+      paidByPerson: "Couto Da Silva Carla",
+      paidByRole: "Gérante",
+    };
+
+    expect(applyPersonalPurchaseDefaults(expense)).toEqual(expense);
+  });
+
+  it("conserve les valeurs après décochage puis recochage", () => {
+    const initiallyChecked = applyPersonalPurchaseDefaults({ personalAccountPurchase: true });
+    const unchecked = applyPersonalPurchaseDefaults({
+      ...initiallyChecked,
+      personalAccountPurchase: false,
+    });
+    const checkedAgain = applyPersonalPurchaseDefaults({
+      ...unchecked,
+      personalAccountPurchase: true,
+    });
+
+    expect(checkedAgain).toMatchObject({
+      paidByPerson: "Couto Da Silva Carla",
+      paidByRole: "Gérante",
+    });
+  });
+
+  it("complète une ancienne dépense personnelle dont les champs sont absents", () => {
+    expect(applyPersonalPurchaseDefaults({ personalAccountPurchase: true })).toMatchObject({
+      paidByPerson: "Couto Da Silva Carla",
+      paidByRole: "Gérante",
+    });
+  });
+
+  it("utilise les paramètres société avant les valeurs par défaut", () => {
+    const settings = {
+      personalPurchaseDefaults: {
+        paidByPerson: "Marie Exemple",
+        paidByRole: "Directrice",
+      },
+    };
+
+    expect(resolvePersonalPurchaseDefaults(settings)).toEqual({
+      paidByPerson: "Marie Exemple",
+      paidByRole: "Directrice",
+    });
+  });
+
   it("fournisseur sans pays => origine null et avertissement", () => {
     const defaults = getSupplierVatDefaults({ name: "Inconnu" });
     expect(defaults.default_vat_origin).toBeNull();
@@ -139,7 +273,7 @@ describe("expenseVatClassification", () => {
   });
 
   it("ancienne depense => to_review sans ecriture automatique", () => {
-    const legacy = { id: "old", amountHT: 10 };
+    const legacy = { id: "old", amountHT: 10, category: "matériel" };
     const normalized = normalizeExpenseVatFields(legacy);
 
     expect(legacy.vat_review_status).toBeUndefined();
@@ -147,6 +281,7 @@ describe("expenseVatClassification", () => {
     expect(normalized.reverse_charge_rate_status).toBe("to_review");
     expect(normalized.personalAccountPurchase).toBe(false);
     expect(normalized.vatDeductionStatus).toBe("accountant_review");
+    expect(normalized.category).toBe("small_equipment");
   });
 
   it("conserve les informations d'un achat Amazon paye personnellement", () => {

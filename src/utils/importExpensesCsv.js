@@ -2,7 +2,7 @@ import {
   normalizeSupplierName,
   resolveSupplierForExpense,
 } from "./expenseSuppliers";
-import { NEW_EXPENSE_VAT_DEFAULTS } from "./expenseVatClassification";
+import { NEW_EXPENSE_VAT_DEFAULTS, normalizeExpenseCategory } from "./expenseVatClassification";
 
 const HEADER_ALIASES = {
   date: ["date", "date achat", "date d achat", "purchase date"],
@@ -37,6 +37,7 @@ const HEADER_ALIASES = {
   notes: ["notes", "commentaire", "commentaires"],
   personalAccountPurchase: ["compte personnel", "achat personnel", "personal account purchase"],
   paidByPerson: ["personne ayant payé", "personne ayant paye", "payé par", "paye par"],
+  paidByRole: ["fonction", "fonction dans la société", "fonction dans la societe", "rôle", "role"],
   companyReimbursementStatus: ["statut remboursement", "remboursement"],
   vatDeductionStatus: ["traitement tva", "statut deduction tva"],
 };
@@ -315,10 +316,11 @@ export function parseExpenseImportRow(row, mapping, suppliers = [], rowIndex = 0
     supplierId: supplierMatch.supplierId,
     supplierMatched: supplierMatch.matched,
     invoiceNumber: String(invoiceNumber || "").trim(),
-    category: String(category || "").trim(),
+    category: normalizeExpenseCategory(category),
     notes,
     personalAccountPurchase: parseBoolean(getCell(row, mapping.personalAccountPurchase)),
     paidByPerson: String(getCell(row, mapping.paidByPerson) || "").trim(),
+    paidByRole: String(getCell(row, mapping.paidByRole) || "").trim(),
     companyReimbursementStatus: String(getCell(row, mapping.companyReimbursementStatus) || "not_reimbursable").trim(),
     vatDeductionStatus: String(getCell(row, mapping.vatDeductionStatus) || "accountant_review").trim(),
     ...amounts,
@@ -390,10 +392,11 @@ export function buildExpensesFromImportRows(validRows, { uid, now } = {}) {
     vatRate: row.vatRate,
     vatAmount: row.vatAmount,
     totalTTC: row.totalTTC,
-    category: row.category,
+    category: normalizeExpenseCategory(row.category),
     notes: row.notes,
     personalAccountPurchase: row.personalAccountPurchase,
     paidByPerson: row.paidByPerson,
+    paidByRole: row.paidByRole,
     companyReimbursementStatus: row.companyReimbursementStatus,
     vatDeductionStatus: row.vatDeductionStatus,
     source: "csv-import",

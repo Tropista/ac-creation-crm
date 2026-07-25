@@ -116,13 +116,14 @@ describe("importExpensesCsv", () => {
       source: "csv-import",
       supplierId: "s1",
       totalTTC: 120,
+      category: "small_equipment",
     });
   });
 
   it("importe les informations d'avance personnelle et le traitement TVA", () => {
     const result = parseExpensesCsv([
-      "date;fournisseur;montant_ht;montant_ttc;compte personnel;personne ayant paye;statut remboursement;traitement tva",
-      "15/05/2026;Amazon;100;120;Oui;Couto Da Silva Carla;pending;foreign_vat",
+      "date;fournisseur;montant_ht;montant_ttc;compte personnel;personne ayant paye;fonction;statut remboursement;traitement tva",
+      "15/05/2026;Amazon;100;120;Oui;Couto Da Silva Carla;Gérante;pending;foreign_vat",
     ].join("\n"), suppliers);
 
     const expense = buildExpensesFromImportRows(result.validRows, {
@@ -133,6 +134,7 @@ describe("importExpensesCsv", () => {
     expect(expense).toMatchObject({
       personalAccountPurchase: true,
       paidByPerson: "Couto Da Silva Carla",
+      paidByRole: "Gérante",
       companyReimbursementStatus: "pending",
       vatDeductionStatus: "foreign_vat",
     });

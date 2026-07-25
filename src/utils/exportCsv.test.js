@@ -53,6 +53,7 @@ describe("exportCsv", () => {
           category: "Matières",
           personalAccountPurchase: true,
           paidByPerson: "Couto Da Silva Carla",
+          paidByRole: "Gérante",
           companyReimbursementStatus: "pending",
           vatDeductionStatus: "non_deductible",
         },
@@ -73,6 +74,7 @@ describe("exportCsv", () => {
     );
     expect(built.rows.some((row) => row.includes("Compte personnel"))).toBe(true);
     expect(built.rows.some((row) => row.includes("Couto Da Silva Carla"))).toBe(true);
+    expect(built.rows.some((row) => row.includes("Gérante"))).toBe(true);
   });
 
   it("filters monthly accounting export by selected month", () => {
