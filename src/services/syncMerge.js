@@ -80,6 +80,7 @@ export const SYNC_COLLECTIONS = [
   "expenses",
   "leads",
   "vatReports",
+  "vatWorkbookPeriods",
   "users",
   "backups",
   "logs",
@@ -145,6 +146,7 @@ const CONFLICT_ENTITY_LABELS = {
   quotes: "devis",
   invoices: "facture",
   vatReports: "rapport TVA",
+  vatWorkbookPeriods: "classeur TVA",
   deliveryNotes: "bon de livraison",
   settings: "paramètres",
 };

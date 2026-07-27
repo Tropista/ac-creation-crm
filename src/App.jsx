@@ -54,7 +54,7 @@ const Settings        = lazy(() => import("./components/Settings"));
 const Categories      = lazy(() => import("./components/Categories"));
 const Suppliers       = lazy(() => import("./components/Suppliers"));
 const Expenses        = lazy(() => import("./components/Expenses"));
-const VatDeclaration  = lazy(() => import("./components/VatDeclaration"));
+const VatWorkbook     = lazy(() => import("./components/VatWorkbook"));
 const UsersAdmin      = lazy(() => import("./components/UsersAdmin"));
 const ActivityLogs    = lazy(() => import("./components/ActivityLogs"));
 const Backups         = lazy(() => import("./components/Backups"));
@@ -650,7 +650,7 @@ function CrmApp() {
               path={pageToPath("vatdeclaration")}
               element={
                 canAccessPage(currentRole, "vatdeclaration") ? (
-                  <VatDeclaration
+                  <VatWorkbook
                     data={data}
                     setData={updateData}
                     currentRole={currentRole}

@@ -456,6 +456,9 @@ export async function syncSupabaseData(nextData, previousData = {}) {
     safeOptionalCollectionWrite("vat_reports", () =>
       upsertCollectionDelta("vat_reports", previousData.vatReports, syncedData.vatReports)
     ),
+    safeOptionalCollectionWrite("vat_workbook_periods", () =>
+      upsertCollectionDelta("vat_workbook_periods", previousData.vatWorkbookPeriods, syncedData.vatWorkbookPeriods)
+    ),
     upsertCollection("quotes", syncedData.quotes),
     upsertCollection("invoices", syncedData.invoices),
     upsertCollection("crm_logs", syncedData.logs),
@@ -574,6 +577,15 @@ export async function syncSupabaseData(nextData, previousData = {}) {
         getTombstoneIds(syncedData.settings, "vatReports")
       )
     ),
+    safeOptionalCollectionWrite("vat_workbook_periods", () =>
+      trackDelete(
+        "vatWorkbookPeriods",
+        "vat_workbook_periods",
+        syncedData.vatWorkbookPeriods,
+        previousData.vatWorkbookPeriods,
+        getTombstoneIds(syncedData.settings, "vatWorkbookPeriods")
+      )
+    ),
     trackDelete(
       "quotes",
       "quotes",
@@ -640,6 +652,7 @@ export async function loadSupabaseData({
     afterSalesRes,
     paymentsRes,
     vatReportsRes,
+    vatWorkbookPeriodsRes,
     quotesRes,
     invoicesRes,
     logsRes,
@@ -657,6 +670,7 @@ export async function loadSupabaseData({
     fetchCollectionRows(supabase, "after_sales_cases").then((data) => ({ data, error: null })),
     fetchCollectionRows(supabase, "payments").then((data) => ({ data, error: null })),
     fetchCollectionRows(supabase, "vat_reports").then((data) => ({ data, error: null })),
+    fetchCollectionRows(supabase, "vat_workbook_periods").then((data) => ({ data, error: null })),
     fetchCollectionRows(supabase, "quotes").then((data) => ({ data, error: null })),
     fetchCollectionRows(supabase, "invoices").then((data) => ({ data, error: null })),
     fetchCollectionRows(supabase, "crm_logs").then((data) => ({ data, error: null })),
@@ -670,6 +684,7 @@ export async function loadSupabaseData({
   const resolvedAfterSalesRes = resolveCollectionResult(afterSalesRes, "after_sales_cases");
   const resolvedPaymentsRes = resolveCollectionResult(paymentsRes, "payments");
   const resolvedVatReportsRes = resolveCollectionResult(vatReportsRes, "vat_reports");
+  const resolvedVatWorkbookPeriodsRes = resolveCollectionResult(vatWorkbookPeriodsRes, "vat_workbook_periods");
 
   const cloudSettings = settingsRes.data?.data || emptyData.settings;
   const tombstones = mergeDeletionTombstones(
@@ -720,6 +735,10 @@ export async function loadSupabaseData({
       rowsToItems(resolvedVatReportsRes.data),
       tombstones.vatReports
     ),
+    vatWorkbookPeriods: filterCollectionByTombstones(
+      rowsToItems(resolvedVatWorkbookPeriodsRes.data),
+      tombstones.vatWorkbookPeriods
+    ),
     quotes: filterCollectionByTombstones(rowsToItems(quotesRes.data), tombstones.quotes),
     invoices: filterCollectionByTombstones(rowsToItems(invoicesRes.data), tombstones.invoices),
     logs: filterCollectionByTombstones(rowsToItems(logsRes.data), tombstones.logs),
@@ -743,6 +762,7 @@ export async function loadSupabaseData({
         resolvedAfterSalesRes.data?.length ||
         resolvedPaymentsRes.data?.length ||
         resolvedVatReportsRes.data?.length ||
+        resolvedVatWorkbookPeriodsRes.data?.length ||
         quotesRes.data?.length ||
         invoicesRes.data?.length
     ),

@@ -135,6 +135,7 @@ export default function Settings({
             form.taxRate || 0
           ),
         paymentDays: normalizePaymentDays(form.paymentDays),
+        monthlyRevenueGoal: Math.max(0, Number(form.monthlyRevenueGoal || 0)),
         onlinePaymentEnabled: Boolean(form.onlinePaymentEnabled),
         onlinePaymentProvider: normalizePaymentProvider(form.onlinePaymentProvider),
         onlinePaymentUrlTemplate: String(form.onlinePaymentUrlTemplate || "").trim(),
@@ -310,6 +311,20 @@ setForm({
 ...form,
 vatNumber:
 e.target.value
+})
+}
+/>
+
+<input
+type="number"
+min="0"
+step="100"
+placeholder="Objectif mensuel HT"
+value={form.monthlyRevenueGoal ?? ""}
+onChange={(e)=>
+setForm({
+...form,
+monthlyRevenueGoal: e.target.value
 })
 }
 />

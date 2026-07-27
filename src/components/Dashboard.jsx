@@ -71,8 +71,10 @@ import {
   buildDashboardProfitability,
 } from "../utils/profitability";
 import { buildDirectionDashboard } from "../utils/directionDashboard";
+import { buildFinancialPerformance } from "../utils/financialPerformance";
 import AutomationCenter from "./AutomationCenter";
 const DashboardCharts = lazy(() => import("./DashboardCharts"));
+const FinancialPerformance = lazy(() => import("./dashboard/FinancialPerformance"));
 import ErrorBoundary from "./ErrorBoundary";
 import DashboardStatCard from "./dashboard/DashboardStatCard";
 import BillingPeriodCard from "./dashboard/BillingPeriodCard";
@@ -335,6 +337,10 @@ export default function Dashboard({
   const billingYearOptions = useMemo(
     () => collectInvoiceYears(invoices, new Date().getFullYear()),
     [invoices]
+  );
+  const financialPerformance = useMemo(
+    () => buildFinancialPerformance(data, { period: billingPeriod }),
+    [data, billingPeriod]
   );
 
   const annualYearOptions = collectAnnualYears(quotes, invoices, expenses);
@@ -786,6 +792,23 @@ export default function Dashboard({
           </button>
         )}
       </div>
+
+      {canViewDirectionMargins && (
+        <ErrorBoundary title="Performance financière indisponible">
+          <Suspense fallback={<div className="card">Chargement de la performance financière...</div>}>
+            <FinancialPerformance
+              performance={financialPerformance}
+              billingPeriodMode={billingPeriodMode}
+              setBillingPeriodMode={setBillingPeriodMode}
+              billingMonthValue={billingMonthValue}
+              setBillingMonthValue={setBillingMonthValue}
+              billingYear={billingYear}
+              setBillingYear={setBillingYear}
+              billingYearOptions={billingYearOptions}
+            />
+          </Suspense>
+        </ErrorBoundary>
+      )}
 
       {(canManageQuotes || canManageInvoices) && mondayWorkQueue.length > 0 && (
         <div

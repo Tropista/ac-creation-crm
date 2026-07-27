@@ -194,6 +194,7 @@ export const emptyData = {
   afterSalesCases: [],
   payments: [],
   vatReports: [],
+  vatWorkbookPeriods: [],
   clientFiles: [],
   clientNotes: [],
   deletedItems: [],
@@ -295,6 +296,10 @@ export function normalizeData(data) {
 
     vatReports: dedupeItemsById(
       rest?.vatReports || []
+    ),
+
+    vatWorkbookPeriods: dedupeItemsById(
+      rest?.vatWorkbookPeriods || []
     ),
 
     clientFiles: dedupeItemsById(
