@@ -38,21 +38,34 @@ export class CrmIntegrationService {
   async event(event) {
     const existing = await this.repository.findEvent(event.id);
     if (existing) {
-      return { accepted: true, duplicate: true, event: existing };
-    }
-    if (!(await this.repository.startEvent(event))) {
       return {
         accepted: true,
         duplicate: true,
-        event: await this.repository.findEvent(event.id),
+        eventId: event.id,
+        ...(existing.result || {}),
+      };
+    }
+    if (!(await this.repository.startEvent(event))) {
+      const stored = await this.repository.findEvent(event.id);
+      return {
+        accepted: true,
+        duplicate: true,
+        eventId: event.id,
+        ...(stored?.result || {}),
       };
     }
     try {
       const result = await processIntegrationEvent(this.repository, event);
+      const externalIds = result.state.integrationResult || {};
       const response = {
         accepted: true,
         duplicate: result.duplicate,
         eventId: event.id,
+        ...externalIds,
+        externalIds,
+        targetId: externalIds.orderId || externalIds.customerId,
+        status: "completed",
+        version: this.versionInfo.version,
       };
       await this.repository.completeEvent(event.id, response);
       return response;

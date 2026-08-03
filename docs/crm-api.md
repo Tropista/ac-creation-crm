@@ -114,3 +114,21 @@ Chaque appel écrit dans `crm_integration_logs` : date, IP, méthode, chemin, id
 | `CRM_ACK_EVENT_NOT_FOUND`       |  404 | Événement à acquitter absent |
 
 Les erreurs ne contiennent jamais de secret ni de stack trace.
+
+## Flux commande complet
+
+Le site envoie une version `1.0` et l'un des types suivants : `customer.created`, `customer.updated`, `order.created`, `payment.completed`, `production.created`, `production.updated`. Une commande contient le client, les adresses, les lignes, les snapshots, les personnalisations, les polices, les ressources, la production, le paiement, les taxes et les totaux.
+
+`order.created` orchestre exclusivement les Application Services : upsert client, commande/devis acceptÃ©, facture brouillon, paiement, entrÃ©e atelier et suivi production. Le handler HTTP ne contient aucune mutation mÃ©tier et le repository persiste l'ensemble via la RPC transactionnelle.
+
+La rÃ©ponse contient `customerId`, `orderId`, `invoiceId`, `workshopId`, `productionId`, `status` et `version`. Le rejeu du mÃªme `event.id` retourne la rÃ©ponse enregistrÃ©e sans recrÃ©er de document. Une erreur conserve l'Ã©vÃ©nement en statut `failed` et la transaction empÃªche toute persistance partielle.
+
+## Mise en service locale
+
+1. Appliquer `supabase/migrations/20260804000000_crm_integration_api.sql` au projet Supabase du CRM.
+2. Renseigner cÃ´tÃ© CRM `CRM_SUPABASE_URL`, `CRM_SUPABASE_SERVICE_ROLE_KEY`, `CRM_HMAC_KEY_ID` et `CRM_HMAC_SECRET`.
+3. Renseigner cÃ´tÃ© site l'endpoint complet, le mÃªme identifiant de clÃ© et le mÃªme secret.
+4. DÃ©marrer le CRM sur le port 3001 et valider `/health` avec une requÃªte signÃ©e.
+5. Activer les flags du site et passer une commande sandbox.
+
+Sans service role CRM, le serveur indique explicitement que l'API est inactive. Cette protection ne doit jamais Ãªtre contournÃ©e avec la clÃ© anon.

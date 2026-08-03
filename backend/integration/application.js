@@ -22,6 +22,45 @@ function findQuote(state, payload) {
   );
 }
 
+function orderToQuote(payload, customerId) {
+  const totals = payload.totals || {};
+  return {
+    id: payload.id,
+    number: payload.number,
+    clientId: customerId,
+    date: payload.createdAt,
+    status: "Accepté",
+    description: `Commande e-commerce ${payload.number || payload.id}`,
+    lines: (payload.items || []).map((item) => ({
+      id: item.id,
+      description: item.name,
+      quantity: Number(item.quantity || 0),
+      unitPrice: Number(item.unitPrice || 0),
+      total: Number(item.total || 0),
+      productId: item.productId,
+      technique: item.snapshot?.productionProfile?.technique || "",
+      snapshot: item.snapshot,
+    })),
+    totalHT: Number(totals.subtotal || 0),
+    totalTVA: Number(totals.vat || 0),
+    totalTTC: Number(totals.total || 0),
+    shipping: Number(totals.shipping || 0),
+    discount: Number(totals.discount || 0),
+    currency: totals.currency || "EUR",
+    billingAddress: payload.billingAddress,
+    shippingAddress: payload.shippingAddress,
+    ecommerce: {
+      sourceOrderId: payload.id,
+      snapshot: payload.snapshot,
+      assets: payload.assets || [],
+      fonts: payload.fonts || [],
+      resources: payload.resources || [],
+      production: payload.production || [],
+      productionJobs: payload.productionJobs || [],
+    },
+  };
+}
+
 export function createIntegrationApplication(repository, logger = null) {
   const customers = new CustomerApplicationService();
   const invoices = new InvoiceApplicationService();
@@ -64,12 +103,60 @@ export function createIntegrationApplication(repository, logger = null) {
     "customer.updated": (state, payload) =>
       customers.save(state, payload, { customerId: payload.id }),
     "order.created": (state, payload, event) => {
-      const command = {
-        ...payload,
-        id: payload.id || event.id,
-        idempotencyKey: event.id,
+      const rawCustomer = payload.customer || {};
+      const customerPayload = {
+        ...rawCustomer,
+        name:
+          rawCustomer.name ||
+          [rawCustomer.firstName, rawCustomer.lastName]
+            .filter(Boolean)
+            .join(" "),
+        city:
+          payload.billingAddress?.city || payload.shippingAddress?.city || "",
+        country:
+          payload.billingAddress?.countryCode ||
+          payload.shippingAddress?.countryCode ||
+          "",
       };
-      return orderService.apply(state, command);
+      const customerId = customerPayload.id || payload.customerId;
+      const quote = orderToQuote(payload, customerId);
+      let nextState = orderService.apply(state, {
+        id: payload.id || event.id,
+        customer: customerPayload,
+        quote,
+        convertQuoteId: quote.id,
+      });
+      const invoice = findInvoice(nextState, {
+        invoiceNumber: nextState.invoices?.find(
+          (entry) => String(entry.convertedFrom) === String(quote.number),
+        )?.number,
+      });
+      if (payload.payment?.status === "paid") {
+        nextState = payments.record(nextState, invoice, {
+          amount: Number(payload.payment.amount || quote.totalTTC),
+          method: payload.payment.provider || "E-commerce",
+          reference: payload.payment.providerReference || "",
+          date: payload.payment.paidAt,
+          idempotencyKey: `site-payment:${payload.payment.id || payload.payment.providerReference || payload.id}`,
+        });
+      }
+      const activeQuote = findQuote(nextState, { quoteId: quote.id });
+      const productionResult =
+        activeQuote?.status === "Accepté"
+          ? production.advance(nextState, activeQuote, {
+              user: "site-integration",
+            })
+          : { ...nextState, advanced: false, quote: activeQuote };
+      return {
+        ...productionResult,
+        integrationResult: {
+          customerId,
+          orderId: quote.id,
+          invoiceId: invoice?.id,
+          workshopId: quote.id,
+          productionId: quote.id,
+        },
+      };
     },
     "order.updated": (state, payload) => {
       const quote = findQuote(state, payload);
@@ -77,6 +164,9 @@ export function createIntegrationApplication(repository, logger = null) {
       return workshop.patchQuote(state, quote.id, payload.quote || payload);
     },
     "payment.completed": (state, payload, event) => {
+      if (payload.items && payload.customer) {
+        return handlers["order.created"](state, payload, event);
+      }
       const invoice = findInvoice(state, payload);
       if (!invoice) throw new Error("CRM_PAYMENT_INVOICE_NOT_FOUND");
       return payments.record(state, invoice, {
@@ -97,6 +187,11 @@ export function createIntegrationApplication(repository, logger = null) {
       };
     },
     "production.created": (state, payload) => {
+      if (payload.items && payload.customer) {
+        return handlers["order.created"](state, payload, {
+          id: payload.id,
+        });
+      }
       const quote = findQuote(state, payload);
       if (!quote) throw new Error("CRM_PRODUCTION_QUOTE_NOT_FOUND");
       return production.advance(state, quote, { user: "site-integration" });
