@@ -67,11 +67,12 @@ async function request(route, options, expectedStatus) {
   };
 }
 
+const runId = crypto.randomUUID();
 const event = {
   version: "1.0",
-  id: "crm-runtime-diagnostic-customer-v1",
+  id: `crm-runtime-diagnostic-${runId}`,
   type: "customer.updated",
-  occurredAt: "2026-08-04T00:00:00.000Z",
+  occurredAt: new Date().toISOString(),
   correlationId: "crm-runtime-diagnostic",
   idempotencyKey: "crm-runtime-diagnostic-customer-v1",
   payload: {
@@ -99,22 +100,34 @@ results.push(
     401,
   ),
 );
-const replayNonce = "runtimevalidationnonce0001";
-results.push(
-  await request(
-    "/events",
-    signedOptions("POST", event, { nonce: replayNonce }),
-    [200, 202],
-  ),
+// Unique for every script execution, then reused exactly once to prove replay protection.
+const replayNonce = crypto.randomBytes(16).toString("hex");
+const replayOptions = signedOptions("POST", event, { nonce: replayNonce });
+const firstDelivery = await request("/events", replayOptions, 202);
+results.push(firstDelivery);
+results.push(await request("/events", replayOptions, 409));
+// Same idempotency key and event id, but a fresh timestamp, nonce and signature.
+const idempotencyOptions = signedOptions("POST", event);
+if (
+  idempotencyOptions.headers["X-CRM-Nonce"] ===
+    replayOptions.headers["X-CRM-Nonce"] ||
+  idempotencyOptions.headers["X-CRM-Timestamp"] ===
+    replayOptions.headers["X-CRM-Timestamp"]
+) {
+  throw new Error("CRM_IDEMPOTENCY_HEADERS_REUSED");
+}
+const idempotentDelivery = await request(
+  "/events",
+  idempotencyOptions,
+  [200, 202],
 );
-results.push(
-  await request(
-    "/events",
-    signedOptions("POST", event, { nonce: replayNonce }),
-    409,
-  ),
-);
-results.push(await request("/events", signedOptions("POST", event), 200));
+if (
+  idempotentDelivery.payload?.accepted !== true ||
+  idempotentDelivery.payload?.eventId !== event.id
+) {
+  throw new Error("CRM_IDEMPOTENCY_RESPONSE_INVALID");
+}
+results.push(idempotentDelivery);
 results.push(
   await request(
     "/ack",
