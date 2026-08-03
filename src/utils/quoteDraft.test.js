@@ -15,9 +15,6 @@ import {
   buildQuoteDraftPayload,
   mergeQuoteDraftSources,
   resolveQuoteDraftForApply,
-  buildTshirtConfiguratorQuoteDescription,
-  buildTshirtConfiguratorWorkshopNotes,
-  formatTshirtColorLabel,
   openQuoteFromCalculator,
 } from "./quoteDraft";
 
@@ -44,48 +41,9 @@ describe("quoteDraft", () => {
     expect(localStorage.getItem(QUOTE_DRAFT_KEY)).toBeNull();
   });
 
-  it("génère une description t-shirt minimale", () => {
-    expect(buildTshirtConfiguratorQuoteDescription({ tshirtColor: "#ffffff" })).toBe(
-      "T-shirt blanc"
-    );
-    expect(buildTshirtConfiguratorQuoteDescription({ tshirtColor: "#ff00aa" })).toBe(
-      "T-shirt #ff00aa"
-    );
-    expect(buildTshirtConfiguratorQuoteDescription()).toBe("T-shirt");
-  });
-
-  it("déplace le détail marquage dans les notes atelier", () => {
-    const notes = buildTshirtConfiguratorWorkshopNotes({
-      projectName: "Club FC",
-      garmentSize: "M",
-      garmentPresetLabel: "M",
-      tshirtColor: "#111827",
-      techniqueSummary: "DTF",
-      quantity: 10,
-      totalUnitHT: 15.5,
-      markings: [
-        {
-          zone: "Avant",
-          content: '"Logo"',
-          technique: "DTF",
-          width: 28,
-          height: 35,
-          unitPrice: 15.5,
-        },
-      ],
-    });
-
-    expect(formatTshirtColorLabel("#111827")).toBe("anthracite");
-    expect(notes).toContain("Club FC");
-    expect(notes).toContain("Qté 10");
-    expect(notes).toContain("Avant : \"Logo\"");
-    expect(notes).not.toContain("Personnalisations");
-    expect(notes.split("\n").length).toBeLessThan(8);
-  });
-
   it("persiste les pièces jointes dans le brouillon", () => {
     saveQuoteDraft({
-      source: "configurateur t-shirt",
+      source: "outil atelier",
       lines: [{ description: "Ligne", quantity: 1 }],
       attachments: [{ id: "a1", name: "export.zip", url: "data:application/zip;base64,AA==" }],
     });
@@ -95,7 +53,7 @@ describe("quoteDraft", () => {
   it("conserve localBlobId même si l'URL blob est retirée à la persistance", () => {
     const largeBase64 = `data:application/zip;base64,${"A".repeat(700 * 1024)}`;
     saveQuoteDraft({
-      source: "configurateur t-shirt",
+      source: "outil atelier",
       lines: [{ description: "Ligne", quantity: 1 }],
       attachments: [
         {
@@ -151,7 +109,7 @@ describe("quoteDraft", () => {
 
   it("buildQuoteDraftPayload garde les lignes et allège les pièces jointes", () => {
     const payload = buildQuoteDraftPayload({
-      source: "configurateur mug",
+      source: "outil atelier",
       lines: [{ description: "Mug personnalisé", quantity: 2, price: 0 }],
       attachments: [
         {
@@ -165,7 +123,7 @@ describe("quoteDraft", () => {
       notes: "Notes atelier mug",
     });
 
-    expect(payload.source).toBe("configurateur mug");
+    expect(payload.source).toBe("outil atelier");
     expect(payload.lines).toHaveLength(1);
     expect(payload.lines[0].description).toBe("Mug personnalisé");
     expect(payload.attachments[0].localBlobId).toBe("idb-mug");
@@ -175,13 +133,13 @@ describe("quoteDraft", () => {
   it("mergeQuoteDraftSources préfère les lignes navigation et localBlobId storage", () => {
     const merged = mergeQuoteDraftSources(
       {
-        source: "configurateur mug",
+        source: "outil atelier",
         lines: [{ description: "Mon texte", quantity: 1 }],
         attachments: [],
         savedAt: 100,
       },
       {
-        source: "configurateur mug",
+        source: "outil atelier",
         lines: [],
         attachments: [{ id: "a1", name: "export.zip", localBlobId: "idb-1" }],
         notes: "Notes storage",
@@ -196,7 +154,7 @@ describe("quoteDraft", () => {
 
   it("resolveQuoteDraftForApply lit le storage sans consommer", () => {
     saveQuoteDraft({
-      source: "configurateur mug",
+      source: "outil atelier",
       lines: [{ description: "Ligne mug", quantity: 1 }],
     });
 
@@ -209,7 +167,7 @@ describe("quoteDraft", () => {
   it("openQuoteFromCalculator enregistre avant navigation", () => {
     const navigate = vi.fn();
     openQuoteFromCalculator(navigate, {
-      source: "configurateur mug",
+      source: "outil atelier",
       lines: [{ description: "Mug", quantity: 1, price: 0 }],
       notes: "test",
     });
@@ -218,7 +176,7 @@ describe("quoteDraft", () => {
     expect(navigate).toHaveBeenCalledWith("/devis", {
       state: {
         quoteDraft: expect.objectContaining({
-          source: "configurateur mug",
+          source: "outil atelier",
           lines: [{ description: "Mug", quantity: 1, price: 0 }],
         }),
       },

@@ -324,7 +324,7 @@ export default function DocumentForm({
     if (!resolved?.url) {
       showToast(
         resolved?.localBlobId
-          ? "Fichier local introuvable (IndexedDB). Réexportez depuis le configurateur ou réimportez le fichier."
+          ? "Fichier local introuvable (IndexedDB). Réexportez depuis le site e-commerce ou réimportez le fichier."
           : "Fichier indisponible sur cet appareil. Connectez-vous au CRM avec Supabase ou réimportez le fichier.",
         "warning"
       );

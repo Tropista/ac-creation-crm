@@ -27,8 +27,6 @@
     "bank:restart": "powershell -NoProfile -Command \"foreach ($line in (netstat -ano | findstr ':3001' | findstr LISTENING)) { $p = ($line -split '\\s+')[-1]; if ($p -and $p -ne '0') { taskkill /PID $p /F 2>$null } }; node backend/server.js\""
   },
   "dependencies": {
-    "@react-three/drei": "^10.7.7",
-    "@react-three/fiber": "^9.6.1",
     "@supabase/supabase-js": "^2.105.4",
     "axios": "^1.16.1",
     "cors": "^2.8.6",
@@ -47,7 +45,6 @@
     "react-qr-code": "^2.0.21",
     "react-router-dom": "^7.15.1",
     "recharts": "^2.15.4",
-    "three": "^0.184.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

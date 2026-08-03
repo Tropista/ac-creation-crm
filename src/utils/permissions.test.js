@@ -101,4 +101,11 @@ describe("canAccessPage", () => {
   it("refuse la declaration TVA au role employe", () => {
     expect(canAccessPage("Employ\u00e9", "vatdeclaration")).toBe(false);
   });
+
+  it("n'expose aucun configurateur produit dans les permissions CRM", () => {
+    for (const permissions of Object.values(ROLE_PERMISSIONS)) {
+      expect(permissions.pages).not.toContain("vue3d");
+      expect(permissions.pages).not.toContain("tshirt3d");
+    }
+  });
 });

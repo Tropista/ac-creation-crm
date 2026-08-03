@@ -440,7 +440,7 @@ export default function Clients({
       status: lead.status || "nouveau",
       date: lead.convertedAt || lead.createdAt,
       total: Number(lead.estimatedAmount || lead.metadata?.estimatedAmount || 0),
-      detail: `${lead.source || "configurateur"}${lead.probability ? ` · ${lead.probability}%` : ""}`,
+      detail: `${lead.source || "site e-commerce"}${lead.probability ? ` · ${lead.probability}%` : ""}`,
     }));
 
     const emailEvents = [...selectedClientQuotes, ...selectedClientInvoices, ...selectedClientDeliveryNotes]

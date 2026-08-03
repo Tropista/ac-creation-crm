@@ -30,8 +30,7 @@ button[aria-selected="true"],
 .quote-signature-tabs button.active,
 .atelier-layout-toggle button.active,
 .atelier-view-toggle button.active,
-.atelier-priority-chip.active,
-.tshirt3d-size-scale button.active {
+.atelier-priority-chip.active {
   color: #fff !important;
   border-color: rgba(255,255,255,0.32) !important;
   background: linear-gradient(135deg, var(--purple), var(--purple-dark)) !important;
@@ -48,7 +47,6 @@ button[aria-selected="true"],
 .atelier-layout-toggle button.active::before,
 .atelier-view-toggle button.active::before,
 .atelier-priority-chip.active::before,
-.tshirt3d-size-scale button.active::before,
 button[aria-selected="true"]::before {
   content: "✓";
   display: inline-block;
@@ -59,7 +57,6 @@ button[aria-selected="true"]::before {
 .dtf-checkbox:has(input[type="checkbox"]:checked),
 .laser-checkbox:has(input[type="checkbox"]:checked),
 .uvdtf-checkbox:has(input[type="checkbox"]:checked),
-.tshirt3d-checkbox:has(input[type="checkbox"]:checked),
 .labels-checkbox:has(input[type="checkbox"]:checked) {
   border-color: rgba(192,132,252,0.65) !important;
   background: rgba(192,132,252,0.18) !important;
@@ -70,9 +67,7 @@ button[aria-selected="true"]::before {
 .client-erp-row.selected,
 .product-premium-card.selected,
 .product-premium-card.active-product-card,
-.suppliers-table tr.selected-row td,
-.vue3d-design-item.selected,
-.tshirt3d-design.selected {
+.suppliers-table tr.selected-row td {
   border-color: rgba(255,255,255,0.34) !important;
   box-shadow: 0 0 0 3px rgba(192,132,252,0.2), 0 16px 34px rgba(15,23,42,0.18) !important;
 }

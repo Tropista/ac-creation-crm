@@ -1633,14 +1633,14 @@ export default function Dashboard({
             <div className="dashboard-action-card__header">
               <div>
                 <h3>
-                  Leads configurateur
+                  Demandes du site
                   {unreadLeadCount > 0 ? (
                     <span className="dashboard-badge">{unreadLeadCount}</span>
                   ) : null}
                 </h3>
                 <p className="muted">
                   {activeLeadCount === 0
-                    ? "Aucun contact configurateur en attente."
+                    ? "Aucune demande du site en attente."
                     : `${activeLeadCount} contact(s) à traiter${
                         unreadLeadCount > 0 && unreadLeadCount < activeLeadCount
                           ? ` (${unreadLeadCount} nouveau(x))`
@@ -1664,7 +1664,7 @@ export default function Dashboard({
             </div>
             {activeLeadCount === 0 ? (
               <p className="muted">
-                Les emails laissés sur le configurateur t-shirt apparaissent ici avec le bouton
+                Les demandes transmises par le site e-commerce apparaissent ici avec le bouton
                 « Créer client + devis ».
               </p>
             ) : (
@@ -1695,7 +1695,7 @@ export default function Dashboard({
                         <span>{lead.phone}</span>
                       ) : null}
                       {projectName ? <span>{projectName}</span> : null}
-                      <span className="muted">{lead.source || "configurateur"}</span>
+                      <span className="muted">{lead.source || "site e-commerce"}</span>
                     </div>
                     <div className="dashboard-leads-list__actions">
                       {canConvertLeads && statusMeta.label !== "Converti" ? (

@@ -2,7 +2,9 @@
 
 [![CI](https://github.com/Tropista/ac-creation-crm/actions/workflows/ci.yml/badge.svg)](https://github.com/Tropista/ac-creation-crm/actions/workflows/ci.yml)
 
-Application CRM interne pour **AC Creation** : clients, produits, devis, factures, rapprochement bancaire, configurateurs 3D et export desktop (Electron).
+Application CRM interne pour **AC Creation** : clients, produits, devis, factures, rapprochement bancaire, production, atelier et export desktop (Electron).
+
+La personnalisation des produits est exclusivement proposée sur le site e-commerce. Le CRM reçoit les données utiles par son intégration avec le site et ne fournit plus d'interface de configuration produit.
 
 ## Stack
 
@@ -12,7 +14,6 @@ Application CRM interne pour **AC Creation** : clients, produits, devis, facture
 | Backend cloud | Supabase (Auth + PostgreSQL) |
 | Desktop | Electron + electron-builder (Windows NSIS) |
 | Banque (optionnel) | API Express + Tink (`backend/server.js`) |
-| 3D | Three.js, React Three Fiber |
 
 ## Prérequis
 
@@ -185,15 +186,6 @@ Publication automatique (optionnel) : définir `GH_TOKEN` (token GitHub avec dro
 
 Sans connexion Internet, sans release publiée ou sans config publish au build, la vérification est ignorée silencieusement.
 
-## Configurateur t-shirt → Devis
-
-| Contexte | Route | Comportement « Créer un devis » |
-|----------|-------|----------------------------------|
-| Public (web) | `/configurateur-tshirt` | Brouillon `localStorage` + lien vers `/devis` (même navigateur) |
-| CRM / Electron | `/t-shirt-3d` | Navigation directe vers Devis avec lignes pré-remplies |
-
-Le devis inclut taille, couleur, techniques (DTF / UV-DTF / Flex), quantité et estimation HT par marquage.
-
 ## Routes
 
 | Page | Chemin | Description |
@@ -212,10 +204,7 @@ Le devis inclut taille, couleur, techniques (DTF / UV-DTF / Flex), quantité et 
 | Sauvegardes | `/sauvegardes` | Backups cloud |
 | Journal | `/journal` | Logs d’activité |
 | Calculateur 3D | `/calculateur-3d` | Estimation impression 3D |
-| Vue 3D | `/vue-3d` | Prévisualisation 3D |
-| T-shirt 3D | `/t-shirt-3d` | Configurateur t-shirt |
 | Banque | `/banque` | Rapprochement bancaire |
-| Configurateur public | `/configurateur-tshirt` | Route publique (sans auth CRM) |
 
 En mode Electron (`file://`), le routeur utilise le hash (`#/dashboard`, etc.).
 
@@ -226,7 +215,7 @@ Définis dans `src/utils/permissions.js`. L’auth passe par Supabase ; le rôle
 | Rôle | Pages accessibles | Droits |
 |------|-------------------|--------|
 | **Admin** | Toutes | Suppression, paramètres, utilisateurs, import |
-| **Employé** | Dashboard, clients, produits, étiquettes, scan, devis, factures, banque, calculateur 3D | Lecture/écriture métier, pas de suppression globale |
+| **Employé** | Dashboard, clients, produits, étiquettes, scan, devis, factures, banque et outils atelier | Lecture/écriture métier, pas de suppression globale |
 | **Comptable** | Dashboard, factures, banque | Comptabilité et rapprochement |
 | **Utilisateur** | Dashboard uniquement | Consultation limitée |
 

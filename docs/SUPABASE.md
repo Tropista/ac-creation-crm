@@ -18,7 +18,7 @@ Activer **Email + mot de passe** dans Authentication → Providers. Les utilisat
 3. Se connecter au CRM : Supabase Auth vérifie le mot de passe, l’app vérifie que l’email existe dans `users` avec statut **Actif**.
 4. Les requêtes cloud utilisent le JWT **authenticated** — la clé **anon** seule ne suffit plus.
 
-> **Configurateur public** (`/configurateur-tshirt`) : aucun accès Supabase. Brouillon en `localStorage` uniquement.
+> La personnalisation produit est hébergée par le site e-commerce. Le CRM ne propose aucune route publique de configuration produit.
 
 ## Modèle de données CRM
 

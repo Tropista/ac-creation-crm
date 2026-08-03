@@ -180,7 +180,7 @@ export default function Leads({ data, setData, logActivity, currentRole = "Admin
         <div>
           <h2>Leads</h2>
           <p>
-            Contacts laisses via les configurateurs - {activeCount} actif(s)
+            Contacts transmis par le site e-commerce - {activeCount} actif(s)
             {unreadCount > 0 ? ` · ${unreadCount} nouveau(x)` : ""}.
           </p>
         </div>

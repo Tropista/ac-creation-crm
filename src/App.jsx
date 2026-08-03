@@ -19,7 +19,6 @@ import {
   isSupabaseConfigured,
 } from "./supabase";
 import {
-  PUBLIC_TSHIRT_PATH,
   PUBLIC_QUOTE_PATH,
   pageToPath,
   pathToPage,
@@ -112,14 +111,6 @@ import "./styles/credit-notes.css";
 import "./styles/after-sales.css";
 import "./styles/automations.css";
 import "./styles/selection-states.css";
-const Vue3D = lazy(() =>
-  import("./components/Vue3D")
-);
-
-const Vue3DTshirt = lazy(() =>
-  import("./components/Vue3DTshirt")
-);
-
 const Banque = lazy(() =>
   import("./components/Banque")
 );
@@ -192,25 +183,11 @@ export default function App() {
   return (
     <>
       <Routes>
-        <Route
-          path={PUBLIC_TSHIRT_PATH}
-          element={<PublicTshirtConfigurator />}
-        />
         <Route path={PUBLIC_QUOTE_PATH} element={<PublicQuoteView />} />
         <Route path="/*" element={<CrmApp />} />
       </Routes>
       <ConfirmDialogHost />
     </>
-  );
-}
-
-function PublicTshirtConfigurator() {
-  return (
-    <div style={{ minHeight: "100vh", background: "#081b4b", padding: "20px" }}>
-      <Suspense fallback={<ContentLoading />}>
-        <Vue3DTshirt />
-      </Suspense>
-    </div>
   );
 }
 
@@ -227,7 +204,7 @@ function CrmApp() {
   useLayoutEffect(() => {
     if (typeof window === "undefined") return;
     if (pathname === location.pathname) return;
-    // Ne pas annuler configurateur → Devis (brouillon dans location.state).
+    // Ne pas annuler un outil atelier → Devis (brouillon dans location.state).
     if (location.state?.quoteDraft) return;
     navigate(`${pathname}${location.search}${location.hash}`, {
       replace: true,
@@ -916,18 +893,6 @@ function CrmApp() {
                     logActivity={handleLogActivity}
                   />
                 ) : null
-              }
-            />
-            <Route
-              path={pageToPath("vue3d")}
-              element={
-                canAccessPage(currentRole, "vue3d") ? <Vue3D /> : null
-              }
-            />
-            <Route
-              path={pageToPath("tshirt3d")}
-              element={
-                canAccessPage(currentRole, "tshirt3d") ? <Vue3DTshirt /> : null
               }
             />
             <Route

@@ -209,7 +209,6 @@ button[aria-selected="true"]::before {
 .dtf-checkbox:has(input[type="checkbox"]:checked),
 .laser-checkbox:has(input[type="checkbox"]:checked),
 .uvdtf-checkbox:has(input[type="checkbox"]:checked),
-.tshirt3d-checkbox:has(input[type="checkbox"]:checked),
 .labels-checkbox:has(input[type="checkbox"]:checked) {
   border-color: rgba(192,132,252,0.65) !important;
   background: rgba(192,132,252,0.18) !important;
@@ -220,9 +219,7 @@ button[aria-selected="true"]::before {
 .client-erp-row.selected,
 .product-premium-card.selected,
 .product-premium-card.active-product-card,
-.suppliers-table tr.selected-row td,
-.vue3d-design-item.selected,
-.tshirt3d-design.selected {
+.suppliers-table tr.selected-row td {
   border-color: rgba(255,255,255,0.34) !important;
   box-shadow: 0 0 0 3px rgba(192,132,252,0.2), 0 16px 34px rgba(15,23,42,0.18) !important;
 }
@@ -1294,16 +1291,8 @@ tbody tr:hover td { background: rgba(255,255,255,0.04); }
 .auth-note { text-align: center; color: #cbd5e1; margin: 24px 0 0; }
 
 /* =========================================================
-   3D / upload / miscellanous
+   Upload / miscellanous
    ========================================================= */
-.vue3d-stage,
-.tshirt-stage,
-.model-preview,
-.product-model-preview {
-  border-radius: 24px;
-  overflow: hidden;
-  background: linear-gradient(135deg, #eef2ff, #fff);
-}
 .logo-preview-box,
 .company-block { display: grid; gap: 6px; }
 .company-logo { max-width: 150px; max-height: 90px; object-fit: contain; margin-bottom: 12px; }

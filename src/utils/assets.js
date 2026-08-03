@@ -20,6 +20,3 @@ export function resolveAssetUrl(relativePath) {
 }
 
 export const APP_LOGO_URL = resolveAssetUrl("logo.png");
-export const MUG_MODEL_URL = resolveAssetUrl("models/scene.gltf");
-export const TSHIRT_MODEL_URL = resolveAssetUrl("models/tshirt/t-shirt.gltf");
-export const POLO_MODEL_URL = resolveAssetUrl("models/polo/scene.gltf");

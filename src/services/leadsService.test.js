@@ -35,7 +35,7 @@ const sampleLead = {
   id: "lead-1",
   email: "marie.dupont@example.com",
   phone: "+352 621 000 000",
-  source: "configurateur-tshirt",
+  source: "site-e-commerce",
   metadata: {
     projectName: "T-shirts équipe",
     quantity: 24,
@@ -245,7 +245,7 @@ describe("leadsService", () => {
     expect(loadLocalPublicLeads()).toEqual([]);
   });
 
-  it("enregistre un lead configurateur dans la file locale", async () => {
+  it("enregistre une demande du site dans la file locale", async () => {
     const result = await submitPublicLead({
       email: "prospect@example.com",
       phone: "+352 621 000 000",

@@ -2,7 +2,6 @@ export const CALCULATOR_TYPES = {
   laser: "laser",
   dtf: "dtf",
   uvdtf: "uvdtf",
-  vue3d: "vue3d",
   print3d: "print3d",
 };
 

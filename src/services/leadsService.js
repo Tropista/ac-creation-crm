@@ -72,7 +72,7 @@ export function mergePublicLeadsIntoData(data = {}) {
   return added > 0 ? { ...data, leads: merged } : data;
 }
 
-export async function submitPublicLead({ email, phone = "", source = "configurateur-tshirt", metadata = {} } = {}) {
+export async function submitPublicLead({ email, phone = "", source = "site-e-commerce", metadata = {} } = {}) {
   const normalizedEmail = String(email || "").trim().toLowerCase();
   if (!normalizedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
     throw new Error("Adresse email invalide.");
@@ -266,7 +266,7 @@ export function deriveClientNameFromLead(lead = {}) {
   if (explicitName) return explicitName;
 
   const emailLocal = String(lead.email || "").split("@")[0] || "";
-  if (!emailLocal) return "Prospect configurateur";
+  if (!emailLocal) return "Prospect site e-commerce";
 
   return emailLocal
     .replace(/[._-]+/g, " ")
@@ -276,7 +276,7 @@ export function deriveClientNameFromLead(lead = {}) {
 
 function buildLeadClientNotes(lead = {}) {
   const metadata = lead.metadata || {};
-  const parts = [`Lead ${lead.source || "configurateur"} (${lead.createdAt || ""})`];
+  const parts = [`Lead ${lead.source || "site e-commerce"} (${lead.createdAt || ""})`];
   if (metadata.projectName) parts.push(`Projet : ${metadata.projectName}`);
   return parts.join("\n");
 }
@@ -304,8 +304,8 @@ export function buildClientFromLead(lead = {}) {
 
 export function buildQuoteDraftFromLead(lead = {}, clientId = "") {
   const metadata = lead.metadata || {};
-  const projectName = String(metadata.projectName || "").trim() || "Projet configurateur";
-  const source = lead.source || "configurateur";
+  const projectName = String(metadata.projectName || "").trim() || "Projet e-commerce";
+  const source = lead.source || "site e-commerce";
   const details = [];
 
   if (metadata.size) details.push(`Taille : ${metadata.size}`);
@@ -324,14 +324,14 @@ export function buildQuoteDraftFromLead(lead = {}, clientId = "") {
   return {
     clientId,
     source: `lead ${source}`,
-    notes: "Créé depuis un lead configurateur.",
+    notes: "Créé depuis une demande du site e-commerce.",
     lines: [
       buildCalculatorQuoteLine({
         description,
         quantity: Number(metadata.quantity) || 1,
         priceHT: 0,
         sku: "LEAD-CFG",
-        category: "Configurateur",
+        category: "Site e-commerce",
       }),
     ],
   };

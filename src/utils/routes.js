@@ -1,4 +1,3 @@
-export const PUBLIC_TSHIRT_PATH = "/configurateur-tshirt";
 export const PUBLIC_QUOTE_PATH = "/devis-public";
 
 export const PAGE_PATHS = {
@@ -25,8 +24,6 @@ export const PAGE_PATHS = {
   dtfcalc: "/calculateur-dtf",
   uvdtfcalc: "/calculateur-uv-dtf",
   brodcalc: "/calculateur-broderie",
-  vue3d: "/vue-3d",
-  tshirt3d: "/t-shirt-3d",
   banque: "/banque",
   leads: "/leads",
   creditnotes: "/avoirs",

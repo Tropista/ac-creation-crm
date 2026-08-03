@@ -4,12 +4,10 @@ import { resolveAssetUrl } from "./assets.js";
 describe("resolveAssetUrl", () => {
   it("joins the Vite base URL with a relative path", () => {
     expect(resolveAssetUrl("logo.png")).toMatch(/logo\.png$/);
-    expect(resolveAssetUrl("models/scene.gltf")).toMatch(/models\/scene\.gltf$/);
+    expect(resolveAssetUrl("icons/app.svg")).toMatch(/icons\/app\.svg$/);
   });
 
   it("strips leading slashes before joining", () => {
-    expect(resolveAssetUrl("/models/scene.gltf")).toBe(
-      resolveAssetUrl("models/scene.gltf")
-    );
+    expect(resolveAssetUrl("/logo.png")).toBe(resolveAssetUrl("logo.png"));
   });
 });
