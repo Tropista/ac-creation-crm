@@ -1,5 +1,5 @@
-import { advanceProductionStatus } from "../utils/production";
-import { workshopApplicationService } from "./WorkshopApplicationService";
+import { advanceProductionStatus } from "../utils/production.js";
+import { workshopApplicationService } from "./WorkshopApplicationService.js";
 
 export class ProductionApplicationService {
   advance(state, quote, context = {}) {

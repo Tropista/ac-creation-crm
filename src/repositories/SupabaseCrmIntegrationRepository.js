@@ -1,4 +1,4 @@
-import { createCrmStateRepository } from "./crmStateRepository";
+import { createCrmStateRepository } from "./crmStateRepository.js";
 
 const COLLECTIONS = {
   clients: "clients",

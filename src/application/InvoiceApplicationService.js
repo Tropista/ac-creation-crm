@@ -2,7 +2,7 @@ import {
   convertQuoteToInvoiceData,
   createBalanceInvoiceFromQuote,
   createDepositInvoiceFromQuote,
-} from "../utils/documents";
+} from "../utils/documents.js";
 
 export class InvoiceApplicationService {
   convertQuote(state, quote) {

@@ -1,7 +1,7 @@
-import { applyStockByLines } from "./stock";
-import { buildCompanySnapshot } from "./companySnapshot";
-import { computeDueDate } from "./invoiceReminders";
-import { getInvoicePaidAmount } from "./invoices";
+import { applyStockByLines } from "./stock.js";
+import { buildCompanySnapshot } from "./companySnapshot.js";
+import { computeDueDate } from "./invoiceReminders.js";
+import { getInvoicePaidAmount } from "./invoices.js";
 
 export const uid = () =>
   Date.now().toString(36) + Math.random().toString(36).slice(2);
@@ -67,10 +67,7 @@ export function dedupeDocuments(items = []) {
 
   return Array.from(map.values());
 }
-export function createBackupSnapshot(
-  data,
-  label = "Sauvegarde automatique"
-) {
+export function createBackupSnapshot(data, label = "Sauvegarde automatique") {
   const safeData = normalizeData(data);
 
   return {
@@ -90,10 +87,9 @@ export function createBackupSnapshot(
   };
 }
 export function downloadJson(filename, data) {
-  const blob = new Blob(
-    [JSON.stringify(data, null, 2)],
-    { type: "application/json" }
-  );
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: "application/json",
+  });
 
   const url = URL.createObjectURL(blob);
 
@@ -128,11 +124,7 @@ export function normalizeData(data) {
 }
 export function pruneBackups(backups, max = 12) {
   return [...(backups || [])]
-    .sort(
-      (a, b) =>
-        new Date(b.createdAt || 0)
-        - new Date(a.createdAt || 0)
-    )
+    .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
     .slice(0, max);
 }
 
@@ -157,7 +149,7 @@ export function formatDocumentNumber(prefix, year, sequence, padding = 4) {
 export function parseDocumentSequence(number, docPrefix, year, padding = 4) {
   const value = String(number || "");
   const pattern = new RegExp(
-    `^${docPrefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-${year}-(\\d{${padding},})$`
+    `^${docPrefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-${year}-(\\d{${padding},})$`,
   );
   const match = value.match(pattern);
   if (!match) return null;
@@ -169,7 +161,7 @@ export function nextDocumentNumber(
   list,
   docPrefix,
   year = currentDocumentYear(),
-  options = {}
+  options = {},
 ) {
   const padding = options.padding ?? 4;
   const numbers = (list || [])
@@ -180,12 +172,21 @@ export function nextDocumentNumber(
   return formatDocumentNumber(docPrefix, year, nextNumber, padding);
 }
 
-export function nextInvoiceNumber(invoices, settings, year = currentDocumentYear()) {
+export function nextInvoiceNumber(
+  invoices,
+  settings,
+  year = currentDocumentYear(),
+) {
   const { prefix, padding } = getInvoiceNumberSettings(settings);
   return nextDocumentNumber(invoices, prefix, year, { padding });
 }
 
-export function detectDocumentNumberGaps(docs, prefix, year = currentDocumentYear(), padding = 4) {
+export function detectDocumentNumberGaps(
+  docs,
+  prefix,
+  year = currentDocumentYear(),
+  padding = 4,
+) {
   const sequences = (docs || [])
     .map((doc) => parseDocumentSequence(doc.number, prefix, year, padding))
     .filter((value) => value != null)
@@ -206,13 +207,18 @@ export function detectDocumentNumberGaps(docs, prefix, year = currentDocumentYea
   return missing;
 }
 
-export function detectInvoiceNumberGaps(invoices, settings, year = currentDocumentYear()) {
+export function detectInvoiceNumberGaps(
+  invoices,
+  settings,
+  year = currentDocumentYear(),
+) {
   const { prefix, padding } = getInvoiceNumberSettings(settings);
   return detectDocumentNumberGaps(invoices, prefix, year, padding);
 }
 
 export function isFullInvoiceFromQuote(invoice, quoteNumber) {
-  if (String(invoice?.convertedFrom || "") !== String(quoteNumber || "")) return false;
+  if (String(invoice?.convertedFrom || "") !== String(quoteNumber || ""))
+    return false;
   const type = String(invoice?.invoiceType || "");
   return type !== "acompte" && type !== "solde";
 }
@@ -223,7 +229,7 @@ export function getQuoteDepositInvoices(data, quote) {
   return (data.invoices || []).filter(
     (invoice) =>
       String(invoice.invoiceType || "") === "acompte" &&
-      String(invoice.parentQuoteId || "") === quoteId
+      String(invoice.parentQuoteId || "") === quoteId,
   );
 }
 
@@ -234,7 +240,7 @@ export function getQuoteBalanceInvoice(data, quote) {
     (data.invoices || []).find(
       (invoice) =>
         String(invoice.invoiceType || "") === "solde" &&
-        String(invoice.parentQuoteId || "") === quoteId
+        String(invoice.parentQuoteId || "") === quoteId,
     ) || null
   );
 }
@@ -248,13 +254,14 @@ export function getQuoteDepositSummary(data, quote) {
   const quoteTotalTTC = Number(quote?.totalTTC || 0);
   const invoicedDeposit = depositInvoices.reduce(
     (sum, invoice) => sum + Number(invoice.totalTTC || 0),
-    0
+    0,
   );
   const paidDeposit = depositInvoices.reduce(
     (sum, invoice) => sum + getInvoicePaidAmount(invoice),
-    0
+    0,
   );
-  const remainingBalance = Math.round((quoteTotalTTC - paidDeposit) * 100) / 100;
+  const remainingBalance =
+    Math.round((quoteTotalTTC - paidDeposit) * 100) / 100;
   const hasDeposits =
     depositInvoices.length > 0 || Number(quote?.depositPercent || 0) > 0;
 
@@ -281,12 +288,14 @@ export function quoteAlreadyConverted(data, quote) {
   const quoteNumber = String(quote?.number || "");
   if (!quoteNumber) return false;
   return (data.invoices || []).some((invoice) =>
-    isFullInvoiceFromQuote(invoice, quoteNumber)
+    isFullInvoiceFromQuote(invoice, quoteNumber),
   );
 }
 
 export function quoteIsFullyInvoiced(data, quote) {
-  return quoteAlreadyConverted(data, quote) || quoteHasBalanceInvoice(data, quote);
+  return (
+    quoteAlreadyConverted(data, quote) || quoteHasBalanceInvoice(data, quote)
+  );
 }
 
 const CONVERTIBLE_QUOTE_STATUSES = new Set([
@@ -306,12 +315,12 @@ export function convertQuoteToInvoiceData(data, quote) {
   const depositSummary = getQuoteDepositSummary(data, quote);
   if (depositSummary.depositInvoices.length > 0) {
     throw new Error(
-      "Ce devis possède des factures d'acompte. Utilisez « Facture de solde »."
+      "Ce devis possède des factures d'acompte. Utilisez « Facture de solde ».",
     );
   }
   if (Number(quote?.depositPercent || 0) > 0) {
     throw new Error(
-      "Ce devis prévoit un acompte. Créez d'abord la facture d'acompte, puis la facture de solde."
+      "Ce devis prévoit un acompte. Créez d'abord la facture d'acompte, puis la facture de solde.",
     );
   }
 
@@ -319,7 +328,8 @@ export function convertQuoteToInvoiceData(data, quote) {
     ...quote,
     id: uid(),
     number: nextInvoiceNumber(data.invoices || [], data.settings),
-    companySnapshot: quote.companySnapshot || buildCompanySnapshot(data.settings || {}),
+    companySnapshot:
+      quote.companySnapshot || buildCompanySnapshot(data.settings || {}),
     date: today(),
     status: "Non payée",
     dueDate: computeDueDate(today(), data.settings?.paymentDays),
@@ -331,11 +341,16 @@ export function convertQuoteToInvoiceData(data, quote) {
 
   return {
     ...data,
-    products: applyStockByLines(data.products || [], invoice.lines || [], "remove", {
-      type: "invoice",
-      reason: "Conversion devis en facture",
-      reference: invoice.number,
-    }),
+    products: applyStockByLines(
+      data.products || [],
+      invoice.lines || [],
+      "remove",
+      {
+        type: "invoice",
+        reason: "Conversion devis en facture",
+        reference: invoice.number,
+      },
+    ),
     invoices: [...(data.invoices || []), invoice],
   };
 }
@@ -343,7 +358,9 @@ export function convertQuoteToInvoiceData(data, quote) {
 export const DELIVERY_NOTE_ELIGIBLE_STATUSES = ["Prêt", "Livré"];
 
 export function isQuoteDeliveryNoteEligible(quote) {
-  return DELIVERY_NOTE_ELIGIBLE_STATUSES.includes(String(quote?.status || "").trim());
+  return DELIVERY_NOTE_ELIGIBLE_STATUSES.includes(
+    String(quote?.status || "").trim(),
+  );
 }
 
 export function quoteHasDeliveryNote(data, quote) {
@@ -352,7 +369,7 @@ export function quoteHasDeliveryNote(data, quote) {
   return (data.deliveryNotes || []).some(
     (note) =>
       String(note.quoteNumber || "") === quoteNumber ||
-      String(note.quoteId || "") === String(quote?.id || "")
+      String(note.quoteId || "") === String(quote?.id || ""),
   );
 }
 
@@ -361,7 +378,7 @@ export function getDeliveryNoteForQuote(data, quote) {
   return (data.deliveryNotes || []).find(
     (note) =>
       String(note.quoteNumber || "") === quoteNumber ||
-      String(note.quoteId || "") === String(quote?.id || "")
+      String(note.quoteId || "") === String(quote?.id || ""),
   );
 }
 
@@ -380,7 +397,9 @@ function normalizeDeliveryLines(quote, products = []) {
   return sourceLines
     .filter((line) => line.description && Number(line.quantity || 0) > 0)
     .map((line) => {
-      const product = products.find((p) => String(p.id) === String(line.productId));
+      const product = products.find(
+        (p) => String(p.id) === String(line.productId),
+      );
       return {
         productId: line.productId || product?.id || "",
         sku: line.sku || product?.sku || "",
@@ -409,7 +428,8 @@ export function createDeliveryNoteFromQuote(data, quote, options = {}) {
   const deliveryNote = {
     id: uid(),
     number: nextDocumentNumber(data.deliveryNotes || [], "BL"),
-    companySnapshot: quote.companySnapshot || buildCompanySnapshot(data.settings || {}),
+    companySnapshot:
+      quote.companySnapshot || buildCompanySnapshot(data.settings || {}),
     date: today(),
     quoteNumber: quote.number,
     quoteId: quote.id,
@@ -424,7 +444,7 @@ export function createDeliveryNoteFromQuote(data, quote, options = {}) {
 
   const nextNotes = existing
     ? (data.deliveryNotes || []).map((note) =>
-        String(note.id) === String(existing.id) ? deliveryNote : note
+        String(note.id) === String(existing.id) ? deliveryNote : note,
       )
     : [...(data.deliveryNotes || []), deliveryNote];
 
@@ -455,7 +475,8 @@ export function createDepositInvoiceFromQuote(data, quote, percent) {
   const invoice = {
     id: uid(),
     number: nextInvoiceNumber(data.invoices || [], data.settings),
-    companySnapshot: quote.companySnapshot || buildCompanySnapshot(data.settings || {}),
+    companySnapshot:
+      quote.companySnapshot || buildCompanySnapshot(data.settings || {}),
     date: today(),
     clientId: quote.clientId,
     billingDetail: quote.billingDetail || "",
@@ -507,14 +528,17 @@ export function createBalanceInvoiceFromQuote(data, quote) {
     throw new Error("Une facture de solde existe déjà pour ce devis.");
   }
   if (summary.remainingBalance <= 0.01) {
-    throw new Error("Le solde restant est nul ou déjà couvert par les acomptes payés.");
+    throw new Error(
+      "Le solde restant est nul ou déjà couvert par les acomptes payés.",
+    );
   }
 
   const quoteTotalTTC = Number(quote.totalTTC || 0);
   const balanceTTC = summary.remainingBalance;
   const ratio = quoteTotalTTC > 0 ? balanceTTC / quoteTotalTTC : 1;
   const totalHT = Math.round(Number(quote.totalHT || 0) * ratio * 100) / 100;
-  const taxAmount = Math.round(Number(quote.taxAmount || 0) * ratio * 100) / 100;
+  const taxAmount =
+    Math.round(Number(quote.taxAmount || 0) * ratio * 100) / 100;
   const taxRate = Number(quote.taxRate ?? data.settings?.taxRate ?? 0);
   const paidDepositLabel = summary.paidDeposit.toLocaleString("fr-FR", {
     minimumFractionDigits: 2,
@@ -539,7 +563,8 @@ export function createBalanceInvoiceFromQuote(data, quote) {
   const invoice = {
     id: uid(),
     number: nextInvoiceNumber(data.invoices || [], data.settings),
-    companySnapshot: quote.companySnapshot || buildCompanySnapshot(data.settings || {}),
+    companySnapshot:
+      quote.companySnapshot || buildCompanySnapshot(data.settings || {}),
     date: today(),
     clientId: quote.clientId,
     billingDetail: quote.billingDetail || "",
@@ -554,7 +579,8 @@ export function createBalanceInvoiceFromQuote(data, quote) {
     globalDiscount: quote.globalDiscount || 0,
     subtotal: totalHT,
     lineDiscountAmount: quote.lineDiscountAmount || 0,
-    globalDiscountAmount: Math.round(Number(quote.globalDiscountAmount || 0) * ratio * 100) / 100,
+    globalDiscountAmount:
+      Math.round(Number(quote.globalDiscountAmount || 0) * ratio * 100) / 100,
     totalHT,
     taxRate,
     taxAmount,
@@ -566,11 +592,16 @@ export function createBalanceInvoiceFromQuote(data, quote) {
 
   return {
     ...data,
-    products: applyStockByLines(data.products || [], invoice.lines || [], "remove", {
-      type: "invoice",
-      reason: "Facture de solde",
-      reference: invoice.number,
-    }),
+    products: applyStockByLines(
+      data.products || [],
+      invoice.lines || [],
+      "remove",
+      {
+        type: "invoice",
+        reason: "Facture de solde",
+        reference: invoice.number,
+      },
+    ),
     invoices: [...(data.invoices || []), invoice],
     invoice,
   };
@@ -615,11 +646,18 @@ export function computeDocumentTotals(lines = [], options = {}) {
     (lines || []).reduce((sum, line) => {
       const lineTotals = computeDocumentLineTotals(line);
       return sum + lineTotals.totalHT;
-    }, 0)
+    }, 0),
   );
-  const globalDiscountRate = Math.min(100, Math.max(0, Number(options.globalDiscount || 0)));
-  const globalDiscountAmount = roundDocumentAmount(subtotal * (globalDiscountRate / 100));
-  const totalHT = roundDocumentAmount(Math.max(0, subtotal - globalDiscountAmount));
+  const globalDiscountRate = Math.min(
+    100,
+    Math.max(0, Number(options.globalDiscount || 0)),
+  );
+  const globalDiscountAmount = roundDocumentAmount(
+    subtotal * (globalDiscountRate / 100),
+  );
+  const totalHT = roundDocumentAmount(
+    Math.max(0, subtotal - globalDiscountAmount),
+  );
   const taxRate = Number(options.taxRate || 0);
   const taxAmount = roundDocumentAmount(totalHT * (taxRate / 100));
   const totalTTC = roundDocumentAmount(totalHT + taxAmount);

@@ -1,9 +1,9 @@
 import {
   createDeliveryNoteFromQuote,
   getDeliveryNoteForQuote,
-} from "../utils/documents";
-import { ATELIER_PIPELINE_STATUSES } from "../utils/production";
-import { syncQuoteProductionStock } from "../utils/stock";
+} from "../utils/documents.js";
+import { ATELIER_PIPELINE_STATUSES } from "../utils/production.js";
+import { syncQuoteProductionStock } from "../utils/stock.js";
 
 export class WorkshopApplicationService {
   patchQuote(state, quoteId, changes) {

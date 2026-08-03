@@ -132,3 +132,16 @@ La rÃ©ponse contient `customerId`, `orderId`, `invoiceId`, `workshopId`, `prod
 5. Activer les flags du site et passer une commande sandbox.
 
 Sans service role CRM, le serveur indique explicitement que l'API est inactive. Cette protection ne doit jamais Ãªtre contournÃ©e avec la clÃ© anon.
+
+## DÃ©veloppement local
+
+| Processus               | Commande           | Adresse                 |
+| ----------------------- | ------------------ | ----------------------- |
+| SPA CRM                 | `npm run dev:spa`  | `http://localhost:5173` |
+| API CRM                 | `npm run api:dev`  | `http://127.0.0.1:3001` |
+| SPA et API              | `npm run dev`      | ports 5173 et 3001      |
+| Validation HTTP signÃ©e | `npm run api:test` | cinq endpoints v1       |
+
+Vite ne relaie pas l'API et son fallback HTML ne constitue jamais une rÃ©ponse d'intÃ©gration. Les cinq endpoints sont servis exclusivement par `backend/server.js`. Le test runtime vÃ©rifie le type JSON, HMAC valide/invalide, timestamp expirÃ©, rejeu de nonce, duplicata d'Ã©vÃ©nement et accusÃ© de rÃ©ception.
+
+Si le runtime retourne `Could not find the table 'public.crm_integration_nonces' in the schema cache`, appliquer la migration au projet rÃ©fÃ©rencÃ© par `CRM_SUPABASE_URL`, puis exÃ©cuter `NOTIFY pgrst, 'reload schema';` dans le SQL Editor avant de relancer l'API. La prÃ©sence de la migration dans Git ne prouve pas son application au projet configurÃ©.

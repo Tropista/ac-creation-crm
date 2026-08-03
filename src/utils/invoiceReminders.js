@@ -1,4 +1,4 @@
-import { parseDocumentDate } from "./invoices";
+import { parseDocumentDate } from "./invoices.js";
 
 export const DEFAULT_PAYMENT_DAYS = 30;
 export const MIN_PAYMENT_DAYS = 1;
@@ -66,7 +66,7 @@ export function buildInvoiceReminderEmail(
   invoice,
   client,
   settings = {},
-  options = {}
+  options = {},
 ) {
   const companyName = settings.companyName || "AC Creation";
   const reminderNumber =
@@ -107,7 +107,7 @@ export function openInvoiceReminderMailto(
   invoice,
   client,
   settings = {},
-  options = {}
+  options = {},
 ) {
   if (!client?.email) {
     return { ok: false, reason: "no_email" };
@@ -119,7 +119,7 @@ export function openInvoiceReminderMailto(
     invoice,
     client,
     settings,
-    { reminderNumber }
+    { reminderNumber },
   );
   window.location.href = `mailto:${encodeURIComponent(client.email)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   return { ok: true, reminderNumber };

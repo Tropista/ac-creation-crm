@@ -1,4 +1,4 @@
-import { uid, today } from "./documents";
+import { uid, today } from "./documents.js";
 
 /** Noms de catégorie reconnus comme consommables (encre DTF, films, vinyle…). */
 export const CONSUMABLE_CATEGORY_NAMES = ["consommable", "consommables"];
@@ -10,13 +10,13 @@ export function isConsumableProduct(product, settings = {}) {
   if (!product || product.archived) return false;
 
   const trackedIds = settings.consumablesStock || [];
-  if (
-    trackedIds.some((id) => String(id) === String(product.id))
-  ) {
+  if (trackedIds.some((id) => String(id) === String(product.id))) {
     return true;
   }
 
-  const category = String(product.category || "").trim().toLowerCase();
+  const category = String(product.category || "")
+    .trim()
+    .toLowerCase();
   return CONSUMABLE_CATEGORY_NAMES.includes(category);
 }
 
@@ -24,7 +24,11 @@ export function isBlankProduct(product, settings = {}) {
   return !isConsumableProduct(product, settings);
 }
 
-export function filterProductsByStockKind(products = [], kind = "all", settings = {}) {
+export function filterProductsByStockKind(
+  products = [],
+  kind = "all",
+  settings = {},
+) {
   if (kind === "consumable") {
     return products.filter((product) => isConsumableProduct(product, settings));
   }
@@ -57,7 +61,11 @@ export function countLowStockProducts(products = []) {
   return products.filter(isLowStock).length;
 }
 
-export function countLowStockByKind(products = [], kind = "all", settings = {}) {
+export function countLowStockByKind(
+  products = [],
+  kind = "all",
+  settings = {},
+) {
   return filterProductsByStockKind(products, kind, settings).filter(isLowStock)
     .length;
 }
@@ -73,7 +81,7 @@ export function getLowStockProductsByKind(
   products = [],
   kind = "all",
   limit = 8,
-  settings = {}
+  settings = {},
 ) {
   return filterProductsByStockKind(products, kind, settings)
     .filter(isLowStock)
@@ -85,16 +93,23 @@ export function getLowStockProductsByKind(
 export function resolveProductSupplier(product, suppliers = []) {
   if (!product) return null;
 
-  const supplierId = String(product.supplierId || product.primarySupplierId || "").trim();
+  const supplierId = String(
+    product.supplierId || product.primarySupplierId || "",
+  ).trim();
   if (supplierId) {
     const byId = suppliers.find((entry) => String(entry.id) === supplierId);
     if (byId) return byId;
   }
 
-  const supplierName = String(product.supplier || "").trim().toLowerCase();
+  const supplierName = String(product.supplier || "")
+    .trim()
+    .toLowerCase();
   if (supplierName) {
     const byName = suppliers.find(
-      (entry) => String(entry.name || "").trim().toLowerCase() === supplierName
+      (entry) =>
+        String(entry.name || "")
+          .trim()
+          .toLowerCase() === supplierName,
     );
     if (byName) return byName;
   }
@@ -102,14 +117,16 @@ export function resolveProductSupplier(product, suppliers = []) {
   return (
     suppliers.find((entry) =>
       (entry.productLinks || []).some(
-        (link) => String(link.productId) === String(product.id)
-      )
+        (link) => String(link.productId) === String(product.id),
+      ),
     ) || null
   );
 }
 
 function normalizeName(value) {
-  return String(value || "").trim().toLowerCase();
+  return String(value || "")
+    .trim()
+    .toLowerCase();
 }
 
 export function resolveProductSupplierLink(product, supplier) {
@@ -138,7 +155,7 @@ export function getProductSupplierInfo(product, suppliers = []) {
     product?.supplierPurchasePrice ??
       link?.purchasePriceHT ??
       product?.purchasePrice ??
-      0
+      0,
   );
 
   return {
@@ -150,7 +167,9 @@ export function getProductSupplierInfo(product, suppliers = []) {
     supplierSku: product?.supplierSku || link?.supplierSku || "",
     unit: product?.supplierUnit || link?.unit || "pièce",
     purchasePriceHT,
-    leadTimeDays: Number(product?.supplierLeadTimeDays ?? link?.leadTimeDays ?? 0),
+    leadTimeDays: Number(
+      product?.supplierLeadTimeDays ?? link?.leadTimeDays ?? 0,
+    ),
   };
 }
 
@@ -253,7 +272,9 @@ export function applyStockByLines(products, lines, direction, options = {}) {
       type: options.type || "invoice",
       reason:
         options.reason ||
-        (direction === "remove" ? "Vente facture" : "Restitution stock facture"),
+        (direction === "remove"
+          ? "Vente facture"
+          : "Restitution stock facture"),
       reference: options.reference || "",
       user: options.user || "",
     });
@@ -267,27 +288,42 @@ export function shouldAdjustQuoteProductionStock(status) {
   return QUOTE_PRODUCTION_STOCK_STATUSES.includes(String(status || "").trim());
 }
 
-export function syncQuoteProductionStock(products, previousQuote, nextQuote, options = {}) {
+export function syncQuoteProductionStock(
+  products,
+  previousQuote,
+  nextQuote,
+  options = {},
+) {
   let nextProducts = [...(products || [])];
   const wasStocked = Boolean(previousQuote?.productionStockAdjusted);
   const shouldStock = shouldAdjustQuoteProductionStock(nextQuote?.status);
 
   if (wasStocked && !shouldStock) {
-    nextProducts = applyStockByLines(nextProducts, previousQuote?.lines || [], "add", {
-      type: "production",
-      reason: "Restitution stock (production annulée)",
-      reference: previousQuote?.number || "",
-      user: options.user || "",
-    });
+    nextProducts = applyStockByLines(
+      nextProducts,
+      previousQuote?.lines || [],
+      "add",
+      {
+        type: "production",
+        reason: "Restitution stock (production annulée)",
+        reference: previousQuote?.number || "",
+        user: options.user || "",
+      },
+    );
   }
 
   if (shouldStock && !wasStocked) {
-    nextProducts = applyStockByLines(nextProducts, nextQuote?.lines || [], "remove", {
-      type: "production",
-      reason: "Sortie stock (mise en production)",
-      reference: nextQuote?.number || "",
-      user: options.user || "",
-    });
+    nextProducts = applyStockByLines(
+      nextProducts,
+      nextQuote?.lines || [],
+      "remove",
+      {
+        type: "production",
+        reason: "Sortie stock (mise en production)",
+        reference: nextQuote?.number || "",
+        user: options.user || "",
+      },
+    );
   }
 
   return {
@@ -296,28 +332,43 @@ export function syncQuoteProductionStock(products, previousQuote, nextQuote, opt
   };
 }
 
-export function syncDocumentStock(products, previousDoc, nextDoc, options = {}) {
+export function syncDocumentStock(
+  products,
+  previousDoc,
+  nextDoc,
+  options = {},
+) {
   let nextProducts = [...(products || [])];
   const previousWasStocked = Boolean(previousDoc?.stockAdjusted);
   const nextShouldBeStocked =
     options.isQuote !== true && nextDoc?.status !== "Annulée";
 
   if (previousWasStocked) {
-    nextProducts = applyStockByLines(nextProducts, previousDoc?.lines || [], "add", {
-      type: "invoice",
-      reason: "Modification facture — restitution stock",
-      reference: previousDoc?.number || "",
-      user: options.user || "",
-    });
+    nextProducts = applyStockByLines(
+      nextProducts,
+      previousDoc?.lines || [],
+      "add",
+      {
+        type: "invoice",
+        reason: "Modification facture — restitution stock",
+        reference: previousDoc?.number || "",
+        user: options.user || "",
+      },
+    );
   }
 
   if (nextShouldBeStocked) {
-    nextProducts = applyStockByLines(nextProducts, nextDoc?.lines || [], "remove", {
-      type: "invoice",
-      reason: "Vente facture",
-      reference: nextDoc?.number || "",
-      user: options.user || "",
-    });
+    nextProducts = applyStockByLines(
+      nextProducts,
+      nextDoc?.lines || [],
+      "remove",
+      {
+        type: "invoice",
+        reason: "Vente facture",
+        reference: nextDoc?.number || "",
+        user: options.user || "",
+      },
+    );
   }
 
   return nextProducts;
@@ -327,7 +378,11 @@ export function getReservedProductQuantities(quotes = []) {
   const map = new Map();
 
   for (const quote of quotes || []) {
-    if (!QUOTE_RESERVED_STOCK_STATUSES.includes(String(quote?.status || "").trim())) {
+    if (
+      !QUOTE_RESERVED_STOCK_STATUSES.includes(
+        String(quote?.status || "").trim(),
+      )
+    ) {
       continue;
     }
 
@@ -341,7 +396,9 @@ export function getReservedProductQuantities(quotes = []) {
       };
 
       current.quantity += Number(line.quantity || 0);
-      if (!current.quotes.some((entry) => String(entry.id) === String(quote.id))) {
+      if (
+        !current.quotes.some((entry) => String(entry.id) === String(quote.id))
+      ) {
         current.quotes.push({
           id: quote.id,
           number: quote.number || quote.reference || "",
@@ -356,7 +413,12 @@ export function getReservedProductQuantities(quotes = []) {
   return map;
 }
 
-export function buildAdvancedStockRows(products = [], quotes = [], suppliers = [], settings = {}) {
+export function buildAdvancedStockRows(
+  products = [],
+  quotes = [],
+  suppliers = [],
+  settings = {},
+) {
   const reservedMap = getReservedProductQuantities(quotes);
 
   return (products || [])
@@ -364,13 +426,16 @@ export function buildAdvancedStockRows(products = [], quotes = [], suppliers = [
     .map((product) => {
       const reserved = reservedMap.get(String(product.id));
       const stock = getStock(product);
-      const reservedQty = Math.round(Number(reserved?.quantity || 0) * 100) / 100;
+      const reservedQty =
+        Math.round(Number(reserved?.quantity || 0) * 100) / 100;
       const availableStock = Math.round((stock - reservedQty) * 100) / 100;
       const minStock = getMinStock(product);
       const supplierInfo = getProductSupplierInfo(product, suppliers);
       const supplier = supplierInfo.supplier;
       const reorderQty =
-        minStock > 0 ? Math.max(0, Math.ceil(minStock * 2 - availableStock)) : 0;
+        minStock > 0
+          ? Math.max(0, Math.ceil(minStock * 2 - availableStock))
+          : 0;
 
       return {
         product,
@@ -389,9 +454,11 @@ export function buildAdvancedStockRows(products = [], quotes = [], suppliers = [
         supplierUnit: supplierInfo.unit,
         supplierPurchasePriceHT: supplierInfo.purchasePriceHT,
         supplierLeadTimeDays: supplierInfo.leadTimeDays,
-        reorderCostHT: Math.round(reorderQty * supplierInfo.purchasePriceHT * 100) / 100,
+        reorderCostHT:
+          Math.round(reorderQty * supplierInfo.purchasePriceHT * 100) / 100,
         reorderQty,
-        lowStock: availableStock > 0 && minStock > 0 && availableStock <= minStock,
+        lowStock:
+          availableStock > 0 && minStock > 0 && availableStock <= minStock,
         outOfStock: availableStock <= 0,
         isConsumable: isConsumableProduct(product, settings),
         reservations: reserved?.quotes || [],
@@ -404,10 +471,18 @@ export function buildAdvancedStockRows(products = [], quotes = [], suppliers = [
     });
 }
 
-export function buildSupplierReorderGroups(products = [], suppliers = [], quotes = [], settings = {}) {
-  const rows = buildAdvancedStockRows(products, quotes, suppliers, settings).filter(
-    (row) => row.minStock > 0 && row.reorderQty > 0
-  );
+export function buildSupplierReorderGroups(
+  products = [],
+  suppliers = [],
+  quotes = [],
+  settings = {},
+) {
+  const rows = buildAdvancedStockRows(
+    products,
+    quotes,
+    suppliers,
+    settings,
+  ).filter((row) => row.minStock > 0 && row.reorderQty > 0);
   const groups = new Map();
 
   for (const row of rows) {
@@ -438,13 +513,17 @@ export function buildSupplierReorderGroups(products = [], suppliers = [], quotes
       totalHT: row.reorderCostHT,
     });
     current.totalSuggestedQty += row.reorderQty;
-    current.totalCostHT = Math.round((current.totalCostHT + row.reorderCostHT) * 100) / 100;
-    current.maxLeadTimeDays = Math.max(current.maxLeadTimeDays, row.supplierLeadTimeDays || 0);
+    current.totalCostHT =
+      Math.round((current.totalCostHT + row.reorderCostHT) * 100) / 100;
+    current.maxLeadTimeDays = Math.max(
+      current.maxLeadTimeDays,
+      row.supplierLeadTimeDays || 0,
+    );
     groups.set(key, current);
   }
 
   return [...groups.values()].sort((a, b) =>
-    String(a.supplierName).localeCompare(String(b.supplierName))
+    String(a.supplierName).localeCompare(String(b.supplierName)),
   );
 }
 
@@ -464,10 +543,14 @@ export function createSupplierPurchaseOrderDraft(group = {}, settings = {}) {
       "",
       ...lines.map(
         (line) =>
-          `- ${line.quantity} ${line.unit || "pièce"} x ${line.supplierSku ? `${line.supplierSku} / ` : ""}${line.sku ? `${line.sku} - ` : ""}${line.name}${line.purchasePriceHT ? ` (${line.purchasePriceHT.toFixed(2)} EUR HT/u)` : ""}`
+          `- ${line.quantity} ${line.unit || "pièce"} x ${line.supplierSku ? `${line.supplierSku} / ` : ""}${line.sku ? `${line.sku} - ` : ""}${line.name}${line.purchasePriceHT ? ` (${line.purchasePriceHT.toFixed(2)} EUR HT/u)` : ""}`,
       ),
-      group.totalCostHT ? `\nTotal estimé HT : ${group.totalCostHT.toFixed(2)} EUR` : "",
-      group.maxLeadTimeDays ? `Délai souhaité / habituel : ${group.maxLeadTimeDays} jour(s)` : "",
+      group.totalCostHT
+        ? `\nTotal estimé HT : ${group.totalCostHT.toFixed(2)} EUR`
+        : "",
+      group.maxLeadTimeDays
+        ? `Délai souhaité / habituel : ${group.maxLeadTimeDays} jour(s)`
+        : "",
       "",
       "Merci d'avance.",
       company,

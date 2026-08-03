@@ -1,10 +1,10 @@
-import { uid } from "./documents";
+import { uid } from "./documents.js";
 import {
   applyPartialPayment,
   deriveInvoiceStatus,
   getInvoicePaidAmount,
   getInvoiceRemaining,
-} from "./invoices";
+} from "./invoices.js";
 
 export const PAYMENT_METHODS = [
   "Virement",
@@ -27,7 +27,9 @@ export function normalizePayment(payment = {}) {
     saleId: payment.saleId || payment.invoiceId || "",
     documentType: payment.documentType || "invoice",
     amount: Math.round(Number(payment.amount || 0) * 100) / 100,
-    method: PAYMENT_METHODS.includes(payment.method) ? payment.method : "Virement",
+    method: PAYMENT_METHODS.includes(payment.method)
+      ? payment.method
+      : "Virement",
     status: PAYMENT_STATUSES.includes(payment.status) ? payment.status : "Reçu",
     date: payment.date || new Date().toISOString().slice(0, 10),
     paymentDate: payment.paymentDate || payment.date || "",
@@ -37,7 +39,8 @@ export function normalizePayment(payment = {}) {
     bankTransactionId: payment.bankTransactionId || "",
     source: payment.source || "manual",
     createdAt: payment.createdAt || new Date().toISOString(),
-    updatedAt: payment.updatedAt || payment.createdAt || new Date().toISOString(),
+    updatedAt:
+      payment.updatedAt || payment.createdAt || new Date().toISOString(),
   };
 }
 
@@ -46,17 +49,20 @@ export function getPaymentsForInvoice(payments = [], invoiceId) {
     .filter(
       (payment) =>
         String(payment.invoiceId) === String(invoiceId) &&
-        payment.status !== "Annulé"
+        payment.status !== "Annulé",
     )
     .sort(
       (a, b) =>
-        new Date(b.date || b.createdAt || 0) - new Date(a.date || a.createdAt || 0)
+        new Date(b.date || b.createdAt || 0) -
+        new Date(a.date || a.createdAt || 0),
     );
 }
 
 export function isPaymentLinkedToInvoice(payment = {}, invoice = {}) {
   const invoiceIds = [invoice.id, invoice.number].filter(Boolean).map(String);
-  const paymentIds = [payment.invoiceId, payment.invoiceNumber].filter(Boolean).map(String);
+  const paymentIds = [payment.invoiceId, payment.invoiceNumber]
+    .filter(Boolean)
+    .map(String);
   return paymentIds.some((id) => invoiceIds.includes(id));
 }
 
@@ -66,7 +72,9 @@ export function isValidReceivedInvoicePayment(payment = {}) {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
   return (
-    (status.includes("recu") || status.includes("received") || status.includes("paye")) &&
+    (status.includes("recu") ||
+      status.includes("received") ||
+      status.includes("paye")) &&
     Number(payment.amount || 0) > 0 &&
     Boolean(payment.date)
   );
@@ -76,7 +84,7 @@ export function hasValidPaymentForInvoice(payments = [], invoice = {}) {
   return (payments || []).some(
     (payment) =>
       isPaymentLinkedToInvoice(payment, invoice) &&
-      isValidReceivedInvoicePayment(payment)
+      isValidReceivedInvoicePayment(payment),
   );
 }
 
@@ -94,11 +102,13 @@ function isHistoricalPaymentEligible(invoice = {}) {
 }
 
 export function sumPayments(payments = []) {
-  return Math.round(
-    (payments || [])
-      .filter((p) => p.status === "Reçu")
-      .reduce((sum, p) => sum + Number(p.amount || 0), 0) * 100
-  ) / 100;
+  return (
+    Math.round(
+      (payments || [])
+        .filter((p) => p.status === "Reçu")
+        .reduce((sum, p) => sum + Number(p.amount || 0), 0) * 100,
+    ) / 100
+  );
 }
 
 export function buildPaymentSummary(invoice, payments = []) {
@@ -136,7 +146,11 @@ export function enrichInvoiceWithPayments(invoice, payments = []) {
   };
 }
 
-export function recordInvoicePayment(data, invoice, { amount, method, date, notes, isDeposit = false } = {}) {
+export function recordInvoicePayment(
+  data,
+  invoice,
+  { amount, method, date, notes, isDeposit = false } = {},
+) {
   if (!invoice?.id) throw new Error("Facture introuvable.");
 
   const paymentAmount = Math.round(Number(amount || 0) * 100) / 100;
@@ -144,7 +158,9 @@ export function recordInvoicePayment(data, invoice, { amount, method, date, note
 
   const remaining = getInvoiceRemaining(invoice);
   if (paymentAmount > remaining + 0.01) {
-    throw new Error(`Montant supérieur au reste dû (${remaining.toFixed(2)} €).`);
+    throw new Error(
+      `Montant supérieur au reste dû (${remaining.toFixed(2)} €).`,
+    );
   }
 
   const payment = normalizePayment({
@@ -162,11 +178,11 @@ export function recordInvoicePayment(data, invoice, { amount, method, date, note
   const nextPayments = [...(data.payments || []), payment];
   const updatedInvoice = enrichInvoiceWithPayments(
     applyPartialPayment(invoice, paymentAmount),
-    nextPayments
+    nextPayments,
   );
 
   const nextInvoices = (data.invoices || []).map((entry) =>
-    String(entry.id) === String(invoice.id) ? updatedInvoice : entry
+    String(entry.id) === String(invoice.id) ? updatedInvoice : entry,
   );
 
   return {
@@ -181,7 +197,7 @@ export function recordInvoicePayment(data, invoice, { amount, method, date, note
 export function upsertHistoricalInvoicePayment(
   data,
   invoice,
-  { paymentId = "", amount, method, date, notes, bankTransactionId = "" } = {}
+  { paymentId = "", amount, method, date, notes, bankTransactionId = "" } = {},
 ) {
   if (!invoice?.id) throw new Error("Facture introuvable.");
 
@@ -190,8 +206,11 @@ export function upsertHistoricalInvoicePayment(
   if (!date) throw new Error("Date d'encaissement obligatoire.");
 
   const normalizedMethod = PAYMENT_METHODS.includes(method) ? method : "Autre";
-  const existingPayment = (data.payments || []).find((payment) => String(payment.id) === String(paymentId));
-  const existingValidPayment = !existingPayment && hasValidPaymentForInvoice(data.payments || [], invoice);
+  const existingPayment = (data.payments || []).find(
+    (payment) => String(payment.id) === String(paymentId),
+  );
+  const existingValidPayment =
+    !existingPayment && hasValidPaymentForInvoice(data.payments || [], invoice);
   if (existingValidPayment) {
     return {
       ...data,
@@ -223,7 +242,9 @@ export function upsertHistoricalInvoicePayment(
   });
 
   const payments = existingPayment
-    ? (data.payments || []).map((entry) => (String(entry.id) === String(payment.id) ? payment : entry))
+    ? (data.payments || []).map((entry) =>
+        String(entry.id) === String(payment.id) ? payment : entry,
+      )
     : [...(data.payments || []), payment];
 
   const updatedInvoice = enrichInvoiceWithPayments(
@@ -233,13 +254,13 @@ export function upsertHistoricalInvoicePayment(
       paymentDate: date,
       bankTransactionId: bankTransactionId || invoice.bankTransactionId || "",
     },
-    payments
+    payments,
   );
 
   return {
     ...data,
     invoices: (data.invoices || []).map((entry) =>
-      String(entry.id) === String(invoice.id) ? updatedInvoice : entry
+      String(entry.id) === String(invoice.id) ? updatedInvoice : entry,
     ),
     payments,
     invoice: updatedInvoice,
@@ -259,11 +280,16 @@ export function createHistoricalInvoicePaymentsBatch(data, entries = []) {
 
   for (const entry of entries || []) {
     const invoice = (nextData.invoices || []).find(
-      (item) => String(item.id) === String(entry.invoiceId) || String(item.number) === String(entry.invoiceNumber)
+      (item) =>
+        String(item.id) === String(entry.invoiceId) ||
+        String(item.number) === String(entry.invoiceNumber),
     );
     if (!invoice) {
       result.needsReview += 1;
-      result.errors.push({ invoiceId: entry.invoiceId, reason: "Facture introuvable." });
+      result.errors.push({
+        invoiceId: entry.invoiceId,
+        reason: "Facture introuvable.",
+      });
       continue;
     }
     if (!isHistoricalPaymentEligible(invoice)) {
@@ -276,20 +302,32 @@ export function createHistoricalInvoicePaymentsBatch(data, entries = []) {
     }
     if (!entry.date) {
       result.needsReview += 1;
-      result.errors.push({ invoiceId: invoice.id, reason: "Date d'encaissement obligatoire." });
+      result.errors.push({
+        invoiceId: invoice.id,
+        reason: "Date d'encaissement obligatoire.",
+      });
       continue;
     }
     const amount = Number(entry.amount || 0);
     if (!amount || amount <= 0) {
       result.needsReview += 1;
-      result.errors.push({ invoiceId: invoice.id, reason: "Montant invalide." });
+      result.errors.push({
+        invoiceId: invoice.id,
+        reason: "Montant invalide.",
+      });
       continue;
     }
     const updated = upsertHistoricalInvoicePayment(nextData, invoice, {
       amount,
-      method: entry.method || invoice.paymentMethod || invoice.paymentMode || "Virement",
+      method:
+        entry.method ||
+        invoice.paymentMethod ||
+        invoice.paymentMode ||
+        "Virement",
       date: entry.date,
-      notes: entry.notes || "Paiement historique cree en masse depuis la declaration TVA",
+      notes:
+        entry.notes ||
+        "Paiement historique cree en masse depuis la declaration TVA",
       bankTransactionId: entry.bankTransactionId || "",
     });
     if (updated.skipped) {

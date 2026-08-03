@@ -7,6 +7,9 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently -n vite,backend -c cyan,yellow \"vite\" \"node backend/server.js\"",
+    "dev:spa": "vite",
+    "api:dev": "node backend/server.js",
+    "api:test": "node scripts/test-crm-integration-api.mjs",
     "clean:dist": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
     "clean:release": "node -e \"require('fs').rmSync('release/win-unpacked',{recursive:true,force:true})\"",
     "prebuild": "npm run clean:dist",

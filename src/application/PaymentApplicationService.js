@@ -1,7 +1,7 @@
 import {
   recordInvoicePayment,
   upsertHistoricalInvoicePayment,
-} from "../utils/payments";
+} from "../utils/payments.js";
 
 export class PaymentApplicationService {
   record(state, invoice, payment) {

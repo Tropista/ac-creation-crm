@@ -1,4 +1,4 @@
-import { uid } from "../utils/documents";
+import { uid } from "../utils/documents.js";
 
 function normalizedTaxRate(value) {
   return value === "" || value === "default" || value == null
