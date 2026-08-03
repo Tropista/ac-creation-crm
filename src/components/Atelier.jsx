@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { clientName, statusClass, createDeliveryNoteFromQuote, getDeliveryNoteForQuote, getQuoteDepositSummary, isQuoteDeliveryNoteEligible } from "../utils/documents";
+import {
+  clientName,
+  statusClass,
+  getDeliveryNoteForQuote,
+  getQuoteDepositSummary,
+  isQuoteDeliveryNoteEligible,
+} from "../utils/documents";
 import {
   ATELIER_PIPELINE_STATUSES,
   QUOTE_PRIORITY_OPTIONS,
@@ -11,8 +17,11 @@ import {
   isAtelierPipelineQuote,
   resolveProcessType,
 } from "../utils/production";
-import { syncQuoteProductionStock, countLowStockProducts } from "../utils/stock";
-import { isQuoteDeliveryOverdue, getQuotesToLaunchToday } from "../utils/quoteDelivery";
+import { countLowStockProducts } from "../utils/stock";
+import {
+  isQuoteDeliveryOverdue,
+  getQuotesToLaunchToday,
+} from "../utils/quoteDelivery";
 import DeliveryUrgencyBadge from "./DeliveryUrgencyBadge";
 import { summarizeQuoteProductionLines } from "../utils/quoteLines";
 import {
@@ -35,6 +44,8 @@ import { buildOrderMarginTable } from "../utils/profitability";
 import AtelierGantt from "./AtelierGantt";
 import { addDays, startOfWeekMonday } from "../utils/quoteDeliveryCalendar";
 import AtelierProductionPanel from "./AtelierProductionPanel";
+import { workshopApplicationService } from "../application/WorkshopApplicationService";
+import { productionApplicationService } from "../application/ProductionApplicationService";
 
 const PROCESS_ICONS = {
   laser: "🔥",
@@ -86,15 +97,22 @@ function advanceLabel(status) {
 }
 
 function priorityLabel(priority) {
-  return QUOTE_PRIORITY_OPTIONS.find((entry) => entry.value === priority)?.label || "Normale";
+  return (
+    QUOTE_PRIORITY_OPTIONS.find((entry) => entry.value === priority)?.label ||
+    "Normale"
+  );
 }
 
 function atelierStatusBadgeClass(status) {
   const normalized = String(status || "").toLowerCase();
-  if (normalized.includes("accept")) return "atelier-status-badge atelier-status-badge--accepted";
-  if (normalized.includes("production")) return "atelier-status-badge atelier-status-badge--production";
-  if (normalized.includes("pret") || normalized.includes("prêt")) return "atelier-status-badge atelier-status-badge--ready";
-  if (normalized.includes("livre") || normalized.includes("livré")) return "atelier-status-badge atelier-status-badge--delivered";
+  if (normalized.includes("accept"))
+    return "atelier-status-badge atelier-status-badge--accepted";
+  if (normalized.includes("production"))
+    return "atelier-status-badge atelier-status-badge--production";
+  if (normalized.includes("pret") || normalized.includes("prêt"))
+    return "atelier-status-badge atelier-status-badge--ready";
+  if (normalized.includes("livre") || normalized.includes("livré"))
+    return "atelier-status-badge atelier-status-badge--delivered";
   return `atelier-status-badge ${statusClass(status)}`;
 }
 
@@ -107,13 +125,21 @@ function DepositBadge({ data, quote }) {
   const invoiced = summary.invoicedDeposit > 0.01;
 
   let label = percent > 0 ? `Acompte ${percent}%` : "Acompte";
-  if (paid) label = `Acompte payé (${summary.paidDeposit.toLocaleString("fr-FR")} €)`;
-  else if (invoiced) label = `Acompte facturé (${summary.invoicedDeposit.toLocaleString("fr-FR")} €)`;
+  if (paid)
+    label = `Acompte payé (${summary.paidDeposit.toLocaleString("fr-FR")} €)`;
+  else if (invoiced)
+    label = `Acompte facturé (${summary.invoicedDeposit.toLocaleString("fr-FR")} €)`;
 
   return (
     <span
       className={`atelier-deposit-badge${paid ? " atelier-deposit-badge--paid" : ""}`}
-      title={paid ? "Acompte encaissé" : invoiced ? "Facture d'acompte émise" : "Acompte prévu sur le devis"}
+      title={
+        paid
+          ? "Acompte encaissé"
+          : invoiced
+            ? "Facture d'acompte émise"
+            : "Acompte prévu sur le devis"
+      }
     >
       {label}
     </span>
@@ -133,13 +159,24 @@ function AtelierMobileSimpleCard({
   const process = resolveProcessType(quote);
 
   return (
-    <article className="atelier-mobile-card" data-testid={`atelier-mobile-${quote.id}`}>
-      <button type="button" className="atelier-mobile-card__number" onClick={() => onOpen(quote)}>
+    <article
+      className="atelier-mobile-card"
+      data-testid={`atelier-mobile-${quote.id}`}
+    >
+      <button
+        type="button"
+        className="atelier-mobile-card__number"
+        onClick={() => onOpen(quote)}
+      >
         {quote.number}
       </button>
-      <p className="atelier-mobile-card__client">{clientName(data, quote.clientId)}</p>
+      <p className="atelier-mobile-card__client">
+        {clientName(data, quote.clientId)}
+      </p>
       <div className="atelier-mobile-card__meta">
-        <span className={atelierStatusBadgeClass(quote.status)}>{quote.status}</span>
+        <span className={atelierStatusBadgeClass(quote.status)}>
+          {quote.status}
+        </span>
         <span className="atelier-process-badge">
           {PROCESS_ICONS[process.key] || "📋"} {process.label}
         </span>
@@ -216,7 +253,7 @@ function AtelierCard({
     : "";
   const productionSheetEligible = isProductionSheetEligible(quote);
   const assignee = (data.users || []).find(
-    (user) => String(user.id) === String(quote.assignedTo)
+    (user) => String(user.id) === String(quote.assignedTo),
   );
 
   return (
@@ -250,7 +287,9 @@ function AtelierCard({
           {quote.number}
         </button>
         <div className="atelier-card__top-actions">
-          <span className={atelierStatusBadgeClass(quote.status)}>{quote.status}</span>
+          <span className={atelierStatusBadgeClass(quote.status)}>
+            {quote.status}
+          </span>
           <DepositBadge data={data} quote={quote} />
           {canDelete && (
             <button
@@ -278,7 +317,9 @@ function AtelierCard({
           <span className="muted">Non assigné</span>
         )}
         {quote.priority && quote.priority !== "normal" && (
-          <span className={`atelier-priority atelier-priority--${quote.priority}`}>
+          <span
+            className={`atelier-priority atelier-priority--${quote.priority}`}
+          >
             {priorityLabel(quote.priority)}
           </span>
         )}
@@ -364,7 +405,9 @@ function AtelierCard({
         onDownloadPdf={onDownloadProductionSheet}
       />
 
-      <div className={`atelier-card__actions${isList ? " atelier-card__actions--list" : ""}`}>
+      <div
+        className={`atelier-card__actions${isList ? " atelier-card__actions--list" : ""}`}
+      >
         {nextLabel ? (
           <button
             type="button"
@@ -489,7 +532,7 @@ export default function Atelier({
   const products = data.products || [];
   const lowStockCount = countLowStockProducts(products);
   const activeUsers = (data.users || []).filter(
-    (user) => String(user?.status || "Actif") !== "Désactivé"
+    (user) => String(user?.status || "Actif") !== "Désactivé",
   );
 
   const assigneeFilteredQuotes = useMemo(() => {
@@ -498,27 +541,34 @@ export default function Atelier({
       return quotes.filter((quote) => !quote.assignedTo);
     }
     return quotes.filter(
-      (quote) => String(quote.assignedTo || "") === String(assigneeFilter)
+      (quote) => String(quote.assignedTo || "") === String(assigneeFilter),
     );
   }, [assigneeFilter, quotes]);
 
   const launchTodayIds = useMemo(
-    () => new Set(getQuotesToLaunchToday(assigneeFilteredQuotes).map((q) => String(q.id))),
-    [assigneeFilteredQuotes]
+    () =>
+      new Set(
+        getQuotesToLaunchToday(assigneeFilteredQuotes).map((q) => String(q.id)),
+      ),
+    [assigneeFilteredQuotes],
   );
 
   const filteredQuotes = useMemo(() => {
     switch (priorityFilter) {
       case "today":
         return assigneeFilteredQuotes.filter((quote) =>
-          launchTodayIds.has(String(quote.id))
+          launchTodayIds.has(String(quote.id)),
         );
       case "overdue":
         return assigneeFilteredQuotes.filter(isQuoteDeliveryOverdue);
       case "production":
-        return assigneeFilteredQuotes.filter((quote) => quote.status === "En production");
+        return assigneeFilteredQuotes.filter(
+          (quote) => quote.status === "En production",
+        );
       case "waiting":
-        return assigneeFilteredQuotes.filter((quote) => quote.status === "Accepté");
+        return assigneeFilteredQuotes.filter(
+          (quote) => quote.status === "Accepté",
+        );
       default:
         return assigneeFilteredQuotes;
     }
@@ -536,7 +586,7 @@ export default function Atelier({
       ]
         .join(" ")
         .toLowerCase()
-        .includes(query)
+        .includes(query),
     );
   }, [filteredQuotes, mobileSearch, data]);
 
@@ -544,40 +594,57 @@ export default function Atelier({
     return [...mobileFilteredQuotes]
       .filter((quote) => quote.status !== "Livré")
       .sort((a, b) => {
-        const overdueDelta = Number(isQuoteDeliveryOverdue(b)) - Number(isQuoteDeliveryOverdue(a));
+        const overdueDelta =
+          Number(isQuoteDeliveryOverdue(b)) - Number(isQuoteDeliveryOverdue(a));
         if (overdueDelta) return overdueDelta;
-        const todayDelta = Number(launchTodayIds.has(String(b.id))) - Number(launchTodayIds.has(String(a.id)));
+        const todayDelta =
+          Number(launchTodayIds.has(String(b.id))) -
+          Number(launchTodayIds.has(String(a.id)));
         if (todayDelta) return todayDelta;
-        return String(a.promisedDeliveryDate || "9999").localeCompare(String(b.promisedDeliveryDate || "9999"));
+        return String(a.promisedDeliveryDate || "9999").localeCompare(
+          String(b.promisedDeliveryDate || "9999"),
+        );
       })
       .slice(0, 8);
   }, [mobileFilteredQuotes, launchTodayIds]);
 
-  const statusBoard = getAtelierStatusBoard(isCompact ? mobileFilteredQuotes : filteredQuotes);
-  const processBoard = getAtelierBoard(isCompact ? mobileFilteredQuotes : filteredQuotes);
+  const statusBoard = getAtelierStatusBoard(
+    isCompact ? mobileFilteredQuotes : filteredQuotes,
+  );
+  const processBoard = getAtelierBoard(
+    isCompact ? mobileFilteredQuotes : filteredQuotes,
+  );
   const board = viewMode === "status" ? statusBoard : processBoard;
   const showListLayout = isCompact && layoutMode === "list";
   const overdueDeliveries = filteredQuotes.filter(isQuoteDeliveryOverdue);
   const quotesToLaunchToday = getQuotesToLaunchToday(filteredQuotes);
   const planningWeekStart = useMemo(
     () => addDays(startOfWeekMonday(new Date()), planningWeekOffset * 7),
-    [planningWeekOffset]
+    [planningWeekOffset],
   );
   const operatorPlanning = useMemo(() => {
-    const planning = buildOperatorWeekPlanning(filteredQuotes, activeUsers, planningWeekStart);
+    const planning = buildOperatorWeekPlanning(
+      filteredQuotes,
+      activeUsers,
+      planningWeekStart,
+    );
     return filterPlanningByOperator(planning, assigneeFilter);
   }, [filteredQuotes, activeUsers, planningWeekStart, assigneeFilter]);
   const capacityPlanning = useMemo(() => {
-    const planning = buildOperatorCapacityPlanning(filteredQuotes, activeUsers, planningWeekStart);
+    const planning = buildOperatorCapacityPlanning(
+      filteredQuotes,
+      activeUsers,
+      planningWeekStart,
+    );
     return filterPlanningByOperator(planning, assigneeFilter);
   }, [filteredQuotes, activeUsers, planningWeekStart, assigneeFilter]);
   const workshopRisks = useMemo(
     () => detectWorkshopRisks(filteredQuotes, activeUsers, planningWeekStart),
-    [filteredQuotes, activeUsers, planningWeekStart]
+    [filteredQuotes, activeUsers, planningWeekStart],
   );
   const marginRows = useMemo(
     () => buildOrderMarginTable(data).slice(0, 8),
-    [data]
+    [data],
   );
 
   useAtelierRealtime({
@@ -592,7 +659,9 @@ export default function Atelier({
   }, [isCompact]);
 
   const statusCounts = ATELIER_PIPELINE_STATUSES.reduce((acc, status) => {
-    acc[status] = statusBoard.items.filter((quote) => quote.status === status).length;
+    acc[status] = statusBoard.items.filter(
+      (quote) => quote.status === status,
+    ).length;
     return acc;
   }, {});
 
@@ -603,49 +672,44 @@ export default function Atelier({
   }
 
   function patchQuote(quote, changes) {
-    const nextQuotes = quotes.map((entry) =>
-      String(entry.id) === String(quote.id) ? { ...entry, ...changes } : entry
-    );
-    setData({ ...data, quotes: nextQuotes });
+    setData(workshopApplicationService.patchQuote(data, quote.id, changes));
   }
 
   function updateProductionSheet(quote, nextQuote) {
-    const nextQuotes = quotes.map((entry) =>
-      String(entry.id) === String(quote.id) ? nextQuote : entry
+    setData(
+      workshopApplicationService.updateProductionSheet(
+        data,
+        quote.id,
+        nextQuote,
+      ),
     );
-    setData({ ...data, quotes: nextQuotes });
   }
 
   function updateQuoteStatus(quote, status) {
     if (!ATELIER_PIPELINE_STATUSES.includes(status)) return;
     if (quote.status === status) return;
 
-    const updatedQuote = { ...quote, status };
-    const stockSync = syncQuoteProductionStock(
-      data.products || [],
-      quote,
-      updatedQuote,
-      { user: currentRole }
+    setData(
+      workshopApplicationService.changeStatus(data, quote, status, {
+        user: currentRole,
+      }),
     );
-
-    const nextQuotes = quotes.map((entry) =>
-      String(entry.id) === String(quote.id)
-        ? { ...updatedQuote, productionStockAdjusted: stockSync.productionStockAdjusted }
-        : entry
-    );
-
-    setData({ ...data, quotes: nextQuotes, products: stockSync.products });
     logActivity?.("Changement statut devis", quote.number, status);
     showToast(`${quote.number} : ${status}`, "success");
   }
 
   function handleAdvance(quote) {
-    const nextStatus = advanceProductionStatus(quote.status);
-    if (!nextStatus) {
+    const result = productionApplicationService.advance(data, quote, {
+      user: currentRole,
+    });
+    if (!result.advanced) {
       showToast("Ce devis est déjà livré.", "info");
       return;
     }
-    updateQuoteStatus(quote, nextStatus);
+    const { advanced: _advanced, quote: _quote, ...nextData } = result;
+    setData(nextData);
+    logActivity?.("Changement statut devis", quote.number, result.quote.status);
+    showToast(`${quote.number} : ${result.quote.status}`, "success");
   }
 
   async function handleDelete(quote) {
@@ -666,20 +730,9 @@ export default function Atelier({
       return;
     }
 
-    const nextQuotes = quotes.filter(
-      (entry) => String(entry.id) !== String(quote.id)
+    setData(
+      workshopApplicationService.remove(data, quote, { user: currentRole }),
     );
-
-    const nextProducts = quote.productionStockAdjusted
-      ? syncQuoteProductionStock(
-          data.products || [],
-          quote,
-          { ...quote, status: "Accepté" },
-          { user: currentRole }
-        ).products
-      : data.products || [];
-
-    setData({ ...data, quotes: nextQuotes, products: nextProducts });
     logActivity?.("Suppression devis atelier", quote.number, quote.status);
     showToast(`${quote.number} supprimé de l'atelier`, "success");
   }
@@ -688,36 +741,48 @@ export default function Atelier({
     try {
       const deliveryInfo = window.prompt(
         "Informations de livraison (optionnel) :",
-        getDeliveryNoteForQuote(data, quote)?.deliveryInfo || ""
+        getDeliveryNoteForQuote(data, quote)?.deliveryInfo || "",
       );
       if (deliveryInfo === null) return;
 
-      const result = createDeliveryNoteFromQuote(data, quote, {
-        deliveryInfo: deliveryInfo.trim(),
-      });
+      const result = workshopApplicationService.createDeliveryNote(
+        data,
+        quote,
+        {
+          deliveryInfo: deliveryInfo.trim(),
+        },
+      );
       setData(result);
       logActivity?.(
-        result.created ? "Création bon de livraison" : "Mise à jour bon de livraison",
+        result.created
+          ? "Création bon de livraison"
+          : "Mise à jour bon de livraison",
         result.deliveryNote.number,
-        quote.number
+        quote.number,
       );
       showToast(
         result.created
           ? `Bon de livraison ${result.deliveryNote.number} créé.`
           : `Bon de livraison ${result.deliveryNote.number} mis à jour.`,
-        "success"
+        "success",
       );
       setPreviewBl(result.deliveryNote);
     } catch (error) {
       console.error(error);
-      showToast(error.message || "Impossible de générer le bon de livraison.", "error");
+      showToast(
+        error.message || "Impossible de générer le bon de livraison.",
+        "error",
+      );
     }
   }
 
   function handlePreviewBl(quote) {
     const note = getDeliveryNoteForQuote(data, quote);
     if (!note) {
-      showToast("Aucun bon de livraison. Cliquez sur BL pour en créer un.", "info");
+      showToast(
+        "Aucun bon de livraison. Cliquez sur BL pour en créer un.",
+        "info",
+      );
       return;
     }
     setPreviewBl(note);
@@ -743,7 +808,7 @@ export default function Atelier({
       result.hasPhone
         ? `WhatsApp ouvert pour ${quote.number}.`
         : `Message prêt pour ${quote.number} — ajoutez le numéro client.`,
-      "success"
+      "success",
     );
   }
 
@@ -764,7 +829,8 @@ export default function Atelier({
         <div>
           <h2>Atelier</h2>
           <p>
-            Suivi de production par statut ou par processus — devis acceptés jusqu&apos;à livraison.
+            Suivi de production par statut ou par processus — devis acceptés
+            jusqu&apos;à livraison.
           </p>
         </div>
 
@@ -798,7 +864,11 @@ export default function Atelier({
             </div>
           ) : null}
 
-          <div className="atelier-view-toggle" role="tablist" aria-label="Vue atelier">
+          <div
+            className="atelier-view-toggle"
+            role="tablist"
+            aria-label="Vue atelier"
+          >
             <button
               type="button"
               className={viewMode === "status" ? "active" : ""}
@@ -858,13 +928,36 @@ export default function Atelier({
         </div>
       </div>
 
-      <div className="atelier-priority-bar" role="tablist" aria-label="Filtres priorité atelier">
+      <div
+        className="atelier-priority-bar"
+        role="tablist"
+        aria-label="Filtres priorité atelier"
+      >
         {[
-          { id: "all", label: "Toutes", count: assigneeFilteredQuotes.filter(isAtelierPipelineQuote).length },
+          {
+            id: "all",
+            label: "Toutes",
+            count: assigneeFilteredQuotes.filter(isAtelierPipelineQuote).length,
+          },
           { id: "today", label: "Aujourd'hui", count: launchTodayIds.size },
-          { id: "overdue", label: "En retard", count: assigneeFilteredQuotes.filter(isQuoteDeliveryOverdue).length },
-          { id: "production", label: "En production", count: assigneeFilteredQuotes.filter((q) => q.status === "En production").length },
-          { id: "waiting", label: "En attente", count: assigneeFilteredQuotes.filter((q) => q.status === "Accepté").length },
+          {
+            id: "overdue",
+            label: "En retard",
+            count: assigneeFilteredQuotes.filter(isQuoteDeliveryOverdue).length,
+          },
+          {
+            id: "production",
+            label: "En production",
+            count: assigneeFilteredQuotes.filter(
+              (q) => q.status === "En production",
+            ).length,
+          },
+          {
+            id: "waiting",
+            label: "En attente",
+            count: assigneeFilteredQuotes.filter((q) => q.status === "Accepté")
+              .length,
+          },
         ].map((entry) => (
           <button
             key={entry.id}
@@ -872,21 +965,32 @@ export default function Atelier({
             role="tab"
             aria-selected={priorityFilter === entry.id}
             className={`atelier-priority-chip${priorityFilter === entry.id ? " active" : ""}${
-              entry.id === "overdue" && entry.count > 0 ? " atelier-priority-chip--alert" : ""
+              entry.id === "overdue" && entry.count > 0
+                ? " atelier-priority-chip--alert"
+                : ""
             }`}
             onClick={() => setPriorityFilter(entry.id)}
             data-testid={`atelier-filter-${entry.id}`}
           >
             {entry.label}
-            {entry.count > 0 ? <span className="atelier-priority-chip__count">{entry.count}</span> : null}
+            {entry.count > 0 ? (
+              <span className="atelier-priority-chip__count">
+                {entry.count}
+              </span>
+            ) : null}
           </button>
         ))}
       </div>
 
       {lowStockCount > 0 ? (
-        <div className="card atelier-stock-alert" data-testid="atelier-stock-alert">
+        <div
+          className="card atelier-stock-alert"
+          data-testid="atelier-stock-alert"
+        >
           <strong>{lowStockCount} produit(s) en stock faible</strong>
-          <span className="muted">Vérifiez les consommables avant de lancer la production.</span>
+          <span className="muted">
+            Vérifiez les consommables avant de lancer la production.
+          </span>
           <button
             type="button"
             className="compact"
@@ -901,9 +1005,14 @@ export default function Atelier({
       ) : null}
 
       {quotesToLaunchToday.length > 0 && priorityFilter !== "today" ? (
-        <div className="card atelier-launch-today" data-testid="atelier-launch-today">
+        <div
+          className="card atelier-launch-today"
+          data-testid="atelier-launch-today"
+        >
           <div className="atelier-launch-today__header">
-            <strong>À lancer aujourd&apos;hui ({quotesToLaunchToday.length})</strong>
+            <strong>
+              À lancer aujourd&apos;hui ({quotesToLaunchToday.length})
+            </strong>
             <span className="muted">
               Devis acceptés à démarrer — triés par urgence et priorité
             </span>
@@ -911,14 +1020,20 @@ export default function Atelier({
           <ul className="atelier-launch-today__list">
             {quotesToLaunchToday.map((quote) => (
               <li key={quote.id} className="atelier-launch-today__item">
-                <button type="button" className="atelier-card__number" onClick={() => openQuote(quote)}>
+                <button
+                  type="button"
+                  className="atelier-card__number"
+                  onClick={() => openQuote(quote)}
+                >
                   {quote.number}
                 </button>
                 <span>{clientName(data, quote.clientId)}</span>
                 <em>{quote.promisedDeliveryDate || "—"}</em>
                 <DeliveryUrgencyBadge quote={quote} />
                 {quote.priority && quote.priority !== "normal" && (
-                  <span className={`atelier-priority atelier-priority--${quote.priority}`}>
+                  <span
+                    className={`atelier-priority atelier-priority--${quote.priority}`}
+                  >
                     {priorityLabel(quote.priority)}
                   </span>
                 )}
@@ -936,18 +1051,27 @@ export default function Atelier({
       ) : null}
 
       {overdueDeliveries.length > 0 && priorityFilter !== "overdue" ? (
-        <div className="card atelier-overdue-alert" data-testid="atelier-overdue-alert">
+        <div
+          className="card atelier-overdue-alert"
+          data-testid="atelier-overdue-alert"
+        >
           <strong>Livraisons en retard ({overdueDeliveries.length})</strong>
           <ul>
             {overdueDeliveries.slice(0, 6).map((quote) => (
               <li key={quote.id}>
-                <button type="button" className="atelier-card__number" onClick={() => openQuote(quote)}>
+                <button
+                  type="button"
+                  className="atelier-card__number"
+                  onClick={() => openQuote(quote)}
+                >
                   {quote.number}
                 </button>
                 <span>{clientName(data, quote.clientId)}</span>
                 <em>{quote.promisedDeliveryDate}</em>
                 <DeliveryUrgencyBadge quote={quote} />
-                <span className={atelierStatusBadgeClass(quote.status)}>{quote.status}</span>
+                <span className={atelierStatusBadgeClass(quote.status)}>
+                  {quote.status}
+                </span>
               </li>
             ))}
           </ul>
@@ -972,7 +1096,8 @@ export default function Atelier({
           <div className="atelier-panel-head">
             <strong>Charge atelier</strong>
             <span>
-              {formatHours(capacityPlanning.totalPlannedMinutes)} / {formatHours(capacityPlanning.totalCapacityMinutes)}
+              {formatHours(capacityPlanning.totalPlannedMinutes)} /{" "}
+              {formatHours(capacityPlanning.totalCapacityMinutes)}
             </span>
           </div>
           <div className="atelier-capacity-list">
@@ -980,10 +1105,20 @@ export default function Atelier({
               <p className="muted">Aucun opérateur actif.</p>
             ) : (
               capacityPlanning.operators.map((row) => (
-                <div key={row.user.id} className={row.overloaded ? "atelier-capacity-row danger" : "atelier-capacity-row"}>
+                <div
+                  key={row.user.id}
+                  className={
+                    row.overloaded
+                      ? "atelier-capacity-row danger"
+                      : "atelier-capacity-row"
+                  }
+                >
                   <div>
                     <strong>{row.user.name || row.user.email}</strong>
-                    <span>{formatHours(row.weekMinutes)} prévues · capacité {row.weeklyCapacityHours} h</span>
+                    <span>
+                      {formatHours(row.weekMinutes)} prévues · capacité{" "}
+                      {row.weeklyCapacityHours} h
+                    </span>
                   </div>
                   <b>{row.loadRate}%</b>
                 </div>
@@ -995,7 +1130,12 @@ export default function Atelier({
         <section className="card atelier-risk-panel">
           <div className="atelier-panel-head">
             <strong>Retards prévisibles</strong>
-            <span>{workshopRisks.overloadedOperators.length + workshopRisks.overdueQuotes.length + workshopRisks.unassignedQuotes.length} alerte(s)</span>
+            <span>
+              {workshopRisks.overloadedOperators.length +
+                workshopRisks.overdueQuotes.length +
+                workshopRisks.unassignedQuotes.length}{" "}
+              alerte(s)
+            </span>
           </div>
           <div className="atelier-risk-list">
             {workshopRisks.overloadedOperators.slice(0, 3).map((row) => (
@@ -1035,11 +1175,20 @@ export default function Atelier({
               <span>Écart</span>
             </div>
             {marginRows.map((row) => (
-              <div key={row.id} className={row.marginHT < 0 ? "atelier-margin-row danger" : "atelier-margin-row"}>
+              <div
+                key={row.id}
+                className={
+                  row.marginHT < 0
+                    ? "atelier-margin-row danger"
+                    : "atelier-margin-row"
+                }
+              >
                 <span>{row.number}</span>
                 <span>{row.clientName}</span>
                 <span>{money(row.totalCost)}</span>
-                <strong>{money(row.marginHT)} ({row.marginRate}%)</strong>
+                <strong>
+                  {money(row.marginHT)} ({row.marginRate}%)
+                </strong>
                 <span>{money(row.marginDeltaHT)}</span>
               </div>
             ))}
@@ -1055,7 +1204,11 @@ export default function Atelier({
               <p className="muted">Semaine du {operatorPlanning.weekLabel}</p>
             </div>
             <div className="atelier-planning__nav">
-              <button type="button" className="ghost" onClick={() => setPlanningWeekOffset((v) => v - 1)}>
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => setPlanningWeekOffset((v) => v - 1)}
+              >
                 ←
               </button>
               <button
@@ -1066,7 +1219,11 @@ export default function Atelier({
               >
                 Cette semaine
               </button>
-              <button type="button" className="ghost" onClick={() => setPlanningWeekOffset((v) => v + 1)}>
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => setPlanningWeekOffset((v) => v + 1)}
+              >
                 →
               </button>
             </div>
@@ -1075,38 +1232,54 @@ export default function Atelier({
             <div className="atelier-planning__row atelier-planning__row--head">
               <div className="atelier-planning__operator">Opérateur</div>
               {operatorPlanning.days.map((day) => (
-                <div key={day.toISOString()} className="atelier-planning__day-head">
-                  {day.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" })}
+                <div
+                  key={day.toISOString()}
+                  className="atelier-planning__day-head"
+                >
+                  {day.toLocaleDateString("fr-FR", {
+                    weekday: "short",
+                    day: "numeric",
+                  })}
                 </div>
               ))}
             </div>
-            {[...operatorPlanning.operators, operatorPlanning.unassigned].map((row) => (
-              <div key={row.user?.id || "unassigned"} className="atelier-planning__row">
-                <div className="atelier-planning__operator">
-                  {row.user?.name || row.user?.email || row.label}
-                  <span>{formatHours(row.weekMinutes)}</span>
-                </div>
-                {row.days.map((day) => (
-                  <div key={day.date.toISOString()} className="atelier-planning__cell">
-                    {day.minutes > 0 ? <small>{formatHours(day.minutes)}</small> : null}
-                    {day.quotes.length === 0 ? (
-                      <span className="muted">—</span>
-                    ) : (
-                      day.quotes.map((quote) => (
-                        <button
-                          key={quote.id}
-                          type="button"
-                          className="atelier-planning__quote"
-                          onClick={() => openQuote(quote)}
-                        >
-                          {quote.number}
-                        </button>
-                      ))
-                    )}
+            {[...operatorPlanning.operators, operatorPlanning.unassigned].map(
+              (row) => (
+                <div
+                  key={row.user?.id || "unassigned"}
+                  className="atelier-planning__row"
+                >
+                  <div className="atelier-planning__operator">
+                    {row.user?.name || row.user?.email || row.label}
+                    <span>{formatHours(row.weekMinutes)}</span>
                   </div>
-                ))}
-              </div>
-            ))}
+                  {row.days.map((day) => (
+                    <div
+                      key={day.date.toISOString()}
+                      className="atelier-planning__cell"
+                    >
+                      {day.minutes > 0 ? (
+                        <small>{formatHours(day.minutes)}</small>
+                      ) : null}
+                      {day.quotes.length === 0 ? (
+                        <span className="muted">—</span>
+                      ) : (
+                        day.quotes.map((quote) => (
+                          <button
+                            key={quote.id}
+                            type="button"
+                            className="atelier-planning__quote"
+                            onClick={() => openQuote(quote)}
+                          >
+                            {quote.number}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ),
+            )}
           </div>
         </div>
       ) : viewMode === "gantt" ? (
@@ -1119,7 +1292,8 @@ export default function Atelier({
         <div className="card atelier-empty">
           <h3>Aucune commande en file</h3>
           <p className="muted">
-            Les devis au statut Accepté, En production, Prêt ou Livré apparaîtront ici.
+            Les devis au statut Accepté, En production, Prêt ou Livré
+            apparaîtront ici.
           </p>
         </div>
       ) : showListLayout ? (
@@ -1137,7 +1311,11 @@ export default function Atelier({
                 <p className="muted">Aucune commande prioritaire.</p>
               ) : (
                 mobilePriorityQueue.map((quote) => (
-                  <button key={quote.id} type="button" onClick={() => openQuote(quote)}>
+                  <button
+                    key={quote.id}
+                    type="button"
+                    onClick={() => openQuote(quote)}
+                  >
                     <span>{quote.number}</span>
                     <em>{clientName(data, quote.clientId)}</em>
                     <DeliveryUrgencyBadge quote={quote} />
@@ -1195,7 +1373,9 @@ export default function Atelier({
             <div
               key={column.status}
               className={`atelier-column card atelier-status-column ${
-                dragOverStatus === column.status ? "atelier-status-column--active" : ""
+                dragOverStatus === column.status
+                  ? "atelier-status-column--active"
+                  : ""
               }`}
               onDragOver={(event) => {
                 event.preventDefault();
@@ -1204,18 +1384,22 @@ export default function Atelier({
               }}
               onDragLeave={() => {
                 setDragOverStatus((current) =>
-                  current === column.status ? "" : current
+                  current === column.status ? "" : current,
                 );
               }}
               onDrop={(event) => handleDropOnStatus(event, column.status)}
             >
               <div className="atelier-column__header">
                 <strong>{column.status}</strong>
-                <span className="atelier-column__count">{column.items.length}</span>
+                <span className="atelier-column__count">
+                  {column.items.length}
+                </span>
               </div>
 
               {column.items.length === 0 ? (
-                <p className="muted atelier-column__empty">Glisser un devis ici</p>
+                <p className="muted atelier-column__empty">
+                  Glisser un devis ici
+                </p>
               ) : (
                 <div className="atelier-cards">
                   {column.items.map((quote) => (
@@ -1250,7 +1434,9 @@ export default function Atelier({
                   <span>{PROCESS_ICONS[group.key] || "📋"}</span>
                   {group.label}
                 </strong>
-                <span className="atelier-column__count">{group.items.length}</span>
+                <span className="atelier-column__count">
+                  {group.items.length}
+                </span>
               </div>
 
               {group.items.length === 0 ? (

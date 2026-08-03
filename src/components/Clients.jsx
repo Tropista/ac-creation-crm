@@ -8,6 +8,7 @@ import { isRequired, validateFields } from "../utils/validation";
 import { filterCreditNotesByClient } from "../utils/creditNotes";
 import { filterAfterSalesByClient } from "../utils/afterSales";
 import { computeInvoiceProfitability } from "../utils/profitability";
+import { customerApplicationService } from "../application/CustomerApplicationService";
 
 function statusClass(status) {
   const value = String(status || "").toLowerCase();
@@ -33,14 +34,6 @@ function money(value) {
   );
 }
 
-function uid() {
-  return crypto.randomUUID();
-}
-
-function today() {
-  return new Date().toISOString();
-}
-
 function formatDate(value) {
   if (!value) return "-";
   return String(value).slice(0, 10);
@@ -56,17 +49,27 @@ function docTotal(doc) {
 
 function isAcceptedQuote(quote) {
   const status = String(quote?.status || "").toLowerCase();
-  return status.includes("accept") || status.includes("valid") || status.includes("sign");
+  return (
+    status.includes("accept") ||
+    status.includes("valid") ||
+    status.includes("sign")
+  );
 }
 
 function isRejectedQuote(quote) {
   const status = String(quote?.status || "").toLowerCase();
-  return status.includes("refus") || status.includes("rejet") || status.includes("perdu");
+  return (
+    status.includes("refus") ||
+    status.includes("rejet") ||
+    status.includes("perdu")
+  );
 }
 
 function isPaidInvoice(invoice) {
   const status = String(invoice?.status || "").toLowerCase();
-  return status.includes("pay") || status.includes("régl") || status.includes("regl");
+  return (
+    status.includes("pay") || status.includes("régl") || status.includes("regl")
+  );
 }
 
 function isUnpaidInvoice(invoice) {
@@ -107,7 +110,10 @@ export default function Clients({
   const [search, setSearch] = useState("");
   const [selectedClientId, setSelectedClientId] = useState(() => {
     const pending = localStorage.getItem("crm_open_client_id");
-    if (pending) { localStorage.removeItem("crm_open_client_id"); return pending; }
+    if (pending) {
+      localStorage.removeItem("crm_open_client_id");
+      return pending;
+    }
     return null;
   });
 
@@ -192,24 +198,39 @@ export default function Clients({
       return docNumbers.some((entry) => entry.includes(term));
     })
     .sort((a, b) => {
-      if (sortBy === "nameAsc") return String(a.name || "").localeCompare(String(b.name || ""));
-      if (sortBy === "nameDesc") return String(b.name || "").localeCompare(String(a.name || ""));
-      if (sortBy === "dateDesc") return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
-      if (sortBy === "dateAsc") return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
-      if (sortBy === "status") return String(a.status || "").localeCompare(String(b.status || ""));
+      if (sortBy === "nameAsc")
+        return String(a.name || "").localeCompare(String(b.name || ""));
+      if (sortBy === "nameDesc")
+        return String(b.name || "").localeCompare(String(a.name || ""));
+      if (sortBy === "dateDesc")
+        return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+      if (sortBy === "dateAsc")
+        return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
+      if (sortBy === "status")
+        return String(a.status || "").localeCompare(String(b.status || ""));
       return 0;
     });
 
-  const clientTotalPages = Math.max(1, Math.ceil(clients.length / itemsPerPage));
+  const clientTotalPages = Math.max(
+    1,
+    Math.ceil(clients.length / itemsPerPage),
+  );
   const clientPage = Math.min(currentPage, clientTotalPages);
-  const paginatedClients = clients.slice((clientPage - 1) * itemsPerPage, clientPage * itemsPerPage);
-  const selectedClient = (data.clients || []).find((client) => client.id === selectedClientId);
+  const paginatedClients = clients.slice(
+    (clientPage - 1) * itemsPerPage,
+    clientPage * itemsPerPage,
+  );
+  const selectedClient = (data.clients || []).find(
+    (client) => client.id === selectedClientId,
+  );
 
   const selectedClientInvoices = useMemo(() => {
     if (!selectedClient) return [];
 
     return (data.invoices || [])
-      .filter((invoice) => String(invoice.clientId) === String(selectedClient.id))
+      .filter(
+        (invoice) => String(invoice.clientId) === String(selectedClient.id),
+      )
       .sort((a, b) => new Date(docDate(b) || 0) - new Date(docDate(a) || 0));
   }, [data.invoices, selectedClient]);
 
@@ -217,9 +238,10 @@ export default function Clients({
     if (!selectedClient) return [];
     const map = new Map();
     for (const inv of selectedClientInvoices) {
-      for (const line of (inv.lines || [])) {
+      for (const line of inv.lines || []) {
         const key = line.description || line.productId || "?";
-        if (!map.has(key)) map.set(key, { description: key, prices: [], dates: [] });
+        if (!map.has(key))
+          map.set(key, { description: key, prices: [], dates: [] });
         const entry = map.get(key);
         if (line.price != null) entry.prices.push(Number(line.price));
         if (inv.date) entry.dates.push(inv.date);
@@ -267,16 +289,19 @@ export default function Clients({
 
   const selectedClientPayments = useMemo(() => {
     if (!selectedClient) return [];
-    const invoiceIds = new Set(selectedClientInvoices.map((invoice) => String(invoice.id)));
+    const invoiceIds = new Set(
+      selectedClientInvoices.map((invoice) => String(invoice.id)),
+    );
     return (data.payments || [])
       .filter(
         (payment) =>
           String(payment.clientId || "") === String(selectedClient.id) ||
-          invoiceIds.has(String(payment.invoiceId || ""))
+          invoiceIds.has(String(payment.invoiceId || "")),
       )
       .sort(
         (a, b) =>
-          new Date(b.date || b.createdAt || 0) - new Date(a.date || a.createdAt || 0)
+          new Date(b.date || b.createdAt || 0) -
+          new Date(a.date || a.createdAt || 0),
       );
   }, [data.payments, selectedClient, selectedClientInvoices]);
 
@@ -284,7 +309,11 @@ export default function Clients({
     if (!selectedClient) return [];
     return (data.clientFiles || [])
       .filter((file) => String(file.clientId) === String(selectedClient.id))
-      .sort((a, b) => new Date(b.uploadedAt || b.createdAt || 0) - new Date(a.uploadedAt || a.createdAt || 0));
+      .sort(
+        (a, b) =>
+          new Date(b.uploadedAt || b.createdAt || 0) -
+          new Date(a.uploadedAt || a.createdAt || 0),
+      );
   }, [data.clientFiles, selectedClient]);
 
   const selectedClientNotes = useMemo(() => {
@@ -296,12 +325,17 @@ export default function Clients({
 
   const selectedClientLeads = useMemo(() => {
     if (!selectedClient) return [];
-    const clientEmail = String(selectedClient.email || "").trim().toLowerCase();
+    const clientEmail = String(selectedClient.email || "")
+      .trim()
+      .toLowerCase();
     return (data.leads || [])
       .filter(
         (lead) =>
           String(lead.clientId || "") === String(selectedClient.id) ||
-          (clientEmail && String(lead.email || "").trim().toLowerCase() === clientEmail)
+          (clientEmail &&
+            String(lead.email || "")
+              .trim()
+              .toLowerCase() === clientEmail),
       )
       .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
   }, [data.leads, selectedClient]);
@@ -385,12 +419,16 @@ export default function Clients({
       id: `payment-${payment.id}`,
       type: "Paiement",
       icon: "Paiement",
-      tone: payment.status === "Recu" || payment.status === "Reçu" ? "green" : "purple",
+      tone:
+        payment.status === "Recu" || payment.status === "Reçu"
+          ? "green"
+          : "purple",
       title: payment.invoiceNumber || payment.method || "Paiement",
       status: payment.status || payment.method || "Enregistre",
       date: payment.date || payment.createdAt,
       total: Number(payment.amount || 0),
-      detail: payment.notes || (payment.method ? `Mode : ${payment.method}` : ""),
+      detail:
+        payment.notes || (payment.method ? `Mode : ${payment.method}` : ""),
     }));
 
     const files = selectedClientFiles.map((file) => ({
@@ -439,52 +477,57 @@ export default function Clients({
       title: lead.metadata?.projectName || lead.email || "Lead",
       status: lead.status || "nouveau",
       date: lead.convertedAt || lead.createdAt,
-      total: Number(lead.estimatedAmount || lead.metadata?.estimatedAmount || 0),
+      total: Number(
+        lead.estimatedAmount || lead.metadata?.estimatedAmount || 0,
+      ),
       detail: `${lead.source || "site e-commerce"}${lead.probability ? ` · ${lead.probability}%` : ""}`,
     }));
 
-    const emailEvents = [...selectedClientQuotes, ...selectedClientInvoices, ...selectedClientDeliveryNotes]
-      .flatMap((doc) => {
-        const label = doc.number || doc.reference || "Document";
-        const events = [];
-        if (doc.sentAt || doc.emailSentAt) {
-          events.push({
-            id: `email-sent-${doc.id}`,
-            type: "Email",
-            icon: "Email",
-            tone: "purple",
-            title: `${label} envoye`,
-            status: "Envoye",
-            date: doc.emailSentAt || doc.sentAt,
-            total: 0,
-          });
-        }
-        if (doc.emailReadAt) {
-          events.push({
-            id: `email-read-${doc.id}`,
-            type: "Email",
-            icon: "Email",
-            tone: "green",
-            title: `${label} lu`,
-            status: "Lu",
-            date: doc.emailReadAt,
-            total: 0,
-          });
-        }
-        if (doc.lastReminderAt || doc.lastReminderDate) {
-          events.push({
-            id: `email-reminder-${doc.id}`,
-            type: "Relance",
-            icon: "Relance",
-            tone: "purple",
-            title: `${label} relance`,
-            status: `Relance n°${Number(doc.reminderCount || 1)}`,
-            date: doc.lastReminderAt || doc.lastReminderDate,
-            total: 0,
-          });
-        }
-        return events;
-      });
+    const emailEvents = [
+      ...selectedClientQuotes,
+      ...selectedClientInvoices,
+      ...selectedClientDeliveryNotes,
+    ].flatMap((doc) => {
+      const label = doc.number || doc.reference || "Document";
+      const events = [];
+      if (doc.sentAt || doc.emailSentAt) {
+        events.push({
+          id: `email-sent-${doc.id}`,
+          type: "Email",
+          icon: "Email",
+          tone: "purple",
+          title: `${label} envoye`,
+          status: "Envoye",
+          date: doc.emailSentAt || doc.sentAt,
+          total: 0,
+        });
+      }
+      if (doc.emailReadAt) {
+        events.push({
+          id: `email-read-${doc.id}`,
+          type: "Email",
+          icon: "Email",
+          tone: "green",
+          title: `${label} lu`,
+          status: "Lu",
+          date: doc.emailReadAt,
+          total: 0,
+        });
+      }
+      if (doc.lastReminderAt || doc.lastReminderDate) {
+        events.push({
+          id: `email-reminder-${doc.id}`,
+          type: "Relance",
+          icon: "Relance",
+          tone: "purple",
+          title: `${label} relance`,
+          status: `Relance n°${Number(doc.reminderCount || 1)}`,
+          date: doc.lastReminderAt || doc.lastReminderDate,
+          total: 0,
+        });
+      }
+      return events;
+    });
 
     return [
       ...quotes,
@@ -498,9 +541,7 @@ export default function Clients({
       ...leads,
       ...emailEvents,
       ...created,
-    ].sort(
-      (a, b) => new Date(b.date || 0) - new Date(a.date || 0)
-    );
+    ].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
   }, [
     selectedClient,
     selectedClientInvoices,
@@ -516,37 +557,44 @@ export default function Clients({
 
   const selectedClientInvoiceTotal = selectedClientInvoices.reduce(
     (sum, invoice) => sum + docTotal(invoice),
-    0
+    0,
   );
 
   const _selectedClientQuoteTotal = selectedClientQuotes.reduce(
     (sum, quote) => sum + docTotal(quote),
-    0
+    0,
   );
 
-  const selectedClientPaidInvoices = selectedClientInvoices.filter(isPaidInvoice);
-  const selectedClientUnpaidInvoices = selectedClientInvoices.filter(isUnpaidInvoice);
-  const selectedClientAcceptedQuotes = selectedClientQuotes.filter(isAcceptedQuote);
+  const selectedClientPaidInvoices =
+    selectedClientInvoices.filter(isPaidInvoice);
+  const selectedClientUnpaidInvoices =
+    selectedClientInvoices.filter(isUnpaidInvoice);
+  const selectedClientAcceptedQuotes =
+    selectedClientQuotes.filter(isAcceptedQuote);
   const selectedClientLastInvoice = selectedClientInvoices[0];
   const _selectedClientLastQuote = selectedClientQuotes[0];
-  const _selectedClientLastOrder = selectedClientInvoices[0] || selectedClientAcceptedQuotes[0] || null;
+  const _selectedClientLastOrder =
+    selectedClientInvoices[0] || selectedClientAcceptedQuotes[0] || null;
 
   const _selectedClientPaidTotal = selectedClientPaidInvoices.reduce(
     (sum, invoice) => sum + docTotal(invoice),
-    0
+    0,
   );
 
   const _clientAverageBasket =
-    selectedClientInvoices.length > 0 ? selectedClientInvoiceTotal / selectedClientInvoices.length : 0;
+    selectedClientInvoices.length > 0
+      ? selectedClientInvoiceTotal / selectedClientInvoices.length
+      : 0;
 
   const _clientConversionRate =
     selectedClientQuotes.length > 0
-      ? (selectedClientAcceptedQuotes.length / selectedClientQuotes.length) * 100
+      ? (selectedClientAcceptedQuotes.length / selectedClientQuotes.length) *
+        100
       : 0;
 
   const clientUnpaidAmount = selectedClientUnpaidInvoices.reduce(
     (sum, invoice) => sum + docTotal(invoice),
-    0
+    0,
   );
 
   const clientCommercialSummary = useMemo(() => {
@@ -566,11 +614,19 @@ export default function Clients({
     }
 
     const profitabilityRows = selectedClientInvoices.map((invoice) =>
-      computeInvoiceProfitability(invoice, data)
+      computeInvoiceProfitability(invoice, data),
     );
-    const knownRows = profitabilityRows.filter((row) => row.costSource !== "unknown");
-    const revenueHT = knownRows.reduce((sum, row) => sum + Number(row.revenueHT || 0), 0);
-    const marginHT = knownRows.reduce((sum, row) => sum + Number(row.marginHT || 0), 0);
+    const knownRows = profitabilityRows.filter(
+      (row) => row.costSource !== "unknown",
+    );
+    const revenueHT = knownRows.reduce(
+      (sum, row) => sum + Number(row.revenueHT || 0),
+      0,
+    );
+    const marginHT = knownRows.reduce(
+      (sum, row) => sum + Number(row.marginHT || 0),
+      0,
+    );
     const unknownCostRevenueHT = profitabilityRows
       .filter((row) => row.costSource === "unknown")
       .reduce((sum, row) => sum + Number(row.revenueHT || 0), 0);
@@ -587,9 +643,16 @@ export default function Clients({
           lastDate: "",
         };
         current.quantity += Number(line.quantity || 0);
-        current.revenueHT += Number(line.totalHT || line.subtotal || Number(line.quantity || 0) * Number(line.price || 0));
+        current.revenueHT += Number(
+          line.totalHT ||
+            line.subtotal ||
+            Number(line.quantity || 0) * Number(line.price || 0),
+        );
         const date = docDate(invoice);
-        if (!current.lastDate || new Date(date || 0) > new Date(current.lastDate || 0)) {
+        if (
+          !current.lastDate ||
+          new Date(date || 0) > new Date(current.lastDate || 0)
+        ) {
           current.lastDate = date;
         }
         productMap.set(key, current);
@@ -599,13 +662,24 @@ export default function Clients({
     const acceptedQuotes = selectedClientQuotes.filter(isAcceptedQuote).length;
     const rejectedQuotes = selectedClientQuotes.filter(isRejectedQuote).length;
     const lastReminders = [...selectedClientQuotes, ...selectedClientInvoices]
-      .filter((doc) => doc.lastReminderAt || doc.lastReminderDate || doc.reminderCount)
+      .filter(
+        (doc) =>
+          doc.lastReminderAt || doc.lastReminderDate || doc.reminderCount,
+      )
       .map((doc) => ({
         id: doc.id,
         number: doc.number || doc.reference || "Document",
-        date: doc.lastReminderAt || doc.lastReminderDate || doc.updatedAt || doc.date,
+        date:
+          doc.lastReminderAt ||
+          doc.lastReminderDate ||
+          doc.updatedAt ||
+          doc.date,
         count: Number(doc.reminderCount || 1),
-        type: selectedClientInvoices.some((invoice) => String(invoice.id) === String(doc.id)) ? "Facture" : "Devis",
+        type: selectedClientInvoices.some(
+          (invoice) => String(invoice.id) === String(doc.id),
+        )
+          ? "Facture"
+          : "Devis",
       }))
       .sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
       .slice(0, 5);
@@ -613,13 +687,15 @@ export default function Clients({
     return {
       revenueHT: Math.round(revenueHT * 100) / 100,
       marginHT: Math.round(marginHT * 100) / 100,
-      marginRate: revenueHT > 0 ? Math.round((marginHT / revenueHT) * 1000) / 10 : 0,
+      marginRate:
+        revenueHT > 0 ? Math.round((marginHT / revenueHT) * 1000) / 10 : 0,
       unknownCostRevenueHT: Math.round(unknownCostRevenueHT * 100) / 100,
       acceptedQuotes,
       rejectedQuotes,
       quoteConversionRate:
         selectedClientQuotes.length > 0
-          ? Math.round((acceptedQuotes / selectedClientQuotes.length) * 1000) / 10
+          ? Math.round((acceptedQuotes / selectedClientQuotes.length) * 1000) /
+            10
           : 0,
       topProducts: [...productMap.values()]
         .map((entry) => ({
@@ -664,45 +740,27 @@ export default function Clients({
     e.preventDefault();
 
     const validationError = validateFields(form, {
-      name: [{ test: isRequired, message: "Le nom du client est obligatoire." }],
+      name: [
+        { test: isRequired, message: "Le nom du client est obligatoire." },
+      ],
     });
     if (validationError) {
       showToast(validationError, "error");
       return;
     }
 
-    const payload = {
-      ...form,
-      taxRateOverride:
-        form.taxRateOverride === "" || form.taxRateOverride === "default"
-          ? ""
-          : Number(form.taxRateOverride),
-    };
+    const result = customerApplicationService.save(data, form, {
+      customerId: editing || "",
+    });
+    const { customer: savedCustomer, created: _created, ...nextData } = result;
+    setData(nextData);
 
     if (editing) {
-      setData({
-        ...data,
-        clients: (data.clients || []).map((client) =>
-          client.id === editing ? { ...client, ...payload } : client
-        ),
-      });
-
       logActivity?.("Modification client", form.name);
     } else {
-      const client = {
-        id: uid(),
-        createdAt: today(),
-        ...payload,
-      };
-
-      setData({
-        ...data,
-        clients: [...(data.clients || []), client],
-      });
-
-      setSelectedClientId(client.id);
+      setSelectedClientId(savedCustomer.id);
       setClientTab("infos");
-      logActivity?.("Création client", client.name);
+      logActivity?.("Création client", savedCustomer.name);
     }
 
     reset();
@@ -743,18 +801,19 @@ export default function Clients({
       !(await confirmAction({
         title: "Supprimer le client",
         message: "Cette fiche client sera supprimée.",
-        detail: "Les documents existants conservent leurs informations, mais le client ne sera plus disponible dans la liste.",
+        detail:
+          "Les documents existants conservent leurs informations, mais le client ne sera plus disponible dans la liste.",
         confirmLabel: "Supprimer",
         danger: true,
       }))
-    ) return;
+    )
+      return;
 
-    const removedClient = (data.clients || []).find((client) => client.id === id);
+    const removedClient = (data.clients || []).find(
+      (client) => client.id === id,
+    );
 
-    setData({
-      ...data,
-      clients: (data.clients || []).filter((client) => client.id !== id),
-    });
+    setData(customerApplicationService.remove(data, id));
 
     logActivity?.("Suppression client", removedClient?.name || id);
 
@@ -777,14 +836,20 @@ export default function Clients({
     localStorage.setItem("crm_open_document_type", type);
 
     if (type === "quote") {
-      setPage?.("quotes", { state: { openDocumentId: doc.id, openDocumentType: "quote" } });
+      setPage?.("quotes", {
+        state: { openDocumentId: doc.id, openDocumentType: "quote" },
+      });
       return;
     }
     if (type === "delivery") {
-      setPage?.("quotes", { state: { openDocumentId: doc.id, openDocumentType: "delivery" } });
+      setPage?.("quotes", {
+        state: { openDocumentId: doc.id, openDocumentType: "delivery" },
+      });
       return;
     }
-    setPage?.("invoices", { state: { openDocumentId: doc.id, openDocumentType: "invoice" } });
+    setPage?.("invoices", {
+      state: { openDocumentId: doc.id, openDocumentType: "invoice" },
+    });
   }
 
   function remindClient(mode = "copy") {
@@ -823,7 +888,9 @@ AC Creation`;
     const subject = encodeURIComponent("Relance facture impayée - AC Creation");
     const body = encodeURIComponent(text);
 
-    window.open(`mailto:${selectedClient.email || ""}?subject=${subject}&body=${body}`);
+    window.open(
+      `mailto:${selectedClient.email || ""}?subject=${subject}&body=${body}`,
+    );
   }
 
   function updateForm(field, value) {
@@ -855,44 +922,105 @@ AC Creation`;
 
       {showClientForm && (
         <form className="card form-grid client-form-panel" onSubmit={submit}>
-          <input placeholder="Nom client *" value={form.name} onChange={(e) => updateForm("name", e.target.value)} />
-          <input placeholder="Email" value={form.email} onChange={(e) => updateForm("email", e.target.value)} />
-          <input placeholder="Téléphone" value={form.phone} onChange={(e) => updateForm("phone", e.target.value)} />
-          <input placeholder="Société" value={form.company} onChange={(e) => updateForm("company", e.target.value)} />
-          <input placeholder="Site web" value={form.website} onChange={(e) => updateForm("website", e.target.value)} />
-          <input placeholder="TVA (n°)" value={form.vat} onChange={(e) => updateForm("vat", e.target.value)} />
+          <input
+            placeholder="Nom client *"
+            value={form.name}
+            onChange={(e) => updateForm("name", e.target.value)}
+          />
+          <input
+            placeholder="Email"
+            value={form.email}
+            onChange={(e) => updateForm("email", e.target.value)}
+          />
+          <input
+            placeholder="Téléphone"
+            value={form.phone}
+            onChange={(e) => updateForm("phone", e.target.value)}
+          />
+          <input
+            placeholder="Société"
+            value={form.company}
+            onChange={(e) => updateForm("company", e.target.value)}
+          />
+          <input
+            placeholder="Site web"
+            value={form.website}
+            onChange={(e) => updateForm("website", e.target.value)}
+          />
+          <input
+            placeholder="TVA (n°)"
+            value={form.vat}
+            onChange={(e) => updateForm("vat", e.target.value)}
+          />
           <label className="documents-field">
             <span>Taux TVA sur devis/factures</span>
             <select
-              value={form.taxRateOverride === "" ? "default" : String(form.taxRateOverride)}
-              onChange={(e) => updateForm("taxRateOverride", e.target.value === "default" ? "" : e.target.value)}
+              value={
+                form.taxRateOverride === ""
+                  ? "default"
+                  : String(form.taxRateOverride)
+              }
+              onChange={(e) =>
+                updateForm(
+                  "taxRateOverride",
+                  e.target.value === "default" ? "" : e.target.value,
+                )
+              }
             >
               <option value="default">Par défaut (paramètres)</option>
               <option value="17">17 % — TVA Luxembourg</option>
               <option value="0">0 % — autoliquidation / intra-UE B2B</option>
             </select>
           </label>
-          <input placeholder="Adresse" value={form.address} onChange={(e) => updateForm("address", e.target.value)} />
-          <input placeholder="Code postal" value={form.zip} onChange={(e) => updateForm("zip", e.target.value)} />
-          <input placeholder="Ville" value={form.city} onChange={(e) => updateForm("city", e.target.value)} />
-          <input placeholder="Pays" value={form.country} onChange={(e) => updateForm("country", e.target.value)} />
+          <input
+            placeholder="Adresse"
+            value={form.address}
+            onChange={(e) => updateForm("address", e.target.value)}
+          />
+          <input
+            placeholder="Code postal"
+            value={form.zip}
+            onChange={(e) => updateForm("zip", e.target.value)}
+          />
+          <input
+            placeholder="Ville"
+            value={form.city}
+            onChange={(e) => updateForm("city", e.target.value)}
+          />
+          <input
+            placeholder="Pays"
+            value={form.country}
+            onChange={(e) => updateForm("country", e.target.value)}
+          />
 
-          <select value={form.clientType} onChange={(e) => updateForm("clientType", e.target.value)}>
+          <select
+            value={form.clientType}
+            onChange={(e) => updateForm("clientType", e.target.value)}
+          >
             <option>Professionnel</option>
             <option>Particulier</option>
             <option>Association</option>
           </select>
 
-          <select value={form.status} onChange={(e) => updateForm("status", e.target.value)}>
+          <select
+            value={form.status}
+            onChange={(e) => updateForm("status", e.target.value)}
+          >
             <option>Prospect</option>
             <option>Client</option>
             <option>VIP</option>
             <option>Inactif</option>
           </select>
 
-          <textarea placeholder="Notes" value={form.notes} onChange={(e) => updateForm("notes", e.target.value)} />
+          <textarea
+            placeholder="Notes"
+            value={form.notes}
+            onChange={(e) => updateForm("notes", e.target.value)}
+          />
 
-          <button className="primary">{editing ? "Modifier" : "Ajouter"}</button>
+          <button className="primary">
+            {editing ? "Modifier" : "Ajouter"}
+          </button>
           <button type="button" onClick={reset}>
             Annuler
           </button>
@@ -941,12 +1069,12 @@ AC Creation`;
           <div className="clients-erp-list">
             {paginatedClients.map((client) => {
               const clientInvoices = (data.invoices || []).filter(
-                (invoice) => String(invoice.clientId) === String(client.id)
+                (invoice) => String(invoice.clientId) === String(client.id),
               );
 
               const clientCa = clientInvoices.reduce(
                 (sum, invoice) => sum + docTotal(invoice),
-                0
+                0,
               );
 
               const isSelected = selectedClientId === client.id;
@@ -954,7 +1082,9 @@ AC Creation`;
               return (
                 <div
                   key={client.id}
-                  className={isSelected ? "client-erp-row selected" : "client-erp-row"}
+                  className={
+                    isSelected ? "client-erp-row selected" : "client-erp-row"
+                  }
                   onClick={() => {
                     setSelectedClientId(client.id);
                     setClientTab("infos");
@@ -972,7 +1102,9 @@ AC Creation`;
                   <div className="client-erp-main">
                     <div className="client-erp-name-row">
                       <strong>{client.name || "Sans nom"}</strong>
-                      <span className={"status-badge " + statusClass(client.status)}>
+                      <span
+                        className={"status-badge " + statusClass(client.status)}
+                      >
                         {client.status || "Prospect"}
                       </span>
                     </div>
@@ -982,17 +1114,26 @@ AC Creation`;
                     </span>
 
                     <div className="client-erp-meta">
-                      <span>{client.company || client.clientType || "Client"}</span>
+                      <span>
+                        {client.company || client.clientType || "Client"}
+                      </span>
                       <span>CA : {money(clientCa)}</span>
                     </div>
                   </div>
 
-                  <div className="client-erp-actions" onClick={(event) => event.stopPropagation()}>
+                  <div
+                    className="client-erp-actions"
+                    onClick={(event) => event.stopPropagation()}
+                  >
                     <button type="button" onClick={() => edit(client)}>
                       Modifier
                     </button>
 
-                    <button type="button" className="danger" onClick={() => remove(client.id)}>
+                    <button
+                      type="button"
+                      className="danger"
+                      onClick={() => remove(client.id)}
+                    >
                       Supprimer
                     </button>
                   </div>
@@ -1027,27 +1168,33 @@ AC Creation`;
                   <h2>{selectedClient?.name || "Fiche client"}</h2>
 
                   {selectedClient && (
-                    <span className={"status-badge " + statusClass(selectedClient.status)}>
+                    <span
+                      className={
+                        "status-badge " + statusClass(selectedClient.status)
+                      }
+                    >
                       {selectedClient.status || "Client"}
                     </span>
                   )}
                 </div>
 
                 {selectedClient && (
-                  <span className="erp-created">Client depuis le {formatDate(selectedClient.createdAt)}</span>
+                  <span className="erp-created">
+                    Client depuis le {formatDate(selectedClient.createdAt)}
+                  </span>
                 )}
               </div>
             </div>
 
             {selectedClient && (
               <button
-  className="erp-print-btn"
-  onClick={() => {
-    if (!selectedClient) return;
+                className="erp-print-btn"
+                onClick={() => {
+                  if (!selectedClient) return;
 
-    const win = window.open("", "_blank");
+                  const win = window.open("", "_blank");
 
-    win.document.write(`
+                  win.document.write(`
       <html>
         <head>
           <title>Fiche client</title>
@@ -1137,7 +1284,7 @@ h1{
         <body>
           <div class="header">
             <div class="avatar">
-              ${(selectedClient.name || "?").slice(0,2).toUpperCase()}
+              ${(selectedClient.name || "?").slice(0, 2).toUpperCase()}
             </div>
             <div>
               <h1>${selectedClient.name || "-"}</h1>
@@ -1169,15 +1316,15 @@ h1{
       </html>
     `);
 
-    win.document.close();
+                  win.document.close();
 
-    setTimeout(() => {
-      win.print();
-    }, 300);
-  }}
->
-  🖨 Imprimer la fiche
-</button>
+                  setTimeout(() => {
+                    win.print();
+                  }, 300);
+                }}
+              >
+                🖨 Imprimer la fiche
+              </button>
             )}
           </div>
 
@@ -1199,7 +1346,12 @@ h1{
               </div>
 
               <div>
-                <strong>{formatDate(selectedClientLastInvoice?.date || selectedClientLastInvoice?.createdAt)}</strong>
+                <strong>
+                  {formatDate(
+                    selectedClientLastInvoice?.date ||
+                      selectedClientLastInvoice?.createdAt,
+                  )}
+                </strong>
                 <span>Dernière facture</span>
               </div>
             </div>
@@ -1210,27 +1362,105 @@ h1{
           ) : (
             <>
               <div className="client-tabs">
-                <button type="button" className={clientTab === "commercial" ? "active" : ""} onClick={() => setClientTab("commercial")}>Commercial</button>
-                <button type="button" className={clientTab === "infos" ? "active" : ""} onClick={() => setClientTab("infos")}>ℹ Informations</button>
-                <button type="button" className={clientTab === "contact" ? "active" : ""} onClick={() => setClientTab("contact")}>📞 Contact</button>
-                <button type="button" className={clientTab === "address" ? "active" : ""} onClick={() => setClientTab("address")}>📍 Adresse</button>
-                <button type="button" className={clientTab === "documents" ? "active" : ""} onClick={() => setClientTab("documents")}>📄 Documents</button>
-                <button type="button" className={clientTab === "history" ? "active" : ""} onClick={() => setClientTab("history")}>🕘 Historique</button>
-                <button type="button" className={clientTab === "files" ? "active" : ""} onClick={() => setClientTab("files")}>📂 Fichiers</button>
-                <button type="button" className={clientTab === "notes" ? "active" : ""} onClick={() => setClientTab("notes")}>📝 Notes</button>
-                <button type="button" className={clientTab === "prices" ? "active" : ""} onClick={() => setClientTab("prices")}>💰 Historique prix</button>
+                <button
+                  type="button"
+                  className={clientTab === "commercial" ? "active" : ""}
+                  onClick={() => setClientTab("commercial")}
+                >
+                  Commercial
+                </button>
+                <button
+                  type="button"
+                  className={clientTab === "infos" ? "active" : ""}
+                  onClick={() => setClientTab("infos")}
+                >
+                  ℹ Informations
+                </button>
+                <button
+                  type="button"
+                  className={clientTab === "contact" ? "active" : ""}
+                  onClick={() => setClientTab("contact")}
+                >
+                  📞 Contact
+                </button>
+                <button
+                  type="button"
+                  className={clientTab === "address" ? "active" : ""}
+                  onClick={() => setClientTab("address")}
+                >
+                  📍 Adresse
+                </button>
+                <button
+                  type="button"
+                  className={clientTab === "documents" ? "active" : ""}
+                  onClick={() => setClientTab("documents")}
+                >
+                  📄 Documents
+                </button>
+                <button
+                  type="button"
+                  className={clientTab === "history" ? "active" : ""}
+                  onClick={() => setClientTab("history")}
+                >
+                  🕘 Historique
+                </button>
+                <button
+                  type="button"
+                  className={clientTab === "files" ? "active" : ""}
+                  onClick={() => setClientTab("files")}
+                >
+                  📂 Fichiers
+                </button>
+                <button
+                  type="button"
+                  className={clientTab === "notes" ? "active" : ""}
+                  onClick={() => setClientTab("notes")}
+                >
+                  📝 Notes
+                </button>
+                <button
+                  type="button"
+                  className={clientTab === "prices" ? "active" : ""}
+                  onClick={() => setClientTab("prices")}
+                >
+                  💰 Historique prix
+                </button>
               </div>
 
               <div className="client-card">
                 {clientTab === "commercial" && (
                   <div className="client-commercial">
                     <div className="client-doc-top">
-                      <DashboardCard label="CA HT suivi" value={money(clientCommercialSummary.revenueHT)} />
-                      <DashboardCard label="Marge connue" value={`${money(clientCommercialSummary.marginHT)} (${clientCommercialSummary.marginRate} %)`} />
-                      <DashboardCard label="CA sans coût" value={money(clientCommercialSummary.unknownCostRevenueHT)} danger={clientCommercialSummary.unknownCostRevenueHT > 0} />
-                      <DashboardCard label="Conversion devis" value={`${clientCommercialSummary.quoteConversionRate} %`} />
-                      <DashboardCard label="Devis acceptés" value={clientCommercialSummary.acceptedQuotes} />
-                      <DashboardCard label="Devis refusés" value={clientCommercialSummary.rejectedQuotes} danger={clientCommercialSummary.rejectedQuotes > 0} />
+                      <DashboardCard
+                        label="CA HT suivi"
+                        value={money(clientCommercialSummary.revenueHT)}
+                      />
+                      <DashboardCard
+                        label="Marge connue"
+                        value={`${money(clientCommercialSummary.marginHT)} (${clientCommercialSummary.marginRate} %)`}
+                      />
+                      <DashboardCard
+                        label="CA sans coût"
+                        value={money(
+                          clientCommercialSummary.unknownCostRevenueHT,
+                        )}
+                        danger={
+                          clientCommercialSummary.unknownCostRevenueHT > 0
+                        }
+                      />
+                      <DashboardCard
+                        label="Conversion devis"
+                        value={`${clientCommercialSummary.quoteConversionRate} %`}
+                      />
+                      <DashboardCard
+                        label="Devis acceptés"
+                        value={clientCommercialSummary.acceptedQuotes}
+                      />
+                      <DashboardCard
+                        label="Devis refusés"
+                        value={clientCommercialSummary.rejectedQuotes}
+                        danger={clientCommercialSummary.rejectedQuotes > 0}
+                      />
                     </div>
 
                     <div className="client-commercial-grid">
@@ -1240,15 +1470,23 @@ h1{
                           {clientCommercialSummary.topProducts.length === 0 ? (
                             <p className="muted">Aucun produit facturé.</p>
                           ) : (
-                            clientCommercialSummary.topProducts.map((product) => (
-                              <div key={product.key} className="client-commercial-row">
-                                <div>
-                                  <strong>{product.name}</strong>
-                                  <span>{product.quantity} unité(s) · dernier achat {formatDate(product.lastDate)}</span>
+                            clientCommercialSummary.topProducts.map(
+                              (product) => (
+                                <div
+                                  key={product.key}
+                                  className="client-commercial-row"
+                                >
+                                  <div>
+                                    <strong>{product.name}</strong>
+                                    <span>
+                                      {product.quantity} unité(s) · dernier
+                                      achat {formatDate(product.lastDate)}
+                                    </span>
+                                  </div>
+                                  <strong>{money(product.revenueHT)}</strong>
                                 </div>
-                                <strong>{money(product.revenueHT)}</strong>
-                              </div>
-                            ))
+                              ),
+                            )
                           )}
                         </div>
                       </div>
@@ -1256,17 +1494,28 @@ h1{
                       <div className="client-history-section">
                         <h4>Dernières relances</h4>
                         <div className="client-commercial-list">
-                          {clientCommercialSummary.lastReminders.length === 0 ? (
+                          {clientCommercialSummary.lastReminders.length ===
+                          0 ? (
                             <p className="muted">Aucune relance enregistrée.</p>
                           ) : (
-                            clientCommercialSummary.lastReminders.map((reminder) => (
-                              <div key={`${reminder.type}-${reminder.id}`} className="client-commercial-row">
-                                <div>
-                                  <strong>{reminder.type} {reminder.number}</strong>
-                                  <span>Relance n°{reminder.count} · {formatDate(reminder.date)}</span>
+                            clientCommercialSummary.lastReminders.map(
+                              (reminder) => (
+                                <div
+                                  key={`${reminder.type}-${reminder.id}`}
+                                  className="client-commercial-row"
+                                >
+                                  <div>
+                                    <strong>
+                                      {reminder.type} {reminder.number}
+                                    </strong>
+                                    <span>
+                                      Relance n°{reminder.count} ·{" "}
+                                      {formatDate(reminder.date)}
+                                    </span>
+                                  </div>
                                 </div>
-                              </div>
-                            ))
+                              ),
+                            )
                           )}
                         </div>
                       </div>
@@ -1274,20 +1523,34 @@ h1{
                       <div className="client-history-section">
                         <h4>Notes internes récentes</h4>
                         <div className="client-commercial-list">
-                          {clientCommercialSummary.recentNotes.length === 0 && !selectedClient.notes ? (
+                          {clientCommercialSummary.recentNotes.length === 0 &&
+                          !selectedClient.notes ? (
                             <p className="muted">Aucune note interne.</p>
                           ) : (
                             <>
                               {selectedClient.notes ? (
-                                <div className="client-commercial-note">{selectedClient.notes}</div>
-                              ) : null}
-                              {clientCommercialSummary.recentNotes.map((note) => (
-                                <div key={note.id} className="client-commercial-note">
-                                  <strong>{note.kind === "call" ? "Appel" : note.kind === "email" ? "Email" : "Note"}</strong>
-                                  <span>{formatDate(note.createdAt)}</span>
-                                  <p>{note.text}</p>
+                                <div className="client-commercial-note">
+                                  {selectedClient.notes}
                                 </div>
-                              ))}
+                              ) : null}
+                              {clientCommercialSummary.recentNotes.map(
+                                (note) => (
+                                  <div
+                                    key={note.id}
+                                    className="client-commercial-note"
+                                  >
+                                    <strong>
+                                      {note.kind === "call"
+                                        ? "Appel"
+                                        : note.kind === "email"
+                                          ? "Email"
+                                          : "Note"}
+                                    </strong>
+                                    <span>{formatDate(note.createdAt)}</span>
+                                    <p>{note.text}</p>
+                                  </div>
+                                ),
+                              )}
                             </>
                           )}
                         </div>
@@ -1296,16 +1559,31 @@ h1{
                       <div className="client-history-section">
                         <h4>Documents & fichiers</h4>
                         <div className="client-commercial-docs">
-                          <button type="button" onClick={() => setClientTab("documents")}>
-                            {selectedClientQuotes.length + selectedClientInvoices.length + selectedClientDeliveryNotes.length} document(s)
+                          <button
+                            type="button"
+                            onClick={() => setClientTab("documents")}
+                          >
+                            {selectedClientQuotes.length +
+                              selectedClientInvoices.length +
+                              selectedClientDeliveryNotes.length}{" "}
+                            document(s)
                           </button>
-                          <button type="button" onClick={() => setClientTab("files")}>
+                          <button
+                            type="button"
+                            onClick={() => setClientTab("files")}
+                          >
                             {selectedClientFiles.length} fichier(s)
                           </button>
-                          <button type="button" onClick={() => setClientTab("history")}>
+                          <button
+                            type="button"
+                            onClick={() => setClientTab("history")}
+                          >
                             Historique complet
                           </button>
-                          <button type="button" onClick={() => setClientTab("notes")}>
+                          <button
+                            type="button"
+                            onClick={() => setClientTab("notes")}
+                          >
                             Ajouter une note
                           </button>
                         </div>
@@ -1317,7 +1595,10 @@ h1{
                 {clientTab === "infos" && (
                   <div className="erp-info-grid">
                     <InfoBox label="Société" value={selectedClient.company} />
-                    <InfoBox label="Type client" value={selectedClient.clientType} />
+                    <InfoBox
+                      label="Type client"
+                      value={selectedClient.clientType}
+                    />
                     <InfoBox label="Site web" value={selectedClient.website} />
                     <InfoBox label="TVA (n°)" value={selectedClient.vat} />
                     <InfoBox
@@ -1351,25 +1632,53 @@ h1{
                   </div>
                 )}
 
-                
                 {clientTab === "documents" && (
                   <div className="client-documents">
                     <div className="client-doc-top">
-                      <DashboardCard label="CA client" value={money(selectedClientInvoiceTotal)} />
-                      <DashboardCard label="Impayés" value={money(clientUnpaidAmount)} danger />
-                      <DashboardCard label="Devis" value={selectedClientQuotes.length} />
-                      <DashboardCard label="Factures" value={selectedClientInvoices.length} />
-                      <DashboardCard label="BL" value={selectedClientDeliveryNotes.length} />
+                      <DashboardCard
+                        label="CA client"
+                        value={money(selectedClientInvoiceTotal)}
+                      />
+                      <DashboardCard
+                        label="Impayés"
+                        value={money(clientUnpaidAmount)}
+                        danger
+                      />
+                      <DashboardCard
+                        label="Devis"
+                        value={selectedClientQuotes.length}
+                      />
+                      <DashboardCard
+                        label="Factures"
+                        value={selectedClientInvoices.length}
+                      />
+                      <DashboardCard
+                        label="BL"
+                        value={selectedClientDeliveryNotes.length}
+                      />
                     </div>
 
                     <div className="client-doc-actions">
-                      <button onClick={()=>goToDocumentPage("quotes")}>🧾 Nouveau devis</button>
-                      <button onClick={()=>goToDocumentPage("invoices")}>💶 Nouvelle facture</button>
-                      <button type="button" className="ghost" onClick={() => setClientTab("history")}>
+                      <button onClick={() => goToDocumentPage("quotes")}>
+                        🧾 Nouveau devis
+                      </button>
+                      <button onClick={() => goToDocumentPage("invoices")}>
+                        💶 Nouvelle facture
+                      </button>
+                      <button
+                        type="button"
+                        className="ghost"
+                        onClick={() => setClientTab("history")}
+                      >
                         🕘 Historique complet ({clientHistory.length})
                       </button>
-                      {selectedClientUnpaidInvoices.length>0 && (
-                        <button className="danger" onClick={()=>remindClient("mail")}>✉ Relancer</button>
+                      {selectedClientUnpaidInvoices.length > 0 && (
+                        <button
+                          className="danger"
+                          onClick={() => remindClient("mail")}
+                        >
+                          ✉ Relancer
+                        </button>
                       )}
                     </div>
 
@@ -1381,7 +1690,13 @@ h1{
                             <p className="muted">Aucun devis.</p>
                           ) : (
                             selectedClientQuotes.map((quote) => (
-                              <DocumentRow key={quote.id} doc={quote} type="quote" label="Devis" onOpen={openDocument} />
+                              <DocumentRow
+                                key={quote.id}
+                                doc={quote}
+                                type="quote"
+                                label="Devis"
+                                onOpen={openDocument}
+                              />
                             ))
                           )}
                         </div>
@@ -1394,20 +1709,35 @@ h1{
                             <p className="muted">Aucune facture.</p>
                           ) : (
                             selectedClientInvoices.map((invoice) => (
-                              <DocumentRow key={invoice.id} doc={invoice} type="invoice" label="Facture" onOpen={openDocument} />
+                              <DocumentRow
+                                key={invoice.id}
+                                doc={invoice}
+                                type="invoice"
+                                label="Facture"
+                                onOpen={openDocument}
+                              />
                             ))
                           )}
                         </div>
                       </div>
 
                       <div className="client-history-section client-history-section--full">
-                        <h4>Bons de livraison ({selectedClientDeliveryNotes.length})</h4>
+                        <h4>
+                          Bons de livraison (
+                          {selectedClientDeliveryNotes.length})
+                        </h4>
                         <div className="client-history-list">
                           {selectedClientDeliveryNotes.length === 0 ? (
                             <p className="muted">Aucun bon de livraison.</p>
                           ) : (
                             selectedClientDeliveryNotes.map((note) => (
-                              <DocumentRow key={note.id} doc={note} type="delivery" label="BL" onOpen={openDocument} />
+                              <DocumentRow
+                                key={note.id}
+                                doc={note}
+                                type="delivery"
+                                label="BL"
+                                onOpen={openDocument}
+                              />
                             ))
                           )}
                         </div>
@@ -1415,8 +1745,6 @@ h1{
                     </div>
                   </div>
                 )}
-
-
 
                 {clientTab === "history" && (
                   <Timeline items={clientHistory} onOpen={openDocument} />
@@ -1429,8 +1757,13 @@ h1{
                     onFilesChange={(updated) => {
                       const clientId = selectedClient.id;
                       setData((prev) => {
-                        const others = (prev.clientFiles || []).filter((f) => String(f.clientId) !== String(clientId));
-                        return { ...prev, clientFiles: [...others, ...updated] };
+                        const others = (prev.clientFiles || []).filter(
+                          (f) => String(f.clientId) !== String(clientId),
+                        );
+                        return {
+                          ...prev,
+                          clientFiles: [...others, ...updated],
+                        };
                       });
                     }}
                   />
@@ -1439,31 +1772,140 @@ h1{
                 {clientTab === "prices" && (
                   <div>
                     {clientPriceHistory.length === 0 ? (
-                      <p style={{ color: "var(--muted)", fontSize: 13 }}>Aucune facture enregistrée pour ce client.</p>
+                      <p style={{ color: "var(--muted)", fontSize: 13 }}>
+                        Aucune facture enregistrée pour ce client.
+                      </p>
                     ) : (
-                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                      <table
+                        style={{
+                          width: "100%",
+                          borderCollapse: "collapse",
+                          fontSize: 13,
+                        }}
+                      >
                         <thead>
-                          <tr style={{ borderBottom: "2px solid var(--border)" }}>
-                            <th style={{ textAlign: "left", padding: "6px 8px", color: "var(--muted)", fontWeight: 600, fontSize: 11 }}>Produit / Prestation</th>
-                            <th style={{ textAlign: "right", padding: "6px 8px", color: "var(--muted)", fontWeight: 600, fontSize: 11 }}>Commandes</th>
-                            <th style={{ textAlign: "right", padding: "6px 8px", color: "var(--muted)", fontWeight: 600, fontSize: 11 }}>Dernier prix</th>
-                            <th style={{ textAlign: "right", padding: "6px 8px", color: "var(--muted)", fontWeight: 600, fontSize: 11 }}>Prix moyen</th>
-                            <th style={{ textAlign: "right", padding: "6px 8px", color: "var(--muted)", fontWeight: 600, fontSize: 11 }}>Min / Max</th>
+                          <tr
+                            style={{ borderBottom: "2px solid var(--border)" }}
+                          >
+                            <th
+                              style={{
+                                textAlign: "left",
+                                padding: "6px 8px",
+                                color: "var(--muted)",
+                                fontWeight: 600,
+                                fontSize: 11,
+                              }}
+                            >
+                              Produit / Prestation
+                            </th>
+                            <th
+                              style={{
+                                textAlign: "right",
+                                padding: "6px 8px",
+                                color: "var(--muted)",
+                                fontWeight: 600,
+                                fontSize: 11,
+                              }}
+                            >
+                              Commandes
+                            </th>
+                            <th
+                              style={{
+                                textAlign: "right",
+                                padding: "6px 8px",
+                                color: "var(--muted)",
+                                fontWeight: 600,
+                                fontSize: 11,
+                              }}
+                            >
+                              Dernier prix
+                            </th>
+                            <th
+                              style={{
+                                textAlign: "right",
+                                padding: "6px 8px",
+                                color: "var(--muted)",
+                                fontWeight: 600,
+                                fontSize: 11,
+                              }}
+                            >
+                              Prix moyen
+                            </th>
+                            <th
+                              style={{
+                                textAlign: "right",
+                                padding: "6px 8px",
+                                color: "var(--muted)",
+                                fontWeight: 600,
+                                fontSize: 11,
+                              }}
+                            >
+                              Min / Max
+                            </th>
                           </tr>
                         </thead>
                         <tbody>
                           {clientPriceHistory.map((row, i) => (
-                            <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
-                              <td style={{ padding: "7px 8px", fontWeight: 500 }}>{row.description}</td>
-                              <td style={{ textAlign: "right", padding: "7px 8px", color: "var(--muted)" }}>{row.count}</td>
-                              <td style={{ textAlign: "right", padding: "7px 8px", fontWeight: 700, color: "var(--pink, #ec4899)" }}>
-                                {row.lastPrice.toLocaleString("fr-FR", { minimumFractionDigits: 2 })} €
+                            <tr
+                              key={i}
+                              style={{
+                                borderBottom: "1px solid var(--border)",
+                              }}
+                            >
+                              <td
+                                style={{ padding: "7px 8px", fontWeight: 500 }}
+                              >
+                                {row.description}
                               </td>
-                              <td style={{ textAlign: "right", padding: "7px 8px" }}>
-                                {row.avgPrice.toLocaleString("fr-FR", { minimumFractionDigits: 2 })} €
+                              <td
+                                style={{
+                                  textAlign: "right",
+                                  padding: "7px 8px",
+                                  color: "var(--muted)",
+                                }}
+                              >
+                                {row.count}
                               </td>
-                              <td style={{ textAlign: "right", padding: "7px 8px", color: "var(--muted)", fontSize: 11 }}>
-                                {row.minPrice.toLocaleString("fr-FR", { minimumFractionDigits: 2 })} / {row.maxPrice.toLocaleString("fr-FR", { minimumFractionDigits: 2 })} €
+                              <td
+                                style={{
+                                  textAlign: "right",
+                                  padding: "7px 8px",
+                                  fontWeight: 700,
+                                  color: "var(--pink, #ec4899)",
+                                }}
+                              >
+                                {row.lastPrice.toLocaleString("fr-FR", {
+                                  minimumFractionDigits: 2,
+                                })}{" "}
+                                €
+                              </td>
+                              <td
+                                style={{
+                                  textAlign: "right",
+                                  padding: "7px 8px",
+                                }}
+                              >
+                                {row.avgPrice.toLocaleString("fr-FR", {
+                                  minimumFractionDigits: 2,
+                                })}{" "}
+                                €
+                              </td>
+                              <td
+                                style={{
+                                  textAlign: "right",
+                                  padding: "7px 8px",
+                                  color: "var(--muted)",
+                                  fontSize: 11,
+                                }}
+                              >
+                                {row.minPrice.toLocaleString("fr-FR", {
+                                  minimumFractionDigits: 2,
+                                })}{" "}
+                                /{" "}
+                                {row.maxPrice.toLocaleString("fr-FR", {
+                                  minimumFractionDigits: 2,
+                                })}{" "}
+                                €
                               </td>
                             </tr>
                           ))}
@@ -1478,12 +1920,16 @@ h1{
                     clientId={selectedClient.id}
                     notes={selectedClientNotes}
                     onNotesChange={(updated) => {
-                      const others = (data.clientNotes || []).filter((n) => String(n.clientId) !== String(selectedClient.id));
-                      setData({ ...data, clientNotes: [...others, ...updated] });
+                      const others = (data.clientNotes || []).filter(
+                        (n) => String(n.clientId) !== String(selectedClient.id),
+                      );
+                      setData({
+                        ...data,
+                        clientNotes: [...others, ...updated],
+                      });
                     }}
                   />
                 )}
-
               </div>
             </>
           )}
@@ -1500,7 +1946,16 @@ function ClientNotes({ clientId, notes = [], onNotesChange }) {
   function addNote() {
     const t = text.trim();
     if (!t) return;
-    onNotesChange([...notes, { id: crypto.randomUUID(), clientId, kind, text: t, createdAt: new Date().toISOString() }]);
+    onNotesChange([
+      ...notes,
+      {
+        id: crypto.randomUUID(),
+        clientId,
+        kind,
+        text: t,
+        createdAt: new Date().toISOString(),
+      },
+    ]);
     setText("");
   }
 
@@ -1508,7 +1963,9 @@ function ClientNotes({ clientId, notes = [], onNotesChange }) {
     onNotesChange(notes.filter((n) => n.id !== id));
   }
 
-  const sorted = [...notes].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  const sorted = [...notes].sort(
+    (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
+  );
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -1528,26 +1985,83 @@ function ClientNotes({ clientId, notes = [], onNotesChange }) {
           onChange={(e) => setText(e.target.value)}
           placeholder="Ajouter une note…"
           style={{ flex: 1, resize: "vertical", fontSize: 13 }}
-          onKeyDown={(e) => { if (e.key === "Enter" && e.ctrlKey) addNote(); }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && e.ctrlKey) addNote();
+          }}
         />
-        <button type="button" className="primary" onClick={addNote} style={{ alignSelf: "flex-end" }}>
+        <button
+          type="button"
+          className="primary"
+          onClick={addNote}
+          style={{ alignSelf: "flex-end" }}
+        >
           Ajouter
         </button>
       </div>
       {sorted.length === 0 ? (
-        <p style={{ color: "var(--muted)", fontSize: 13, margin: 0 }}>Aucune note pour ce client.</p>
+        <p style={{ color: "var(--muted)", fontSize: 13, margin: 0 }}>
+          Aucune note pour ce client.
+        </p>
       ) : (
-        <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 8 }}>
+        <ul
+          style={{
+            margin: 0,
+            padding: 0,
+            listStyle: "none",
+            display: "flex",
+            flexDirection: "column",
+            gap: 8,
+          }}
+        >
           {sorted.map((n) => (
-            <li key={n.id} style={{ background: "var(--surface-2)", borderRadius: 8, padding: "10px 12px", display: "flex", gap: 10 }}>
+            <li
+              key={n.id}
+              style={{
+                background: "var(--surface-2)",
+                borderRadius: 8,
+                padding: "10px 12px",
+                display: "flex",
+                gap: 10,
+              }}
+            >
               <div style={{ flex: 1 }}>
-                <p style={{ margin: "0 0 4px", fontSize: 13, whiteSpace: "pre-wrap" }}>{n.text}</p>
+                <p
+                  style={{
+                    margin: "0 0 4px",
+                    fontSize: 13,
+                    whiteSpace: "pre-wrap",
+                  }}
+                >
+                  {n.text}
+                </p>
                 <span style={{ fontSize: 11, color: "var(--muted)" }}>
-                  {(n.kind === "call" ? "Appel" : n.kind === "email" ? "Email" : "Note")} · {new Date(n.createdAt).toLocaleString("fr-FR", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  {n.kind === "call"
+                    ? "Appel"
+                    : n.kind === "email"
+                      ? "Email"
+                      : "Note"}{" "}
+                  ·{" "}
+                  {new Date(n.createdAt).toLocaleString("fr-FR", {
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
                 </span>
               </div>
-              <button type="button" onClick={() => deleteNote(n.id)}
-                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)", fontSize: 14, alignSelf: "flex-start" }}>
+              <button
+                type="button"
+                onClick={() => deleteNote(n.id)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  color: "var(--muted)",
+                  fontSize: 14,
+                  alignSelf: "flex-start",
+                }}
+              >
                 ✕
               </button>
             </li>
@@ -1569,7 +2083,11 @@ function InfoBox({ label, value }) {
 
 function DashboardCard({ label, value, danger = false }) {
   return (
-    <div className={danger ? "client-dashboard-card danger" : "client-dashboard-card"}>
+    <div
+      className={
+        danger ? "client-dashboard-card danger" : "client-dashboard-card"
+      }
+    >
       <strong>{value}</strong>
       <span>{label}</span>
     </div>
@@ -1580,7 +2098,10 @@ function DocumentRow({ doc, type, label, onOpen }) {
   const total = type === "delivery" ? null : docTotal(doc);
 
   return (
-    <div className="client-history-item clickable" onClick={() => onOpen(doc, type)}>
+    <div
+      className="client-history-item clickable"
+      onClick={() => onOpen(doc, type)}
+    >
       <div>
         <strong>{doc.number || doc.reference || label}</strong>
         <span>{formatDate(docDate(doc))}</span>
@@ -1588,7 +2109,9 @@ function DocumentRow({ doc, type, label, onOpen }) {
 
       <div>
         {total != null ? <strong>{money(total)}</strong> : null}
-        <span className={"status-badge " + statusClass(doc.status)}>{doc.status || "Sans statut"}</span>
+        <span className={"status-badge " + statusClass(doc.status)}>
+          {doc.status || "Sans statut"}
+        </span>
       </div>
     </div>
   );
@@ -1608,7 +2131,11 @@ function Timeline({ items, onOpen }) {
           <div
             className={`timeline-item${canOpenDocument ? " clickable" : ""}`}
             key={item.id}
-            onClick={canOpenDocument ? () => onOpen?.(item.doc, item.docType) : undefined}
+            onClick={
+              canOpenDocument
+                ? () => onOpen?.(item.doc, item.docType)
+                : undefined
+            }
             onKeyDown={
               canOpenDocument
                 ? (event) => {

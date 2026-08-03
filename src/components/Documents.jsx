@@ -13,12 +13,9 @@ import {
   detectInvoiceNumberGaps,
   detectDocumentNumberGaps,
   currentDocumentYear,
-  convertQuoteToInvoiceData,
   isQuoteConvertible,
   createDeliveryNoteFromQuote,
   getDeliveryNoteForQuote,
-  createDepositInvoiceFromQuote,
-  createBalanceInvoiceFromQuote,
   getQuoteDepositSummary,
   quoteRequiresDepositFlow,
   computeDocumentLineTotals,
@@ -28,7 +25,11 @@ import {
   today,
   resolveDocumentTaxRate,
 } from "../utils/documents";
-import { applyStockByLines, syncDocumentStock, syncQuoteProductionStock } from "../utils/stock";
+import {
+  applyStockByLines,
+  syncDocumentStock,
+  syncQuoteProductionStock,
+} from "../utils/stock";
 import {
   INVOICES_FILTER_KEY,
   isInvoiceOverdue,
@@ -38,8 +39,14 @@ import {
   parseDocumentDate,
   DEPOSIT_PRESETS,
 } from "../utils/invoices";
-import { computeDueDate, openInvoiceReminderMailto } from "../utils/invoiceReminders";
-import { INVOICE_PERIOD_MODES, INVOICES_PERIOD_FILTER_KEY } from "../utils/invoicePeriodStats";
+import {
+  computeDueDate,
+  openInvoiceReminderMailto,
+} from "../utils/invoiceReminders";
+import {
+  INVOICE_PERIOD_MODES,
+  INVOICES_PERIOD_FILTER_KEY,
+} from "../utils/invoicePeriodStats";
 import { syncQuoteProductionSheetFromLines } from "../utils/quoteMarginAssistant";
 import {
   clearInvoiceDraft,
@@ -50,14 +57,20 @@ import {
   QUOTES_LIST_VIEW_EVENT,
   wasQuoteDraftApplied,
 } from "../utils/quoteDraft";
-import { cleanupNavigationBlockers, CRM_ROUTE_CHANGE_EVENT } from "../utils/uiCleanup";
+import {
+  cleanupNavigationBlockers,
+  CRM_ROUTE_CHANGE_EVENT,
+} from "../utils/uiCleanup";
 import {
   copyQuoteShareLink,
   getQuoteIdFromLocation,
   openQuoteWhatsAppShare,
   prepareQuoteForShare,
 } from "../utils/quoteShare";
-import { PRODUCTION_STATUSES, QUOTES_STATUS_FILTER_KEY } from "../utils/production";
+import {
+  PRODUCTION_STATUSES,
+  QUOTES_STATUS_FILTER_KEY,
+} from "../utils/production";
 import { downloadProductionSheetPdf } from "../utils/productionPdf";
 import { fromDateInputValue, toDateInputValue } from "../utils/quoteDelivery";
 import { exportInvoicesCsv } from "../utils/exportCsv";
@@ -75,7 +88,6 @@ import {
   hydrateQuoteAttachmentsAsync,
 } from "../utils/quoteAttachments";
 import {
-  recordInvoicePayment,
   buildPaymentSummary,
   PAYMENT_METHODS,
   upsertHistoricalInvoicePayment,
@@ -83,6 +95,8 @@ import {
 import { getInvoicePaymentLink } from "../utils/onlinePayments";
 import { buildCompanySnapshot } from "../utils/companySnapshot";
 import { confirmAction } from "../utils/confirmAction";
+import { invoiceApplicationService } from "../application/InvoiceApplicationService";
+import { paymentApplicationService } from "../application/PaymentApplicationService";
 
 function toInputDate(date) {
   const year = date.getFullYear();
@@ -116,7 +130,15 @@ function getPeriodDateRange(period) {
   return { from: "", to: "" };
 }
 
-function Documents({ type, data, setData, currentRole = 'Admin', logActivity, pendingOpenDoc = null, onClearPendingOpenDoc }) {
+function Documents({
+  type,
+  data,
+  setData,
+  currentRole = "Admin",
+  logActivity,
+  pendingOpenDoc = null,
+  onClearPendingOpenDoc,
+}) {
   const location = useLocation();
   const navigate = useNavigate();
   const isQuote = type === "quote";
@@ -162,31 +184,28 @@ function Documents({ type, data, setData, currentRole = 'Admin', logActivity, pe
   const [statusFilter, setStatusFilter] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const prefilledClientId =
-  localStorage.getItem(
-    "crm_prefill_client_id"
-  ) || "";
-const [form, setForm] = useState({
-  clientId: prefilledClientId,
-  status: defaultStatus,
-  billingDetail: "",
-  globalDiscount: 0,
-  depositPercent: 0,
-  promisedDeliveryDateInput: "",
-  dateInput: isQuote ? "" : toDateInputValue(today()),
-  processType: "",
-  assignedTo: "",
-  atelierNotes: "",
-  priority: "normal",
-  numberOverride: "",
-  paymentId: "",
-  paymentStatus: "",
-  paymentAmount: "",
-  paymentDateInput: "",
-  paymentMethod: "Virement",
-  bankTransactionId: "",
-  lines: [{ ...emptyLine }],
-});
+  const prefilledClientId = localStorage.getItem("crm_prefill_client_id") || "";
+  const [form, setForm] = useState({
+    clientId: prefilledClientId,
+    status: defaultStatus,
+    billingDetail: "",
+    globalDiscount: 0,
+    depositPercent: 0,
+    promisedDeliveryDateInput: "",
+    dateInput: isQuote ? "" : toDateInputValue(today()),
+    processType: "",
+    assignedTo: "",
+    atelierNotes: "",
+    priority: "normal",
+    numberOverride: "",
+    paymentId: "",
+    paymentStatus: "",
+    paymentAmount: "",
+    paymentDateInput: "",
+    paymentMethod: "Virement",
+    bankTransactionId: "",
+    lines: [{ ...emptyLine }],
+  });
   const [attachments, setAttachments] = useState([]);
   const [formSessionKey, setFormSessionKey] = useState(0);
   const quotesListViewHandledKeyRef = useRef(null);
@@ -196,20 +215,26 @@ const [form, setForm] = useState({
   const documents = data[listKey] || [];
 
   const selectedClient = useMemo(
-    () => (data.clients || []).find((client) => client.id === form.clientId) || null,
-    [data.clients, form.clientId]
+    () =>
+      (data.clients || []).find((client) => client.id === form.clientId) ||
+      null,
+    [data.clients, form.clientId],
   );
 
   const effectiveTaxRate = useMemo(
     () => resolveDocumentTaxRate(selectedClient, data.settings),
-    [selectedClient, data.settings]
+    [selectedClient, data.settings],
   );
 
   const invoiceNumberGaps = useMemo(() => {
     if (isQuote) {
       return detectDocumentNumberGaps(documents, prefix, currentDocumentYear());
     }
-    return detectInvoiceNumberGaps(documents, data.settings || {}, currentDocumentYear());
+    return detectInvoiceNumberGaps(
+      documents,
+      data.settings || {},
+      currentDocumentYear(),
+    );
   }, [documents, data.settings, isQuote, prefix]);
 
   const nextAutoNumber = useMemo(() => {
@@ -260,8 +285,16 @@ const [form, setForm] = useState({
       e.preventDefault();
       reset();
       setTimeout(() => {
-        document.querySelector(`[data-testid="${isQuote ? "quote-form" : "invoice-form"}"] select`)?.focus();
-        document.querySelector(`[data-testid="${isQuote ? "quote-form" : "invoice-form"}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+        document
+          .querySelector(
+            `[data-testid="${isQuote ? "quote-form" : "invoice-form"}"] select`,
+          )
+          ?.focus();
+        document
+          .querySelector(
+            `[data-testid="${isQuote ? "quote-form" : "invoice-form"}"]`,
+          )
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
       }, 50);
     }
     window.addEventListener("crm:new-item", onNewItem);
@@ -269,7 +302,9 @@ const [form, setForm] = useState({
   }, [isQuote]);
 
   useEffect(() => {
-    const listViewEvent = isQuote ? QUOTES_LIST_VIEW_EVENT : INVOICES_LIST_VIEW_EVENT;
+    const listViewEvent = isQuote
+      ? QUOTES_LIST_VIEW_EVENT
+      : INVOICES_LIST_VIEW_EVENT;
 
     function onListViewRequest() {
       resetDocumentsListView();
@@ -285,7 +320,7 @@ const [form, setForm] = useState({
     () => () => {
       cleanupNavigationBlockers();
     },
-    []
+    [],
   );
 
   useEffect(() => {
@@ -297,7 +332,8 @@ const [form, setForm] = useState({
     }
 
     window.addEventListener(CRM_ROUTE_CHANGE_EVENT, onRouteChange);
-    return () => window.removeEventListener(CRM_ROUTE_CHANGE_EVENT, onRouteChange);
+    return () =>
+      window.removeEventListener(CRM_ROUTE_CHANGE_EVENT, onRouteChange);
   }, [type]);
 
   useEffect(() => {
@@ -360,7 +396,9 @@ const [form, setForm] = useState({
     async function applyDraft() {
       let hydratedAttachments = [];
       try {
-        hydratedAttachments = await hydrateQuoteAttachmentsAsync(draft.attachments || []);
+        hydratedAttachments = await hydrateQuoteAttachmentsAsync(
+          draft.attachments || [],
+        );
       } catch (error) {
         console.error("Hydratation pièces jointes brouillon devis :", error);
       }
@@ -393,7 +431,7 @@ const [form, setForm] = useState({
         draft.source
           ? `Devis pré-rempli depuis ${draft.source}${attachmentHint}.`
           : `Devis pré-rempli${attachmentHint}.`,
-        "success"
+        "success",
       );
     }
 
@@ -413,7 +451,9 @@ const [form, setForm] = useState({
 
   useEffect(() => {
     if (!pendingOpenDoc) return;
-    const doc = documents.find((d) => String(d.id) === String(pendingOpenDoc.id));
+    const doc = documents.find(
+      (d) => String(d.id) === String(pendingOpenDoc.id),
+    );
     if (doc) {
       setPreviewDoc(doc);
       setPreviewType(isQuote ? "quote" : "invoice");
@@ -429,7 +469,7 @@ const [form, setForm] = useState({
     const quote = documents.find(
       (entry) =>
         String(entry.id) === String(quoteId) ||
-        String(entry.number) === String(quoteId)
+        String(entry.number) === String(quoteId),
     );
     if (quote) {
       setPreviewDoc(quote);
@@ -481,7 +521,11 @@ const [form, setForm] = useState({
     const list = [...documents].filter((doc) => {
       if (statusFilter && doc.status !== statusFilter) return false;
       if (overdueOnly && !isQuote && !isInvoiceOverdue(doc)) return false;
-      if (unpaidOnly && !isQuote && (isPaidInvoice(doc) || isCancelledInvoice(doc))) {
+      if (
+        unpaidOnly &&
+        !isQuote &&
+        (isPaidInvoice(doc) || isCancelledInvoice(doc))
+      ) {
         return false;
       }
       if (paidOnly && !isQuote && !isPaidInvoice(doc)) return false;
@@ -530,40 +574,86 @@ const [form, setForm] = useState({
       if (sortBy === "numberDesc") return numberValue(b) - numberValue(a);
       if (sortBy === "dateAsc") return dateValue(a) - dateValue(b);
       if (sortBy === "dateDesc") return dateValue(b) - dateValue(a);
-      if (sortBy === "clientAsc") return clientName(data, a.clientId).localeCompare(clientName(data, b.clientId));
-      if (sortBy === "clientDesc") return clientName(data, b.clientId).localeCompare(clientName(data, a.clientId));
-      if (sortBy === "totalAsc") return Number(a.totalTTC || 0) - Number(b.totalTTC || 0);
-      if (sortBy === "totalDesc") return Number(b.totalTTC || 0) - Number(a.totalTTC || 0);
-      if (sortBy === "statusAsc") return String(a.status || "").localeCompare(String(b.status || ""));
-      if (sortBy === "statusDesc") return String(b.status || "").localeCompare(String(a.status || ""));
+      if (sortBy === "clientAsc")
+        return clientName(data, a.clientId).localeCompare(
+          clientName(data, b.clientId),
+        );
+      if (sortBy === "clientDesc")
+        return clientName(data, b.clientId).localeCompare(
+          clientName(data, a.clientId),
+        );
+      if (sortBy === "totalAsc")
+        return Number(a.totalTTC || 0) - Number(b.totalTTC || 0);
+      if (sortBy === "totalDesc")
+        return Number(b.totalTTC || 0) - Number(a.totalTTC || 0);
+      if (sortBy === "statusAsc")
+        return String(a.status || "").localeCompare(String(b.status || ""));
+      if (sortBy === "statusDesc")
+        return String(b.status || "").localeCompare(String(a.status || ""));
       return 0;
     });
-  }, [documents, sortBy, data, overdueOnly, unpaidOnly, paidOnly, statusFilter, isQuote, search, dateFrom, dateTo]);
+  }, [
+    documents,
+    sortBy,
+    data,
+    overdueOnly,
+    unpaidOnly,
+    paidOnly,
+    statusFilter,
+    isQuote,
+    search,
+    dateFrom,
+    dateTo,
+  ]);
 
-  const documentTotalPages = Math.max(1, Math.ceil(sortedDocuments.length / itemsPerPage));
+  const documentTotalPages = Math.max(
+    1,
+    Math.ceil(sortedDocuments.length / itemsPerPage),
+  );
   const documentPage = Math.min(currentPage, documentTotalPages);
-  const paginatedDocuments = sortedDocuments.slice((documentPage - 1) * itemsPerPage, documentPage * itemsPerPage);
+  const paginatedDocuments = sortedDocuments.slice(
+    (documentPage - 1) * itemsPerPage,
+    documentPage * itemsPerPage,
+  );
 
   const stats = useMemo(() => {
-    const totalTTC = documents.reduce((sum, doc) => sum + Number(doc.totalTTC || 0), 0);
+    const totalTTC = documents.reduce(
+      (sum, doc) => sum + Number(doc.totalTTC || 0),
+      0,
+    );
 
     if (isQuote) {
       const pending = documents.filter(
-        (doc) => doc.status === "Brouillon" || doc.status === "Envoyé"
+        (doc) => doc.status === "Brouillon" || doc.status === "Envoyé",
       ).length;
       const staleDrafts = getStaleDraftQuotes(documents).length;
-      const accepted = documents.filter((doc) => doc.status === "Accepté").length;
-      const inProduction = documents.filter((doc) =>
-        PRODUCTION_STATUSES.includes(doc.status)
+      const accepted = documents.filter(
+        (doc) => doc.status === "Accepté",
       ).length;
-      const convertible = documents.filter((doc) => isQuoteConvertible(data, doc)).length;
-      return { count: documents.length, totalTTC, pending, staleDrafts, accepted, inProduction, convertible };
+      const inProduction = documents.filter((doc) =>
+        PRODUCTION_STATUSES.includes(doc.status),
+      ).length;
+      const convertible = documents.filter((doc) =>
+        isQuoteConvertible(data, doc),
+      ).length;
+      return {
+        count: documents.length,
+        totalTTC,
+        pending,
+        staleDrafts,
+        accepted,
+        inProduction,
+        convertible,
+      };
     }
 
     const overdueDocs = documents.filter((doc) => isInvoiceOverdue(doc));
-    const overdueTotal = overdueDocs.reduce((sum, doc) => sum + Number(doc.totalTTC || 0), 0);
+    const overdueTotal = overdueDocs.reduce(
+      (sum, doc) => sum + Number(doc.totalTTC || 0),
+      0,
+    );
     const unpaid = documents.filter(
-      (doc) => doc.status === "Non payée" || doc.status === "En retard"
+      (doc) => doc.status === "Non payée" || doc.status === "En retard",
     ).length;
 
     return {
@@ -590,12 +680,16 @@ const [form, setForm] = useState({
   function updateLine(index, changes) {
     setForm({
       ...form,
-      lines: (form.lines || []).map((line, i) => (i === index ? { ...line, ...changes } : line)),
+      lines: (form.lines || []).map((line, i) =>
+        i === index ? { ...line, ...changes } : line,
+      ),
     });
   }
 
   function selectProduct(index, productId) {
-    const product = (data.products || []).find((p) => String(p.id) === String(productId));
+    const product = (data.products || []).find(
+      (p) => String(p.id) === String(productId),
+    );
 
     if (!product) {
       updateLine(index, {
@@ -637,7 +731,8 @@ const [form, setForm] = useState({
   }
 
   function removeLine(index) {
-    if (form.lines.length === 1) return showToast("Il faut au moins une ligne.", "error");
+    if (form.lines.length === 1)
+      return showToast("Il faut au moins une ligne.", "error");
     setForm({ ...form, lines: form.lines.filter((_, i) => i !== index) });
   }
 
@@ -676,7 +771,11 @@ const [form, setForm] = useState({
   }
 
   function parsePaymentAmount(value) {
-    return Number(String(value || "").replace(",", ".").replace(/[^\d.]/g, ""));
+    return Number(
+      String(value || "")
+        .replace(",", ".")
+        .replace(/[^\d.]/g, ""),
+    );
   }
 
   function applyInvoiceFormPayment(nextData, invoice) {
@@ -698,14 +797,21 @@ const [form, setForm] = useState({
     if (!form.clientId && (!isQuote || form.status !== "Brouillon")) {
       return showToast("Choisis un client.", "error");
     }
-    const formPaymentAmount = !isQuote ? parsePaymentAmount(form.paymentAmount) : 0;
+    const formPaymentAmount = !isQuote
+      ? parsePaymentAmount(form.paymentAmount)
+      : 0;
     if (!isQuote && formPaymentAmount > 0 && !form.paymentDateInput) {
-      return showToast("Date d'encaissement obligatoire pour enregistrer un paiement.", "error");
+      return showToast(
+        "Date d'encaissement obligatoire pour enregistrer un paiement.",
+        "error",
+      );
     }
 
     const cleanLines = form.lines
       .map((line) => {
-        const product = (data.products || []).find((p) => String(p.id) === String(line.productId));
+        const product = (data.products || []).find(
+          (p) => String(p.id) === String(line.productId),
+        );
         const cleanLine = {
           ...line,
           productId: product?.id || line.productId || "",
@@ -742,9 +848,16 @@ const [form, setForm] = useState({
       })
       .filter((line) => line.description && line.quantity > 0);
 
-    if (cleanLines.length === 0) return showToast("Ajoute au moins un produit ou une prestation.", "error");
+    if (cleanLines.length === 0)
+      return showToast(
+        "Ajoute au moins un produit ou une prestation.",
+        "error",
+      );
 
-    const firstDescription = cleanLines.length === 1 ? cleanLines[0].description : `${cleanLines.length} lignes`;
+    const firstDescription =
+      cleanLines.length === 1
+        ? cleanLines[0].description
+        : `${cleanLines.length} lignes`;
     const promisedDeliveryDate = isQuote
       ? fromDateInputValue(form.promisedDeliveryDateInput)
       : "";
@@ -763,7 +876,9 @@ const [form, setForm] = useState({
       const existingDoc = documents.find((d) => d.id === editingId);
       const updatedDocBase = enrichInvoicePaymentFields({
         ...existingDoc,
-        companySnapshot: existingDoc?.companySnapshot || buildCompanySnapshot(data.settings || {}),
+        companySnapshot:
+          existingDoc?.companySnapshot ||
+          buildCompanySnapshot(data.settings || {}),
         clientId: form.clientId,
         billingDetail: String(form.billingDetail || "").trim(),
         status: form.status,
@@ -788,7 +903,7 @@ const [form, setForm] = useState({
             data.products || [],
             existingDoc,
             updatedDoc,
-            { user: currentRole }
+            { user: currentRole },
           )
         : null;
 
@@ -800,18 +915,23 @@ const [form, setForm] = useState({
           });
 
       const savedDoc = isQuote
-        ? { ...updatedDoc, productionStockAdjusted: stockSync.productionStockAdjusted }
+        ? {
+            ...updatedDoc,
+            productionStockAdjusted: stockSync.productionStockAdjusted,
+          }
         : updatedDoc;
 
       const nextData = {
         ...data,
         products: nextProducts,
-        [listKey]: documents.map((d) =>
-          d.id === editingId ? savedDoc : d
-        ),
+        [listKey]: documents.map((d) => (d.id === editingId ? savedDoc : d)),
       };
       setData(isQuote ? nextData : applyInvoiceFormPayment(nextData, savedDoc));
-      logActivity?.(`Modification ${isQuote ? "devis" : "facture"}`, existingDoc?.number || editingId, money(totals.totalTTC));
+      logActivity?.(
+        `Modification ${isQuote ? "devis" : "facture"}`,
+        existingDoc?.number || editingId,
+        money(totals.totalTTC),
+      );
     } else {
       const docBase = {
         id: uid(),
@@ -847,31 +967,41 @@ const [form, setForm] = useState({
           })
         : null;
 
-      const nextProducts = !isQuote && doc.stockAdjusted
-        ? applyStockByLines(data.products || [], cleanLines, "remove", {
-            type: "invoice",
-            reason: "Création facture",
-            reference: doc.number,
-            user: currentRole,
-          })
-        : isQuote
-          ? quoteStockSync.products
-          : data.products || [];
+      const nextProducts =
+        !isQuote && doc.stockAdjusted
+          ? applyStockByLines(data.products || [], cleanLines, "remove", {
+              type: "invoice",
+              reason: "Création facture",
+              reference: doc.number,
+              user: currentRole,
+            })
+          : isQuote
+            ? quoteStockSync.products
+            : data.products || [];
 
       const savedDoc = isQuote
-        ? { ...doc, productionStockAdjusted: quoteStockSync.productionStockAdjusted }
+        ? {
+            ...doc,
+            productionStockAdjusted: quoteStockSync.productionStockAdjusted,
+          }
         : doc;
 
-      const nextData = { ...data, products: nextProducts, [listKey]: [...documents, savedDoc] };
+      const nextData = {
+        ...data,
+        products: nextProducts,
+        [listKey]: [...documents, savedDoc],
+      };
       setData(isQuote ? nextData : applyInvoiceFormPayment(nextData, savedDoc));
-      logActivity?.(`Création ${isQuote ? "devis" : "facture"}`, doc.number, money(doc.totalTTC));
+      logActivity?.(
+        `Création ${isQuote ? "devis" : "facture"}`,
+        doc.number,
+        money(doc.totalTTC),
+      );
     }
 
-   localStorage.removeItem(
-  "crm_prefill_client_id"
-);
+    localStorage.removeItem("crm_prefill_client_id");
 
-reset();
+    reset();
   }
 
   async function edit(doc) {
@@ -921,11 +1051,13 @@ reset();
       if (unavailable > 0) {
         showToast(
           `${unavailable} pièce(s) jointe(s) absente(s) sur cet appareil — vérifiez Supabase Storage ou réimportez.`,
-          "warning"
+          "warning",
         );
       }
     }
-    const paymentSummary = !isQuote ? buildPaymentSummary(doc, data.payments || []) : null;
+    const paymentSummary = !isQuote
+      ? buildPaymentSummary(doc, data.payments || [])
+      : null;
     const primaryPayment = paymentSummary?.paymentHistory?.[0] || null;
     setForm({
       clientId: doc.clientId || "",
@@ -944,7 +1076,8 @@ reset();
       paymentAmount: primaryPayment?.amount ?? doc.paidAmount ?? "",
       paymentDateInput: primaryPayment?.date || doc.paymentDate || "",
       paymentMethod: primaryPayment?.method || doc.paymentMethod || "Virement",
-      bankTransactionId: primaryPayment?.bankTransactionId || doc.bankTransactionId || "",
+      bankTransactionId:
+        primaryPayment?.bankTransactionId || doc.bankTransactionId || "",
       lines,
     });
   }
@@ -988,27 +1121,39 @@ reset();
     if (location.state?.openDocumentId) {
       navigate(`${location.pathname}${location.search}${location.hash}`, {
         replace: true,
-        state: { ...location.state, openDocumentId: null, openDocumentType: null },
+        state: {
+          ...location.state,
+          openDocumentId: null,
+          openDocumentType: null,
+        },
       });
     }
 
     return undefined;
-  }, [documents, isQuote, location.search, location.hash, location.pathname, location.state, navigate]);
+  }, [
+    documents,
+    isQuote,
+    location.search,
+    location.hash,
+    location.pathname,
+    location.state,
+    navigate,
+  ]);
   function duplicate(doc) {
-    const newId  = crypto.randomUUID();
+    const newId = crypto.randomUUID();
     const newNum = isQuote
       ? nextDocumentNumber(documents, prefix)
       : nextInvoiceNumber(documents, data.settings);
     const base = {
       ...doc,
-      id:          newId,
-      number:      newNum,
+      id: newId,
+      number: newNum,
       companySnapshot: buildCompanySnapshot(data.settings || {}),
-      date:        today(),
-      acceptedAt:  null,
-      sentAt:      null,
-      signature:   null,
-      shareToken:  null,
+      date: today(),
+      acceptedAt: null,
+      sentAt: null,
+      signature: null,
+      shareToken: null,
       convertedToInvoiceId: null,
       emailSentAt: null,
       emailReadAt: null,
@@ -1016,10 +1161,19 @@ reset();
     };
     const copy = isQuote
       ? { ...base, status: "Brouillon" }
-      : { ...base, status: "Non payée", paidAmount: 0, remaining: Number(doc.totalTTC || 0), dueDate: computeDueDate(today(), data.settings?.paymentDays) };
+      : {
+          ...base,
+          status: "Non payée",
+          paidAmount: 0,
+          remaining: Number(doc.totalTTC || 0),
+          dueDate: computeDueDate(today(), data.settings?.paymentDays),
+        };
     setData({ ...data, [listKey]: [...documents, copy] });
     const label = isQuote ? "Devis" : "Facture";
-    logActivity?.(`Duplication ${label.toLowerCase()}`, `${doc.number} → ${newNum}`);
+    logActivity?.(
+      `Duplication ${label.toLowerCase()}`,
+      `${doc.number} → ${newNum}`,
+    );
     showToast(`${label} ${newNum} créée depuis ${doc.number}.`, "success");
   }
 
@@ -1039,17 +1193,23 @@ reset();
         confirmLabel: "Supprimer",
         danger: true,
       }))
-    ) return;
+    )
+      return;
     const removedDoc = documents.find((d) => d.id === id);
     let nextProducts = data.products || [];
 
     if (!isQuote && removedDoc?.stockAdjusted) {
-      nextProducts = applyStockByLines(nextProducts, removedDoc.lines || [], "add", {
-        type: "invoice",
-        reason: "Suppression facture",
-        reference: removedDoc?.number || "",
-        user: currentRole,
-      });
+      nextProducts = applyStockByLines(
+        nextProducts,
+        removedDoc.lines || [],
+        "add",
+        {
+          type: "invoice",
+          reason: "Suppression facture",
+          reference: removedDoc?.number || "",
+          user: currentRole,
+        },
+      );
     }
 
     if (isQuote && removedDoc?.productionStockAdjusted) {
@@ -1057,7 +1217,7 @@ reset();
         nextProducts,
         removedDoc,
         { ...removedDoc, status: "Accepté" },
-        { user: currentRole }
+        { user: currentRole },
       ).products;
     }
 
@@ -1066,13 +1226,22 @@ reset();
       products: nextProducts,
       [listKey]: documents.filter((d) => d.id !== id),
     });
-    logActivity?.(`Suppression ${isQuote ? "devis" : "facture"}`, removedDoc?.number || id);
+    logActivity?.(
+      `Suppression ${isQuote ? "devis" : "facture"}`,
+      removedDoc?.number || id,
+    );
   }
 
   function updateStatus(id, status) {
-    const existingDoc = (data[listKey] || []).find((d) => String(d.id) === String(id));
+    const existingDoc = (data[listKey] || []).find(
+      (d) => String(d.id) === String(id),
+    );
     const updatedDoc = existingDoc
-      ? { ...existingDoc, status, stockAdjusted: !isQuote && status !== "Annulée" }
+      ? {
+          ...existingDoc,
+          status,
+          stockAdjusted: !isQuote && status !== "Annulée",
+        }
       : null;
 
     let nextProducts = data.products || [];
@@ -1089,15 +1258,17 @@ reset();
         nextProducts,
         existingDoc,
         updatedDoc,
-        { user: currentRole }
+        { user: currentRole },
       );
       nextProducts = stockSync.products;
       updatedDoc.productionStockAdjusted = stockSync.productionStockAdjusted;
     }
 
-    const nextDocuments = dedupeDocuments((data[listKey] || []).map((d) =>
-      String(d.id) === String(id) && updatedDoc ? updatedDoc : d
-    ));
+    const nextDocuments = dedupeDocuments(
+      (data[listKey] || []).map((d) =>
+        String(d.id) === String(id) && updatedDoc ? updatedDoc : d,
+      ),
+    );
 
     const changedDoc = nextDocuments.find((d) => String(d.id) === String(id));
     setData({
@@ -1105,25 +1276,34 @@ reset();
       products: nextProducts,
       [listKey]: nextDocuments,
     });
-    logActivity?.(`Changement statut ${isQuote ? "devis" : "facture"}`, changedDoc?.number || id, status);
+    logActivity?.(
+      `Changement statut ${isQuote ? "devis" : "facture"}`,
+      changedDoc?.number || id,
+      status,
+    );
   }
 
   function sendInvoiceReminder(invoice) {
     const client = (data.clients || []).find((c) => c.id === invoice.clientId);
-    const result = openInvoiceReminderMailto(invoice, client, data.settings || {});
+    const result = openInvoiceReminderMailto(
+      invoice,
+      client,
+      data.settings || {},
+    );
     if (!result.ok) {
       showToast("Ce client n'a pas d'adresse email enregistrée.", "error");
       return;
     }
 
     const nextInvoices = documents.map((doc) =>
-      String(doc.id) === String(invoice.id)
-        ? markDocumentReminder(doc)
-        : doc
+      String(doc.id) === String(invoice.id) ? markDocumentReminder(doc) : doc,
     );
     setData({ ...data, invoices: nextInvoices });
     logActivity?.("Relance facture", invoice.number, client?.name || "");
-    showToast(`Relance n°${result.reminderNumber || 1} préparée pour ${invoice.number}.`, "success");
+    showToast(
+      `Relance n°${result.reminderNumber || 1} préparée pour ${invoice.number}.`,
+      "success",
+    );
   }
 
   async function handleCopyQuoteLink(quote) {
@@ -1137,7 +1317,7 @@ reset();
       setData({
         ...data,
         quotes: (data.quotes || []).map((entry) =>
-          String(entry.id) === String(quote.id) ? prepared : entry
+          String(entry.id) === String(quote.id) ? prepared : entry,
         ),
       });
     }
@@ -1171,7 +1351,7 @@ reset();
     try {
       const deliveryInfo = window.prompt(
         "Informations de livraison (optionnel) :",
-        getDeliveryNoteForQuote(data, quote)?.deliveryInfo || ""
+        getDeliveryNoteForQuote(data, quote)?.deliveryInfo || "",
       );
       if (deliveryInfo === null) return;
 
@@ -1180,27 +1360,35 @@ reset();
       });
       setData(result);
       logActivity?.(
-        result.created ? "Création bon de livraison" : "Mise à jour bon de livraison",
+        result.created
+          ? "Création bon de livraison"
+          : "Mise à jour bon de livraison",
         result.deliveryNote.number,
-        quote.number
+        quote.number,
       );
       showToast(
         result.created
           ? `Bon de livraison ${result.deliveryNote.number} créé.`
           : `Bon de livraison ${result.deliveryNote.number} mis à jour.`,
-        "success"
+        "success",
       );
       openPreview(result.deliveryNote, "delivery");
     } catch (error) {
       console.error(error);
-      showToast(error.message || "Impossible de générer le bon de livraison.", "error");
+      showToast(
+        error.message || "Impossible de générer le bon de livraison.",
+        "error",
+      );
     }
   }
 
   function previewDeliveryNote(quote) {
     const note = getDeliveryNoteForQuote(data, quote);
     if (!note) {
-      showToast("Aucun bon de livraison pour ce devis. Générez-le d'abord.", "info");
+      showToast(
+        "Aucun bon de livraison pour ce devis. Générez-le d'abord.",
+        "info",
+      );
       return;
     }
     openPreview(note, "delivery");
@@ -1219,39 +1407,49 @@ reset();
 
   function createBalanceInvoice(quote) {
     try {
-      const result = createBalanceInvoiceFromQuote(data, quote);
+      const result = invoiceApplicationService.createBalance(data, quote);
       setData(result);
       logActivity?.(
         "Création facture de solde",
         result.invoice.number,
-        quote.number
+        quote.number,
       );
       showToast(
         `Facture de solde ${result.invoice.number} créée (${money(result.invoice.totalTTC)}).`,
-        "success"
+        "success",
       );
     } catch (error) {
       console.error(error);
-      showToast(error.message || "Impossible de créer la facture de solde.", "error");
+      showToast(
+        error.message || "Impossible de créer la facture de solde.",
+        "error",
+      );
     }
   }
 
   function createDepositInvoice(quote, percent) {
     try {
-      const result = createDepositInvoiceFromQuote(data, quote, percent);
+      const result = invoiceApplicationService.createDeposit(
+        data,
+        quote,
+        percent,
+      );
       setData(result);
       logActivity?.(
         "Création facture d'acompte",
         result.invoice.number,
-        `${percent}% — ${quote.number}`
+        `${percent}% — ${quote.number}`,
       );
       showToast(
         `Facture d'acompte ${result.invoice.number} (${percent}%) créée.`,
-        "success"
+        "success",
       );
     } catch (error) {
       console.error(error);
-      showToast(error.message || "Impossible de créer la facture d'acompte.", "error");
+      showToast(
+        error.message || "Impossible de créer la facture d'acompte.",
+        "error",
+      );
     }
   }
 
@@ -1264,11 +1462,13 @@ reset();
 
     const raw = window.prompt(
       `Montant du paiement reçu (reste dû : ${money(remaining)})`,
-      String(remaining.toFixed(2)).replace(".", ",")
+      String(remaining.toFixed(2)).replace(".", ","),
     );
     if (raw === null) return;
 
-    const normalized = String(raw).replace(",", ".").replace(/[^\d.]/g, "");
+    const normalized = String(raw)
+      .replace(",", ".")
+      .replace(/[^\d.]/g, "");
     const amount = Number(normalized);
     if (!amount || amount <= 0) {
       showToast("Montant invalide.", "error");
@@ -1278,11 +1478,11 @@ reset();
     const method =
       window.prompt(
         `Mode de paiement (${PAYMENT_METHODS.join(", ")})`,
-        "Virement"
+        "Virement",
       ) || "Virement";
 
     try {
-      const result = recordInvoicePayment(data, invoice, {
+      const result = paymentApplicationService.record(data, invoice, {
         amount,
         method: PAYMENT_METHODS.includes(method) ? method : "Autre",
         notes: "",
@@ -1292,16 +1492,19 @@ reset();
       logActivity?.(
         "Paiement facture",
         invoice.number,
-        `${money(amount)} · ${method}`
+        `${money(amount)} · ${method}`,
       );
       showToast(
         result.invoice.status === "Payée"
           ? `${invoice.number} entièrement payée.`
           : `Paiement enregistré — reste ${money(getInvoiceRemaining(result.invoice))}.`,
-        "success"
+        "success",
       );
     } catch (error) {
-      showToast(error.message || "Impossible d'enregistrer le paiement.", "error");
+      showToast(
+        error.message || "Impossible d'enregistrer le paiement.",
+        "error",
+      );
     }
   }
 
@@ -1316,20 +1519,24 @@ reset();
 
   function handleCreatePaymentLink(invoice) {
     const client = (data.clients || []).find(
-      (entry) => String(entry.id) === String(invoice.clientId)
+      (entry) => String(entry.id) === String(invoice.clientId),
     );
-    const generatedLink = getInvoicePaymentLink(invoice, data.settings || {}, client);
+    const generatedLink = getInvoicePaymentLink(
+      invoice,
+      data.settings || {},
+      client,
+    );
     const paymentLink =
       generatedLink ||
       window.prompt(
         `Lien de paiement pour ${invoice.number}`,
-        invoice.paymentLink || ""
+        invoice.paymentLink || "",
       );
 
     if (!paymentLink) {
       showToast(
         "Configurez un modèle de lien dans Paramètres ou collez un lien manuel.",
-        "info"
+        "info",
       );
       return;
     }
@@ -1337,8 +1544,12 @@ reset();
     const trimmedLink = String(paymentLink).trim();
     const nextInvoices = (data.invoices || []).map((entry) =>
       String(entry.id) === String(invoice.id)
-        ? { ...entry, paymentLink: trimmedLink, paymentLinkCreatedAt: new Date().toISOString() }
-        : entry
+        ? {
+            ...entry,
+            paymentLink: trimmedLink,
+            paymentLinkCreatedAt: new Date().toISOString(),
+          }
+        : entry,
     );
 
     setData({ ...data, invoices: nextInvoices });
@@ -1350,24 +1561,31 @@ reset();
 
   function handleQuoteSignatureAccept(signedQuote) {
     const nextQuotes = documents.map((entry) =>
-      String(entry.id) === String(signedQuote.id) ? signedQuote : entry
+      String(entry.id) === String(signedQuote.id) ? signedQuote : entry,
     );
     setData({ ...data, quotes: nextQuotes });
     setPreviewDoc(signedQuote);
-    logActivity?.("Signature devis", signedQuote.number, signedQuote.signature?.clientEmail || "");
+    logActivity?.(
+      "Signature devis",
+      signedQuote.number,
+      signedQuote.signature?.clientEmail || "",
+    );
   }
 
   function handleDocumentSent(doc) {
-    const updatedDoc = { ...markDocumentSent(doc), ...(doc.emailSentAt ? { emailSentAt: doc.emailSentAt } : {}) };
+    const updatedDoc = {
+      ...markDocumentSent(doc),
+      ...(doc.emailSentAt ? { emailSentAt: doc.emailSentAt } : {}),
+    };
     const nextDocuments = documents.map((entry) =>
-      String(entry.id) === String(doc.id) ? updatedDoc : entry
+      String(entry.id) === String(doc.id) ? updatedDoc : entry,
     );
     setData({ ...data, [listKey]: nextDocuments });
     setPreviewDoc(updatedDoc);
     logActivity?.(
       `Envoi ${isQuote ? "devis" : "facture"}`,
       doc.number,
-      formatTrackingDate(new Date().toISOString())
+      formatTrackingDate(new Date().toISOString()),
     );
     showToast(`${doc.number} marqué comme envoyé.`, "success");
   }
@@ -1378,23 +1596,33 @@ reset();
       if (summary.depositInvoices.length > 0) {
         showToast(
           "Ce devis possède des acomptes. Utilisez « Facture de solde ».",
-          "error"
+          "error",
         );
         return;
       }
       showToast(
         "Ce devis prévoit un acompte. Créez d'abord la facture d'acompte.",
-        "error"
+        "error",
       );
       return;
     }
 
     try {
-      const nextData = convertQuoteToInvoiceData(data, doc);
-      const invoice = nextData.invoices[nextData.invoices.length - 1];
-      setData(nextData);
+      const nextData = invoiceApplicationService.convertQuote(data, doc);
+      const invoice = nextData.invoice;
+      const {
+        invoice: _invoice,
+        created: _created,
+        ...persistedData
+      } = nextData;
+      setData(persistedData);
       logActivity?.("Conversion devis en facture", doc.number, invoice?.number);
-      showToast(`Facture ${invoice?.number} créée depuis ${doc.number}`, "success");
+      showToast(
+        nextData.created
+          ? `Facture ${invoice?.number} créée depuis ${doc.number}`
+          : `La facture ${invoice?.number} existe déjà.`,
+        nextData.created ? "success" : "info",
+      );
     } catch (error) {
       console.error(error);
       showToast("Impossible de convertir ce devis", "error");
@@ -1403,7 +1631,10 @@ reset();
 
   function handleExportCsv() {
     if (documents.length === 0) {
-      showToast(`Aucun${isQuote ? " devis" : "e facture"} à exporter.`, "error");
+      showToast(
+        `Aucun${isQuote ? " devis" : "e facture"} à exporter.`,
+        "error",
+      );
       return;
     }
 
@@ -1415,7 +1646,7 @@ reset();
     exportInvoicesCsv(
       sortedDocuments,
       data,
-      `factures-${new Date().toISOString().slice(0, 10)}.csv`
+      `factures-${new Date().toISOString().slice(0, 10)}.csv`,
     );
     showToast(`${sortedDocuments.length} facture(s) exportée(s).`, "success");
   }
@@ -1476,12 +1707,12 @@ reset();
           </>
         ) : (
           <>
-            <div className={`documents-stat-card${stats.overdueCount > 0 ? " documents-stat-card--danger" : ""}`}>
+            <div
+              className={`documents-stat-card${stats.overdueCount > 0 ? " documents-stat-card--danger" : ""}`}
+            >
               <span>En retard</span>
               <strong>{stats.overdueCount}</strong>
-              {stats.overdueCount > 0 && (
-                <em>{money(stats.overdueTotal)}</em>
-              )}
+              {stats.overdueCount > 0 && <em>{money(stats.overdueTotal)}</em>}
             </div>
             <div className="documents-stat-card documents-stat-card--accent">
               <span>Non payées</span>
@@ -1493,29 +1724,62 @@ reset();
 
       {!isQuote && documents.some((d) => d.isTemplate) && (
         <div className="card" style={{ marginBottom: 0, padding: "14px 16px" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-            <span style={{ fontSize: 14, fontWeight: 700 }}>⭐ Modèles de facture</span>
-            <span style={{ fontSize: 12, color: "var(--muted)" }}>{documents.filter((d) => d.isTemplate).length} modèle(s)</span>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              marginBottom: 10,
+            }}
+          >
+            <span style={{ fontSize: 14, fontWeight: 700 }}>
+              ⭐ Modèles de facture
+            </span>
+            <span style={{ fontSize: 12, color: "var(--muted)" }}>
+              {documents.filter((d) => d.isTemplate).length} modèle(s)
+            </span>
           </div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {documents.filter((d) => d.isTemplate).map((tpl) => {
-              const tplClient = (data.clients || []).find((c) => c.id === tpl.clientId);
-              return (
-                <div key={tpl.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", borderRadius: 10, border: "1px solid rgba(255,255,255,0.12)", background: "rgba(255,255,255,0.07)", fontSize: 12 }}>
-                  <span style={{ fontWeight: 600 }}>{tpl.number}</span>
-                  {tplClient && <span style={{ color: "var(--muted)" }}>{tplClient.name}</span>}
-                  <span style={{ color: "var(--muted)" }}>{money(tpl.totalTTC)}</span>
-                  <button
-                    type="button"
-                    className="primary"
-                    style={{ padding: "4px 12px", fontSize: 11 }}
-                    onClick={() => duplicate(tpl)}
+            {documents
+              .filter((d) => d.isTemplate)
+              .map((tpl) => {
+                const tplClient = (data.clients || []).find(
+                  (c) => c.id === tpl.clientId,
+                );
+                return (
+                  <div
+                    key={tpl.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      padding: "6px 12px",
+                      borderRadius: 10,
+                      border: "1px solid rgba(255,255,255,0.12)",
+                      background: "rgba(255,255,255,0.07)",
+                      fontSize: 12,
+                    }}
                   >
-                    Créer depuis ce modèle
-                  </button>
-                </div>
-              );
-            })}
+                    <span style={{ fontWeight: 600 }}>{tpl.number}</span>
+                    {tplClient && (
+                      <span style={{ color: "var(--muted)" }}>
+                        {tplClient.name}
+                      </span>
+                    )}
+                    <span style={{ color: "var(--muted)" }}>
+                      {money(tpl.totalTTC)}
+                    </span>
+                    <button
+                      type="button"
+                      className="primary"
+                      style={{ padding: "4px 12px", fontSize: 11 }}
+                      onClick={() => duplicate(tpl)}
+                    >
+                      Créer depuis ce modèle
+                    </button>
+                  </div>
+                );
+              })}
           </div>
         </div>
       )}
@@ -1525,16 +1789,27 @@ reset();
           <strong>Numérotation {currentDocumentYear()} — trous détectés</strong>
           <p className="muted">
             Numéros manquants : {invoiceNumberGaps.slice(0, 8).join(", ")}
-            {invoiceNumberGaps.length > 8 ? ` … (+${invoiceNumberGaps.length - 8})` : ""}
+            {invoiceNumberGaps.length > 8
+              ? ` … (+${invoiceNumberGaps.length - 8})`
+              : ""}
           </p>
           {!editingId && (
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
+            <div
+              style={{
+                display: "flex",
+                gap: 6,
+                flexWrap: "wrap",
+                marginTop: 6,
+              }}
+            >
               {invoiceNumberGaps.slice(0, 4).map((gap) => (
                 <button
                   key={gap}
                   type="button"
                   className="compact"
-                  onClick={() => setForm((f) => ({ ...f, numberOverride: gap }))}
+                  onClick={() =>
+                    setForm((f) => ({ ...f, numberOverride: gap }))
+                  }
                   title={`Utiliser le numéro manquant ${gap}`}
                 >
                   Utiliser {gap}
@@ -1611,23 +1886,64 @@ reset();
         onDuplicate={duplicate}
         onMarkEmailRead={(doc) => {
           const key = isQuote ? "quotes" : "invoices";
-          setData({ ...data, [key]: documents.map((d) => String(d.id) === String(doc.id) ? { ...d, emailReadAt: new Date().toISOString() } : d) });
+          setData({
+            ...data,
+            [key]: documents.map((d) =>
+              String(d.id) === String(doc.id)
+                ? { ...d, emailReadAt: new Date().toISOString() }
+                : d,
+            ),
+          });
           showToast(`${doc.number} marqué comme lu.`, "success");
         }}
-        onToggleTemplate={!isQuote ? (doc) => {
-          const next = !doc.isTemplate;
-          setData({ ...data, invoices: documents.map((d) => String(d.id) === String(doc.id) ? { ...d, isTemplate: next } : d) });
-          showToast(`${doc.number} ${next ? "enregistré comme modèle ⭐" : "retiré des modèles"}.`, "success");
-        } : undefined}
-        onToggleNoReminder={!isQuote ? (doc) => {
-          const next = !doc.noAutoReminder;
-          setData({ ...data, invoices: documents.map((d) => String(d.id) === String(doc.id) ? { ...d, noAutoReminder: next } : d) });
-          showToast(`Relances ${next ? "désactivées" : "réactivées"} pour ${doc.number}.`, "success");
-        } : undefined}
+        onToggleTemplate={
+          !isQuote
+            ? (doc) => {
+                const next = !doc.isTemplate;
+                setData({
+                  ...data,
+                  invoices: documents.map((d) =>
+                    String(d.id) === String(doc.id)
+                      ? { ...d, isTemplate: next }
+                      : d,
+                  ),
+                });
+                showToast(
+                  `${doc.number} ${next ? "enregistré comme modèle ⭐" : "retiré des modèles"}.`,
+                  "success",
+                );
+              }
+            : undefined
+        }
+        onToggleNoReminder={
+          !isQuote
+            ? (doc) => {
+                const next = !doc.noAutoReminder;
+                setData({
+                  ...data,
+                  invoices: documents.map((d) =>
+                    String(d.id) === String(doc.id)
+                      ? { ...d, noAutoReminder: next }
+                      : d,
+                  ),
+                });
+                showToast(
+                  `Relances ${next ? "désactivées" : "réactivées"} pour ${doc.number}.`,
+                  "success",
+                );
+              }
+            : undefined
+        }
         dateFrom={dateFrom}
         dateTo={dateTo}
-        onDateFromChange={(v) => { setDateFrom(v); setCurrentPage(1); }}
-        onDateToChange={(v) => { setDateTo(v); setCurrentPage(1); }}
+        onDateFromChange={(v) => {
+          setDateFrom(v);
+          setCurrentPage(1);
+        }}
+        onDateToChange={(v) => {
+          setDateTo(v);
+          setCurrentPage(1);
+        }}
         depositPresets={DEPOSIT_PRESETS}
       />
 
@@ -1651,7 +1967,7 @@ reset();
             setData({
               ...data,
               quotes: (data.quotes || []).map((entry) =>
-                String(entry.id) === String(prepared.id) ? prepared : entry
+                String(entry.id) === String(prepared.id) ? prepared : entry,
               ),
             });
             if (previewDoc && String(previewDoc.id) === String(prepared.id)) {
