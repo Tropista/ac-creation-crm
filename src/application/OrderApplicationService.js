@@ -14,10 +14,7 @@ export class OrderApplicationService {
       return { created: false, duplicate: true, state: this.repository.read() };
     }
     const state = this.repository.transaction((initialState) =>
-      this.steps.reduce(
-        (currentState, step) => step(currentState, command),
-        initialState,
-      ),
+      this.apply(initialState, command),
     );
     this.processedKeys.add(key);
     await this.logger?.({
@@ -26,5 +23,12 @@ export class OrderApplicationService {
       details: "completed",
     });
     return { created: true, duplicate: false, state };
+  }
+
+  apply(state, command) {
+    return this.steps.reduce(
+      (currentState, step) => step(currentState, command),
+      state,
+    );
   }
 }
