@@ -26,6 +26,7 @@ function request(overrides = {}) {
       paymentStatus: "paid",
       reviewStatus: SITE_REQUEST_STATUS.NEW,
       snapshot: { version: 1 },
+      resourceValidation: { complete: true, errors: [] },
       history: [],
       ...overrides,
     },

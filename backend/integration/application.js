@@ -71,6 +71,10 @@ function orderToQuote(payload, customerId) {
       resources: payload.resources || [],
       production: payload.production || [],
       productionJobs: payload.productionJobs || [],
+      resourceValidation: payload.resourceValidation || {
+        complete: false,
+        errors: ["Validation binaire non recue"],
+      },
       history: [
         {
           id: `${payload.id}:received`,
@@ -233,6 +237,9 @@ export async function processIntegrationEvent(
   logger = null,
 ) {
   await repository.initialize();
+  event = repository.ingestEventResources
+    ? await repository.ingestEventResources(event)
+    : event;
   const previousState = repository.read();
   const service = createIntegrationApplication(repository, logger);
   const result = await service.handle(event);

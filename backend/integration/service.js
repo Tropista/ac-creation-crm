@@ -37,7 +37,7 @@ export class CrmIntegrationService {
 
   async event(event) {
     const existing = await this.repository.findEvent(event.id);
-    if (existing) {
+    if (existing && existing.status !== "failed") {
       return {
         accepted: true,
         duplicate: true,
@@ -45,7 +45,10 @@ export class CrmIntegrationService {
         ...(existing.result || {}),
       };
     }
-    if (!(await this.repository.startEvent(event))) {
+    const started = existing
+      ? await this.repository.restartEvent(event)
+      : await this.repository.startEvent(event);
+    if (!started) {
       const stored = await this.repository.findEvent(event.id);
       return {
         accepted: true,

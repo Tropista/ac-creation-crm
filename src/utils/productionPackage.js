@@ -1,6 +1,7 @@
 import { strToU8, zipSync } from "fflate";
 import { jsPDF } from "jspdf";
 import QRCode from "qrcode";
+import { getSupabase } from "../supabase.js";
 
 function safeName(value, fallback) {
   const name = String(value || fallback).replace(/[<>:"/\\|?*]+/g, "_");
@@ -27,11 +28,89 @@ function resourceName(resource, fallback) {
 }
 
 async function fetchBytes(resource) {
-  const url = resourceUrl(resource);
+  let url = resourceUrl(resource);
+  if (!url && resource?.bucket && resource?.storagePath) {
+    const client = await getSupabase();
+    const signed = await client.storage
+      .from(resource.bucket)
+      .createSignedUrl(resource.storagePath, 300);
+    if (signed.error || !signed.data?.signedUrl)
+      throw new Error(`PRODUCTION_RESOURCE_SIGNING_FAILED:${resource.id}`);
+    url = signed.data.signedUrl;
+  }
   if (!url) return null;
   const response = await fetch(url);
   if (!response.ok) throw new Error(`PRODUCTION_RESOURCE_UNAVAILABLE:${url}`);
   return new Uint8Array(await response.arrayBuffer());
+}
+
+function bytesEqual(bytes, signature) {
+  return signature.every((value, index) => bytes[index] === value);
+}
+
+export function pngDimensions(bytes) {
+  if (
+    bytes.length < 24 ||
+    !bytesEqual(bytes, [137, 80, 78, 71, 13, 10, 26, 10])
+  )
+    return null;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  return { width: view.getUint32(16), height: view.getUint32(20) };
+}
+
+export async function validateBinaryResource(resource, bytes, options = {}) {
+  if (!bytes?.length)
+    throw new Error(`PRODUCTION_RESOURCE_EMPTY:${resource?.id || "unknown"}`);
+  const descriptor = String(
+    resource?.mimeType || resource?.format || resource?.name || "",
+  ).toLowerCase();
+  if (/demo\//i.test(JSON.stringify(resource)))
+    throw new Error(`PRODUCTION_RESOURCE_PLACEHOLDER:${resource.id}`);
+  let dimensions = null;
+  if (/png/.test(descriptor)) {
+    dimensions = pngDimensions(bytes);
+    if (!dimensions) throw new Error(`PRODUCTION_PNG_INVALID:${resource.id}`);
+  } else if (/jpe?g/.test(descriptor)) {
+    if (!bytesEqual(bytes, [255, 216, 255]))
+      throw new Error(`PRODUCTION_JPEG_INVALID:${resource.id}`);
+  } else if (/webp/.test(descriptor)) {
+    if (
+      new TextDecoder().decode(bytes.slice(0, 4)) !== "RIFF" ||
+      new TextDecoder().decode(bytes.slice(8, 12)) !== "WEBP"
+    )
+      throw new Error(`PRODUCTION_WEBP_INVALID:${resource.id}`);
+  } else if (/svg/.test(descriptor)) {
+    const content = new TextDecoder().decode(bytes);
+    if (!/<svg(?:\s|>)[\s\S]*<\/svg>\s*$/i.test(content.trim()))
+      throw new Error(`PRODUCTION_SVG_INVALID:${resource.id}`);
+  } else if (/woff2/.test(descriptor)) {
+    if (new TextDecoder().decode(bytes.slice(0, 4)) !== "wOF2")
+      throw new Error(`PRODUCTION_FONT_INVALID:${resource.id}`);
+  } else if (/woff/.test(descriptor)) {
+    if (new TextDecoder().decode(bytes.slice(0, 4)) !== "wOFF")
+      throw new Error(`PRODUCTION_FONT_INVALID:${resource.id}`);
+  } else if (/otf/.test(descriptor)) {
+    if (new TextDecoder().decode(bytes.slice(0, 4)) !== "OTTO")
+      throw new Error(`PRODUCTION_FONT_INVALID:${resource.id}`);
+  } else if (/ttf|font/.test(descriptor)) {
+    if (!bytesEqual(bytes, [0, 1, 0, 0]))
+      throw new Error(`PRODUCTION_FONT_INVALID:${resource.id}`);
+  }
+  const checksum = await sha256(bytes);
+  if (resource?.checksum && checksum !== resource.checksum)
+    throw new Error(`PRODUCTION_RESOURCE_CHECKSUM_MISMATCH:${resource.id}`);
+  if (options.expectedDimensions && dimensions) {
+    const { width, height } = options.expectedDimensions;
+    if (dimensions.width !== width || dimensions.height !== height)
+      throw new Error(`PRODUCTION_PRINT_DIMENSIONS_INVALID:${resource.id}`);
+  }
+  if (
+    options.minimumLongestSide &&
+    dimensions &&
+    Math.max(dimensions.width, dimensions.height) < options.minimumLongestSide
+  )
+    throw new Error(`PRODUCTION_PREVIEW_TOO_SMALL:${resource.id}`);
+  return { checksum, size: bytes.length, dimensions };
 }
 
 async function sha256(bytes) {
@@ -47,31 +126,50 @@ export function inspectProductionArtifacts(quote) {
   const resources = asList(ecommerce.resources);
   const images = assets.filter((asset) => {
     const descriptor = String(
-      asset?.type || asset?.mimeType || asset?.storage_path || "",
+      asset?.type ||
+        asset?.mimeType ||
+        asset?.role ||
+        asset?.kind ||
+        asset?.name ||
+        asset?.storage_path ||
+        "",
     );
     return !/svg/i.test(descriptor) && /image|png|jpe?g|webp/i.test(descriptor);
   });
   const svgs = assets.filter((asset) =>
     /svg/i.test(
-      String(asset?.type || asset?.mimeType || asset?.storage_path || ""),
-    ),
-  );
-  const printPngs = resources.filter((resource) =>
-    /png/i.test(
       String(
-        resource?.type || resource?.mimeType || resource?.storage_path || "",
+        asset?.type ||
+          asset?.mimeType ||
+          asset?.role ||
+          asset?.kind ||
+          asset?.name ||
+          asset?.storage_path ||
+          "",
       ),
     ),
   );
+  const printPngs = resources.filter(
+    (resource) =>
+      /png/i.test(
+        String(resource?.format || resource?.mimeType || resource?.name || ""),
+      ) &&
+      /production|impression/i.test(
+        String(resource?.role || resource?.kind || resource?.name || ""),
+      ),
+  );
   const preview =
-    ecommerce.preview ||
     resources.find((resource) =>
       /preview/i.test(
         String(
-          resource?.type || resource?.name || resource?.storage_path || "",
+          resource?.role ||
+            resource?.kind ||
+            resource?.name ||
+            resource?.storagePath ||
+            "",
         ),
       ),
-    );
+    ) || ecommerce.preview;
   return {
     images,
     svgs,
@@ -83,6 +181,7 @@ export function inspectProductionArtifacts(quote) {
       ecommerce.project ||
       ecommerce.composition ||
       ecommerce.snapshot?.project ||
+      quote?.lines?.[0]?.snapshot ||
       null,
     resumeUrl: ecommerce.resumeUrl || ecommerce.configuratorUrl || "",
     production: asList(ecommerce.production),
@@ -91,9 +190,11 @@ export function inspectProductionArtifacts(quote) {
 
 export function buildProductionManifest(quote, files = []) {
   const artifacts = inspectProductionArtifacts(quote);
+  const snapshot = quote?.lines?.[0]?.snapshot || {};
   const zone =
     quote?.lines?.flatMap((line) => line.snapshot?.printZones || [])[0] ||
     quote?.lines?.[0]?.snapshot?.production?.dimensions ||
+    snapshot.production?.dimensions ||
     null;
   return {
     schemaVersion: "1.0.0",
@@ -124,6 +225,26 @@ export function buildProductionManifest(quote, files = []) {
       project: Boolean(artifacts.project),
       preview: Boolean(artifacts.preview),
     },
+    productionFile: files.find((file) => file.path.startsWith("Impression_")),
+    layers: (snapshot.layers || []).map((layer, index) => ({
+      id: layer.id,
+      type: layer.type,
+      name: layer.name || `${layer.type || "calque"} ${index + 1}`,
+      xMm: layer.xMm ?? layer.x,
+      yMm: layer.yMm ?? layer.y,
+      widthMm: layer.widthMm ?? layer.width,
+      heightMm: layer.heightMm ?? layer.height,
+      rotationDeg: layer.rotationDeg ?? layer.rotation ?? 0,
+      opacity: layer.opacity ?? 1,
+      order: layer.order ?? index,
+      visible: !layer.hidden,
+      locked: Boolean(layer.locked),
+      text: layer.type === "text" ? layer.text : undefined,
+      fontFamily: layer.type === "text" ? layer.fontFamily : undefined,
+      fontSize: layer.type === "text" ? layer.fontSize : undefined,
+      color: layer.color,
+      assetId: layer.assetId,
+    })),
     files,
   };
 }
@@ -183,6 +304,45 @@ export async function buildProductionPdf(quote, client, previewBytes = null) {
     pdf.text(String(line.technique || ""), 196, y, { align: "right" });
     y += 7;
   }
+  const snapshot = quote.lines?.[0]?.snapshot || {};
+  const dimensions = snapshot.production?.dimensions || {
+    width: 210,
+    height: 90,
+  };
+  const dpi = Number(snapshot.production?.resolutionDpi || 300);
+  const widthPx = Math.round((Number(dimensions.width) / 25.4) * dpi);
+  const heightPx = Math.round((Number(dimensions.height) / 25.4) * dpi);
+  y += 4;
+  pdf.setFont("helvetica", "bold");
+  pdf.text("PARAMETRES D'IMPRESSION", 14, y);
+  y += 7;
+  pdf.setFont("helvetica", "normal");
+  pdf.text(
+    `${dimensions.width} x ${dimensions.height} mm | ${widthPx} x ${heightPx} px | ${dpi} DPI | sRGB`,
+    14,
+    y,
+  );
+  y += 7;
+  pdf.text("Fichier : Impression_1_1.png", 14, y);
+  y += 9;
+  pdf.setFont("helvetica", "bold");
+  pdf.text("CALQUES", 14, y);
+  y += 6;
+  pdf.setFont("helvetica", "normal");
+  for (const [index, layer] of (snapshot.layers || []).entries()) {
+    const label =
+      layer.type === "text"
+        ? `${layer.text || "Texte vide"} | ${layer.fontFamily || "Police inconnue"}`
+        : layer.name || layer.assetId || layer.type;
+    pdf.text(
+      `${index + 1}. ${label} | X ${layer.xMm ?? layer.x ?? "-"} mm | Y ${layer.yMm ?? layer.y ?? "-"} mm | ${layer.rotationDeg ?? layer.rotation ?? 0} deg`,
+      14,
+      y,
+      { maxWidth: 180 },
+    );
+    y += 6;
+    if (y > 225) break;
+  }
   if (quote.ecommerce?.resumeUrl) {
     const qr = await QRCode.toDataURL(quote.ecommerce.resumeUrl, {
       width: 180,
@@ -222,10 +382,18 @@ export async function buildProductionPackage({ quote, client }) {
   const artifacts = inspectProductionArtifacts(quote);
   const files = {};
   const records = [];
-  const addFile = async (path, bytes) => {
-    if (!bytes) return;
-    files[path] = bytes;
-    records.push({ path, size: bytes.length, checksum: await sha256(bytes) });
+  const root = `Commande_${safeName(quote.number, quote.id || "commande")}`;
+  for (const folder of ["Images", "SVG", "Fonts"])
+    files[`${root}/${folder}/`] = new Uint8Array();
+  const addFile = async (path, bytes, metadata = {}) => {
+    if (!bytes) throw new Error(`PRODUCTION_REQUIRED_FILE_MISSING:${path}`);
+    files[`${root}/${path}`] = bytes;
+    records.push({
+      path,
+      size: bytes.length,
+      checksum: await sha256(bytes),
+      ...metadata,
+    });
   };
 
   const snapshotBytes = artifacts.snapshot
@@ -238,9 +406,36 @@ export async function buildProductionPackage({ quote, client }) {
   await addFile("Projet.acproject", projectBytes);
 
   const previewBytes = await fetchBytes(artifacts.preview);
-  await addFile("Preview_HD.png", previewBytes);
+  const previewValidation = await validateBinaryResource(
+    artifacts.preview,
+    previewBytes,
+    { minimumLongestSide: 1200 },
+  );
+  await addFile("Preview_HD.png", previewBytes, previewValidation);
+  if (artifacts.printPngs.length !== 1)
+    throw new Error("PRODUCTION_PRINT_PNG_REQUIRED");
+  const profile = quote.lines?.[0]?.snapshot?.production;
+  const widthMm = Number(profile?.dimensions?.width || 210);
+  const heightMm = Number(profile?.dimensions?.height || 90);
+  const dpi = Number(profile?.resolutionDpi || 300);
+  const expectedDimensions = {
+    width: Math.round((widthMm / 25.4) * dpi),
+    height: Math.round((heightMm / 25.4) * dpi),
+  };
   for (const [index, resource] of artifacts.printPngs.entries()) {
-    await addFile(`Impression_${index + 1}_1.png`, await fetchBytes(resource));
+    const bytes = await fetchBytes(resource);
+    const validation = await validateBinaryResource(resource, bytes, {
+      expectedDimensions,
+    });
+    await addFile(`Impression_${index + 1}_1.png`, bytes, {
+      ...validation,
+      widthMm,
+      heightMm,
+      dpi,
+      widthPx: expectedDimensions.width,
+      heightPx: expectedDimensions.height,
+      colorSpace: "sRGB",
+    });
   }
   for (const [folder, resources] of [
     ["Images", artifacts.images],
@@ -248,9 +443,12 @@ export async function buildProductionPackage({ quote, client }) {
     ["Fonts", artifacts.fonts],
   ]) {
     for (const [index, resource] of resources.entries()) {
+      const bytes = await fetchBytes(resource);
+      const validation = await validateBinaryResource(resource, bytes);
       await addFile(
         `${folder}/${resourceName(resource, `${folder.toLowerCase()}-${index + 1}`)}`,
-        await fetchBytes(resource),
+        bytes,
+        validation,
       );
     }
   }
@@ -264,9 +462,7 @@ export async function buildProductionPackage({ quote, client }) {
     bytes: zipSync(files, { level: 6 }),
     filename: `Commande_${safeName(quote.number, quote.id || "commande")}.zip`,
     manifest,
-    complete:
-      Boolean(artifacts.snapshot && artifacts.project && artifacts.preview) &&
-      artifacts.printPngs.length > 0,
+    complete: true,
   };
 }
 

@@ -9,6 +9,7 @@ import {
 import { canManageWorkshop } from "../utils/permissions.js";
 import { showToast } from "../utils/toast.js";
 import {
+  buildProductionManifest,
   buildProductionPackage,
   downloadBytes,
   downloadProductionPdf,
@@ -275,6 +276,14 @@ export default function SiteRequests({
     }
   }
 
+  function downloadJson(value, filename) {
+    downloadBytes(
+      new TextEncoder().encode(JSON.stringify(value, null, 2)),
+      filename,
+      "application/json",
+    );
+  }
+
   return (
     <section className="site-requests" data-testid="site-requests-page">
       <header className="page-header">
@@ -529,14 +538,18 @@ export default function SiteRequests({
                     <section className="erp-card">
                       <h4>Fichiers de production</h4>
                       <div className="site-request-resources">
-                        {inspectProductionArtifacts(selected).printPngs.map(
+                        {(selected.ecommerce.resources || []).map(
                           (resource, index) => (
-                            <article key={`print-${index}`}>
+                            <article key={resource.id || index}>
                               <div>
-                                <strong>PNG impression {index + 1}</strong>
+                                <strong>
+                                  {resource.name || "Fichier production"}
+                                </strong>
                                 <small>
-                                  Fichier original fourni par le site ·{" "}
-                                  {resourceSize(resource)}
+                                  {resource.mimeType ||
+                                    resource.format ||
+                                    "Format inconnu"}{" "}
+                                  · {resourceSize(resource)}
                                 </small>
                               </div>
                               <button
@@ -545,8 +558,8 @@ export default function SiteRequests({
                                 onClick={() =>
                                   downloadResource(
                                     resource,
-                                    `Impression_${index + 1}_1.png`,
-                                    "image/png",
+                                    resource.name || "ressource-production",
+                                    resource.mimeType,
                                   )
                                 }
                               >
@@ -563,7 +576,18 @@ export default function SiteRequests({
                               inclus dans le ZIP
                             </small>
                           </div>
-                          <span>JSON</span>
+                          <button
+                            type="button"
+                            className="ghost"
+                            onClick={() =>
+                              downloadJson(
+                                buildProductionManifest(selected),
+                                "Manifest.json",
+                              )
+                            }
+                          >
+                            <Download size={15} /> Telecharger
+                          </button>
                         </article>
                       </div>
                     </section>
@@ -855,9 +879,11 @@ export default function SiteRequests({
                                 "Snapshot present",
                                 Boolean(selected.ecommerce.snapshot),
                               ],
-                              ["Images disponibles", true],
-                              ["Polices disponibles", true],
-                              ["SVG disponibles", true],
+                              [
+                                "Ressources binaires verifiees",
+                                selected.ecommerce.resourceValidation
+                                  ?.complete === true,
+                              ],
                               [
                                 "Package de production",
                                 (selected.ecommerce.production || []).length >

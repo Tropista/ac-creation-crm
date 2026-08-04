@@ -63,6 +63,12 @@ export function evaluateSiteRequestCompleteness(quote) {
     ["items", (quote?.lines || []).length > 0, "Aucun article"],
     ["snapshot", Boolean(ecommerce.snapshot), "Snapshot absent"],
     [
+      "binary-assets",
+      ecommerce.resourceValidation?.complete === true,
+      ecommerce.resourceValidation?.errors?.join(", ") ||
+        "Ressources binaires non verifiees",
+    ],
+    [
       "production",
       (ecommerce.production || []).length > 0 ||
         (quote?.lines || []).some((line) => line.snapshot?.productionProfile),
