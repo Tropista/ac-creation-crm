@@ -64,7 +64,7 @@ export class CrmIntegrationService {
         ...externalIds,
         externalIds,
         targetId: externalIds.orderId || externalIds.customerId,
-        status: "completed",
+        status: externalIds.reviewStatus || "completed",
         version: this.versionInfo.version,
       };
       await this.repository.completeEvent(event.id, response);

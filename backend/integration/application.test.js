@@ -13,7 +13,7 @@ const initialState = () => ({
 });
 
 describe("CRM ecommerce integration application", () => {
-  it("creates the complete CRM workflow atomically", async () => {
+  it("creates a paid site request without sending it to workshop", async () => {
     const repository = createCrmStateRepository(initialState());
     const service = createIntegrationApplication(repository);
     const result = await service.handle({
@@ -57,12 +57,16 @@ describe("CRM ecommerce integration application", () => {
     expect(result.state.quotes).toHaveLength(1);
     expect(result.state.invoices).toHaveLength(1);
     expect(result.state.payments).toHaveLength(1);
-    expect(result.state.quotes[0].status).toBe("En production");
+    expect(result.state.quotes[0].status).toBe("Accepté");
+    expect(result.state.quotes[0].ecommerce).toMatchObject({
+      source: "ecommerce",
+      reviewStatus: "new",
+      paymentStatus: "paid",
+    });
     expect(result.state.integrationResult).toMatchObject({
       customerId: "customer-1",
       orderId: "order-1",
-      workshopId: "order-1",
-      productionId: "order-1",
+      reviewStatus: "received_for_review",
     });
   });
 });

@@ -5,6 +5,7 @@ import { PaymentApplicationService } from "../../src/application/PaymentApplicat
 import { ProductionApplicationService } from "../../src/application/ProductionApplicationService.js";
 import { CRMEventApplicationService } from "../../src/application/CRMEventApplicationService.js";
 import { WorkshopApplicationService } from "../../src/application/WorkshopApplicationService.js";
+import { SITE_REQUEST_STATUS } from "../../src/application/SiteRequestApplicationService.js";
 
 function findInvoice(state, payload) {
   return (state.invoices || []).find(
@@ -50,13 +51,39 @@ function orderToQuote(payload, customerId) {
     billingAddress: payload.billingAddress,
     shippingAddress: payload.shippingAddress,
     ecommerce: {
+      source: "ecommerce",
+      externalOrderId: payload.id,
+      siteOrderNumber: payload.number,
+      receivedAt: payload.createdAt || new Date().toISOString(),
+      paymentStatus: payload.payment?.status || "pending",
+      reviewStatus: SITE_REQUEST_STATUS.NEW,
+      openedAt: null,
+      openedBy: null,
+      approvedAt: null,
+      approvedBy: null,
+      sentToWorkshopAt: null,
+      sentToWorkshopBy: null,
       sourceOrderId: payload.id,
       snapshot: payload.snapshot,
+      preview: payload.preview || payload.snapshot?.preview || null,
       assets: payload.assets || [],
       fonts: payload.fonts || [],
       resources: payload.resources || [],
       production: payload.production || [],
       productionJobs: payload.productionJobs || [],
+      history: [
+        {
+          id: `${payload.id}:received`,
+          at: payload.createdAt || new Date().toISOString(),
+          actor: "site-integration",
+          action: "received",
+          comment: "Commande e-commerce recue pour controle",
+          previousStatus: null,
+          nextStatus: SITE_REQUEST_STATUS.NEW,
+          correlationId: payload.id,
+          externalOrderId: payload.id,
+        },
+      ],
     },
   };
 }
@@ -140,21 +167,13 @@ export function createIntegrationApplication(repository, logger = null) {
           idempotencyKey: `site-payment:${payload.payment.id || payload.payment.providerReference || payload.id}`,
         });
       }
-      const activeQuote = findQuote(nextState, { quoteId: quote.id });
-      const productionResult =
-        activeQuote?.status === "Accepté"
-          ? production.advance(nextState, activeQuote, {
-              user: "site-integration",
-            })
-          : { ...nextState, advanced: false, quote: activeQuote };
       return {
-        ...productionResult,
+        ...nextState,
         integrationResult: {
           customerId,
           orderId: quote.id,
           invoiceId: invoice?.id,
-          workshopId: quote.id,
-          productionId: quote.id,
+          reviewStatus: "received_for_review",
         },
       };
     },

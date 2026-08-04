@@ -4,7 +4,7 @@ import {
   useRef,
   useState,
   lazy,
-  Suspense
+  Suspense,
 } from "react";
 import {
   Routes,
@@ -18,16 +18,15 @@ import {
   hasSupabaseAuthSession,
   isSupabaseConfigured,
 } from "./supabase";
-import {
-  PUBLIC_QUOTE_PATH,
-  pageToPath,
-  pathToPage,
-} from "./utils/routes";
+import { PUBLIC_QUOTE_PATH, pageToPath, pathToPage } from "./utils/routes";
 import {
   buildQuoteOpenPath,
   parseQuoteOpenIdFromLocation,
 } from "./utils/quoteOpenUrl";
-import { INVOICES_LIST_NAV_STATE, QUOTES_LIST_NAV_STATE } from "./utils/quoteDraft";
+import {
+  INVOICES_LIST_NAV_STATE,
+  QUOTES_LIST_NAV_STATE,
+} from "./utils/quoteDraft";
 import {
   loadLocalPublicLeads,
   mergePublicLeadsIntoData,
@@ -43,37 +42,31 @@ import AutomationEmailRunner from "./components/AutomationEmailRunner";
 import AuthPage from "./components/auth/AuthPage";
 import AccessDenied from "./components/auth/AccessDenied";
 
-const Clients         = lazy(() => import("./components/Clients"));
-const Products        = lazy(() => import("./components/Products"));
-const Documents       = lazy(() => import("./components/Documents"));
-const Dashboard       = lazy(() => import("./components/Dashboard"));
-const TodayView       = lazy(() => import("./components/TodayView"));
-const Atelier         = lazy(() => import("./components/Atelier"));
-const Settings        = lazy(() => import("./components/Settings"));
-const Categories      = lazy(() => import("./components/Categories"));
-const Suppliers       = lazy(() => import("./components/Suppliers"));
-const Expenses        = lazy(() => import("./components/Expenses"));
-const VatWorkbook     = lazy(() => import("./components/VatWorkbook"));
-const UsersAdmin      = lazy(() => import("./components/UsersAdmin"));
-const ActivityLogs    = lazy(() => import("./components/ActivityLogs"));
-const Backups         = lazy(() => import("./components/Backups"));
+const Clients = lazy(() => import("./components/Clients"));
+const Products = lazy(() => import("./components/Products"));
+const Documents = lazy(() => import("./components/Documents"));
+const Dashboard = lazy(() => import("./components/Dashboard"));
+const TodayView = lazy(() => import("./components/TodayView"));
+const Atelier = lazy(() => import("./components/Atelier"));
+const Settings = lazy(() => import("./components/Settings"));
+const Categories = lazy(() => import("./components/Categories"));
+const Suppliers = lazy(() => import("./components/Suppliers"));
+const Expenses = lazy(() => import("./components/Expenses"));
+const VatWorkbook = lazy(() => import("./components/VatWorkbook"));
+const UsersAdmin = lazy(() => import("./components/UsersAdmin"));
+const ActivityLogs = lazy(() => import("./components/ActivityLogs"));
+const Backups = lazy(() => import("./components/Backups"));
 const PublicQuoteView = lazy(() => import("./components/PublicQuoteView"));
-const Leads           = lazy(() => import("./components/Leads"));
-const CreditNotes     = lazy(() => import("./components/CreditNotes"));
-const AfterSales      = lazy(() => import("./components/AfterSales"));
+const SiteRequests = lazy(() => import("./components/SiteRequests"));
+const CreditNotes = lazy(() => import("./components/CreditNotes"));
+const AfterSales = lazy(() => import("./components/AfterSales"));
 const AutomationCenter = lazy(() => import("./components/AutomationCenter"));
 
-import {
-  createCloudBackup
-} from "./services/backupService";
+import { createCloudBackup } from "./services/backupService";
 
 import { getPermissions } from "./utils/permissions";
 
-import {
-  loadData,
-  saveData,
-  flushSaveData,
-} from "./services/dataService";
+import { loadData, saveData, flushSaveData } from "./services/dataService";
 
 import { APP_LOGO_URL } from "./utils/assets";
 
@@ -87,9 +80,7 @@ import {
   SESSION_EXPIRED_MESSAGE,
 } from "./services/authService";
 
-import {
-  logActivity
-} from "./services/logService";
+import { logActivity } from "./services/logService";
 import { useCloudSync } from "./hooks/useCloudSync";
 import { useSyncedPathname } from "./hooks/useSyncedPathname";
 import {
@@ -111,40 +102,24 @@ import "./styles/credit-notes.css";
 import "./styles/after-sales.css";
 import "./styles/automations.css";
 import "./styles/selection-states.css";
-const Banque = lazy(() =>
-  import("./components/Banque")
-);
+const Banque = lazy(() => import("./components/Banque"));
 
-const ExcelImport = lazy(() =>
-  import("./components/ExcelImport")
-);
+const ExcelImport = lazy(() => import("./components/ExcelImport"));
 
-const BarcodeLabels = lazy(() =>
-  import("./components/BarcodeLabels")
-);
+const BarcodeLabels = lazy(() => import("./components/BarcodeLabels"));
 
-const ProductScan = lazy(() =>
-  import("./components/ProductScan")
-);
+const ProductScan = lazy(() => import("./components/ProductScan"));
 
-const Print3DCalculator = lazy(() =>
-  import("./components/Print3DCalculator")
-);
+const Print3DCalculator = lazy(() => import("./components/Print3DCalculator"));
 
-const LaserCalculator = lazy(() =>
-  import("./components/LaserCalculator")
-);
+const LaserCalculator = lazy(() => import("./components/LaserCalculator"));
 
-const DtfCalculator = lazy(() =>
-  import("./components/DtfCalculator")
-);
+const DtfCalculator = lazy(() => import("./components/DtfCalculator"));
 
-const UvDtfCalculator = lazy(() =>
-  import("./components/UvDtfCalculator")
-);
+const UvDtfCalculator = lazy(() => import("./components/UvDtfCalculator"));
 
-const BroderieCalculator = lazy(() =>
-  import("./components/BroderieCalculator")
+const BroderieCalculator = lazy(
+  () => import("./components/BroderieCalculator"),
 );
 
 function getInitialAuthState() {
@@ -197,9 +172,7 @@ function CrmApp() {
   const pathname = useSyncedPathname();
   const page = pathToPage(pathname) ?? "dashboard";
   const routesLocation =
-    pathname !== location.pathname
-      ? { ...location, pathname }
-      : location;
+    pathname !== location.pathname ? { ...location, pathname } : location;
 
   useLayoutEffect(() => {
     if (typeof window === "undefined") return;
@@ -232,12 +205,22 @@ function CrmApp() {
   const [pendingOpenDoc, setPendingOpenDoc] = useState(null);
 
   useGlobalShortcuts([
-    { key: "k", ctrl: true,  handler: () => setGlobalSearchOpen(true) },
-    { key: "f", ctrl: false, handler: () => { if (navigate) navigate(pageToPath("invoices")); } },
+    { key: "k", ctrl: true, handler: () => setGlobalSearchOpen(true) },
     {
-      key: "n", ctrl: false, handler: () => {
+      key: "f",
+      ctrl: false,
+      handler: () => {
+        if (navigate) navigate(pageToPath("invoices"));
+      },
+    },
+    {
+      key: "n",
+      ctrl: false,
+      handler: () => {
         // Si on est sur une page qui gère son propre "nouveau", on dispatch un événement
-        const handled = window.dispatchEvent(new CustomEvent("crm:new-item", { cancelable: true }));
+        const handled = window.dispatchEvent(
+          new CustomEvent("crm:new-item", { cancelable: true }),
+        );
         // Si personne n'a annulé l'événement → fallback vers nouveau devis
         if (handled) navigate(pageToPath("quotes"));
       },
@@ -312,9 +295,15 @@ function CrmApp() {
     }
 
     mergePendingPublicLeads();
-    window.addEventListener(PUBLIC_LEADS_UPDATED_EVENT, mergePendingPublicLeads);
+    window.addEventListener(
+      PUBLIC_LEADS_UPDATED_EVENT,
+      mergePendingPublicLeads,
+    );
     return () => {
-      window.removeEventListener(PUBLIC_LEADS_UPDATED_EVENT, mergePendingPublicLeads);
+      window.removeEventListener(
+        PUBLIC_LEADS_UPDATED_EVENT,
+        mergePendingPublicLeads,
+      );
     };
   }, [updateData]);
 
@@ -500,19 +489,40 @@ function CrmApp() {
   }
 
   if (!isAllowedUser(currentUser.email, data.users)) {
-    return (
-      <AccessDenied
-        user={currentUser}
-        logout={logout}
-      />
-    );
+    return <AccessDenied user={currentUser} logout={logout} />;
   }
 
   return (
     <div className="app" style={{ position: "relative", overflow: "hidden" }}>
       {/* Blobs décoratifs glassmorphism */}
-      <div style={{ position: "fixed", top: "-50px", right: "-50px", width: 300, height: 300, borderRadius: "50%", background: "radial-gradient(circle, rgba(192,132,252,0.2) 0%, transparent 70%)", pointerEvents: "none", zIndex: 0 }} />
-      <div style={{ position: "fixed", bottom: "-30px", left: "-30px", width: 200, height: 200, borderRadius: "50%", background: "radial-gradient(circle, rgba(56,189,248,0.15) 0%, transparent 70%)", pointerEvents: "none", zIndex: 0 }} />
+      <div
+        style={{
+          position: "fixed",
+          top: "-50px",
+          right: "-50px",
+          width: 300,
+          height: 300,
+          borderRadius: "50%",
+          background:
+            "radial-gradient(circle, rgba(192,132,252,0.2) 0%, transparent 70%)",
+          pointerEvents: "none",
+          zIndex: 0,
+        }}
+      />
+      <div
+        style={{
+          position: "fixed",
+          bottom: "-30px",
+          left: "-30px",
+          width: 200,
+          height: 200,
+          borderRadius: "50%",
+          background:
+            "radial-gradient(circle, rgba(56,189,248,0.15) 0%, transparent 70%)",
+          pointerEvents: "none",
+          zIndex: 0,
+        }}
+      />
       <AutomationEmailRunner
         data={data}
         setData={updateData}
@@ -535,10 +545,7 @@ function CrmApp() {
       <main className="content">
         <Suspense fallback={<ContentLoading />}>
           {!canAccessPage(currentRole, page) && (
-            <AccessDenied
-              user={currentUser}
-              logout={logout}
-            />
+            <AccessDenied user={currentUser} logout={logout} />
           )}
 
           <Routes location={routesLocation}>
@@ -680,7 +687,9 @@ function CrmApp() {
                     setData={updateData}
                     currentRole={currentRole}
                     logActivity={handleLogActivity}
-                    pendingOpenDoc={pendingOpenDoc?.type === "quote" ? pendingOpenDoc : null}
+                    pendingOpenDoc={
+                      pendingOpenDoc?.type === "quote" ? pendingOpenDoc : null
+                    }
                     onClearPendingOpenDoc={() => setPendingOpenDoc(null)}
                   />
                 ) : null
@@ -690,10 +699,11 @@ function CrmApp() {
               path={pageToPath("leads")}
               element={
                 canAccessPage(currentRole, "leads") ? (
-                  <Leads
+                  <SiteRequests
                     data={data}
                     setData={updateData}
                     currentRole={currentRole}
+                    currentUser={currentUser}
                     logActivity={handleLogActivity}
                   />
                 ) : null
@@ -724,7 +734,9 @@ function CrmApp() {
                     setData={updateData}
                     currentRole={currentRole}
                     logActivity={handleLogActivity}
-                    pendingOpenDoc={pendingOpenDoc?.type === "invoice" ? pendingOpenDoc : null}
+                    pendingOpenDoc={
+                      pendingOpenDoc?.type === "invoice" ? pendingOpenDoc : null
+                    }
                     onClearPendingOpenDoc={() => setPendingOpenDoc(null)}
                   />
                 ) : null
@@ -831,7 +843,11 @@ function CrmApp() {
               path={pageToPath("logs")}
               element={
                 canAccessPage(currentRole, "logs") ? (
-                  <ActivityLogs data={data} setData={updateData} currentRole={currentRole} />
+                  <ActivityLogs
+                    data={data}
+                    setData={updateData}
+                    currentRole={currentRole}
+                  />
                 ) : null
               }
             />
@@ -919,7 +935,10 @@ function CrmApp() {
         onClose={() => setGlobalSearchOpen(false)}
         data={data}
         currentRole={currentRole}
-        onOpenDoc={(doc) => { setPendingOpenDoc(doc); setGlobalSearchOpen(false); }}
+        onOpenDoc={(doc) => {
+          setPendingOpenDoc(doc);
+          setGlobalSearchOpen(false);
+        }}
       />
     </div>
   );

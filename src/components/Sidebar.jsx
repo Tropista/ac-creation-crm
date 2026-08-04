@@ -47,9 +47,13 @@ import {
   requestQuotesListView,
 } from "../utils/quoteDraft";
 import { formatLastSyncRelative } from "../services/syncMerge";
-import { cleanupNavigationBlockers, dispatchRouteChange } from "../utils/uiCleanup";
+import {
+  cleanupNavigationBlockers,
+  dispatchRouteChange,
+} from "../utils/uiCleanup";
 import { getSidebarAutomationBadgeCount } from "../utils/automations";
 import { useSyncedPathname } from "../hooks/useSyncedPathname";
+import { countUnreadSiteRequests } from "../application/SiteRequestApplicationService.js";
 
 const SECTIONS_STORAGE_KEY = "crm_sidebar_sections_v1";
 
@@ -104,7 +108,11 @@ const menuGroups = [
       { page: "creditnotes", label: "Avoirs", type: "page" },
       { page: "banque", label: "Banque", type: "page" },
       { page: "vatdeclaration", label: "Declaration TVA", type: "page" },
-      { page: "automations", label: "Automatisations & relances", type: "page" },
+      {
+        page: "automations",
+        label: "Automatisations & relances",
+        type: "page",
+      },
     ],
   },
   {
@@ -135,7 +143,7 @@ const menuGroups = [
       { page: "lasercalc", label: "Calculateur Laser", type: "page" },
       { page: "dtfcalc", label: "Calculateur DTF", type: "page" },
       { page: "uvdtfcalc", label: "Calculateur UV-DTF", type: "page" },
-      { page: "brodcalc",  label: "Calcul Broderie",    type: "page" },
+      { page: "brodcalc", label: "Calcul Broderie", type: "page" },
     ],
   },
   {
@@ -152,12 +160,14 @@ const menuGroups = [
 ];
 
 const defaultSectionState = Object.fromEntries(
-  menuGroups.map((group) => [group.id, true])
+  menuGroups.map((group) => [group.id, true]),
 );
 
 function loadSectionState() {
   try {
-    const stored = JSON.parse(localStorage.getItem(SECTIONS_STORAGE_KEY) || "{}");
+    const stored = JSON.parse(
+      localStorage.getItem(SECTIONS_STORAGE_KEY) || "{}",
+    );
     return { ...defaultSectionState, ...stored };
   } catch {
     return defaultSectionState;
@@ -166,7 +176,14 @@ function loadSectionState() {
 
 function NavIcon({ page }) {
   const Icon = pageIcons[page] || FileText;
-  return <Icon size={18} strokeWidth={2.2} aria-hidden="true" className="sidebar-nav-icon" />;
+  return (
+    <Icon
+      size={18}
+      strokeWidth={2.2}
+      aria-hidden="true"
+      className="sidebar-nav-icon"
+    />
+  );
 }
 
 export default function Sidebar({
@@ -189,7 +206,7 @@ export default function Sidebar({
   const invoicesPath = pageToPath("invoices");
   const [sectionState, setSectionState] = useState(loadSectionState);
   const [syncTimeLabel, setSyncTimeLabel] = useState(() =>
-    formatLastSyncRelative(lastSyncAt)
+    formatLastSyncRelative(lastSyncAt),
   );
 
   function canShow(item) {
@@ -254,7 +271,11 @@ export default function Sidebar({
       return;
     }
 
-    if (leavingDocuments && item.page !== "quotes" && item.page !== "invoices") {
+    if (
+      leavingDocuments &&
+      item.page !== "quotes" &&
+      item.page !== "invoices"
+    ) {
       event.preventDefault();
       dispatchRouteChange(path);
       navigate(path, { state: linkState ?? undefined });
@@ -291,10 +312,12 @@ export default function Sidebar({
   }, [lastSyncAt]);
 
   const automationBadge = getSidebarAutomationBadgeCount(data);
+  const siteRequestBadge = countUnreadSiteRequests(data.quotes || []);
 
   function navBadge(pageKey) {
     if (pageKey === "automations" && automationBadge) return automationBadge;
     if (pageKey === "dashboard" && automationBadge) return automationBadge;
+    if (pageKey === "leads" && siteRequestBadge) return siteRequestBadge;
     return "";
   }
 
@@ -314,7 +337,11 @@ export default function Sidebar({
         aria-expanded={mobileOpen}
         aria-label={mobileOpen ? "Fermer le menu" : "Ouvrir le menu"}
       >
-        {mobileOpen ? <X size={22} aria-hidden="true" /> : <Menu size={22} aria-hidden="true" />}
+        {mobileOpen ? (
+          <X size={22} aria-hidden="true" />
+        ) : (
+          <Menu size={22} aria-hidden="true" />
+        )}
       </button>
 
       {mobileOpen ? (
@@ -326,7 +353,10 @@ export default function Sidebar({
         />
       ) : null}
 
-      <aside className={`sidebar ${mobileOpen ? "sidebar--open" : ""}`} aria-label="Navigation principale">
+      <aside
+        className={`sidebar ${mobileOpen ? "sidebar--open" : ""}`}
+        aria-label="Navigation principale"
+      >
         <div className="sidebar-brand">
           <div className="sidebar-logo">
             <img
@@ -356,7 +386,10 @@ export default function Sidebar({
               <span className="sidebar-sync__status">{syncStatus}</span>
               <span className="sidebar-sync__time">{syncTimeLabel}</span>
               {syncConflictCount > 0 ? (
-                <span className="sidebar-sync__conflicts" data-testid="sidebar-sync-conflicts">
+                <span
+                  className="sidebar-sync__conflicts"
+                  data-testid="sidebar-sync-conflicts"
+                >
                   {syncConflictCount} conflit(s) récent(s) — local conservé
                 </span>
               ) : null}
@@ -400,13 +433,23 @@ export default function Sidebar({
                     aria-controls={`sidebar-section-${group.id}`}
                   >
                     <span>{group.label}</span>
-                    <span className="sidebar-section__chevron" aria-hidden="true">
-                      {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                    <span
+                      className="sidebar-section__chevron"
+                      aria-hidden="true"
+                    >
+                      {isOpen ? (
+                        <ChevronDown size={14} />
+                      ) : (
+                        <ChevronRight size={14} />
+                      )}
                     </span>
                   </button>
 
                   {isOpen ? (
-                    <div className="sidebar-section__items" id={`sidebar-section-${group.id}`}>
+                    <div
+                      className="sidebar-section__items"
+                      id={`sidebar-section-${group.id}`}
+                    >
                       {group.items.map((item) => (
                         <Link
                           key={item.page}
@@ -416,12 +459,16 @@ export default function Sidebar({
                           className={isNavActive(item.page) ? "active" : ""}
                           onClick={(event) => handleNavClick(event, item)}
                           aria-label={item.label}
-                          aria-current={isNavActive(item.page) ? "page" : undefined}
+                          aria-current={
+                            isNavActive(item.page) ? "page" : undefined
+                          }
                         >
                           <NavIcon page={item.page} />
                           {item.label}
                           {navBadge(item.page) ? (
-                            <span className="sidebar-nav-badge">{navBadge(item.page)}</span>
+                            <span className="sidebar-nav-badge">
+                              {navBadge(item.page)}
+                            </span>
                           ) : null}
                         </Link>
                       ))}

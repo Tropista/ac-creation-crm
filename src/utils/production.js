@@ -1,13 +1,32 @@
 const PROCESS_PATTERNS = [
-  { key: "laser", label: "Laser CO2", patterns: [/laser/i, /co2/i, /découpe/i, /gravure/i] },
+  {
+    key: "laser",
+    label: "Laser CO2",
+    patterns: [/laser/i, /co2/i, /découpe/i, /gravure/i],
+  },
   { key: "dtf", label: "DTF", patterns: [/dtf/i, /transfert/i, /mycolor/i] },
-  { key: "uvdtf", label: "UV-DTF", patterns: [/uv-dtf/i, /uv dtf/i, /tristar/i] },
-  { key: "print3d", label: "Impression 3D", patterns: [/impression 3d/i, /3d print/i, /\bpla\b/i, /\bpetg\b/i] },
-  { key: "tshirt", label: "T-shirt", patterns: [/t-shirt/i, /tshirt/i, /textile/i, /flex/i, /vinyle/i] },
+  {
+    key: "uvdtf",
+    label: "UV-DTF",
+    patterns: [/uv-dtf/i, /uv dtf/i, /tristar/i],
+  },
+  {
+    key: "print3d",
+    label: "Impression 3D",
+    patterns: [/impression 3d/i, /3d print/i, /\bpla\b/i, /\bpetg\b/i],
+  },
+  {
+    key: "tshirt",
+    label: "T-shirt",
+    patterns: [/t-shirt/i, /tshirt/i, /textile/i, /flex/i, /vinyle/i],
+  },
   { key: "other", label: "Autre", patterns: [] },
 ];
 
-export const PROCESS_TYPES = PROCESS_PATTERNS.map(({ key, label }) => ({ key, label }));
+export const PROCESS_TYPES = PROCESS_PATTERNS.map(({ key, label }) => ({
+  key,
+  label,
+}));
 
 export const QUOTE_PRIORITY_OPTIONS = [
   { value: "normal", label: "Normale" },
@@ -17,10 +36,7 @@ export const QUOTE_PRIORITY_OPTIONS = [
 
 export const PRODUCTION_STATUSES = ["En production", "Prêt", "Livré"];
 
-export const ATELIER_PIPELINE_STATUSES = [
-  "Accepté",
-  ...PRODUCTION_STATUSES,
-];
+export const ATELIER_PIPELINE_STATUSES = ["Accepté", ...PRODUCTION_STATUSES];
 
 export const QUOTES_STATUS_FILTER_KEY = "crm_quotes_status_filter";
 
@@ -33,7 +49,7 @@ export const QUOTE_STATUSES = [
 ];
 
 const PIPELINE_STATUS_ORDER = Object.fromEntries(
-  ATELIER_PIPELINE_STATUSES.map((status, index) => [status, index])
+  ATELIER_PIPELINE_STATUSES.map((status, index) => [status, index]),
 );
 
 export function isProductionStatus(status) {
@@ -41,11 +57,23 @@ export function isProductionStatus(status) {
 }
 
 export function isQuoteInProductionQueue(quote) {
+  if (
+    quote?.ecommerce?.source === "ecommerce" &&
+    quote.ecommerce.reviewStatus !== "sent_to_workshop"
+  ) {
+    return false;
+  }
   const status = String(quote?.status || "").trim();
   return status === "Accepté" || isProductionStatus(status);
 }
 
 export function isAtelierPipelineQuote(quote) {
+  if (
+    quote?.ecommerce?.source === "ecommerce" &&
+    quote.ecommerce.reviewStatus !== "sent_to_workshop"
+  ) {
+    return false;
+  }
   return ATELIER_PIPELINE_STATUSES.includes(String(quote?.status || "").trim());
 }
 
@@ -82,7 +110,7 @@ export function inferProcessType(quote) {
     quote?.description,
     ...(quote?.lines || []).map(
       (line) =>
-        `${line.description || ""} ${line.category || ""} ${line.sku || ""} ${line.technique || ""}`
+        `${line.description || ""} ${line.category || ""} ${line.sku || ""} ${line.technique || ""}`,
     ),
   ]
     .join(" ")
@@ -124,7 +152,7 @@ export function getProductionQueue(quotes = []) {
   return {
     total: queue.length,
     byProcess: Object.values(byProcess).filter(
-      (group) => group.items.length > 0 || group.key !== "other"
+      (group) => group.items.length > 0 || group.key !== "other",
     ),
     items: queue,
   };
