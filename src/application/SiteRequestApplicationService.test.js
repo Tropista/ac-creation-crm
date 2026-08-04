@@ -26,7 +26,30 @@ function request(overrides = {}) {
       paymentStatus: "paid",
       reviewStatus: SITE_REQUEST_STATUS.NEW,
       snapshot: { version: 1 },
+      preview: {
+        id: "preview",
+        role: "preview",
+        name: "Preview_HD.png",
+        binaryVerified: true,
+      },
+      resources: [
+        {
+          id: "preview",
+          role: "preview",
+          name: "Preview_HD.png",
+          binaryVerified: true,
+        },
+        {
+          id: "print",
+          role: "production",
+          name: "Impression_1_1.png",
+          binaryVerified: true,
+        },
+      ],
+      assets: [{ id: "image", name: "source.png", binaryVerified: true }],
+      fonts: [{ id: "font", name: "Manrope.ttf", binaryVerified: true }],
       resourceValidation: { complete: true, errors: [] },
+      packageValidation: { complete: true, errors: [], files: 11 },
       history: [],
       ...overrides,
     },
@@ -64,6 +87,26 @@ describe("SiteRequestApplicationService", () => {
         "order-1",
       ),
     ).toThrow("SITE_REQUEST_INCOMPLETE");
+  });
+
+  it("blocks workshop delivery until the generated ZIP has passed its audit", () => {
+    const unchecked = request({ packageValidation: null });
+    expect(evaluateSiteRequestCompleteness(unchecked).missing).toContainEqual(
+      expect.objectContaining({ key: "package" }),
+    );
+  });
+
+  it("records a successful package audit through the application service", () => {
+    const unchecked = request({ packageValidation: null });
+    const next = siteRequestApplicationService.recordPackageValidation(
+      { quotes: [unchecked] },
+      "order-1",
+      { complete: true, errors: [], files: 11 },
+    );
+    expect(next.quotes[0].ecommerce.packageValidation).toMatchObject({
+      complete: true,
+      files: 11,
+    });
   });
 
   it("sends once to workshop and remains idempotent", () => {

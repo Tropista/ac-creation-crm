@@ -57,11 +57,53 @@ export function countUnreadSiteRequests(quotes = []) {
 
 export function evaluateSiteRequestCompleteness(quote) {
   const ecommerce = quote?.ecommerce || {};
+  const resources = Array.isArray(ecommerce.resources)
+    ? ecommerce.resources
+    : [];
+  const assets = Array.isArray(ecommerce.assets) ? ecommerce.assets : [];
+  const fonts = Array.isArray(ecommerce.fonts) ? ecommerce.fonts : [];
+  const preview =
+    resources.find((resource) =>
+      /preview/i.test(
+        String(resource?.role || resource?.kind || resource?.name || ""),
+      ),
+    ) || ecommerce.preview;
+  const printFiles = resources.filter(
+    (resource) =>
+      resource?.role === "production" ||
+      /impression|production/i.test(
+        String(resource?.name || resource?.kind || ""),
+      ),
+  );
+  const allOriginalsVerified = [...assets, ...fonts].every(
+    (resource) => resource?.binaryVerified === true,
+  );
+  const serializedSnapshots = JSON.stringify(
+    (quote?.lines || []).map((line) => line.snapshot).filter(Boolean),
+  );
+  const usesText = /"type"\s*:\s*"text"/i.test(serializedSnapshots);
+  const fontsAvailable =
+    !usesText ||
+    fonts.some(
+      (font) =>
+        font?.binaryVerified === true ||
+        (font?.vectorized === true && font?.format === "svg"),
+    );
   const checks = [
     ["payment", ecommerce.paymentStatus === "paid", "Paiement non confirme"],
     ["customer", Boolean(quote?.clientId), "Client absent"],
     ["items", (quote?.lines || []).length > 0, "Aucun article"],
     ["snapshot", Boolean(ecommerce.snapshot), "Snapshot absent"],
+    [
+      "project",
+      Boolean(
+        ecommerce.project ||
+        ecommerce.composition ||
+        ecommerce.snapshot?.project ||
+        quote?.lines?.[0]?.snapshot,
+      ),
+      "Projet.acproject impossible à reconstruire",
+    ],
     [
       "binary-assets",
       ecommerce.resourceValidation?.complete === true,
@@ -69,30 +111,61 @@ export function evaluateSiteRequestCompleteness(quote) {
         "Ressources binaires non verifiees",
     ],
     [
+      "preview",
+      Boolean(preview?.binaryVerified),
+      "Preview_HD.png absent ou non vérifié",
+    ],
+    [
+      "print-file",
+      printFiles.length === 1 && printFiles[0]?.binaryVerified === true,
+      "PNG d’impression absent, ambigu ou non vérifié",
+    ],
+    [
+      "originals",
+      allOriginalsVerified,
+      "Images, SVG ou polices originales non vérifiés",
+    ],
+    ["fonts", fontsAvailable, "Police utilisée absente ou non vectorisée"],
+    [
       "production",
       (ecommerce.production || []).length > 0 ||
         (quote?.lines || []).some((line) => line.snapshot?.productionProfile),
       "Donnees de production absentes",
     ],
+    [
+      "package",
+      ecommerce.packageValidation?.complete === true,
+      ecommerce.packageValidation?.errors?.join(", ") ||
+        "Package ZIP non généré ou non contrôlé",
+    ],
   ];
   const missing = checks
     .filter(([, complete]) => !complete)
     .map(([key, , message]) => ({ key, message, critical: true }));
-  const previewRequired = (quote?.lines || []).some(
-    (line) => line.snapshot?.previewRequired === true,
-  );
-  if (previewRequired && !ecommerce.preview) {
-    missing.push({
-      key: "preview",
-      message: "Apercu requis absent",
-      critical: true,
-    });
-  }
   const state = missing.length ? "incomplete" : "complete";
   return { state, missing, canSendToWorkshop: missing.length === 0 };
 }
 
 export class SiteRequestApplicationService {
+  recordPackageValidation(state, quoteId, audit) {
+    const quote = (state.quotes || []).find(
+      (entry) => String(entry.id) === String(quoteId),
+    );
+    if (!isEcommerceSiteRequest(quote))
+      throw new Error("SITE_REQUEST_NOT_FOUND");
+    return workshopApplicationService.patchQuote(state, quote.id, {
+      ecommerce: {
+        ...quote.ecommerce,
+        packageValidation: {
+          complete: audit?.complete === true,
+          errors: audit?.errors || [],
+          files: Number(audit?.files || 0),
+          validatedAt: new Date().toISOString(),
+        },
+      },
+    });
+  }
+
   transition(state, quoteId, nextStatus, context = {}) {
     const quote = (state.quotes || []).find(
       (entry) => String(entry.id) === String(quoteId),

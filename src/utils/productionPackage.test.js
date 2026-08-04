@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildProductionPackage,
   buildProductionManifest,
+  detectProductionFormat,
   inspectProductionArtifacts,
   pngDimensions,
+  productionErrorMessage,
+  productionFormatLabel,
+  validateProductionPackage,
   validateBinaryResource,
 } from "./productionPackage.js";
+import { unzipSync } from "fflate";
 
 function pngHeader(width, height) {
   const bytes = new Uint8Array(24);
@@ -13,6 +19,10 @@ function pngHeader(width, height) {
   view.setUint32(16, width);
   view.setUint32(20, height);
   return bytes;
+}
+
+function dataUrl(type, bytes) {
+  return `data:${type};base64,${Buffer.from(bytes).toString("base64")}`;
 }
 
 const quote = {
@@ -94,5 +104,95 @@ describe("productionPackage", () => {
         new TextEncoder().encode("not a png"),
       ),
     ).rejects.toThrow("PRODUCTION_RESOURCE_PLACEHOLDER");
+  });
+
+  it("détecte le format depuis la signature et masque les erreurs techniques", () => {
+    const png = pngHeader(1200, 514);
+    expect(detectProductionFormat({ name: "sans-extension" }, png)).toBe("png");
+    expect(productionFormatLabel({ name: "police.otf" })).toBe(
+      "Police OpenType",
+    );
+    expect(
+      productionErrorMessage(
+        new Error("PRODUCTION_RESOURCE_UNAVAILABLE:https://secret.example"),
+      ),
+    ).toBe("Impossible de télécharger la ressource.");
+  });
+
+  it("construit puis réouvre un package atelier complet", async () => {
+    const preview = pngHeader(1200, 514);
+    const print = pngHeader(2480, 1063);
+    const image = pngHeader(640, 480);
+    const svg = new TextEncoder().encode(
+      '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0h10v10z"/></svg>',
+    );
+    const font = new Uint8Array([0, 1, 0, 0, 0, 1, 0, 0]);
+    const completeQuote = structuredClone(quote);
+    completeQuote.lines[0].snapshot.production = {
+      dimensions: { width: 210, height: 90 },
+      resolutionDpi: 300,
+    };
+    completeQuote.ecommerce.snapshot = { version: 1, layers: [] };
+    completeQuote.ecommerce.project = { layers: [] };
+    completeQuote.ecommerce.preview = {
+      id: "preview",
+      role: "preview",
+      name: "Preview_HD.png",
+      mimeType: "image/png",
+      url: dataUrl("image/png", preview),
+    };
+    completeQuote.ecommerce.resources = [
+      completeQuote.ecommerce.preview,
+      {
+        id: "print",
+        role: "production",
+        name: "Impression.png",
+        mimeType: "image/png",
+        url: dataUrl("image/png", print),
+      },
+    ];
+    completeQuote.ecommerce.assets = [
+      {
+        id: "image",
+        name: "original.png",
+        mimeType: "image/png",
+        url: dataUrl("image/png", image),
+      },
+      {
+        id: "svg",
+        name: "original.svg",
+        mimeType: "image/svg+xml",
+        url: dataUrl("image/svg+xml", svg),
+      },
+    ];
+    completeQuote.ecommerce.fonts = [
+      {
+        id: "font",
+        name: "Manrope.ttf",
+        mimeType: "font/ttf",
+        url: dataUrl("font/ttf", font),
+      },
+    ];
+
+    const result = await buildProductionPackage({
+      quote: completeQuote,
+      client: { name: "Client Test" },
+    });
+    expect(result.audit).toMatchObject({ complete: true, files: 11 });
+    expect(result.manifest.printArea).toMatchObject({
+      widthMm: 210,
+      heightMm: 90,
+      dpi: 300,
+      widthPx: 2480,
+      heightPx: 1063,
+    });
+    const paths = Object.keys(unzipSync(result.bytes));
+    expect(paths.some((path) => path.endsWith("Reconstruction.json"))).toBe(
+      true,
+    );
+    expect(paths.some((path) => path.endsWith("README.txt"))).toBe(true);
+    await expect(
+      validateProductionPackage(result.bytes, result.manifest),
+    ).resolves.toMatchObject({ complete: true });
   });
 });

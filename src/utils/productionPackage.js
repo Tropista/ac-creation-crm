@@ -1,4 +1,4 @@
-import { strToU8, zipSync } from "fflate";
+import { strToU8, unzipSync, zipSync } from "fflate";
 import { jsPDF } from "jspdf";
 import QRCode from "qrcode";
 import { getSupabase } from "../supabase.js";
@@ -27,20 +27,31 @@ function resourceName(resource, fallback) {
   );
 }
 
-async function fetchBytes(resource) {
-  let url = resourceUrl(resource);
-  if (!url && resource?.bucket && resource?.storagePath) {
+async function createFreshSignedUrl(resource) {
+  if (resource?.bucket && resource?.storagePath) {
     const client = await getSupabase();
     const signed = await client.storage
       .from(resource.bucket)
       .createSignedUrl(resource.storagePath, 300);
     if (signed.error || !signed.data?.signedUrl)
       throw new Error(`PRODUCTION_RESOURCE_SIGNING_FAILED:${resource.id}`);
-    url = signed.data.signedUrl;
+    return signed.data.signedUrl;
   }
+  return "";
+}
+
+async function fetchBytes(resource) {
+  let url = resourceUrl(resource) || (await createFreshSignedUrl(resource));
   if (!url) return null;
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`PRODUCTION_RESOURCE_UNAVAILABLE:${url}`);
+  let response = await fetch(url);
+  if (!response.ok && resource?.bucket && resource?.storagePath) {
+    url = await createFreshSignedUrl(resource);
+    response = await fetch(url);
+  }
+  if (!response.ok)
+    throw new Error(
+      `PRODUCTION_RESOURCE_UNAVAILABLE:${resource?.id || "unknown"}`,
+    );
   return new Uint8Array(await response.arrayBuffer());
 }
 
@@ -58,41 +69,119 @@ export function pngDimensions(bytes) {
   return { width: view.getUint32(16), height: view.getUint32(20) };
 }
 
+function ascii(bytes, start, end) {
+  return new TextDecoder("ascii").decode(bytes.slice(start, end));
+}
+
+function extensionOf(resource) {
+  return String(
+    resource?.name ||
+      resource?.filename ||
+      resource?.storagePath ||
+      resource?.storage_path ||
+      "",
+  )
+    .split(/[?#]/)[0]
+    .split(".")
+    .at(-1)
+    ?.toLowerCase();
+}
+
+export function detectProductionFormat(resource, bytes = null) {
+  const descriptor =
+    `${resource?.mimeType || ""} ${resource?.type || ""} ${resource?.format || ""} ${extensionOf(resource) || ""}`.toLowerCase();
+  let detected = null;
+  if (bytes?.length) {
+    const beginning = new TextDecoder().decode(bytes.slice(0, 256));
+    if (bytesEqual(bytes, [137, 80, 78, 71, 13, 10, 26, 10])) detected = "png";
+    else if (bytesEqual(bytes, [255, 216, 255])) detected = "jpeg";
+    else if (ascii(bytes, 0, 4) === "RIFF" && ascii(bytes, 8, 12) === "WEBP")
+      detected = "webp";
+    else if (/^\s*(?:<\?xml[^>]*>\s*)?<svg/i.test(beginning)) detected = "svg";
+    else if (ascii(bytes, 0, 4) === "wOF2") detected = "woff2";
+    else if (ascii(bytes, 0, 4) === "wOFF") detected = "woff";
+    else if (ascii(bytes, 0, 4) === "OTTO") detected = "otf";
+    else if (bytesEqual(bytes, [0, 1, 0, 0])) detected = "ttf";
+  }
+  const format =
+    detected ||
+    ["woff2", "woff", "otf", "ttf", "svg", "webp", "jpeg", "jpg", "png"].find(
+      (value) => descriptor.includes(value),
+    );
+  return format === "jpg" ? "jpeg" : format || "binary";
+}
+
+export function productionFormatLabel(resource, bytes = null) {
+  return {
+    png: "PNG Image",
+    jpeg: "JPEG Image",
+    webp: "WebP Image",
+    svg: "SVG Vectoriel",
+    ttf: "Police TrueType",
+    otf: "Police OpenType",
+    woff: "Police WebFont WOFF",
+    woff2: "Police WebFont WOFF2",
+    binary: "Fichier binaire",
+  }[detectProductionFormat(resource, bytes)];
+}
+
+export function productionErrorMessage(error) {
+  const code = String(error?.message || error || "").split(":")[0];
+  const messages = {
+    PRODUCTION_RESOURCE_UNAVAILABLE: "Impossible de télécharger la ressource.",
+    PRODUCTION_RESOURCE_SIGNING_FAILED:
+      "Impossible de renouveler l’accès à la ressource.",
+    PRODUCTION_RESOURCE_URL_MISSING: "La ressource n’est plus accessible.",
+    PRODUCTION_RESOURCE_EMPTY: "La ressource téléchargée est vide.",
+    PRODUCTION_RESOURCE_CHECKSUM_MISMATCH:
+      "Le contrôle d’intégrité de la ressource a échoué.",
+    PRODUCTION_RESOURCE_PLACEHOLDER:
+      "Une ressource de démonstration a été détectée.",
+    PRODUCTION_PRINT_DIMENSIONS_INVALID:
+      "Le fichier d’impression n’a pas les dimensions attendues.",
+    PRODUCTION_PREVIEW_TOO_SMALL: "L’aperçu HD est trop petit.",
+    PRODUCTION_PRINT_PNG_REQUIRED: "Le PNG d’impression est absent ou ambigu.",
+    PRODUCTION_FONT_NOT_EXPORTABLE:
+      "Une police non exportable n’a pas été convertie en courbes.",
+    PRODUCTION_PACKAGE_INVALID:
+      "Le package de production est incomplet ou invalide.",
+  };
+  return messages[code] || "Impossible de préparer le dossier de production.";
+}
+
 export async function validateBinaryResource(resource, bytes, options = {}) {
   if (!bytes?.length)
     throw new Error(`PRODUCTION_RESOURCE_EMPTY:${resource?.id || "unknown"}`);
-  const descriptor = String(
-    resource?.mimeType || resource?.format || resource?.name || "",
-  ).toLowerCase();
+  const format = detectProductionFormat(resource, bytes);
   if (/demo\//i.test(JSON.stringify(resource)))
     throw new Error(`PRODUCTION_RESOURCE_PLACEHOLDER:${resource.id}`);
   let dimensions = null;
-  if (/png/.test(descriptor)) {
+  if (format === "png") {
     dimensions = pngDimensions(bytes);
     if (!dimensions) throw new Error(`PRODUCTION_PNG_INVALID:${resource.id}`);
-  } else if (/jpe?g/.test(descriptor)) {
+  } else if (format === "jpeg") {
     if (!bytesEqual(bytes, [255, 216, 255]))
       throw new Error(`PRODUCTION_JPEG_INVALID:${resource.id}`);
-  } else if (/webp/.test(descriptor)) {
+  } else if (format === "webp") {
     if (
       new TextDecoder().decode(bytes.slice(0, 4)) !== "RIFF" ||
       new TextDecoder().decode(bytes.slice(8, 12)) !== "WEBP"
     )
       throw new Error(`PRODUCTION_WEBP_INVALID:${resource.id}`);
-  } else if (/svg/.test(descriptor)) {
+  } else if (format === "svg") {
     const content = new TextDecoder().decode(bytes);
     if (!/<svg(?:\s|>)[\s\S]*<\/svg>\s*$/i.test(content.trim()))
       throw new Error(`PRODUCTION_SVG_INVALID:${resource.id}`);
-  } else if (/woff2/.test(descriptor)) {
+  } else if (format === "woff2") {
     if (new TextDecoder().decode(bytes.slice(0, 4)) !== "wOF2")
       throw new Error(`PRODUCTION_FONT_INVALID:${resource.id}`);
-  } else if (/woff/.test(descriptor)) {
+  } else if (format === "woff") {
     if (new TextDecoder().decode(bytes.slice(0, 4)) !== "wOFF")
       throw new Error(`PRODUCTION_FONT_INVALID:${resource.id}`);
-  } else if (/otf/.test(descriptor)) {
+  } else if (format === "otf") {
     if (new TextDecoder().decode(bytes.slice(0, 4)) !== "OTTO")
       throw new Error(`PRODUCTION_FONT_INVALID:${resource.id}`);
-  } else if (/ttf|font/.test(descriptor)) {
+  } else if (format === "ttf") {
     if (!bytesEqual(bytes, [0, 1, 0, 0]))
       throw new Error(`PRODUCTION_FONT_INVALID:${resource.id}`);
   }
@@ -110,7 +199,13 @@ export async function validateBinaryResource(resource, bytes, options = {}) {
     Math.max(dimensions.width, dimensions.height) < options.minimumLongestSide
   )
     throw new Error(`PRODUCTION_PREVIEW_TOO_SMALL:${resource.id}`);
-  return { checksum, size: bytes.length, dimensions };
+  return {
+    checksum,
+    size: bytes.length,
+    dimensions,
+    format,
+    formatLabel: productionFormatLabel(resource, bytes),
+  };
 }
 
 async function sha256(bytes) {
@@ -196,6 +291,21 @@ export function buildProductionManifest(quote, files = []) {
     quote?.lines?.[0]?.snapshot?.production?.dimensions ||
     snapshot.production?.dimensions ||
     null;
+  const productionFile = files.find((file) =>
+    file.path.startsWith("Impression_"),
+  );
+  const printArea =
+    productionFile?.widthMm && productionFile?.heightMm
+      ? {
+          widthMm: productionFile.widthMm,
+          heightMm: productionFile.heightMm,
+          dpi: productionFile.dpi,
+          widthPx: productionFile.widthPx,
+          heightPx: productionFile.heightPx,
+          effectiveDpi: productionFile.effectiveDpi,
+          checksum: productionFile.checksum,
+        }
+      : zone;
   return {
     schemaVersion: "1.0.0",
     generatedAt: new Date().toISOString(),
@@ -215,7 +325,7 @@ export function buildProductionManifest(quote, files = []) {
       technique: line.technique || "",
       variants: line.variants || line.snapshot?.variants || [],
     })),
-    printArea: zone,
+    printArea,
     artifacts: {
       images: artifacts.images.length,
       svgs: artifacts.svgs.length,
@@ -225,7 +335,7 @@ export function buildProductionManifest(quote, files = []) {
       project: Boolean(artifacts.project),
       preview: Boolean(artifacts.preview),
     },
-    productionFile: files.find((file) => file.path.startsWith("Impression_")),
+    productionFile,
     layers: (snapshot.layers || []).map((layer, index) => ({
       id: layer.id,
       type: layer.type,
@@ -249,19 +359,34 @@ export function buildProductionManifest(quote, files = []) {
   };
 }
 
-export async function buildProductionPdf(quote, client, previewBytes = null) {
+export async function buildProductionPdf(
+  quote,
+  client,
+  previewBytes = null,
+  fileRecords = [],
+) {
   const pdf = new jsPDF("p", "mm", "a4");
   pdf.setFillColor(248, 200, 220);
   pdf.rect(0, 0, 210, 24, "F");
   pdf.setTextColor(31, 41, 55);
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(18);
-  pdf.text("BON DE PRODUCTION", 14, 15);
+  pdf.text("AC CRÉATION · BON DE PRODUCTION", 14, 15);
   pdf.setFontSize(10);
   pdf.text(quote.number || "Commande", 196, 15, { align: "right" });
   pdf.setFont("helvetica", "normal");
   const rows = [
     ["Client", client?.name || client?.email || quote.clientId || "—"],
+    [
+      "Adresse",
+      [
+        quote.shippingAddress?.addressLine1,
+        quote.shippingAddress?.postalCode,
+        quote.shippingAddress?.city,
+      ]
+        .filter(Boolean)
+        .join(", ") || "Non renseignée",
+    ],
     [
       "Date",
       new Date(quote.ecommerce?.receivedAt || quote.date).toLocaleString(
@@ -294,7 +419,7 @@ export async function buildProductionPdf(quote, client, previewBytes = null) {
       // Preview facultative.
     }
   }
-  y = 82;
+  y = 90;
   pdf.setFont("helvetica", "bold");
   pdf.text("PRODUITS", 14, y);
   y += 7;
@@ -305,10 +430,8 @@ export async function buildProductionPdf(quote, client, previewBytes = null) {
     y += 7;
   }
   const snapshot = quote.lines?.[0]?.snapshot || {};
-  const dimensions = snapshot.production?.dimensions || {
-    width: 210,
-    height: 90,
-  };
+  const dimensions = snapshot.production?.dimensions ||
+    snapshot.printZones?.[0] || { width: 210, height: 90 };
   const dpi = Number(snapshot.production?.resolutionDpi || 300);
   const widthPx = Math.round((Number(dimensions.width) / 25.4) * dpi);
   const heightPx = Math.round((Number(dimensions.height) / 25.4) * dpi);
@@ -317,8 +440,12 @@ export async function buildProductionPdf(quote, client, previewBytes = null) {
   pdf.text("PARAMETRES D'IMPRESSION", 14, y);
   y += 7;
   pdf.setFont("helvetica", "normal");
+  const effectiveDpi = Math.min(
+    widthPx / (Number(dimensions.width) / 25.4),
+    heightPx / (Number(dimensions.height) / 25.4),
+  );
   pdf.text(
-    `${dimensions.width} x ${dimensions.height} mm | ${widthPx} x ${heightPx} px | ${dpi} DPI | sRGB`,
+    `${dimensions.width} × ${dimensions.height} mm | ${widthPx} × ${heightPx} px | ${dpi} DPI (effectif ${effectiveDpi.toFixed(2)}) | sRGB`,
     14,
     y,
   );
@@ -335,7 +462,7 @@ export async function buildProductionPdf(quote, client, previewBytes = null) {
         ? `${layer.text || "Texte vide"} | ${layer.fontFamily || "Police inconnue"}`
         : layer.name || layer.assetId || layer.type;
     pdf.text(
-      `${index + 1}. ${label} | X ${layer.xMm ?? layer.x ?? "-"} mm | Y ${layer.yMm ?? layer.y ?? "-"} mm | ${layer.rotationDeg ?? layer.rotation ?? 0} deg`,
+      `${index + 1}. ${label} | X ${layer.xMm ?? layer.x ?? "-"} mm | Y ${layer.yMm ?? layer.y ?? "-"} mm | ${layer.widthMm ?? layer.width ?? "-"} × ${layer.heightMm ?? layer.height ?? "-"} mm | ${layer.rotationDeg ?? layer.rotation ?? 0}° | ${layer.color || "couleur source"}`,
       14,
       y,
       { maxWidth: 180 },
@@ -353,7 +480,35 @@ export async function buildProductionPdf(quote, client, previewBytes = null) {
     pdf.text("Rouvrir le projet", 176, 278, { align: "center" });
   }
   pdf.setFontSize(8);
-  pdf.text("Dimensions et resolution : voir Manifest.json", 14, 286);
+  pdf.text(
+    "Fichiers et checksums SHA-256 : voir Manifest.json · Reconstruction : Reconstruction.json",
+    14,
+    286,
+  );
+  if (fileRecords.length) {
+    pdf.addPage();
+    pdf.setFillColor(248, 200, 220);
+    pdf.rect(0, 0, 210, 20, "F");
+    pdf.setTextColor(31, 41, 55);
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(15);
+    pdf.text("FICHIERS ET INTÉGRITÉ", 14, 13);
+    let fileY = 29;
+    for (const file of fileRecords) {
+      if (fileY > 274) {
+        pdf.addPage();
+        fileY = 18;
+      }
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(9);
+      pdf.text(`${file.path} · ${file.size} octets`, 14, fileY);
+      fileY += 4;
+      pdf.setFont("courier", "normal");
+      pdf.setFontSize(7);
+      pdf.text(`SHA-256 ${file.checksum}`, 14, fileY);
+      fileY += 7;
+    }
+  }
   return new Uint8Array(pdf.output("arraybuffer"));
 }
 
@@ -376,6 +531,15 @@ export async function downloadProductionResource(
   const bytes = await fetchBytes(resource);
   if (!bytes) throw new Error("PRODUCTION_RESOURCE_URL_MISSING");
   downloadBytes(bytes, filename, type);
+}
+
+export async function createProductionObjectUrl(
+  resource,
+  type = "application/octet-stream",
+) {
+  const bytes = await fetchBytes(resource);
+  if (!bytes) throw new Error("PRODUCTION_RESOURCE_URL_MISSING");
+  return URL.createObjectURL(new Blob([bytes], { type }));
 }
 
 export async function buildProductionPackage({ quote, client }) {
@@ -404,6 +568,44 @@ export async function buildProductionPackage({ quote, client }) {
     : snapshotBytes;
   await addFile("Configurateur.json", snapshotBytes);
   await addFile("Projet.acproject", projectBytes);
+  await addFile(
+    "Reconstruction.json",
+    strToU8(
+      JSON.stringify(
+        {
+          schemaVersion: "1.0.0",
+          orderId: quote.id,
+          products: (quote.lines || []).map((line) => ({
+            id: line.productId,
+            name: line.description,
+            quantity: line.quantity,
+            technique: line.technique,
+            snapshot: line.snapshot,
+          })),
+          project: artifacts.project,
+          sourceAssets: [...artifacts.images, ...artifacts.svgs].map(
+            (item) => ({
+              id: item.id,
+              name: item.name || item.filename,
+              checksum: item.checksum,
+            }),
+          ),
+          fonts: artifacts.fonts.map((font) => ({
+            id: font.id,
+            name: font.name || font.filename,
+            family: font.family || font.fontFamily,
+            style: font.style || "normal",
+            format: font.format || extensionOf(font),
+            size: font.size,
+            checksum: font.checksum,
+            vectorized: Boolean(font.vectorized),
+          })),
+        },
+        null,
+        2,
+      ),
+    ),
+  );
 
   const previewBytes = await fetchBytes(artifacts.preview);
   const previewValidation = await validateBinaryResource(
@@ -427,6 +629,10 @@ export async function buildProductionPackage({ quote, client }) {
     const validation = await validateBinaryResource(resource, bytes, {
       expectedDimensions,
     });
+    const effectiveDpi = Math.min(
+      validation.dimensions.width / (widthMm / 25.4),
+      validation.dimensions.height / (heightMm / 25.4),
+    );
     await addFile(`Impression_${index + 1}_1.png`, bytes, {
       ...validation,
       widthMm,
@@ -434,13 +640,27 @@ export async function buildProductionPackage({ quote, client }) {
       dpi,
       widthPx: expectedDimensions.width,
       heightPx: expectedDimensions.height,
+      effectiveDpi: Number(effectiveDpi.toFixed(2)),
       colorSpace: "sRGB",
     });
   }
   for (const [folder, resources] of [
     ["Images", artifacts.images],
     ["SVG", artifacts.svgs],
-    ["Fonts", artifacts.fonts],
+    [
+      "Fonts",
+      artifacts.fonts.filter((font) => {
+        if (font.exportable !== false) return true;
+        const vectorized = artifacts.svgs.some(
+          (svg) =>
+            svg.vectorized === true &&
+            String(svg.sourceFontId) === String(font.id),
+        );
+        if (!vectorized)
+          throw new Error(`PRODUCTION_FONT_NOT_EXPORTABLE:${font.id}`);
+        return false;
+      }),
+    ],
   ]) {
     for (const [index, resource] of resources.entries()) {
       const bytes = await fetchBytes(resource);
@@ -454,16 +674,82 @@ export async function buildProductionPackage({ quote, client }) {
   }
   await addFile(
     "Bon_Production.pdf",
-    await buildProductionPdf(quote, client, previewBytes),
+    await buildProductionPdf(quote, client, previewBytes, records),
   );
   const manifest = buildProductionManifest(quote, records);
   await addFile("Manifest.json", strToU8(JSON.stringify(manifest, null, 2)));
+  await addFile(
+    "README.txt",
+    strToU8(
+      [
+        `AC Création — Dossier atelier ${quote.number || quote.id}`,
+        "",
+        "Impression_1_1.png est le fichier d'impression aux dimensions finales.",
+        "Preview_HD.png est l'aperçu couleur de contrôle.",
+        "Bon_Production.pdf contient les instructions opérateur.",
+        "Manifest.json contient les dimensions, formats et checksums SHA-256.",
+        "Reconstruction.json et Projet.acproject permettent de reprendre la composition.",
+        "Les originaux sont conservés sans réencodage dans Images, SVG et Fonts.",
+      ].join("\r\n"),
+    ),
+  );
+  const bytes = zipSync(files, { level: 6 });
+  const audit = await validateProductionPackage(bytes, manifest);
+  if (!audit.complete)
+    throw new Error(`PRODUCTION_PACKAGE_INVALID:${audit.errors.join("|")}`);
   return {
-    bytes: zipSync(files, { level: 6 }),
+    bytes,
     filename: `Commande_${safeName(quote.number, quote.id || "commande")}.zip`,
     manifest,
-    complete: true,
+    complete: audit.complete,
+    audit,
   };
+}
+
+export async function validateProductionPackage(bytes, manifest) {
+  const errors = [];
+  let archive;
+  try {
+    archive = unzipSync(bytes);
+  } catch {
+    return { complete: false, errors: ["ZIP invalide"] };
+  }
+  const entries = Object.entries(archive).filter(([, value]) => value.length);
+  const byRelativePath = new Map(
+    entries.map(([path, value]) => [path.split("/").slice(1).join("/"), value]),
+  );
+  for (const required of [
+    "Bon_Production.pdf",
+    "Preview_HD.png",
+    "Impression_1_1.png",
+    "Projet.acproject",
+    "Configurateur.json",
+    "Reconstruction.json",
+    "Manifest.json",
+    "README.txt",
+  ]) {
+    if (!byRelativePath.get(required)?.length)
+      errors.push(`${required} manquant`);
+  }
+  for (const file of manifest.files || []) {
+    const content = byRelativePath.get(file.path);
+    if (!content) errors.push(`${file.path} manquant`);
+    else if ((await sha256(content)) !== file.checksum)
+      errors.push(`${file.path} checksum invalide`);
+  }
+  const paths = [...byRelativePath.keys()].join("\n");
+  if (/demo\//i.test(paths)) errors.push("Chemin demo interdit");
+  if (/placeholder/i.test(paths)) errors.push("Placeholder interdit");
+  const pdf = byRelativePath.get("Bon_Production.pdf");
+  if (pdf && ascii(pdf, 0, 5) !== "%PDF-") errors.push("PDF invalide");
+  const preview = byRelativePath.get("Preview_HD.png");
+  const previewSize = preview ? pngDimensions(preview) : null;
+  if (
+    preview &&
+    Math.max(previewSize?.width || 0, previewSize?.height || 0) < 1200
+  )
+    errors.push("Preview HD invalide");
+  return { complete: errors.length === 0, errors, files: entries.length };
 }
 
 export function downloadBytes(

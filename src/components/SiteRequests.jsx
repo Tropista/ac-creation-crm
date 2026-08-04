@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   SITE_REQUEST_STATUS,
@@ -11,10 +11,13 @@ import { showToast } from "../utils/toast.js";
 import {
   buildProductionManifest,
   buildProductionPackage,
+  createProductionObjectUrl,
   downloadBytes,
   downloadProductionPdf,
   downloadProductionResource,
   inspectProductionArtifacts,
+  productionErrorMessage,
+  productionFormatLabel,
 } from "../utils/productionPackage.js";
 import {
   AlertTriangle,
@@ -100,11 +103,26 @@ function formatAddress(address) {
 }
 
 function resourceSize(resource) {
-  const bytes = Number(resource?.size || resource?.byteLength || 0);
+  const bytes = Number(
+    resource?.size ||
+      resource?.byteLength ||
+      resource?.contentLength ||
+      resource?.metadata?.size ||
+      0,
+  );
   if (!bytes) return "—";
-  return bytes < 1_000_000
-    ? `${Math.round(bytes / 1000)} Ko`
-    : `${(bytes / 1_000_000).toFixed(1)} Mo`;
+  return bytes < 1000
+    ? `${bytes} octets`
+    : bytes < 1_000_000
+      ? `${(bytes / 1000).toFixed(bytes < 10_000 ? 1 : 0)} Ko`
+      : `${(bytes / 1_000_000).toFixed(1)} Mo`;
+}
+
+function previewUrl(request) {
+  const preview = inspectProductionArtifacts(request).preview;
+  return typeof preview === "string"
+    ? preview
+    : preview?.signedUrl || preview?.url || preview?.dataUrl || "";
 }
 
 function formatDate(value) {
@@ -145,6 +163,7 @@ export default function SiteRequests({
   const [detailTab, setDetailTab] = useState("overview");
   const [previewZoom, setPreviewZoom] = useState(1);
   const [exporting, setExporting] = useState(false);
+  const [previewObjectUrl, setPreviewObjectUrl] = useState("");
   const requests = useMemo(
     () => (data.quotes || []).filter(isEcommerceSiteRequest),
     [data.quotes],
@@ -182,6 +201,31 @@ export default function SiteRequests({
   const selected = requests.find(
     (request) => String(request.id) === selectedId,
   );
+
+  useEffect(() => {
+    let active = true;
+    let objectUrl = "";
+    const preview = selected
+      ? inspectProductionArtifacts(selected).preview
+      : null;
+    if (!preview) {
+      setPreviewObjectUrl("");
+      return undefined;
+    }
+    createProductionObjectUrl(preview, "image/png")
+      .then((url) => {
+        objectUrl = url;
+        if (active) setPreviewObjectUrl(url);
+        else URL.revokeObjectURL(url);
+      })
+      .catch(() => {
+        if (active) setPreviewObjectUrl("");
+      });
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [selected]);
 
   function transition(request, nextStatus, action, comment = "") {
     setData((current) =>
@@ -243,6 +287,13 @@ export default function SiteRequests({
         quote: request,
         client: clients.get(String(request.clientId)),
       });
+      setData((current) =>
+        siteRequestApplicationService.recordPackageValidation(
+          current,
+          request.id,
+          result.audit,
+        ),
+      );
       downloadBytes(result.bytes, result.filename, "application/zip");
       showToast(
         result.complete
@@ -251,7 +302,7 @@ export default function SiteRequests({
         result.complete ? "success" : "warning",
       );
     } catch (error) {
-      showToast(error.message || "Generation du package impossible.", "error");
+      showToast(productionErrorMessage(error), "error");
     } finally {
       setExporting(false);
     }
@@ -267,12 +318,7 @@ export default function SiteRequests({
     try {
       await downloadProductionResource(resource, filename, type);
     } catch (error) {
-      showToast(
-        error.message === "PRODUCTION_RESOURCE_URL_MISSING"
-          ? "Le site n'a pas fourni d'URL temporaire pour ce fichier."
-          : "Telechargement du fichier impossible.",
-        "error",
-      );
+      showToast(productionErrorMessage(error), "error");
     }
   }
 
@@ -507,11 +553,8 @@ export default function SiteRequests({
                                   `${kind} ${index + 1}`}
                               </strong>
                               <small>
-                                {kind} ·{" "}
-                                {resource?.mimeType ||
-                                  resource?.type ||
-                                  "Format non renseigne"}{" "}
-                                · {resourceSize(resource)}
+                                {kind} · {productionFormatLabel(resource)} ·{" "}
+                                {resourceSize(resource)}
                               </small>
                             </div>
                             <span>
@@ -546,10 +589,8 @@ export default function SiteRequests({
                                   {resource.name || "Fichier production"}
                                 </strong>
                                 <small>
-                                  {resource.mimeType ||
-                                    resource.format ||
-                                    "Format inconnu"}{" "}
-                                  · {resourceSize(resource)}
+                                  {productionFormatLabel(resource)} ·{" "}
+                                  {resourceSize(resource)}
                                 </small>
                               </div>
                               <button
@@ -710,10 +751,9 @@ export default function SiteRequests({
                             </div>
                           </div>
                           <div className="site-request-preview">
-                            {typeof selected.ecommerce.preview === "string" &&
-                            selected.ecommerce.preview ? (
+                            {previewObjectUrl || previewUrl(selected) ? (
                               <img
-                                src={selected.ecommerce.preview}
+                                src={previewObjectUrl || previewUrl(selected)}
                                 alt={`Apercu de ${selected.number}`}
                                 style={{ transform: `scale(${previewZoom})` }}
                               />
