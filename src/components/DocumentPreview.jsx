@@ -13,7 +13,10 @@ import {
 } from "../utils/documents";
 import { getInvoicePaidAmount, getInvoiceRemaining } from "../utils/invoices";
 import { getInvoiceStyleClass } from "../utils/invoiceStyles";
-import { formatLineProductionLabel, lineHasProductionDetails } from "../utils/quoteLines";
+import {
+  formatLineProductionLabel,
+  lineHasProductionDetails,
+} from "../utils/quoteLines";
 import { money } from "../utils/money";
 import {
   copyQuoteShareLink,
@@ -21,11 +24,18 @@ import {
   prepareQuoteForShare,
 } from "../utils/quoteShare";
 import { showToast } from "../utils/toast";
-import { cleanupNavigationBlockers, CRM_ROUTE_CHANGE_EVENT } from "../utils/uiCleanup";
-import { isQuoteSigned, getSignatureDisplayLabel } from "../utils/quoteSignature";
+import {
+  cleanupNavigationBlockers,
+  CRM_ROUTE_CHANGE_EVENT,
+} from "../utils/uiCleanup";
+import {
+  isQuoteSigned,
+  getSignatureDisplayLabel,
+} from "../utils/quoteSignature";
 import { formatPaymentDate } from "../utils/payments";
 import { getInvoicePaymentLink } from "../utils/onlinePayments";
 import { getDocumentCompanySnapshot } from "../utils/companySnapshot";
+import { REMINDER_HISTORY_TYPES } from "../utils/invoiceReminderPdf";
 import QuoteSignaturePanel from "./QuoteSignaturePanel";
 
 function IconUser() {
@@ -69,9 +79,14 @@ export default function DocumentPreview({
   onQuoteSharePrepared,
   onQuoteAccept,
   paymentSummary,
+  reminderMode = false,
+  reminderData = null,
+  initialReminderAction = "",
+  onReminderDocumentGenerated,
   publicMode = false,
 }) {
   const pdfWrapperRef = useRef(null);
+  const initialReminderActionHandledRef = useRef(false);
   const [sending, setSending] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [emailPreview, setEmailPreview] = useState(null); // { subject, body }
@@ -80,9 +95,10 @@ export default function DocumentPreview({
   const client = (data.clients || []).find((c) => c.id === doc.clientId);
   const paidAmount = getInvoicePaidAmount(doc);
   const remaining = getInvoiceRemaining(doc);
-  const paymentLink = !isQuote && !isDelivery
-    ? getInvoicePaymentLink(doc, data.settings || {}, client)
-    : "";
+  const paymentLink =
+    !isQuote && !isDelivery
+      ? getInvoicePaymentLink(doc, data.settings || {}, client)
+      : "";
   const footerTotals = getDocumentFooterTotals(doc, type);
   const amountDue = getDocumentAmountDue(doc, type, { remaining });
   const billingDetail = getDocumentBillingDetail(doc);
@@ -108,7 +124,7 @@ export default function DocumentPreview({
   function getLineSku(line) {
     if (line.sku) return line.sku;
     const product = (data.products || []).find(
-      (p) => String(p.id) === String(line.productId)
+      (p) => String(p.id) === String(line.productId),
     );
     return product?.sku || "—";
   }
@@ -134,7 +150,8 @@ export default function DocumentPreview({
     }
 
     window.addEventListener(CRM_ROUTE_CHANGE_EVENT, onRouteChange);
-    return () => window.removeEventListener(CRM_ROUTE_CHANGE_EVENT, onRouteChange);
+    return () =>
+      window.removeEventListener(CRM_ROUTE_CHANGE_EVENT, onRouteChange);
   }, [handleClose]);
 
   useEffect(() => {
@@ -160,7 +177,7 @@ export default function DocumentPreview({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [handleClose]);
 
-  async function downloadPdf() {
+  async function downloadPdf(output = "download") {
     const source = document.getElementById("document-preview");
     if (!source) return showToast("Zone PDF introuvable.", "error");
     setGeneratingPdf(true);
@@ -195,12 +212,12 @@ export default function DocumentPreview({
                 img.style.display = "none";
                 resolve();
               };
-            })
-        )
+            }),
+        ),
       );
 
       const canvas = await html2canvas(clone, {
-        scale: 3,           // 300 DPI équivalent — qualité impression professionnelle
+        scale: 3, // 300 DPI équivalent — qualité impression professionnelle
         useCORS: true,
         allowTaint: false,
         backgroundColor: "#ffffff",
@@ -210,6 +227,43 @@ export default function DocumentPreview({
       });
 
       const pdf = new jsPDF("p", "mm", "a4");
+      const finishPdf = () => {
+        if (output === "print") {
+          const blobUrl = URL.createObjectURL(pdf.output("blob"));
+          const frame = document.createElement("iframe");
+          Object.assign(frame.style, {
+            position: "fixed",
+            width: "1px",
+            height: "1px",
+            opacity: "0",
+          });
+          frame.src = blobUrl;
+          frame.onload = () => {
+            frame.contentWindow?.focus();
+            frame.contentWindow?.print();
+            window.setTimeout(() => {
+              URL.revokeObjectURL(blobUrl);
+              frame.remove();
+            }, 60_000);
+          };
+          document.body.appendChild(frame);
+        } else {
+          pdf.save(
+            reminderMode && reminderData
+              ? reminderData.fileName
+              : documentFileName,
+          );
+        }
+        if (reminderMode && reminderData) {
+          onReminderDocumentGenerated?.(
+            doc,
+            reminderData,
+            output === "print"
+              ? REMINDER_HISTORY_TYPES.PRINT
+              : REMINDER_HISTORY_TYPES.PDF,
+          );
+        }
+      };
       // JPEG 95% : 3x moins lourd que PNG avec qualité quasi identique à l'impression
       const imgData = canvas.toDataURL("image/jpeg", 0.95);
 
@@ -224,7 +278,7 @@ export default function DocumentPreview({
 
       if (imgHeight <= maxHeight) {
         pdf.addImage(imgData, "JPEG", margin, margin, imgWidth, imgHeight);
-        pdf.save(documentFileName);
+        finishPdf();
         return;
       }
 
@@ -234,7 +288,7 @@ export default function DocumentPreview({
         imgWidth = (canvas.width * imgHeight) / canvas.height;
         const x = (pageWidth - imgWidth) / 2;
         pdf.addImage(imgData, "JPEG", x, margin, imgWidth, imgHeight);
-        pdf.save(documentFileName);
+        finishPdf();
         return;
       }
 
@@ -251,7 +305,7 @@ export default function DocumentPreview({
         heightLeft -= maxHeight;
       }
 
-      pdf.save(documentFileName);
+      finishPdf();
       showToast("PDF généré.", "success");
     } catch (error) {
       console.error(error);
@@ -267,23 +321,57 @@ export default function DocumentPreview({
     }
   }
 
+  useEffect(() => {
+    if (
+      !reminderMode ||
+      !reminderData ||
+      !initialReminderAction ||
+      initialReminderActionHandledRef.current
+    )
+      return;
+    initialReminderActionHandledRef.current = true;
+    downloadPdf(initialReminderAction);
+    // downloadPdf intentionally uses the current rendered invoice snapshot.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialReminderAction, reminderData, reminderMode]);
 
   async function openEmailPreview() {
-    if (!client?.email) { showToast("Ce client n'a pas d'adresse email enregistrée.", "error"); return; }
-    if (!data.settings?.smtpEmail || !data.settings?.smtpAppPassword) { showToast("Configure ton adresse Gmail dans Paramètres avant d'envoyer.", "error"); return; }
+    if (!client?.email) {
+      showToast("Ce client n'a pas d'adresse email enregistrée.", "error");
+      return;
+    }
+    if (!data.settings?.smtpEmail || !data.settings?.smtpAppPassword) {
+      showToast(
+        "Configure ton adresse Gmail dans Paramètres avant d'envoyer.",
+        "error",
+      );
+      return;
+    }
     const key = isQuote ? "quote" : "invoice";
     const vars = buildDocVars(doc, client, data.settings || {});
-    const { subject, body } = buildEmailFromTemplate(key, vars, data.settings || {});
+    const { subject, body } = buildEmailFromTemplate(
+      key,
+      vars,
+      data.settings || {},
+    );
 
     // Générer une miniature de la première page du document
     let thumbnail = null;
     try {
       const source = document.getElementById("document-preview");
       if (source) {
-        const canvas = await html2canvas(source, { scale: 0.4, useCORS: true, allowTaint: false, backgroundColor: "#ffffff", logging: false });
+        const canvas = await html2canvas(source, {
+          scale: 0.4,
+          useCORS: true,
+          allowTaint: false,
+          backgroundColor: "#ffffff",
+          logging: false,
+        });
         thumbnail = canvas.toDataURL("image/jpeg", 0.7);
       }
-    } catch { /* miniature optionnelle */ }
+    } catch {
+      /* miniature optionnelle */
+    }
 
     setEmailPreview({ subject, body, thumbnail });
   }
@@ -292,9 +380,22 @@ export default function DocumentPreview({
     if (!emailPreview) return;
     setSending(true);
     try {
-      const result = await sendDocumentByEmail({ doc, type, data, client, overrideSubject: emailPreview.subject, overrideBody: emailPreview.body });
-      onDocumentSent?.({ ...doc, emailSentAt: result.sentAt || new Date().toISOString() });
-      showToast(`Email envoyé à ${client.email} avec le PDF en pièce jointe.`, "success");
+      const result = await sendDocumentByEmail({
+        doc,
+        type,
+        data,
+        client,
+        overrideSubject: emailPreview.subject,
+        overrideBody: emailPreview.body,
+      });
+      onDocumentSent?.({
+        ...doc,
+        emailSentAt: result.sentAt || new Date().toISOString(),
+      });
+      showToast(
+        `Email envoyé à ${client.email} avec le PDF en pièce jointe.`,
+        "success",
+      );
       setEmailPreview(null);
     } catch (err) {
       showToast(err.message || "Erreur lors de l'envoi.", "error");
@@ -354,362 +455,490 @@ export default function DocumentPreview({
               </button>
             </>
           )}
-          {!publicMode && (
+          {!publicMode && !reminderMode && (
             <button type="button" onClick={openEmailPreview} disabled={sending}>
               Envoyer par email
             </button>
           )}
-          <button type="button" onClick={() => window.print()}>
-            Imprimer
+          <button
+            type="button"
+            onClick={() =>
+              reminderMode ? downloadPdf("print") : window.print()
+            }
+            disabled={generatingPdf}
+          >
+            {reminderMode ? "Imprimer le rappel" : "Imprimer"}
           </button>
-          <button type="button" className="primary" onClick={downloadPdf} disabled={generatingPdf}>
-            {generatingPdf ? "Génération…" : "Télécharger PDF"}
+          <button
+            type="button"
+            className="primary"
+            onClick={() => downloadPdf("download")}
+            disabled={generatingPdf}
+          >
+            {generatingPdf
+              ? "Génération…"
+              : reminderMode
+                ? "Télécharger le rappel PDF"
+                : "Télécharger PDF"}
           </button>
         </div>
 
-        <div id="document-preview" className={`ac-invoice-v2 ${invoiceStyleClass}`}>
+        <div
+          id="document-preview"
+          className={`ac-invoice-v2 ${invoiceStyleClass}`}
+        >
           <div className="ac-invoice-top">
-          <div className="ac-invoice-head">
-            <div className="ac-company-box">
-              <div className="ac-company-inner">
-                <div className="ac-company-logo">
-                  <img
-                    src={companyLogoUrl}
-                    alt="Logo entreprise"
-                    onError={(event) => {
-                      event.currentTarget.src = APP_LOGO_URL;
-                    }}
-                  />
+            {reminderMode && reminderData && (
+              <section
+                className="ac-reminder-banner"
+                aria-label="Informations du rappel de paiement"
+              >
+                <div className="ac-reminder-heading">
+                  <span>RAPPEL DE PAIEMENT</span>
+                  <strong>{reminderData.label}</strong>
                 </div>
-                <div className="ac-company-text">
-                  <h1>{company.companyName || "AC Creation"}</h1>
-                  <p>{company.companyAddress}</p>
-                  <p>{company.companyPhone}</p>
-                  <p>{company.companyEmail}</p>
-                  <p>
-                    <strong>N° TVA :</strong> {company.vatNumber || "-"}
-                  </p>
+                <div className="ac-reminder-meta">
+                  <span>
+                    Émis le <strong>{reminderData.issueDate}</strong>
+                  </span>
+                  <span>
+                    Échéance initiale{" "}
+                    <strong>{reminderData.dueDate || "-"}</strong>
+                  </span>
+                  <span>
+                    Retard{" "}
+                    <strong>
+                      {reminderData.daysOverdue} jour
+                      {reminderData.daysOverdue > 1 ? "s" : ""}
+                    </strong>
+                  </span>
+                  {reminderData.newDeadline && (
+                    <span>
+                      Nouvelle limite{" "}
+                      <strong>{reminderData.newDeadline}</strong>
+                    </span>
+                  )}
                 </div>
-              </div>
-            </div>
-
-            <div className="ac-title-box">
-              <h2>{documentTitle}</h2>
-              <div className="ac-title-line">
-                <span>N° {documentTitle}</span>
-                <strong>{doc.number}</strong>
-              </div>
-              <div className="ac-title-line">
-                <span>Date d'émission</span>
-                <strong>{doc.date}</strong>
-              </div>
-              {isQuote && doc.promisedDeliveryDate && (
-                <div className="ac-title-line">
-                  <span>Livraison prévue</span>
-                  <strong>{doc.promisedDeliveryDate}</strong>
+                <p>{reminderData.intro}</p>
+                {reminderData.note && <p>{reminderData.note}</p>}
+                <div className="ac-reminder-amounts">
+                  <span>
+                    Montant facture{" "}
+                    <strong>{money(reminderData.initialAmount)}</strong>
+                  </span>
+                  <span>
+                    Paiements reçus{" "}
+                    <strong>{money(reminderData.paidAmount)}</strong>
+                  </span>
+                  <span>
+                    Reste à payer{" "}
+                    <strong>{money(reminderData.remainingAmount)}</strong>
+                  </span>
                 </div>
-              )}
-              {isDelivery && doc.quoteNumber && (
-                <div className="ac-title-line">
-                  <span>Devis</span>
-                  <strong>{doc.quoteNumber}</strong>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="ac-info-grid">
-            <div className="ac-info-card">
-              <div className="ac-icon">{isDelivery ? <IconPackage /> : <IconUser />}</div>
-              <div>
-                <h3>{isDelivery ? "LIVRÉ À" : "FACTURÉ À"}</h3>
-                <strong>{client?.name || "Client supprimé"}</strong>
-                {billingDetail && <p>{billingDetail}</p>}
-                {client?.company && <p>{client.company}</p>}
-                {client?.address && <p>{client.address}</p>}
-                {client?.email && <p>{client.email}</p>}
-                {client?.phone && <p>{client.phone}</p>}
-                {(client?.vatNumber || client?.vat || client?.tva) && (
-                  <p>N° TVA : {client.vatNumber || client.vat || client.tva}</p>
-                )}
-              </div>
-            </div>
-
-            <div className="ac-info-card">
-              <div className="ac-icon"><IconDocument /></div>
-              <div>
-                <h3>{isDelivery ? "LIVRAISON" : "RÉFÉRENCE"}</h3>
-                {isDelivery ? (
-                  <>
-                    {doc.deliveryAddress && (
-                      <p>
-                        <strong>Adresse :</strong> {doc.deliveryAddress}
-                      </p>
-                    )}
-                    {doc.deliveryInfo && (
-                      <p>
-                        <strong>Infos :</strong> {doc.deliveryInfo}
-                      </p>
-                    )}
+                <p>{reminderData.closing}</p>
+              </section>
+            )}
+            <div className="ac-invoice-head">
+              <div className="ac-company-box">
+                <div className="ac-company-inner">
+                  <div className="ac-company-logo">
+                    <img
+                      src={companyLogoUrl}
+                      alt="Logo entreprise"
+                      onError={(event) => {
+                        event.currentTarget.src = APP_LOGO_URL;
+                      }}
+                    />
+                  </div>
+                  <div className="ac-company-text">
+                    <h1>{company.companyName || "AC Creation"}</h1>
+                    <p>{company.companyAddress}</p>
+                    <p>{company.companyPhone}</p>
+                    <p>{company.companyEmail}</p>
                     <p>
-                      <strong>Statut :</strong> {doc.status}
+                      <strong>N° TVA :</strong> {company.vatNumber || "-"}
                     </p>
-                  </>
-                ) : (
-                  <>
-                    <strong>{doc.convertedFrom || doc.number}</strong>
-                    <p>
-                      <strong>Statut :</strong> {doc.status}
-                    </p>
-                    {!isQuote && doc.invoiceType === "acompte" && doc.depositPercent && (
-                      <p>
-                        <strong>Acompte :</strong> {doc.depositPercent}%
-                      </p>
-                    )}
-                    {isQuote && footerTotals.showQuoteDepositSplit && (
-                      <p>
-                        <strong>Acompte :</strong> {footerTotals.quoteDeposit.depositPercent}% (
-                        {money(footerTotals.quoteDeposit.depositAmount)})
-                      </p>
-                    )}
-                    {!isQuote && doc.invoiceType === "solde" && footerTotals.depositPaidAmount > 0 && (
-                      <p>
-                        <strong>Acomptes payés :</strong> {money(footerTotals.depositPaidAmount)}
-                      </p>
-                    )}
-                    {!isQuote && doc.dueDate && (
-                      <p>
-                        <strong>Échéance :</strong> {doc.dueDate}
-                      </p>
-                    )}
-                  </>
+                  </div>
+                </div>
+              </div>
+
+              <div className="ac-title-box">
+                <h2>{documentTitle}</h2>
+                <div className="ac-title-line">
+                  <span>N° {documentTitle}</span>
+                  <strong>{doc.number}</strong>
+                </div>
+                <div className="ac-title-line">
+                  <span>Date d'émission</span>
+                  <strong>{doc.date}</strong>
+                </div>
+                {isQuote && doc.promisedDeliveryDate && (
+                  <div className="ac-title-line">
+                    <span>Livraison prévue</span>
+                    <strong>{doc.promisedDeliveryDate}</strong>
+                  </div>
+                )}
+                {isDelivery && doc.quoteNumber && (
+                  <div className="ac-title-line">
+                    <span>Devis</span>
+                    <strong>{doc.quoteNumber}</strong>
+                  </div>
                 )}
               </div>
             </div>
-          </div>
 
-          <table className="ac-table">
-            <thead>
-              <tr>
-                <th>Réf.</th>
-                <th>Désignation</th>
-                {isDelivery ? (
-                  <th>Quantité</th>
-                ) : (
-                  <>
-                    <th>Prix unitaire HT</th>
-                    <th>Quantité</th>
-                    <th>Montant total</th>
-                  </>
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {lines.map((line, index) => (
-                <tr key={index}>
-                  <td>{getLineSku(line)}</td>
-                  <td>
-                    <div>{line.description}</div>
-                    {isQuote && lineHasProductionDetails(line) && (
-                      <div className="ac-line-production">
-                        {formatLineProductionLabel(line)}
-                      </div>
-                    )}
-                  </td>
+            <div className="ac-info-grid">
+              <div className="ac-info-card">
+                <div className="ac-icon">
+                  {isDelivery ? <IconPackage /> : <IconUser />}
+                </div>
+                <div>
+                  <h3>{isDelivery ? "LIVRÉ À" : "FACTURÉ À"}</h3>
+                  <strong>{client?.name || "Client supprimé"}</strong>
+                  {billingDetail && <p>{billingDetail}</p>}
+                  {client?.company && <p>{client.company}</p>}
+                  {client?.address && <p>{client.address}</p>}
+                  {client?.email && <p>{client.email}</p>}
+                  {client?.phone && <p>{client.phone}</p>}
+                  {(client?.vatNumber || client?.vat || client?.tva) && (
+                    <p>
+                      N° TVA : {client.vatNumber || client.vat || client.tva}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="ac-info-card">
+                <div className="ac-icon">
+                  <IconDocument />
+                </div>
+                <div>
+                  <h3>{isDelivery ? "LIVRAISON" : "RÉFÉRENCE"}</h3>
                   {isDelivery ? (
-                    <td>
-                      {Number(line.quantity || 0).toLocaleString("fr-FR", {
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 2,
-                      })}
-                    </td>
+                    <>
+                      {doc.deliveryAddress && (
+                        <p>
+                          <strong>Adresse :</strong> {doc.deliveryAddress}
+                        </p>
+                      )}
+                      {doc.deliveryInfo && (
+                        <p>
+                          <strong>Infos :</strong> {doc.deliveryInfo}
+                        </p>
+                      )}
+                      <p>
+                        <strong>Statut :</strong> {doc.status}
+                      </p>
+                    </>
                   ) : (
                     <>
-                      <td>{money(line.price)}</td>
+                      <strong>{doc.convertedFrom || doc.number}</strong>
+                      <p>
+                        <strong>Statut :</strong> {doc.status}
+                      </p>
+                      {!isQuote &&
+                        doc.invoiceType === "acompte" &&
+                        doc.depositPercent && (
+                          <p>
+                            <strong>Acompte :</strong> {doc.depositPercent}%
+                          </p>
+                        )}
+                      {isQuote && footerTotals.showQuoteDepositSplit && (
+                        <p>
+                          <strong>Acompte :</strong>{" "}
+                          {footerTotals.quoteDeposit.depositPercent}% (
+                          {money(footerTotals.quoteDeposit.depositAmount)})
+                        </p>
+                      )}
+                      {!isQuote &&
+                        doc.invoiceType === "solde" &&
+                        footerTotals.depositPaidAmount > 0 && (
+                          <p>
+                            <strong>Acomptes payés :</strong>{" "}
+                            {money(footerTotals.depositPaidAmount)}
+                          </p>
+                        )}
+                      {!isQuote && doc.dueDate && (
+                        <p>
+                          <strong>Échéance :</strong> {doc.dueDate}
+                        </p>
+                      )}
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <table className="ac-table">
+              <thead>
+                <tr>
+                  <th>Réf.</th>
+                  <th>Désignation</th>
+                  {isDelivery ? (
+                    <th>Quantité</th>
+                  ) : (
+                    <>
+                      <th>Prix unitaire HT</th>
+                      <th>Quantité</th>
+                      <th>Montant total</th>
+                    </>
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {lines.map((line, index) => (
+                  <tr key={index}>
+                    <td>{getLineSku(line)}</td>
+                    <td>
+                      <div>{line.description}</div>
+                      {isQuote && lineHasProductionDetails(line) && (
+                        <div className="ac-line-production">
+                          {formatLineProductionLabel(line)}
+                        </div>
+                      )}
+                    </td>
+                    {isDelivery ? (
                       <td>
                         {Number(line.quantity || 0).toLocaleString("fr-FR", {
                           minimumFractionDigits: 0,
                           maximumFractionDigits: 2,
                         })}
                       </td>
-                      <td>{money(line.totalHT || line.subtotal)}</td>
-                    </>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                    ) : (
+                      <>
+                        <td>{money(line.price)}</td>
+                        <td>
+                          {Number(line.quantity || 0).toLocaleString("fr-FR", {
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 2,
+                          })}
+                        </td>
+                        <td>{money(line.totalHT || line.subtotal)}</td>
+                      </>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
 
           <div className="ac-invoice-bottom">
-          {isDelivery ? (
-            <>
-              <div className="ac-mentions" style={{ marginBottom: "4mm" }}>
-                <strong>Réception</strong>
-                <p>
-                  Le client reconnaît avoir reçu les articles ci-dessus en bon état.
-                  Date et signature du client : _______________________________
-                </p>
-                {doc.notes && <p>{doc.notes}</p>}
-              </div>
-            </>
-          ) : (
-          <div className="ac-after-table">
-            <div className="ac-after-table-left">
-              <div className="ac-payment-card">
-                <h3>CONDITIONS DE PAIEMENT</h3>
-                <pre>{company.paymentTerms}</pre>
-                <pre>{company.bankInfo}</pre>
-                {paymentLink ? (
-                  <p className="ac-online-payment-link">
-                    Paiement en ligne : <a href={paymentLink}>{paymentLink}</a>
+            {isDelivery ? (
+              <>
+                <div className="ac-mentions" style={{ marginBottom: "4mm" }}>
+                  <strong>Réception</strong>
+                  <p>
+                    Le client reconnaît avoir reçu les articles ci-dessus en bon
+                    état. Date et signature du client :
+                    _______________________________
                   </p>
+                  {doc.notes && <p>{doc.notes}</p>}
+                </div>
+              </>
+            ) : (
+              <div className="ac-after-table">
+                <div className="ac-after-table-left">
+                  <div className="ac-payment-card">
+                    <h3>CONDITIONS DE PAIEMENT</h3>
+                    <pre>{company.paymentTerms}</pre>
+                    <pre>{company.bankInfo}</pre>
+                    {paymentLink ? (
+                      <p className="ac-online-payment-link">
+                        Paiement en ligne :{" "}
+                        <a href={paymentLink}>{paymentLink}</a>
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div className="ac-mentions">
+                    <strong>Mentions</strong>
+                    <p>
+                      Document généré électroniquement. Aucun escompte accordé
+                      sauf indication contraire. En cas de retard de paiement,
+                      des pénalités peuvent être appliquées selon les conditions
+                      convenues.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="ac-totals-wrap">
+                  <div className="ac-totals-card">
+                    <div className="ac-total-line">
+                      <span>Sous-total HT</span>
+                      <strong>{money(doc.subtotal || doc.totalHT)}</strong>
+                    </div>
+                    <div className="ac-total-line">
+                      <span>
+                        Remise globale{" "}
+                        {doc.globalDiscount ? `(${doc.globalDiscount}%)` : ""}
+                      </span>
+                      <strong>{money(doc.globalDiscountAmount || 0)}</strong>
+                    </div>
+                    <div className="ac-total-line">
+                      <span>Total HT</span>
+                      <strong>{money(doc.totalHT)}</strong>
+                    </div>
+                    <div className="ac-total-line">
+                      <span>TVA à {doc.taxRate}%</span>
+                      <strong>{money(doc.taxAmount)}</strong>
+                    </div>
+                    {footerTotals.showQuoteDepositSplit ? (
+                      <>
+                        <div className="ac-total-line">
+                          <span>Total TTC</span>
+                          <strong>{money(doc.totalTTC)}</strong>
+                        </div>
+                        <div className="ac-total-line">
+                          <span>
+                            Acompte ({footerTotals.quoteDeposit.depositPercent}
+                            %)
+                          </span>
+                          <strong>
+                            {money(footerTotals.quoteDeposit.depositAmount)}
+                          </strong>
+                        </div>
+                        <div className="ac-total-line">
+                          <span>Solde</span>
+                          <strong>
+                            {money(
+                              footerTotals.quoteDeposit.balanceAfterDeposit,
+                            )}
+                          </strong>
+                        </div>
+                      </>
+                    ) : footerTotals.showSoldeBreakdown ? (
+                      <>
+                        <div className="ac-total-line">
+                          <span>Total TTC devis</span>
+                          <strong>
+                            {money(footerTotals.quoteTotalTTCForSolde)}
+                          </strong>
+                        </div>
+                        <div className="ac-total-line">
+                          <span>Acomptes payés</span>
+                          <strong>
+                            − {money(footerTotals.depositPaidAmount)}
+                          </strong>
+                        </div>
+                        <div className="ac-total-line">
+                          <span>Total TTC</span>
+                          <strong>{money(doc.totalTTC)}</strong>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="ac-total-line">
+                        <span>Total TTC</span>
+                        <strong>{money(doc.totalTTC)}</strong>
+                      </div>
+                    )}
+                    {paidAmount > 0.01 && amountDue > 0.01 && (
+                      <div className="ac-total-line">
+                        <span>Déjà payé</span>
+                        <strong>{money(paidAmount)}</strong>
+                      </div>
+                    )}
+                    {!isQuote && paymentSummary?.depositPaid > 0.01 && (
+                      <div className="ac-total-line">
+                        <span>Acompte payé</span>
+                        <strong>{money(paymentSummary.depositPaid)}</strong>
+                      </div>
+                    )}
+                    {!isQuote && paymentSummary?.remaining > 0.01 && (
+                      <div className="ac-total-line">
+                        <span>Reste à payer</span>
+                        <strong>{money(paymentSummary.remaining)}</strong>
+                      </div>
+                    )}
+                    <div className="ac-total-line ac-total-final">
+                      <span>
+                        {isQuote && footerTotals.showQuoteDepositSplit
+                          ? "À PAYER (ACOMPTE)"
+                          : "À PAYER"}
+                      </span>
+                      <strong>{money(amountDue)}</strong>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {!isQuote && paymentSummary?.paymentHistory?.length > 0 && (
+              <div className="invoice-payment-history">
+                <strong>Historique des paiements</strong>
+                <ul>
+                  {paymentSummary.paymentHistory.map((payment) => (
+                    <li key={payment.id}>
+                      {formatPaymentDate(payment.date)} —{" "}
+                      {money(payment.amount)} · {payment.method}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {!isQuote && !reminderMode && doc.reminderHistory?.length > 0 && (
+              <div className="invoice-payment-history no-print">
+                <strong>Historique des rappels PDF / impression</strong>
+                <ul>
+                  {doc.reminderHistory.map((entry) => (
+                    <li key={entry.id}>
+                      {formatPaymentDate(entry.date)} -{" "}
+                      {entry.level === "reminder_1"
+                        ? "1er rappel"
+                        : entry.level === "reminder_2"
+                          ? "2e rappel"
+                          : "Dernier rappel"}{" "}
+                      · {entry.type} · {entry.user} · solde{" "}
+                      {money(entry.remainingAmount)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {isQuote && isQuoteSigned(doc) && (
+              <div className="quote-signature-preview quote-signature-preview--compact">
+                <strong>Acceptation client</strong>
+                <p>{getSignatureDisplayLabel(doc)}</p>
+                {doc.signature?.dataUrl ? (
+                  <img
+                    src={doc.signature.dataUrl}
+                    alt="Signature"
+                    className="quote-signature-image"
+                  />
                 ) : null}
               </div>
+            )}
 
-              <div className="ac-mentions">
-                <strong>Mentions</strong>
-                <p>
-                  Document généré électroniquement. Aucun escompte accordé sauf
-                  indication contraire. En cas de retard de paiement, des pénalités
-                  peuvent être appliquées selon les conditions convenues.
-                </p>
+            {isQuote && onQuoteAccept ? (
+              <div className="no-print">
+                <QuoteSignaturePanel
+                  quote={doc}
+                  onAccept={onQuoteAccept}
+                  compact
+                />
               </div>
-            </div>
+            ) : null}
 
-            <div className="ac-totals-wrap">
-              <div className="ac-totals-card">
-                <div className="ac-total-line">
-                  <span>Sous-total HT</span>
-                  <strong>{money(doc.subtotal || doc.totalHT)}</strong>
-                </div>
-                <div className="ac-total-line">
-                  <span>
-                    Remise globale {doc.globalDiscount ? `(${doc.globalDiscount}%)` : ""}
-                  </span>
-                  <strong>{money(doc.globalDiscountAmount || 0)}</strong>
-                </div>
-                <div className="ac-total-line">
-                  <span>Total HT</span>
-                  <strong>{money(doc.totalHT)}</strong>
-                </div>
-                <div className="ac-total-line">
-                  <span>TVA à {doc.taxRate}%</span>
-                  <strong>{money(doc.taxAmount)}</strong>
-                </div>
-                {footerTotals.showQuoteDepositSplit ? (
-                  <>
-                    <div className="ac-total-line">
-                      <span>Total TTC</span>
-                      <strong>{money(doc.totalTTC)}</strong>
-                    </div>
-                    <div className="ac-total-line">
-                      <span>Acompte ({footerTotals.quoteDeposit.depositPercent}%)</span>
-                      <strong>{money(footerTotals.quoteDeposit.depositAmount)}</strong>
-                    </div>
-                    <div className="ac-total-line">
-                      <span>Solde</span>
-                      <strong>{money(footerTotals.quoteDeposit.balanceAfterDeposit)}</strong>
-                    </div>
-                  </>
-                ) : footerTotals.showSoldeBreakdown ? (
-                  <>
-                    <div className="ac-total-line">
-                      <span>Total TTC devis</span>
-                      <strong>{money(footerTotals.quoteTotalTTCForSolde)}</strong>
-                    </div>
-                    <div className="ac-total-line">
-                      <span>Acomptes payés</span>
-                      <strong>− {money(footerTotals.depositPaidAmount)}</strong>
-                    </div>
-                    <div className="ac-total-line">
-                      <span>Total TTC</span>
-                      <strong>{money(doc.totalTTC)}</strong>
-                    </div>
-                  </>
-                ) : (
-                  <div className="ac-total-line">
-                    <span>Total TTC</span>
-                    <strong>{money(doc.totalTTC)}</strong>
-                  </div>
-                )}
-                {paidAmount > 0.01 && amountDue > 0.01 && (
-                  <div className="ac-total-line">
-                    <span>Déjà payé</span>
-                    <strong>{money(paidAmount)}</strong>
-                  </div>
-                )}
-                {!isQuote && paymentSummary?.depositPaid > 0.01 && (
-                  <div className="ac-total-line">
-                    <span>Acompte payé</span>
-                    <strong>{money(paymentSummary.depositPaid)}</strong>
-                  </div>
-                )}
-                {!isQuote && paymentSummary?.remaining > 0.01 && (
-                  <div className="ac-total-line">
-                    <span>Reste à payer</span>
-                    <strong>{money(paymentSummary.remaining)}</strong>
-                  </div>
-                )}
-                <div className="ac-total-line ac-total-final">
-                  <span>
-                    {isQuote && footerTotals.showQuoteDepositSplit
-                      ? "À PAYER (ACOMPTE)"
-                      : "À PAYER"}
-                  </span>
-                  <strong>{money(amountDue)}</strong>
-                </div>
+            <div className="ac-thanks">
+              <div className="ac-icon">
+                <IconInfo />
               </div>
+              <div>
+                <strong>Merci pour votre confiance.</strong>
+                <p>Pour toute question, n'hésitez pas à nous contacter.</p>
+              </div>
+              <div className="ac-signature">Merci !</div>
             </div>
-          </div>
-          )}
 
-          {!isQuote && paymentSummary?.paymentHistory?.length > 0 && (
-            <div className="invoice-payment-history">
-              <strong>Historique des paiements</strong>
-              <ul>
-                {paymentSummary.paymentHistory.map((payment) => (
-                  <li key={payment.id}>
-                    {formatPaymentDate(payment.date)} — {money(payment.amount)} · {payment.method}
-                  </li>
-                ))}
-              </ul>
+            <div className="ac-footer">
+              <strong>{company.companyName} — Personnalisation</strong>
+              <span>
+                {company.companyAddress} — {company.companyPhone} —{" "}
+                {company.companyEmail}
+              </span>
+              <span>N° TVA : {company.vatNumber || "-"}</span>
             </div>
-          )}
-
-          {isQuote && isQuoteSigned(doc) && (
-            <div className="quote-signature-preview quote-signature-preview--compact">
-              <strong>Acceptation client</strong>
-              <p>{getSignatureDisplayLabel(doc)}</p>
-              {doc.signature?.dataUrl ? (
-                <img src={doc.signature.dataUrl} alt="Signature" className="quote-signature-image" />
-              ) : null}
-            </div>
-          )}
-
-          {isQuote && onQuoteAccept ? (
-            <div className="no-print">
-              <QuoteSignaturePanel quote={doc} onAccept={onQuoteAccept} compact />
-            </div>
-          ) : null}
-
-          <div className="ac-thanks">
-            <div className="ac-icon"><IconInfo /></div>
-            <div>
-              <strong>Merci pour votre confiance.</strong>
-              <p>Pour toute question, n'hésitez pas à nous contacter.</p>
-            </div>
-            <div className="ac-signature">Merci !</div>
-          </div>
-
-          <div className="ac-footer">
-            <strong>{company.companyName} — Personnalisation</strong>
-            <span>
-              {company.companyAddress} — {company.companyPhone} —{" "}
-              {company.companyEmail}
-            </span>
-            <span>N° TVA : {company.vatNumber || "-"}</span>
-          </div>
           </div>
         </div>
       </div>
@@ -718,47 +947,150 @@ export default function DocumentPreview({
 
   if (typeof document === "undefined") return null;
 
-  const emailPreviewModal = emailPreview ? createPortal(
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", zIndex: 9100, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}
-      onClick={() => !sending && setEmailPreview(null)}>
-      <div style={{ background: "var(--surface)", borderRadius: 12, width: "min(640px,96vw)", maxHeight: "90vh", overflow: "auto", boxShadow: "var(--shadow)" }}
-        onClick={(e) => e.stopPropagation()}>
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <strong style={{ fontSize: 15 }}>Aperçu de l'email</strong>
-          <span style={{ fontSize: 12, color: "var(--muted)" }}>À : {client?.email}</span>
-        </div>
-        <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
-          <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <span style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600 }}>Objet</span>
-            <input value={emailPreview.subject} onChange={(e) => setEmailPreview({ ...emailPreview, subject: e.target.value })}
-              style={{ fontSize: 13 }} />
-          </label>
-          <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <span style={{ fontSize: 12, color: "var(--muted)", fontWeight: 600 }}>Corps</span>
-            <textarea rows={12} value={emailPreview.body} onChange={(e) => setEmailPreview({ ...emailPreview, body: e.target.value })}
-              style={{ fontSize: 13, fontFamily: "inherit", resize: "vertical" }} />
-          </label>
-          <p style={{ fontSize: 11, color: "var(--muted)", margin: 0 }}>
-            📎 Le PDF sera joint automatiquement à l'envoi.
-            {emailPreview.thumbnail && (
-              <img
-                src={emailPreview.thumbnail}
-                alt="Aperçu PDF"
-                style={{ display: "block", marginTop: 8, maxWidth: 160, border: "1px solid var(--border)", borderRadius: 6, opacity: 0.85 }}
-              />
-            )}
-          </p>
-        </div>
-        <div style={{ padding: "12px 20px", borderTop: "1px solid var(--border)", display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <button type="button" onClick={() => setEmailPreview(null)} disabled={sending}>Annuler</button>
-          <button type="button" className="primary" onClick={sendEmail} disabled={sending}>
-            {sending ? "Envoi en cours…" : "✉ Envoyer"}
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
-  ) : null;
+  const emailPreviewModal = emailPreview
+    ? createPortal(
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,.5)",
+            zIndex: 9100,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+          onClick={() => !sending && setEmailPreview(null)}
+        >
+          <div
+            style={{
+              background: "var(--surface)",
+              borderRadius: 12,
+              width: "min(640px,96vw)",
+              maxHeight: "90vh",
+              overflow: "auto",
+              boxShadow: "var(--shadow)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                padding: "16px 20px",
+                borderBottom: "1px solid var(--border)",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <strong style={{ fontSize: 15 }}>Aperçu de l'email</strong>
+              <span style={{ fontSize: 12, color: "var(--muted)" }}>
+                À : {client?.email}
+              </span>
+            </div>
+            <div
+              style={{
+                padding: 20,
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+              }}
+            >
+              <label
+                style={{ display: "flex", flexDirection: "column", gap: 4 }}
+              >
+                <span
+                  style={{
+                    fontSize: 12,
+                    color: "var(--muted)",
+                    fontWeight: 600,
+                  }}
+                >
+                  Objet
+                </span>
+                <input
+                  value={emailPreview.subject}
+                  onChange={(e) =>
+                    setEmailPreview({
+                      ...emailPreview,
+                      subject: e.target.value,
+                    })
+                  }
+                  style={{ fontSize: 13 }}
+                />
+              </label>
+              <label
+                style={{ display: "flex", flexDirection: "column", gap: 4 }}
+              >
+                <span
+                  style={{
+                    fontSize: 12,
+                    color: "var(--muted)",
+                    fontWeight: 600,
+                  }}
+                >
+                  Corps
+                </span>
+                <textarea
+                  rows={12}
+                  value={emailPreview.body}
+                  onChange={(e) =>
+                    setEmailPreview({ ...emailPreview, body: e.target.value })
+                  }
+                  style={{
+                    fontSize: 13,
+                    fontFamily: "inherit",
+                    resize: "vertical",
+                  }}
+                />
+              </label>
+              <p style={{ fontSize: 11, color: "var(--muted)", margin: 0 }}>
+                📎 Le PDF sera joint automatiquement à l'envoi.
+                {emailPreview.thumbnail && (
+                  <img
+                    src={emailPreview.thumbnail}
+                    alt="Aperçu PDF"
+                    style={{
+                      display: "block",
+                      marginTop: 8,
+                      maxWidth: 160,
+                      border: "1px solid var(--border)",
+                      borderRadius: 6,
+                      opacity: 0.85,
+                    }}
+                  />
+                )}
+              </p>
+            </div>
+            <div
+              style={{
+                padding: "12px 20px",
+                borderTop: "1px solid var(--border)",
+                display: "flex",
+                gap: 8,
+                justifyContent: "flex-end",
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setEmailPreview(null)}
+                disabled={sending}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                className="primary"
+                onClick={sendEmail}
+                disabled={sending}
+              >
+                {sending ? "Envoi en cours…" : "✉ Envoyer"}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
+      )
+    : null;
 
   return (
     <>

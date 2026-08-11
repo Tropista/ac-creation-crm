@@ -46,6 +46,60 @@
   flex: 0 0 auto;
 }
 
+.ac-reminder-banner {
+  margin-bottom: 4mm;
+  padding: 3.5mm;
+  border: 1.5px solid #db2777;
+  border-radius: 9px;
+  background: #fff7fb;
+  color: #334155;
+}
+.ac-reminder-heading,
+.ac-reminder-meta,
+.ac-reminder-amounts {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 3mm;
+  flex-wrap: wrap;
+}
+.ac-reminder-heading span {
+  color: #be185d;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+.ac-reminder-heading strong {
+  padding: 1.2mm 2.5mm;
+  border-radius: 999px;
+  color: #fff;
+  background: #db2777;
+}
+.ac-reminder-meta {
+  margin: 2.5mm 0;
+  padding: 2mm 0;
+  border-top: 1px solid #f5d0e5;
+  border-bottom: 1px solid #f5d0e5;
+  font-size: 9px;
+}
+.ac-reminder-banner p {
+  margin: 1.5mm 0;
+}
+.ac-reminder-amounts {
+  margin: 2mm 0;
+}
+.ac-reminder-amounts span {
+  flex: 1;
+  min-width: 45mm;
+  padding: 2mm;
+  background: #fff;
+  border-radius: 6px;
+}
+.ac-reminder-amounts span:last-child {
+  color: #be185d;
+  border: 1px solid #f9a8d4;
+}
+
 .ac-invoice-bottom {
   margin-top: auto;
   flex: 0 0 auto;

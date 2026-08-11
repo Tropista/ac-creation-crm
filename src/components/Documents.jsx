@@ -97,6 +97,10 @@ import { buildCompanySnapshot } from "../utils/companySnapshot";
 import { confirmAction } from "../utils/confirmAction";
 import { invoiceApplicationService } from "../application/InvoiceApplicationService";
 import { paymentApplicationService } from "../application/PaymentApplicationService";
+import {
+  appendInvoiceReminderHistory,
+  buildInvoiceReminderPdfData,
+} from "../utils/invoiceReminderPdf";
 
 function toInputDate(date) {
   const year = date.getFullYear();
@@ -175,6 +179,8 @@ function Documents({
   const [editingId, setEditingId] = useState(null);
   const [previewDoc, setPreviewDoc] = useState(null);
   const [previewType, setPreviewType] = useState(type);
+  const [previewIsReminder, setPreviewIsReminder] = useState(false);
+  const [previewReminderAction, setPreviewReminderAction] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [sortBy, setSortBy] = useState("dateDesc");
   const [search, setSearch] = useState("");
@@ -1343,8 +1349,38 @@ function Documents({
   }
 
   function openPreview(doc, docType = isQuote ? "quote" : "invoice") {
+    setPreviewIsReminder(false);
+    setPreviewReminderAction("");
     setPreviewDoc(doc);
     setPreviewType(docType);
+  }
+
+  function openReminderPreview(invoice, action = "") {
+    setPreviewIsReminder(true);
+    setPreviewReminderAction(action);
+    setPreviewDoc(invoice);
+    setPreviewType("invoice");
+  }
+
+  function recordReminderDocument(invoice, reminderData, historyType) {
+    const updated = appendInvoiceReminderHistory(
+      invoice,
+      reminderData,
+      historyType,
+      currentRole,
+    );
+    const nextInvoices = (data.invoices || []).map((entry) =>
+      String(entry.id) === String(invoice.id) ? updated : entry,
+    );
+    setData({ ...data, invoices: nextInvoices });
+    setPreviewDoc(updated);
+    logActivity?.(
+      historyType === "impression"
+        ? "Impression rappel facture"
+        : "PDF rappel facture",
+      invoice.number,
+      `${reminderData.label} · solde ${money(reminderData.remainingAmount)}`,
+    );
   }
 
   function generateDeliveryNote(quote) {
@@ -1873,6 +1909,7 @@ function Documents({
         onRemove={remove}
         onUpdateStatus={updateStatus}
         onSendReminder={sendInvoiceReminder}
+        onPreviewReminder={openReminderPreview}
         onConvertQuote={convertQuoteToInvoice}
         onCopyQuoteLink={isQuote ? handleCopyQuoteLink : undefined}
         onShareQuoteWhatsApp={isQuote ? handleShareQuoteWhatsApp : undefined}
@@ -1978,6 +2015,14 @@ function Documents({
           paymentSummary={
             !isQuote ? buildPaymentSummary(previewDoc, data.payments) : null
           }
+          reminderMode={previewIsReminder}
+          initialReminderAction={previewReminderAction}
+          reminderData={
+            previewIsReminder
+              ? buildInvoiceReminderPdfData(previewDoc, data.settings || {})
+              : null
+          }
+          onReminderDocumentGenerated={recordReminderDocument}
         />
       )}
     </section>

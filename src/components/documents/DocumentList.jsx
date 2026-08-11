@@ -1,5 +1,18 @@
-import { clientName, isQuoteConvertible, quoteIsFullyInvoiced, statusClass, isQuoteDeliveryNoteEligible, quoteHasDeliveryNote, getQuoteDepositSummary } from "../../utils/documents";
-import { isInvoiceOverdue, getInvoicePaidAmount, getInvoiceRemaining, isPartiallyPaidInvoice } from "../../utils/invoices";
+import {
+  clientName,
+  isQuoteConvertible,
+  quoteIsFullyInvoiced,
+  statusClass,
+  isQuoteDeliveryNoteEligible,
+  quoteHasDeliveryNote,
+  getQuoteDepositSummary,
+} from "../../utils/documents";
+import {
+  isInvoiceOverdue,
+  getInvoicePaidAmount,
+  getInvoiceRemaining,
+  isPartiallyPaidInvoice,
+} from "../../utils/invoices";
 import { money } from "../../utils/money";
 import { QUOTE_STATUSES } from "../../utils/production";
 import { formatTrackingDate } from "../../utils/documentTracking";
@@ -24,6 +37,7 @@ export default function DocumentList({
   onUpdateStatus,
   onMarkEmailRead,
   onSendReminder,
+  onPreviewReminder,
   onConvertQuote,
   onCopyQuoteLink,
   onShareQuoteWhatsApp,
@@ -51,7 +65,8 @@ export default function DocumentList({
           <div>
             <strong>Liste des {isQuote ? "devis" : "factures"}</strong>
             <span>
-              {sortedDocuments.length} document{sortedDocuments.length > 1 ? "s" : ""}
+              {sortedDocuments.length} document
+              {sortedDocuments.length > 1 ? "s" : ""}
               {overdueOnly && !isQuote ? " · filtre en retard actif" : ""}
             </span>
           </div>
@@ -65,19 +80,61 @@ export default function DocumentList({
             onChange={(e) => onSearchChange?.(e.target.value)}
             aria-label={`Rechercher ${isQuote ? "un devis" : "une facture"}`}
           />
-          <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12 }}>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              fontSize: 12,
+            }}
+          >
             <span style={{ color: "var(--muted)" }}>Du</span>
-            <input type="date" value={dateFrom} onChange={(e) => onDateFromChange?.(e.target.value)}
-              style={{ fontSize: 12, padding: "4px 6px", border: "1px solid var(--border)", borderRadius: 6, background: "var(--input-bg)", color: "var(--text)" }} />
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => onDateFromChange?.(e.target.value)}
+              style={{
+                fontSize: 12,
+                padding: "4px 6px",
+                border: "1px solid var(--border)",
+                borderRadius: 6,
+                background: "var(--input-bg)",
+                color: "var(--text)",
+              }}
+            />
           </label>
-          <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12 }}>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              fontSize: 12,
+            }}
+          >
             <span style={{ color: "var(--muted)" }}>Au</span>
-            <input type="date" value={dateTo} onChange={(e) => onDateToChange?.(e.target.value)}
-              style={{ fontSize: 12, padding: "4px 6px", border: "1px solid var(--border)", borderRadius: 6, background: "var(--input-bg)", color: "var(--text)" }} />
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => onDateToChange?.(e.target.value)}
+              style={{
+                fontSize: 12,
+                padding: "4px 6px",
+                border: "1px solid var(--border)",
+                borderRadius: 6,
+                background: "var(--input-bg)",
+                color: "var(--text)",
+              }}
+            />
           </label>
           {(dateFrom || dateTo) && (
-            <button type="button" style={{ fontSize: 11, padding: "4px 8px" }}
-              onClick={() => { onDateFromChange?.(""); onDateToChange?.(""); }}>
+            <button
+              type="button"
+              style={{ fontSize: 11, padding: "4px 8px" }}
+              onClick={() => {
+                onDateFromChange?.("");
+                onDateToChange?.("");
+              }}
+            >
               ✕ Dates
             </button>
           )}
@@ -98,7 +155,10 @@ export default function DocumentList({
           )}
           <label className="documents-field documents-field--sort">
             <span>Trier par</span>
-            <select value={sortBy} onChange={(e) => onSortChange(e.target.value)}>
+            <select
+              value={sortBy}
+              onChange={(e) => onSortChange(e.target.value)}
+            >
               <option value="dateDesc">Date : plus récent</option>
               <option value="dateAsc">Date : plus ancien</option>
               <option value="numberDesc">N° : décroissant</option>
@@ -144,8 +204,13 @@ export default function DocumentList({
             <tbody>
               {paginatedDocuments.map((d) => {
                 const overdue = !isQuote && isInvoiceOverdue(d);
-                const depositSummary = isQuote ? getQuoteDepositSummary(data, d) : null;
-                const convertible = isQuote && isQuoteConvertible(data, d) && !depositSummary?.hasDeposits;
+                const depositSummary = isQuote
+                  ? getQuoteDepositSummary(data, d)
+                  : null;
+                const convertible =
+                  isQuote &&
+                  isQuoteConvertible(data, d) &&
+                  !depositSummary?.hasDeposits;
                 const converted = isQuote && quoteIsFullyInvoiced(data, d);
                 const depositFlow = isQuote && depositSummary?.hasDeposits;
                 const blEligible = isQuote && isQuoteDeliveryNoteEligible(d);
@@ -155,7 +220,9 @@ export default function DocumentList({
                 const partial = !isQuote && isPartiallyPaidInvoice(d);
                 const depositEligible =
                   isQuote &&
-                  ["Accepté", "En production", "Prêt", "Livré"].includes(d.status);
+                  ["Accepté", "En production", "Prêt", "Livré"].includes(
+                    d.status,
+                  );
                 const productionSheetEligible =
                   isQuote && ["En production", "Prêt"].includes(d.status);
 
@@ -170,7 +237,9 @@ export default function DocumentList({
                     <td>{d.date}</td>
                     <td>{clientName(data, d.clientId)}</td>
                     <td>
-                      <span className="documents-lines-badge">{d.lines?.length || 1}</span>
+                      <span className="documents-lines-badge">
+                        {d.lines?.length || 1}
+                      </span>
                     </td>
                     <td>
                       <strong>{money(d.totalTTC)}</strong>
@@ -182,7 +251,8 @@ export default function DocumentList({
                       )}
                       {isQuote && depositSummary?.hasDeposits && (
                         <span className="documents-deposit-summary muted">
-                          Acompte facturé : {money(depositSummary.invoicedDeposit)} / Reste :{" "}
+                          Acompte facturé :{" "}
+                          {money(depositSummary.invoicedDeposit)} / Reste :{" "}
                           {money(depositSummary.remainingBalance)}
                         </span>
                       )}
@@ -193,8 +263,12 @@ export default function DocumentList({
                           <span className="documents-paid-full">Payé</span>
                         ) : partial || paid > 0 ? (
                           <div className="documents-payment-stack">
-                            <span className="documents-paid-partial">{money(paid)}</span>
-                            <span className="muted documents-remaining">Reste {money(remaining)}</span>
+                            <span className="documents-paid-partial">
+                              {money(paid)}
+                            </span>
+                            <span className="muted documents-remaining">
+                              Reste {money(remaining)}
+                            </span>
                           </div>
                         ) : (
                           <span className="muted">—</span>
@@ -206,8 +280,21 @@ export default function DocumentList({
                         <button
                           type="button"
                           onClick={() => onToggleNoReminder(d)}
-                          title={d.noAutoReminder ? "Relances automatiques désactivées — cliquer pour réactiver" : "Désactiver les relances automatiques pour cette facture"}
-                          style={{ fontSize: 10, background: "none", border: "none", cursor: "pointer", padding: 0, color: d.noAutoReminder ? "var(--orange, #fb923c)" : "var(--muted)" }}
+                          title={
+                            d.noAutoReminder
+                              ? "Relances automatiques désactivées — cliquer pour réactiver"
+                              : "Désactiver les relances automatiques pour cette facture"
+                          }
+                          style={{
+                            fontSize: 10,
+                            background: "none",
+                            border: "none",
+                            cursor: "pointer",
+                            padding: 0,
+                            color: d.noAutoReminder
+                              ? "var(--orange, #fb923c)"
+                              : "var(--muted)",
+                          }}
                         >
                           {d.noAutoReminder ? "🔕 Relances off" : "🔔"}
                         </button>
@@ -215,18 +302,38 @@ export default function DocumentList({
                       {d.emailSentAt && (
                         <div style={{ marginBottom: 3 }}>
                           {d.emailReadAt ? (
-                            <span style={{ fontSize: 10, color: "#10b981", fontWeight: 600 }}>✓ Lu</span>
+                            <span
+                              style={{
+                                fontSize: 10,
+                                color: "#10b981",
+                                fontWeight: 600,
+                              }}
+                            >
+                              ✓ Lu
+                            </span>
                           ) : (
-                            <button type="button" onClick={() => onMarkEmailRead?.(d)}
+                            <button
+                              type="button"
+                              onClick={() => onMarkEmailRead?.(d)}
                               title={`Email envoyé le ${new Date(d.emailSentAt).toLocaleDateString("fr-FR")}`}
-                              style={{ fontSize: 10, background: "none", border: "none", cursor: "pointer", color: "var(--muted)", padding: 0 }}>
+                              style={{
+                                fontSize: 10,
+                                background: "none",
+                                border: "none",
+                                cursor: "pointer",
+                                color: "var(--muted)",
+                                padding: 0,
+                              }}
+                            >
                               📧 Marquer lu
                             </button>
                           )}
                         </div>
                       )}
                       <div className="documents-status-cell">
-                        <span className={statusClass(d.status)}>{d.status}</span>
+                        <span className={statusClass(d.status)}>
+                          {d.status}
+                        </span>
                         <select
                           className="documents-status-select"
                           value={d.status}
@@ -252,27 +359,46 @@ export default function DocumentList({
                     </td>
                     <td className="documents-tracking-cell">
                       {d.sentAt ? (
-                        <span className="muted" title={`Envoyé le ${formatTrackingDate(d.sentAt)}`}>
+                        <span
+                          className="muted"
+                          title={`Envoyé le ${formatTrackingDate(d.sentAt)}`}
+                        >
                           Envoyé {formatTrackingDate(d.sentAt)}
                         </span>
                       ) : (
                         <span className="muted">—</span>
                       )}
                       {!isQuote && Number(d.reminderCount || 0) > 0 && (
-                        <span className="documents-reminder-count" title={`Dernière relance : ${formatTrackingDate(d.lastReminderAt || d.lastReminderDate)}`}>
+                        <span
+                          className="documents-reminder-count"
+                          title={`Dernière relance : ${formatTrackingDate(d.lastReminderAt || d.lastReminderDate)}`}
+                        >
                           Relance n°{d.reminderCount}
                         </span>
                       )}
                     </td>
                     <td className="actions documents-actions">
-                      <button type="button" className="compact" onClick={() => onPreview(d)}>
+                      <button
+                        type="button"
+                        className="compact"
+                        onClick={() => onPreview(d)}
+                      >
                         Voir
                       </button>
-                      <button type="button" className="compact" onClick={() => onEdit(d)}>
+                      <button
+                        type="button"
+                        className="compact"
+                        onClick={() => onEdit(d)}
+                      >
                         Modifier
                       </button>
                       {onDuplicate && (
-                        <button type="button" className="compact" onClick={() => onDuplicate(d)} title={`Dupliquer ce ${isQuote ? "devis" : "facture"}`}>
+                        <button
+                          type="button"
+                          className="compact"
+                          onClick={() => onDuplicate(d)}
+                          title={`Dupliquer ce ${isQuote ? "devis" : "facture"}`}
+                        >
                           Dupliquer
                         </button>
                       )}
@@ -280,16 +406,26 @@ export default function DocumentList({
                         <button
                           type="button"
                           className="compact"
-                          title={d.isTemplate ? "Retirer des modèles" : "Enregistrer comme modèle récurrent"}
+                          title={
+                            d.isTemplate
+                              ? "Retirer des modèles"
+                              : "Enregistrer comme modèle récurrent"
+                          }
                           onClick={() => onToggleTemplate(d)}
-                          style={{ color: d.isTemplate ? "var(--yellow, #fbbf24)" : undefined }}
+                          style={{
+                            color: d.isTemplate
+                              ? "var(--yellow, #fbbf24)"
+                              : undefined,
+                          }}
                         >
                           {d.isTemplate ? "⭐ Modèle" : "☆ Modèle"}
                         </button>
                       )}
                       {isQuote &&
                         (converted ? (
-                          <span className="documents-converted-tag">Facturé</span>
+                          <span className="documents-converted-tag">
+                            Facturé
+                          </span>
                         ) : depositFlow ? (
                           <>
                             {depositSummary?.canCreateBalance && (
@@ -369,26 +505,31 @@ export default function DocumentList({
                             {percent}%
                           </button>
                         ))}
-                      {!isQuote && d.status !== "Payée" && d.status !== "Annulée" && (
-                        <button
-                          type="button"
-                          className="compact documents-payment-btn"
-                          onClick={() => onRecordPayment(d)}
-                          title="Enregistrer un paiement partiel ou total"
-                        >
-                          Paiement
-                        </button>
-                      )}
-                      {!isQuote && d.status !== "Payée" && d.status !== "Annulée" && onCreatePaymentLink && (
-                        <button
-                          type="button"
-                          className="compact documents-payment-link-btn"
-                          onClick={() => onCreatePaymentLink(d)}
-                          title="Générer, copier ou ouvrir le lien de paiement en ligne"
-                        >
-                          Lien paiement
-                        </button>
-                      )}
+                      {!isQuote &&
+                        d.status !== "Payée" &&
+                        d.status !== "Annulée" && (
+                          <button
+                            type="button"
+                            className="compact documents-payment-btn"
+                            onClick={() => onRecordPayment(d)}
+                            title="Enregistrer un paiement partiel ou total"
+                          >
+                            Paiement
+                          </button>
+                        )}
+                      {!isQuote &&
+                        d.status !== "Payée" &&
+                        d.status !== "Annulée" &&
+                        onCreatePaymentLink && (
+                          <button
+                            type="button"
+                            className="compact documents-payment-link-btn"
+                            onClick={() => onCreatePaymentLink(d)}
+                            title="Générer, copier ou ouvrir le lien de paiement en ligne"
+                          >
+                            Lien paiement
+                          </button>
+                        )}
                       {isQuote && (
                         <>
                           <button
@@ -410,23 +551,43 @@ export default function DocumentList({
                         </>
                       )}
                       {!isQuote && overdue && (
-                        <button
-                          type="button"
-                          className="compact documents-remind-btn"
-                          onClick={() => onSendReminder(d)}
-                          title={
-                            d.lastReminderAt || d.lastReminderDate
-                              ? `Dernière relance : ${formatTrackingDate(d.lastReminderAt || d.lastReminderDate)} · Relance n°${Number(d.reminderCount || 0) + 1}`
-                              : "Préparer un email de relance (relance n°1)"
-                          }
-                        >
-                          {Number(d.reminderCount || 0) > 0
-                            ? `Relance n°${Number(d.reminderCount || 0) + 1}`
-                            : "Relancer"}
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            className="compact documents-remind-btn"
+                            onClick={() => onSendReminder(d)}
+                            title={
+                              d.lastReminderAt || d.lastReminderDate
+                                ? `Dernière relance : ${formatTrackingDate(d.lastReminderAt || d.lastReminderDate)} · Relance n°${Number(d.reminderCount || 0) + 1}`
+                                : "Préparer un email de relance (relance n°1)"
+                            }
+                          >
+                            {Number(d.reminderCount || 0) > 0
+                              ? `Relance n°${Number(d.reminderCount || 0) + 1}`
+                              : "Relancer"}
+                          </button>
+                          <button
+                            type="button"
+                            className="compact"
+                            onClick={() => onPreviewReminder?.(d, "print")}
+                          >
+                            Imprimer le rappel
+                          </button>
+                          <button
+                            type="button"
+                            className="compact"
+                            onClick={() => onPreviewReminder?.(d, "download")}
+                          >
+                            Télécharger le rappel PDF
+                          </button>
+                        </>
                       )}
                       {canDelete && (
-                        <button type="button" className="danger compact" onClick={() => onRemove(d.id)}>
+                        <button
+                          type="button"
+                          className="danger compact"
+                          onClick={() => onRemove(d.id)}
+                        >
                           Supprimer
                         </button>
                       )}
