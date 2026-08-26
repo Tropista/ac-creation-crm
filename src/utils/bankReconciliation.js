@@ -65,6 +65,27 @@ function dateProximityScore(transaction, invoice) {
   return 0;
 }
 
+function normalizeMatchText(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function textMatchScore(transaction, values = []) {
+  const haystack = normalizeMatchText([
+    transaction?.description,
+    transaction?.reference,
+    transaction?.notes,
+  ].filter(Boolean).join(" "));
+  const tokens = values
+    .flatMap((value) => normalizeMatchText(value).split(/\s+/))
+    .filter((token) => token.length >= 3);
+  return tokens.some((token) => haystack.includes(token)) ? 15 : 0;
+}
+
 export function scoreInvoiceMatch(transaction, invoice, invoiceClientName = "") {
   let score = 0;
   const reasons = [];
@@ -107,6 +128,7 @@ export function scoreInvoiceMatch(transaction, invoice, invoiceClientName = "") 
 }
 
 export function suggestInvoiceMatches(transaction, invoices, data, { limit = 3 } = {}) {
+  if (Number(transaction?.amount || 0) <= 0) return [];
   return [...(invoices || [])]
     .filter((invoice) => !isCancelledInvoice(invoice))
     .map((invoice) => ({
@@ -125,6 +147,67 @@ export function suggestInvoiceMatches(transaction, invoices, data, { limit = 3 }
     .slice(0, limit);
 }
 
+export function getExpenseAmount(expense) {
+  return Math.abs(Number(expense?.totalTTC ?? expense?.amountTTC ?? expense?.amount ?? 0));
+}
+
+export function scoreExpenseMatch(transaction, expense) {
+  let score = 0;
+  const reasons = [];
+  const txAmount = Math.abs(Number(transaction?.amount || 0));
+  const expenseAmount = getExpenseAmount(expense);
+  const delta = Math.abs(txAmount - expenseAmount);
+
+  if (delta <= 0.01) {
+    score += 40;
+    reasons.push("Montant exact");
+  } else if (expenseAmount > 0 && delta / expenseAmount <= 0.05) {
+    score += 20;
+    reasons.push("Montant proche");
+  }
+
+  const reference = normalizeMatchText(expense?.invoiceNumber || expense?.reference);
+  const txText = normalizeMatchText([
+    transaction?.description,
+    transaction?.reference,
+  ].filter(Boolean).join(" "));
+  if (reference.length >= 3 && txText.includes(reference)) {
+    score += 50;
+    reasons.push("Référence dépense");
+  }
+
+  const textScore = textMatchScore(transaction, [expense?.supplierName]);
+  if (textScore) {
+    score += textScore;
+    reasons.push("Fournisseur");
+  }
+
+  const proximity = dateProximityScore(transaction, { date: expense?.purchaseDate || expense?.date });
+  if (proximity) {
+    score += proximity;
+    reasons.push("Date proche");
+  }
+
+  return { score, reasons };
+}
+
+export function suggestExpenseMatches(transaction, expenses, { limit = 3 } = {}) {
+  if (Number(transaction?.amount || 0) >= 0) return [];
+  return [...(expenses || [])]
+    .map((expense) => ({ expense, ...scoreExpenseMatch(transaction, expense) }))
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score || Math.abs(Math.abs(Number(transaction.amount)) - getExpenseAmount(a.expense)) - Math.abs(Math.abs(Number(transaction.amount)) - getExpenseAmount(b.expense)))
+    .slice(0, limit);
+}
+
+function chooseUnambiguousSuggestion(suggestions, minScore, minGap) {
+  const best = suggestions[0];
+  const second = suggestions[1];
+  if (!best || best.score < minScore) return null;
+  if (second && best.score - second.score < minGap) return null;
+  return best;
+}
+
 export function getAutoReconciliationCandidates(
   transactions = [],
   invoices = [],
@@ -139,12 +222,10 @@ export function getAutoReconciliationCandidates(
   const candidates = [];
 
   for (const transaction of pendingTransactions) {
+    if (Number(transaction.amount) <= 0) continue;
     const suggestions = suggestInvoiceMatches(transaction, openInvoices, data, { limit: 2 });
-    const best = suggestions[0];
-    const second = suggestions[1];
-    if (!best || best.score < minScore) continue;
-    if (second && best.score - second.score < minGap) continue;
-    if (usedInvoiceIds.has(String(best.invoice.id))) continue;
+    const best = chooseUnambiguousSuggestion(suggestions, minScore, minGap);
+    if (!best || usedInvoiceIds.has(String(best.invoice.id))) continue;
 
     candidates.push({
       transaction,
@@ -156,6 +237,42 @@ export function getAutoReconciliationCandidates(
   }
 
   return candidates;
+}
+
+export function getAutoExpenseReconciliationCandidates(
+  transactions = [],
+  expenses = [],
+  { minScore = 65, minGap = 15 } = {}
+) {
+  const usedExpenseIds = new Set();
+  const candidates = [];
+  for (const transaction of transactions || []) {
+    if (transaction?.matched || Number(transaction?.amount || 0) >= 0) continue;
+    const best = chooseUnambiguousSuggestion(
+      suggestExpenseMatches(transaction, expenses, { limit: 2 }),
+      minScore,
+      minGap
+    );
+    if (!best || usedExpenseIds.has(String(best.expense.id))) continue;
+    candidates.push({ transaction, expense: best.expense, score: best.score, reasons: best.reasons });
+    usedExpenseIds.add(String(best.expense.id));
+  }
+  return candidates;
+}
+
+export function getBankTransactionStats(transactions = []) {
+  const entries = transactions.filter((transaction) => Number(transaction.amount) > 0);
+  const exits = transactions.filter((transaction) => Number(transaction.amount) < 0);
+  const entriesTotal = entries.reduce((sum, transaction) => sum + Number(transaction.amount), 0);
+  const exitsTotal = exits.reduce((sum, transaction) => sum + Math.abs(Number(transaction.amount)), 0);
+  return {
+    total: transactions.length,
+    pending: transactions.filter((transaction) => !transaction.matched).length,
+    matched: transactions.filter((transaction) => transaction.matched).length,
+    entriesTotal,
+    exitsTotal,
+    balance: entriesTotal - exitsTotal,
+  };
 }
 
 export function getReconcilableInvoices(invoices) {
@@ -189,10 +306,18 @@ export function buildUnpaidInvoiceRevert(invoice) {
   };
 }
 
-export function getTransactionReconciliationState(transaction, invoices) {
+export function getTransactionReconciliationState(transaction, invoices, expenses = []) {
   if (!transaction?.matched) {
-    return { status: "pending", invoice: null };
+    return {
+      status: transaction?.category ? "categorized" : "pending",
+      invoice: null,
+      expense: null,
+    };
   }
+
+  const expense = (expenses || []).find(
+    (entry) => String(entry.id) === String(transaction.matched_expense_id)
+  ) || null;
 
   const invoice =
     findInvoiceByReference(invoices, transaction.matched_invoice) ||
@@ -202,7 +327,12 @@ export function getTransactionReconciliationState(transaction, invoices) {
     null;
 
   return {
-    status: invoice ? "matched" : transaction.matched_invoice ? "orphan" : "ignored",
+    status: invoice || expense
+      ? "matched"
+      : transaction.matched_invoice || transaction.matched_expense_id
+        ? "orphan"
+        : "ignored",
     invoice,
+    expense,
   };
 }

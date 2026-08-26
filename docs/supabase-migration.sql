@@ -85,13 +85,38 @@ CREATE TABLE IF NOT EXISTS bank_transactions (
   matched boolean DEFAULT false,
   matched_invoice text,
   matched_invoice_id text,
+  matched_expense_id text,
+  matched_expense_reference text,
+  match_type text,
+  source text NOT NULL DEFAULT 'manual',
+  category text,
+  reference text,
+  payment_method text,
+  notes text,
+  external_id text,
+  provider text,
+  updated_at timestamptz DEFAULT now(),
   created_at timestamptz DEFAULT now()
 );
 
 ALTER TABLE bank_transactions
   ADD COLUMN IF NOT EXISTS matched boolean DEFAULT false,
   ADD COLUMN IF NOT EXISTS matched_invoice text,
-  ADD COLUMN IF NOT EXISTS matched_invoice_id text;
+  ADD COLUMN IF NOT EXISTS matched_invoice_id text,
+  ADD COLUMN IF NOT EXISTS matched_expense_id text,
+  ADD COLUMN IF NOT EXISTS matched_expense_reference text,
+  ADD COLUMN IF NOT EXISTS match_type text,
+  ADD COLUMN IF NOT EXISTS source text DEFAULT 'manual',
+  ADD COLUMN IF NOT EXISTS category text,
+  ADD COLUMN IF NOT EXISTS reference text,
+  ADD COLUMN IF NOT EXISTS payment_method text,
+  ADD COLUMN IF NOT EXISTS notes text,
+  ADD COLUMN IF NOT EXISTS external_id text,
+  ADD COLUMN IF NOT EXISTS provider text,
+  ADD COLUMN IF NOT EXISTS updated_at timestamptz DEFAULT now();
+
+CREATE UNIQUE INDEX IF NOT EXISTS bank_transactions_external_id_unique
+  ON bank_transactions (external_id);
 
 -- matched_invoice_id must stay text (CRM invoice ids are strings, not UUIDs)
 

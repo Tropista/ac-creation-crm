@@ -82,6 +82,9 @@ export function reconcilePatchVariants(invoice) {
       matched: true,
       matched_invoice: number,
       matched_invoice_id: invoiceId,
+      matched_expense_id: null,
+      matched_expense_reference: null,
+      match_type: "invoice",
       status: "rapprochée",
     },
     {
@@ -97,12 +100,45 @@ export function reconcilePatchVariants(invoice) {
   ];
 }
 
+export function reconcileExpensePatchVariants(expense) {
+  const expenseId = expense?.id != null ? String(expense.id) : null;
+  const reference = expense?.invoiceNumber || expense?.reference || expense?.supplierName || null;
+  return [
+    {
+      matched: true,
+      matched_invoice: null,
+      matched_invoice_id: null,
+      matched_expense_id: expenseId,
+      matched_expense_reference: reference,
+      match_type: "expense",
+      status: "rapprochée",
+    },
+  ];
+}
+
+export function unlinkPatchVariants() {
+  return [
+    {
+      matched: false,
+      matched_invoice: null,
+      matched_invoice_id: null,
+      matched_expense_id: null,
+      matched_expense_reference: null,
+      match_type: null,
+      status: "non rapprochée",
+    },
+  ];
+}
+
 export function ignorePatchVariants() {
   return [
     {
       matched: true,
       matched_invoice: null,
       matched_invoice_id: null,
+      matched_expense_id: null,
+      matched_expense_reference: null,
+      match_type: null,
       status: "ignorée",
     },
     {

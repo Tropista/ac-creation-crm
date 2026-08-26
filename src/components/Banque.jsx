@@ -5,9 +5,13 @@ import {
   buildPaidInvoiceUpdate,
   buildUnpaidInvoiceRevert,
   findInvoiceByReference,
+  getAutoExpenseReconciliationCandidates,
   getAutoReconciliationCandidates,
+  getBankTransactionStats,
+  getExpenseAmount,
   getReconcilableInvoices,
   getTransactionReconciliationState,
+  suggestExpenseMatches,
   suggestInvoiceMatches,
 } from "../utils/bankReconciliation";
 import {
@@ -18,7 +22,9 @@ import {
   logBankTransactionError,
   patchBankTransaction,
   reconcilePatchVariants,
+  reconcileExpensePatchVariants,
   removeLocalBankTransaction,
+  unlinkPatchVariants,
 } from "../utils/bankTransactionSync";
 import { isPaidInvoice } from "../utils/invoices";
 import { money } from "../utils/money";
@@ -31,34 +37,47 @@ import {
   fetchTinkTransactions,
   getBankApiUrl,
 } from "../utils/bankApi";
-
-const EMPTY_MANUAL_FORM = {
-  date: new Date().toISOString().split("T")[0],
-  description: "",
-  amount: "",
-};
+import {
+  buildManualBankTransactionPayload,
+  buildSyncedBankTransactionPayload,
+  createEmptyManualBankForm,
+  isManualBankTransaction,
+  manualBankTransactionToForm,
+} from "../utils/manualBankTransactions";
 
 export default function Banque({ data, setData, logActivity }) {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState("pending");
   const [selectedInvoiceByTx, setSelectedInvoiceByTx] = useState({});
+  const [selectedExpenseByTx, setSelectedExpenseByTx] = useState({});
   const [showManualForm, setShowManualForm] = useState(false);
-  const [manualForm, setManualForm] = useState(EMPTY_MANUAL_FORM);
+  const [manualForm, setManualForm] = useState(createEmptyManualBankForm);
+  const [editingTransaction, setEditingTransaction] = useState(null);
+  const [savingManual, setSavingManual] = useState(false);
+  const [manualError, setManualError] = useState("");
+  const [search, setSearch] = useState("");
   const [workingTxId, setWorkingTxId] = useState(null);
   const [bankStatus, setBankStatus] = useState(null);
   const [bankLoading, setBankLoading] = useState(false);
   const [tinkSyncing, setTinkSyncing] = useState(false);
 
   const invoices = data?.invoices || [];
+  const expenses = data?.expenses || [];
   const reconcilableInvoices = useMemo(
     () => getReconcilableInvoices(invoices),
     [invoices]
   );
-  const autoCandidates = useMemo(
-    () => getAutoReconciliationCandidates(transactions, invoices, data),
-    [transactions, invoices, data]
-  );
+  const reconcilableExpenses = useMemo(() => {
+    const linkedIds = new Set(
+      transactions.filter((transaction) => transaction.matched).map((transaction) => String(transaction.matched_expense_id || "")).filter(Boolean)
+    );
+    return expenses.filter((expense) => !linkedIds.has(String(expense.id)));
+  }, [expenses, transactions]);
+  const autoCandidates = useMemo(() => [
+    ...getAutoReconciliationCandidates(transactions, invoices, data).map((item) => ({ ...item, type: "invoice" })),
+    ...getAutoExpenseReconciliationCandidates(transactions, reconcilableExpenses).map((item) => ({ ...item, type: "expense" })),
+  ], [transactions, invoices, reconcilableExpenses, data]);
 
   useEffect(() => {
     if (isSupabaseConfigured) {
@@ -122,15 +141,7 @@ export default function Banque({ data, setData, logActivity }) {
         return;
       }
 
-      const existingIds = new Set(
-        transactions
-          .map((tx) => tx.external_id)
-          .filter(Boolean)
-      );
-
-      const freshRows = incoming.filter(
-        (tx) => tx.external_id && !existingIds.has(tx.external_id)
-      );
+      const freshRows = incoming.filter((tx) => tx.external_id);
 
       if (!freshRows.length) {
         showToast("Transactions déjà synchronisées.", "info");
@@ -139,37 +150,15 @@ export default function Banque({ data, setData, logActivity }) {
       }
 
       const supabase = await getSupabase();
-      const { error } = await supabase.from("bank_transactions").insert(
-        freshRows.map((tx) => ({
-          transaction_date: tx.transaction_date,
-          description: tx.description,
-          amount: tx.amount,
-          currency: tx.currency || "EUR",
-          status: tx.status || "non rapprochée",
-          matched: false,
-          external_id: tx.external_id,
-          provider: tx.provider || "Tink",
-        }))
-      );
+      const { error } = await supabase
+        .from("bank_transactions")
+        .upsert(freshRows.map(buildSyncedBankTransactionPayload), {
+          onConflict: "external_id",
+          ignoreDuplicates: true,
+        });
 
       if (error) {
-        if (String(error.message || "").includes("external_id")) {
-          const { error: fallbackError } = await supabase
-            .from("bank_transactions")
-            .insert(
-              freshRows.map((tx) => ({
-                transaction_date: tx.transaction_date,
-                description: `${tx.description} [${tx.external_id}]`,
-                amount: tx.amount,
-                currency: tx.currency || "EUR",
-                status: tx.status || "non rapprochée",
-                matched: false,
-              }))
-            );
-          if (fallbackError) throw fallbackError;
-        } else {
-          throw error;
-        }
+        throw error;
       }
 
       showToast(`${freshRows.length} transaction(s) Tink importée(s).`, "success");
@@ -216,48 +205,57 @@ export default function Banque({ data, setData, logActivity }) {
 
   async function addManualTransaction(event) {
     event.preventDefault();
-
-    const amount = Number(manualForm.amount);
-    if (!manualForm.description.trim()) {
-      showToast("Indiquez une description", "error");
-      return;
-    }
-    if (Number.isNaN(amount) || amount === 0) {
-      showToast("Indiquez un montant valide", "error");
-      return;
-    }
-
+    setManualError("");
+    setSavingManual(true);
     try {
+      const payload = buildManualBankTransactionPayload(manualForm);
       const supabase = await getSupabase();
-      const { error } = await supabase.from("bank_transactions").insert([
-        {
-          transaction_date: manualForm.date,
-          description: manualForm.description.trim(),
-          amount,
-          currency: "EUR",
-          status: "non rapprochée",
-          matched: false,
-        },
-      ]);
+      const query = editingTransaction
+        ? supabase
+            .from("bank_transactions")
+            .update({ ...payload, updated_at: new Date().toISOString() })
+            .eq("id", editingTransaction.id)
+            .eq("source", "manual")
+        : supabase.from("bank_transactions").insert([
+            { ...payload, status: "non rapprochée", matched: false },
+          ]);
+      const { error } = await query;
 
-      if (error) {
-        console.error(error);
-        showToast("Impossible d'ajouter la transaction", "error");
-        return;
-      }
+      if (error) throw error;
 
-      showToast("Transaction ajoutée", "success");
-      setManualForm(EMPTY_MANUAL_FORM);
+      showToast(editingTransaction ? "Transaction modifiée" : "Transaction ajoutée", "success");
+      setManualForm(createEmptyManualBankForm());
+      setEditingTransaction(null);
       setShowManualForm(false);
       await loadTransactions();
       await logActivity?.(
-        "Transaction bancaire ajoutée",
-        `${manualForm.description.trim()} — ${money(amount)}`
+        editingTransaction ? "Transaction bancaire modifiée" : "Transaction bancaire ajoutée",
+        `${payload.description} — ${money(payload.amount)}`
       );
     } catch (error) {
       console.error(error);
-      showToast("Impossible d'ajouter la transaction", "error");
+      const message = error.message || "Impossible d'enregistrer la transaction";
+      setManualError(message);
+      showToast(message, "error");
+    } finally {
+      setSavingManual(false);
     }
+  }
+
+  function openManualForm(transaction = null) {
+    setEditingTransaction(transaction);
+    setManualForm(
+      transaction ? manualBankTransactionToForm(transaction) : createEmptyManualBankForm()
+    );
+    setManualError("");
+    setShowManualForm(true);
+  }
+
+  function closeManualForm() {
+    if (savingManual) return;
+    setShowManualForm(false);
+    setEditingTransaction(null);
+    setManualError("");
   }
 
   async function reconcileTransaction(transaction, invoice) {
@@ -386,7 +384,7 @@ export default function Banque({ data, setData, logActivity }) {
     if (
       !(await confirmAction({
         title: "Rapprochement automatique",
-        message: `Rapprocher automatiquement ${autoCandidates.length} transaction(s) avec leur facture ?`,
+        message: `Rapprocher automatiquement ${autoCandidates.length} transaction(s) avec leur document ?`,
         detail: "Seules les correspondances fortes et non ambiguës seront validées.",
         confirmLabel: "Rapprocher",
       }))
@@ -403,13 +401,16 @@ export default function Banque({ data, setData, logActivity }) {
     let localOnlyCount = 0;
 
     for (const candidate of autoCandidates) {
-      const { transaction, invoice } = candidate;
+      const { transaction, invoice, expense, type } = candidate;
+      const variants = type === "expense"
+        ? reconcileExpensePatchVariants(expense)
+        : reconcilePatchVariants(invoice);
       const bankResult = await patchBankTransaction(
         supabase,
         transaction.id,
-        reconcilePatchVariants(invoice)
+        variants
       );
-      const patch = bankResult.patch || reconcilePatchVariants(invoice).at(-1);
+      const patch = bankResult.patch || variants.at(-1);
 
       if (!bankResult.ok) {
         localOnlyCount += 1;
@@ -421,15 +422,17 @@ export default function Banque({ data, setData, logActivity }) {
         transaction.id,
         patch
       );
-      nextInvoices = nextInvoices.map((entry) =>
-        String(entry.id) === String(invoice.id)
-          ? buildPaidInvoiceUpdate(entry, transaction)
-          : entry
-      );
+      if (type === "invoice") {
+        nextInvoices = nextInvoices.map((entry) =>
+          String(entry.id) === String(invoice.id)
+            ? buildPaidInvoiceUpdate(entry, transaction)
+            : entry
+        );
+      }
       reconciledCount += 1;
       await logActivity?.(
         "Rapprochement bancaire auto",
-        `${invoice.number} — ${money(transaction.amount)}`
+        `${invoice?.number || expense?.invoiceNumber || expense?.supplierName || "Dépense"} — ${money(transaction.amount)}`
       );
     }
 
@@ -439,6 +442,7 @@ export default function Banque({ data, setData, logActivity }) {
     });
     setTransactions(nextTransactions);
     setSelectedInvoiceByTx({});
+    setSelectedExpenseByTx({});
 
     showToast(
       localOnlyCount
@@ -452,10 +456,83 @@ export default function Banque({ data, setData, logActivity }) {
     setWorkingTxId(null);
   }
 
+  async function reconcileExpense(transaction, expense) {
+    if (!expense) {
+      showToast("Sélectionnez une dépense", "error");
+      return;
+    }
+    setWorkingTxId(transaction.id);
+    try {
+      const supabase = await getSupabase();
+      const result = await patchBankTransaction(
+        supabase,
+        transaction.id,
+        reconcileExpensePatchVariants(expense)
+      );
+      if (!result.ok) throw result.error;
+      showToast(`Dépense ${expense.invoiceNumber || expense.supplierName || expense.id} rapprochée`, "success");
+      await logActivity?.(
+        "Rapprochement bancaire dépense",
+        `${expense.supplierName || "Dépense"} — ${money(getExpenseAmount(expense))}`
+      );
+      setSelectedExpenseByTx((current) => {
+        const next = { ...current };
+        delete next[transaction.id];
+        return next;
+      });
+      await loadTransactions();
+    } catch (error) {
+      logBankTransactionError("rapprochement dépense", error);
+      showToast("Impossible de rapprocher la dépense." + bankTransactionErrorHint(error), "error", 7000);
+    } finally {
+      setWorkingTxId(null);
+    }
+  }
+
+  async function unlinkTransaction(transaction) {
+    const reconciliation = getTransactionReconciliationState(transaction, invoices, expenses);
+    if (!(await confirmAction({
+      title: "Retirer le rapprochement",
+      message: "Retirer le lien entre cette transaction et son document ?",
+      detail: reconciliation.invoice ? "La facture repassera en statut non payée." : "La dépense elle-même ne sera pas modifiée.",
+      confirmLabel: "Retirer",
+      danger: true,
+    }))) return;
+
+    setWorkingTxId(transaction.id);
+    try {
+      const supabase = await getSupabase();
+      const result = await patchBankTransaction(supabase, transaction.id, unlinkPatchVariants());
+      if (!result.ok) throw result.error;
+      if (reconciliation.invoice) {
+        await setData({
+          ...data,
+          invoices: invoices.map((invoice) =>
+            String(invoice.id) === String(reconciliation.invoice.id)
+              ? buildUnpaidInvoiceRevert(invoice)
+              : invoice
+          ),
+        });
+      }
+      showToast("Rapprochement retiré", "success");
+      await loadTransactions();
+    } catch (error) {
+      logBankTransactionError("retrait rapprochement", error);
+      showToast("Impossible de retirer le rapprochement." + bankTransactionErrorHint(error), "error", 7000);
+    } finally {
+      setWorkingTxId(null);
+    }
+  }
+
   async function deleteTransaction(transaction) {
+    if (!isManualBankTransaction(transaction)) {
+      showToast("Une transaction synchronisée ne peut pas être supprimée.", "error");
+      return;
+    }
     const reconciliation = getTransactionReconciliationState(
       transaction,
-      invoices
+      invoices,
+      expenses
     );
     const linkedInvoice = reconciliation.invoice;
 
@@ -527,28 +604,24 @@ export default function Banque({ data, setData, logActivity }) {
   }
 
   const stats = useMemo(() => {
-    const credits = transactions.filter((tx) => Number(tx.amount) > 0);
-    const debits = transactions.filter((tx) => Number(tx.amount) < 0);
-
-    return {
-      total: transactions.length,
-      pending: transactions.filter((tx) => !tx.matched).length,
-      matched: transactions.filter((tx) => tx.matched).length,
-      creditsTotal: credits.reduce((sum, tx) => sum + Number(tx.amount), 0),
-      debitsTotal: debits.reduce((sum, tx) => sum + Number(tx.amount), 0),
-      balance: transactions.reduce((sum, tx) => sum + Number(tx.amount), 0),
-    };
+    return getBankTransactionStats(transactions);
   }, [transactions]);
 
   const visibleTransactions = useMemo(() => {
-    if (filter === "pending") {
-      return transactions.filter((tx) => !tx.matched);
-    }
-    if (filter === "matched") {
-      return transactions.filter((tx) => tx.matched);
-    }
-    return transactions;
-  }, [transactions, filter]);
+    const needle = search.trim().toLowerCase();
+    return transactions.filter((tx) => {
+      if (filter === "pending" && tx.matched) return false;
+      if (filter === "matched" && !tx.matched) return false;
+      if (filter === "entries" && Number(tx.amount) <= 0) return false;
+      if (filter === "exits" && Number(tx.amount) >= 0) return false;
+      if (!needle) return true;
+      return [tx.description, tx.category, tx.reference, tx.payment_method, tx.notes]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(needle);
+    });
+  }, [transactions, filter, search]);
 
   function defaultInvoiceId(transaction) {
     const suggestions = suggestInvoiceMatches(transaction, invoices, data, {
@@ -629,9 +702,9 @@ export default function Banque({ data, setData, logActivity }) {
           )}
           <button
             className="primary"
-            onClick={() => setShowManualForm((value) => !value)}
+            onClick={() => openManualForm()}
           >
-            Ajouter une transaction
+            + Ajouter une transaction
           </button>
           <button
             onClick={autoReconcileTransactions}
@@ -669,17 +742,17 @@ export default function Banque({ data, setData, logActivity }) {
       </div>
 
       {showManualForm && (
-        <form className="card" onSubmit={addManualTransaction}>
-          <h3>Ajouter une transaction manuelle</h3>
-          <p className="muted">
-            Utile en attendant la connexion Tink ou pour saisir un virement reçu.
-          </p>
-
-          <div className="form-grid">
+        <div className="bank-modal-backdrop" onClick={closeManualForm}>
+        <form className="bank-modal" onSubmit={addManualTransaction} onClick={(event) => event.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="bank-modal-title">
+          <h3 id="bank-modal-title">{editingTransaction ? "Modifier la transaction" : "Ajouter une transaction manuelle"}</h3>
+          <p className="muted">Cette opération bancaire n'est ni une facture, ni un avoir, ni une écriture automatique de CA ou de TVA.</p>
+          {manualError && <p className="bank-form-error" role="alert">{manualError}</p>}
+          <div className="form-grid bank-form-grid">
             <label>
-              Date
+              Date de transaction
               <input
                 type="date"
+                required
                 value={manualForm.date}
                 onChange={(event) =>
                   setManualForm({ ...manualForm, date: event.target.value })
@@ -688,10 +761,20 @@ export default function Banque({ data, setData, logActivity }) {
             </label>
 
             <label>
-              Montant (€)
+              Type
+              <select value={manualForm.type} onChange={(event) => setManualForm({ ...manualForm, type: event.target.value })}>
+                <option value="credit">Entrée</option>
+                <option value="debit">Sortie</option>
+              </select>
+            </label>
+
+            <label>
+              Montant positif (€)
               <input
                 type="number"
                 step="0.01"
+                min="0.01"
+                required
                 value={manualForm.amount}
                 onChange={(event) =>
                   setManualForm({ ...manualForm, amount: event.target.value })
@@ -700,10 +783,16 @@ export default function Banque({ data, setData, logActivity }) {
               />
             </label>
 
-            <label style={{ gridColumn: "1 / -1" }}>
-              Description
+            <label>
+              Catégorie
+              <input value={manualForm.category} onChange={(event) => setManualForm({ ...manualForm, category: event.target.value })} placeholder="Frais bancaires, apport…" />
+            </label>
+
+            <label className="bank-field-wide">
+              Libellé
               <input
                 type="text"
+                required
                 value={manualForm.description}
                 onChange={(event) =>
                   setManualForm({
@@ -711,20 +800,44 @@ export default function Banque({ data, setData, logActivity }) {
                     description: event.target.value,
                   })
                 }
-                placeholder="PAIEMENT FAC-2025-0063 Client Dupont"
+                placeholder="PAIEMENT FAC-2026-0063 Client Dupont"
               />
+            </label>
+
+            <label>
+              Référence / communication
+              <input value={manualForm.reference} onChange={(event) => setManualForm({ ...manualForm, reference: event.target.value })} />
+            </label>
+
+            <label>
+              Mode de paiement
+              <select value={manualForm.paymentMethod} onChange={(event) => setManualForm({ ...manualForm, paymentMethod: event.target.value })}>
+                <option value="">Non précisé</option>
+                <option value="Virement">Virement</option>
+                <option value="Carte">Carte</option>
+                <option value="Espèces">Espèces</option>
+                <option value="Prélèvement">Prélèvement</option>
+                <option value="Chèque">Chèque</option>
+                <option value="Autre">Autre</option>
+              </select>
+            </label>
+
+            <label className="bank-field-wide">
+              Notes
+              <textarea rows="3" value={manualForm.notes} onChange={(event) => setManualForm({ ...manualForm, notes: event.target.value })} />
             </label>
           </div>
 
-          <div style={{ display: "flex", gap: "10px", marginTop: "16px" }}>
-            <button type="submit" className="primary">
-              Enregistrer
-            </button>
-            <button type="button" onClick={() => setShowManualForm(false)}>
+          <div className="bank-modal-actions">
+            <button type="button" onClick={closeManualForm} disabled={savingManual}>
               Annuler
+            </button>
+            <button type="submit" className="primary" disabled={savingManual}>
+              {savingManual ? "Enregistrement…" : "Enregistrer"}
             </button>
           </div>
         </form>
+        </div>
       )}
 
       <div className="dashboard-grid">
@@ -733,21 +846,22 @@ export default function Banque({ data, setData, logActivity }) {
           <p className="kpi-value">{stats.total}</p>
         </div>
         <div className="card">
-          <h3>À rapprocher</h3>
-          <p className="kpi-value">{stats.pending}</p>
-        </div>
-        <div className="card">
           <h3>Entrées</h3>
-          <p>{money(stats.creditsTotal)}</p>
+          <p className="kpi-value">{money(stats.entriesTotal)}</p>
         </div>
         <div className="card">
-          <h3>Solde affiché</h3>
-          <p>{money(stats.balance)}</p>
+          <h3>Sorties</h3>
+          <p className="kpi-value">{money(stats.exitsTotal)}</p>
+        </div>
+        <div className="card">
+          <h3>Solde</h3>
+          <p className="kpi-value">{money(stats.balance)}</p>
         </div>
       </div>
 
       <div className="card" style={{ marginBottom: "16px" }}>
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+          <input className="bank-search" type="search" placeholder="Rechercher une transaction…" value={search} onChange={(event) => setSearch(event.target.value)} />
           <button
             className={filter === "pending" ? "primary" : ""}
             onClick={() => setFilter("pending")}
@@ -766,6 +880,8 @@ export default function Banque({ data, setData, logActivity }) {
           >
             Toutes
           </button>
+          <button className={filter === "entries" ? "primary" : ""} onClick={() => setFilter("entries")}>Entrées</button>
+          <button className={filter === "exits" ? "primary" : ""} onClick={() => setFilter("exits")}>Sorties</button>
         </div>
         <p className="muted" style={{ margin: "10px 0 0", fontSize: 12 }}>
           Auto-match fiable : {autoCandidates.length} transaction(s). Le CRM valide seulement les
@@ -802,14 +918,16 @@ export default function Banque({ data, setData, logActivity }) {
               visibleTransactions.map((transaction) => {
                 const reconciliation = getTransactionReconciliationState(
                   transaction,
-                  invoices
+                  invoices,
+                  expenses
                 );
-                const suggestions = suggestInvoiceMatches(
+                const invoiceSuggestions = suggestInvoiceMatches(
                   transaction,
                   invoices,
                   data,
                   { limit: 3 }
                 );
+                const expenseSuggestions = suggestExpenseMatches(transaction, reconcilableExpenses, { limit: 3 });
                 const selectedInvoiceId =
                   selectedInvoiceByTx[transaction.id] ??
                   defaultInvoiceId(transaction);
@@ -821,12 +939,25 @@ export default function Banque({ data, setData, logActivity }) {
                     (invoice) => String(invoice.id) === String(selectedInvoiceId)
                   ) ||
                   null;
+                const selectedExpenseId = selectedExpenseByTx[transaction.id] ??
+                  (expenseSuggestions[0] ? String(expenseSuggestions[0].expense.id) : "");
+                const selectedExpense = expenses.find(
+                  (expense) => String(expense.id) === String(selectedExpenseId)
+                ) || null;
+                const isEntry = Number(transaction.amount) > 0;
                 const isWorking = workingTxId === transaction.id;
 
                 return (
                   <tr key={transaction.id}>
                     <td>{transaction.transaction_date || "—"}</td>
-                    <td>{transaction.description || "—"}</td>
+                    <td>
+                      <div>{transaction.description || "—"}</div>
+                      <div className="bank-transaction-meta">
+                        {isManualBankTransaction(transaction) && <span className="badge bank-manual-badge">Saisie manuelle</span>}
+                        {transaction.category && <span>{transaction.category}</span>}
+                        {transaction.reference && <span>Réf. {transaction.reference}</span>}
+                      </div>
+                    </td>
                     <td>{money(transaction.amount)}</td>
                     <td>
                       {reconciliation.status === "matched" && reconciliation.invoice && (
@@ -838,30 +969,43 @@ export default function Banque({ data, setData, logActivity }) {
                         </div>
                       )}
 
+                      {reconciliation.status === "matched" && reconciliation.expense && (
+                        <div>
+                          <strong>Dépense {reconciliation.expense.supplierName || "—"} — {money(getExpenseAmount(reconciliation.expense))}</strong>
+                          <div className="muted">{reconciliation.expense.invoiceNumber || "Sans référence"}</div>
+                        </div>
+                      )}
+
                       {reconciliation.status === "orphan" && (
                         <div>
-                          <span className="badge warning">Facture introuvable</span>
+                          <span className="badge warning">Document introuvable</span>
                           <div className="muted">
-                            Réf. {transaction.matched_invoice}
+                            Réf. {transaction.matched_invoice || transaction.matched_expense_reference || transaction.matched_expense_id}
                           </div>
                         </div>
                       )}
 
                       {reconciliation.status === "ignored" && (
-                        <span className="muted">Sans facture</span>
+                        <span className="muted">Sans document</span>
                       )}
 
-                      {reconciliation.status === "pending" && (
+                      {reconciliation.status === "categorized" && <span>{transaction.category}</span>}
+
+                      {(reconciliation.status === "pending" || reconciliation.status === "categorized") && (
                         <div style={{ display: "grid", gap: "8px" }}>
-                          {suggestions.length > 0 && (
+                          {isEntry && invoiceSuggestions.length > 0 && (
                             <div className="muted">
                               Suggestion :{" "}
-                              <strong>{suggestions[0].invoice.number}</strong>{" "}
-                              ({suggestions[0].reasons.join(", ")} · score {suggestions[0].score})
+                              <strong>{invoiceSuggestions[0].invoice.number}</strong>
                             </div>
                           )}
-
-                          <select
+                          {!isEntry && expenseSuggestions.length > 0 && (
+                            <div className="muted">Suggestion : <strong>Dépense {expenseSuggestions[0].expense.supplierName || "—"} — {money(getExpenseAmount(expenseSuggestions[0].expense))}</strong></div>
+                          )}
+                          {((isEntry && invoiceSuggestions.length === 0) || (!isEntry && expenseSuggestions.length === 0)) && (
+                            <div className="muted">Aucune suggestion fiable</div>
+                          )}
+                          {isEntry ? <select
                             value={selectedInvoiceId}
                             onChange={(event) =>
                               setSelectedInvoiceByTx({
@@ -887,41 +1031,59 @@ export default function Banque({ data, setData, logActivity }) {
                                 </option>
                               )}
                           </select>
+                          : <select
+                              value={selectedExpenseId}
+                              onChange={(event) => setSelectedExpenseByTx({ ...selectedExpenseByTx, [transaction.id]: event.target.value })}
+                            >
+                              <option value="">Choisir une dépense</option>
+                              {reconcilableExpenses.map((expense) => (
+                                <option key={expense.id} value={expense.id}>
+                                  {expense.supplierName || "Dépense"} — {money(getExpenseAmount(expense))} {expense.invoiceNumber ? `— ${expense.invoiceNumber}` : ""}
+                                </option>
+                              ))}
+                            </select>}
                         </div>
                       )}
                     </td>
                     <td>
                       {transaction.matched ? (
                         <span className="badge payee">Rapprochée</span>
+                      ) : transaction.category ? (
+                        <span className="badge">Catégorisée</span>
                       ) : (
-                        <span className="badge non-payee">En attente</span>
+                        <span className="badge non-payee">À rapprocher</span>
                       )}
                     </td>
                     <td>
                       {!transaction.matched && (
                         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                          <button
+                          {isEntry ? <button
                             className="primary"
                             disabled={!selectedInvoice || isWorking}
                             onClick={() =>
                               reconcileTransaction(transaction, selectedInvoice)
                             }
                           >
-                            Rapprocher
-                          </button>
+                            Rapprocher avec facture
+                          </button> : <button
+                            className="primary"
+                            disabled={!selectedExpense || isWorking}
+                            onClick={() => reconcileExpense(transaction, selectedExpense)}
+                          >
+                            Rapprocher avec dépense
+                          </button>}
                           <button
                             disabled={isWorking}
                             onClick={() => ignoreTransaction(transaction)}
                           >
                             Ignorer
                           </button>
-                          <button
-                            className="danger"
-                            disabled={isWorking}
-                            onClick={() => deleteTransaction(transaction)}
-                          >
-                            Supprimer
-                          </button>
+                          {isManualBankTransaction(transaction) && (
+                            <>
+                              <button disabled={isWorking} onClick={() => openManualForm(transaction)}>Modifier</button>
+                              <button className="danger" disabled={isWorking} onClick={() => deleteTransaction(transaction)}>Supprimer</button>
+                            </>
+                          )}
                         </div>
                       )}
 
@@ -932,13 +1094,13 @@ export default function Banque({ data, setData, logActivity }) {
                               {reconciliation.invoice.status}
                             </span>
                           )}
-                          <button
-                            className="danger"
-                            disabled={isWorking}
-                            onClick={() => deleteTransaction(transaction)}
-                          >
-                            Supprimer
-                          </button>
+                          {isManualBankTransaction(transaction) && (
+                            <>
+                              <button disabled={isWorking} onClick={() => openManualForm(transaction)}>Modifier</button>
+                              <button className="danger" disabled={isWorking} onClick={() => deleteTransaction(transaction)}>Supprimer</button>
+                            </>
+                          )}
+                          <button disabled={isWorking} onClick={() => unlinkTransaction(transaction)}>Retirer le rapprochement</button>
                         </div>
                       )}
                     </td>

@@ -5,12 +5,17 @@ import {
   extractInvoiceNumbers,
   findInvoiceByReference,
   getAutoReconciliationCandidates,
+  getAutoExpenseReconciliationCandidates,
+  getBankTransactionStats,
+  getExpenseAmount,
   getInvoiceOpenAmount,
   getReconcilableInvoices,
   getTransactionReconciliationState,
   invoiceNumbersMatch,
   normalizeInvoiceNumber,
   scoreInvoiceMatch,
+  scoreExpenseMatch,
+  suggestExpenseMatches,
   suggestInvoiceMatches,
 } from "./bankReconciliation.js";
 
@@ -79,7 +84,7 @@ describe("scoreInvoiceMatch", () => {
   it("score élevé pour numéro + montant exact + client + date proche", () => {
     const transaction = {
       description: "Virement Dupont FAC-2025-0010",
-      amount: -1200,
+      amount: 1200,
       transaction_date: "03/06/2025",
     };
 
@@ -116,7 +121,7 @@ describe("suggestInvoiceMatches", () => {
   it("propose les factures non annulées triées par score", () => {
     const transaction = {
       description: "FAC-2025-0010 Dupont",
-      amount: -1200,
+      amount: 1200,
       transaction_date: "02/06/2025",
     };
 
@@ -134,7 +139,7 @@ describe("suggestInvoiceMatches", () => {
   it("ignore les factures annulées", () => {
     const transaction = {
       description: "FAC-2025-0012",
-      amount: -800,
+      amount: 800,
       transaction_date: "21/06/2025",
     };
 
@@ -220,5 +225,69 @@ describe("getTransactionReconciliationState", () => {
         invoices
       )
     ).toMatchObject({ status: "orphan", invoice: null });
+  });
+});
+
+describe("statistiques Banque", () => {
+  it("calcule transactions, entrées, sorties absolues et solde sur toutes les sources/statuts", () => {
+    expect(getBankTransactionStats([
+      { amount: 265, source: "manual", matched: false },
+      { amount: -70.94, source: "synced", matched: true },
+      { amount: -8.5, source: "manual", matched: false },
+    ])).toEqual({
+      total: 3,
+      pending: 2,
+      matched: 1,
+      entriesTotal: 265,
+      exitsTotal: 79.44,
+      balance: 185.56,
+    });
+  });
+});
+
+describe("rapprochement dépenses", () => {
+  const expenses = [
+    { id: "exp-1", supplierName: "Amazon", invoiceNumber: "AMZ-42", purchaseDate: "2026-08-20", totalTTC: 70.94 },
+    { id: "exp-2", supplierName: "BGL", invoiceNumber: "BGL-1", purchaseDate: "2026-08-20", totalTTC: 8.5 },
+  ];
+
+  it("propose une dépense pour une sortie selon montant, fournisseur, référence et date", () => {
+    const transaction = { amount: -70.94, description: "AMAZON AMZ-42", transaction_date: "2026-08-21" };
+    const score = scoreExpenseMatch(transaction, expenses[0]);
+    expect(score.score).toBeGreaterThanOrEqual(100);
+    expect(suggestExpenseMatches(transaction, expenses)[0].expense.id).toBe("exp-1");
+    expect(getExpenseAmount(expenses[0])).toBe(70.94);
+  });
+
+  it("ne propose jamais une dépense pour une entrée ni une facture pour une sortie", () => {
+    expect(suggestExpenseMatches({ amount: 70.94 }, expenses)).toEqual([]);
+    expect(suggestInvoiceMatches({ amount: -1200 }, invoices, data)).toEqual([]);
+  });
+
+  it("refuse l'auto-match ambigu", () => {
+    const duplicates = [
+      { id: "a", supplierName: "Amazon", totalTTC: 70.94 },
+      { id: "b", supplierName: "Amazon", totalTTC: 70.94 },
+    ];
+    expect(getAutoExpenseReconciliationCandidates([
+      { id: "tx", amount: -70.94, description: "Amazon" },
+    ], duplicates)).toEqual([]);
+  });
+
+  it("lit les anciens liens facture et les nouveaux liens dépense", () => {
+    expect(getTransactionReconciliationState(
+      { matched: true, matched_invoice: "FAC-2025-0010" },
+      invoices,
+      expenses
+    ).invoice?.id).toBe("inv-1");
+    expect(getTransactionReconciliationState(
+      { matched: true, matched_expense_id: "exp-1", match_type: "expense" },
+      invoices,
+      expenses
+    ).expense?.id).toBe("exp-1");
+  });
+
+  it("considère une transaction catégorisée sans document comme valide", () => {
+    expect(getTransactionReconciliationState({ category: "Frais bancaires" }, [], []).status).toBe("categorized");
   });
 });
