@@ -119,29 +119,29 @@ Les erreurs ne contiennent jamais de secret ni de stack trace.
 
 Le site envoie une version `1.0` et l'un des types suivants : `customer.created`, `customer.updated`, `order.created`, `payment.completed`, `production.created`, `production.updated`. Une commande contient le client, les adresses, les lignes, les snapshots, les personnalisations, les polices, les ressources, la production, le paiement, les taxes et les totaux.
 
-`order.created` orchestre exclusivement les Application Services : upsert client, commande/devis acceptÃ©, facture brouillon, paiement, entrÃ©e atelier et suivi production. Le handler HTTP ne contient aucune mutation mÃ©tier et le repository persiste l'ensemble via la RPC transactionnelle.
+`order.created` orchestre exclusivement les Application Services : upsert client, commande/devis accepté, facture brouillon, paiement, entrée atelier et suivi production. Le handler HTTP ne contient aucune mutation métier et le repository persiste l'ensemble via la RPC transactionnelle.
 
-La rÃ©ponse contient `customerId`, `orderId`, `invoiceId`, `workshopId`, `productionId`, `status` et `version`. Le rejeu du mÃªme `event.id` retourne la rÃ©ponse enregistrÃ©e sans recrÃ©er de document. Une erreur conserve l'Ã©vÃ©nement en statut `failed` et la transaction empÃªche toute persistance partielle.
+La réponse contient `customerId`, `orderId`, `invoiceId`, `workshopId`, `productionId`, `status` et `version`. Le rejeu du même `event.id` retourne la réponse enregistrée sans recréer de document. Une erreur conserve l'événement en statut `failed` et la transaction empêche toute persistance partielle.
 
 ## Mise en service locale
 
 1. Appliquer `supabase/migrations/20260804000000_crm_integration_api.sql` au projet Supabase du CRM.
-2. Renseigner cÃ´tÃ© CRM `CRM_SUPABASE_URL`, `CRM_SUPABASE_SERVICE_ROLE_KEY`, `CRM_HMAC_KEY_ID` et `CRM_HMAC_SECRET`.
-3. Renseigner cÃ´tÃ© site l'endpoint complet, le mÃªme identifiant de clÃ© et le mÃªme secret.
-4. DÃ©marrer le CRM sur le port 3001 et valider `/health` avec une requÃªte signÃ©e.
+2. Renseigner côté CRM `CRM_SUPABASE_URL`, `CRM_SUPABASE_SERVICE_ROLE_KEY`, `CRM_HMAC_KEY_ID` et `CRM_HMAC_SECRET`.
+3. Renseigner côté site l'endpoint complet, le même identifiant de clé et le même secret.
+4. Démarrer le CRM sur le port 3001 et valider `/health` avec une requête signée.
 5. Activer les flags du site et passer une commande sandbox.
 
-Sans service role CRM, le serveur indique explicitement que l'API est inactive. Cette protection ne doit jamais Ãªtre contournÃ©e avec la clÃ© anon.
+Sans service role CRM, le serveur indique explicitement que l'API est inactive. Cette protection ne doit jamais être contournée avec la clé anon.
 
-## DÃ©veloppement local
+## Développement local
 
 | Processus               | Commande           | Adresse                 |
 | ----------------------- | ------------------ | ----------------------- |
 | SPA CRM                 | `npm run dev:spa`  | `http://localhost:5173` |
 | API CRM                 | `npm run api:dev`  | `http://127.0.0.1:3001` |
 | SPA et API              | `npm run dev`      | ports 5173 et 3001      |
-| Validation HTTP signÃ©e | `npm run api:test` | cinq endpoints v1       |
+| Validation HTTP signée | `npm run api:test` | cinq endpoints v1       |
 
-Vite ne relaie pas l'API et son fallback HTML ne constitue jamais une rÃ©ponse d'intÃ©gration. Les cinq endpoints sont servis exclusivement par `backend/server.js`. Le test runtime vÃ©rifie le type JSON, HMAC valide/invalide, timestamp expirÃ©, rejeu de nonce, duplicata d'Ã©vÃ©nement et accusÃ© de rÃ©ception.
+Vite ne relaie pas l'API et son fallback HTML ne constitue jamais une réponse d'intégration. Les cinq endpoints sont servis exclusivement par `backend/server.js`. Le test runtime vérifie le type JSON, HMAC valide/invalide, timestamp expiré, rejeu de nonce, duplicata d'événement et accusé de réception.
 
-Si le runtime retourne `Could not find the table 'public.crm_integration_nonces' in the schema cache`, appliquer la migration au projet rÃ©fÃ©rencÃ© par `CRM_SUPABASE_URL`, puis exÃ©cuter `NOTIFY pgrst, 'reload schema';` dans le SQL Editor avant de relancer l'API. La prÃ©sence de la migration dans Git ne prouve pas son application au projet configurÃ©.
+Si le runtime retourne `Could not find the table 'public.crm_integration_nonces' in the schema cache`, appliquer la migration au projet référencé par `CRM_SUPABASE_URL`, puis exécuter `NOTIFY pgrst, 'reload schema';` dans le SQL Editor avant de relancer l'API. La présence de la migration dans Git ne prouve pas son application au projet configuré.

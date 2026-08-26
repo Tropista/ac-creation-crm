@@ -684,17 +684,17 @@ export default function Suppliers({
                 <div className="supplier-field">
                   <strong>Pays</strong>
                   <span>
-                    {selectedSupplier.country_name || getCountryName(selectedSupplier.country_code) || "â€”"}
+                    {selectedSupplier.country_name || getCountryName(selectedSupplier.country_code) || "—"}
                     {selectedSupplier.country_code ? ` (${selectedSupplier.country_code})` : ""}
                   </span>
                 </div>
                 <div className="supplier-field">
                   <strong>Numero TVA</strong>
-                  <span>{selectedSupplier.vat_number || "â€”"}</span>
+                  <span>{selectedSupplier.vat_number || "—"}</span>
                 </div>
                 <div className="supplier-field">
                   <strong>Origine TVA</strong>
-                  <span>{selectedSupplier.default_vat_origin || "â€”"}</span>
+                  <span>{selectedSupplier.default_vat_origin || "—"}</span>
                 </div>
                 <div className="supplier-field">
                   <strong>Type UE par defaut</strong>
@@ -838,7 +838,7 @@ export default function Suppliers({
                             <td>{money(link.purchasePriceHT)}</td>
                             <td>{link.unit || "pièce"}</td>
                             <td>{link.supplierSku || "—"}</td>
-                            <td>{Number(link.leadTimeDays || 0) > 0 ? `${link.leadTimeDays} j` : "â€”"}</td>
+                            <td>{Number(link.leadTimeDays || 0) > 0 ? `${link.leadTimeDays} j` : "—"}</td>
                             <td>{formatDate(link.updatedAt)}</td>
                             <td>
                               <div className="supplier-actions">
